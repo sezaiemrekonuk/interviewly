@@ -46,6 +46,8 @@ The five rules:
 
 | Path | Holds |
 |---|---|
+| `.agents/EXECUTE.md` | How the team claims, runs, verifies and merges a ledger task. Read before your first task. |
+| `.agents/prompts/` | `AUTHOR_DOCS.md` — the three-stage prompt from IDEA.md to specs to features to ledgers. |
 | `.agents/ledgers/` | Initiative folders — PLAN, DECISIONS, STATE, REFERENCE, MODELS, tasks. |
 | `.agents/specs/` | Specs and designs. |
 | `.agents/features/` | Gherkin `.feature` files — the acceptance-criteria source of truth. |
