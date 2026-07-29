@@ -1,7 +1,25 @@
 # Project conventions
 
-Multi-service application: `backend/`, `frontend/`, `db/`, `elasticsearch/`,
-`kibana/`, `messagequeue/`, `redis/`, orchestrated by Docker at the repo root.
+Interviewly — a mock interview application. See `.agents/docs/IDEA.md` for the full
+design; it is the single reference document and every spec derives from it.
+
+npm workspaces at the repo root, orchestrated by Docker Compose. Services:
+
+| Path | Is |
+|---|---|
+| `frontend/` | Next.js app (`web` container) |
+| `backend/` | Express modular monolith (`api`) — `modules/auth`, `interview`, `admin`, `ai` |
+| `worker/` | BullMQ consumer — report generation, voice reconciliation, sweeper |
+| `edge/` | Caddyfile — single-origin reverse proxy, the only published port |
+| `db/` | Postgres init SQL (creates the Prisma shadow database) |
+| `elasticsearch/`, `kibana/` | Config for the optional `observability` profile |
+| `ci/` | CI helper scripts referenced by `.github/workflows/` |
+
+There is no `ai-gateway` service. The AI layer is `modules/ai` in `backend/` plus the
+`@interviewly/ai` workspace package, shared with `worker/` — see IDEA.md K1.1 for why the
+separate container was rejected.
+
+Build context for every image is the **repo root**, because workspace packages live there.
 
 ## Planning: ledger-driven development
 
@@ -30,8 +48,8 @@ The five rules:
 |---|---|
 | `.agents/ledgers/` | Initiative folders — PLAN, DECISIONS, STATE, REFERENCE, MODELS, tasks. |
 | `.agents/specs/` | Specs and designs. |
-| `.agents/features/` | Feature notes. |
-| `.agents/docs/` | Agent-facing documentation. |
+| `.agents/features/` | Gherkin `.feature` files — the acceptance-criteria source of truth. |
+| `.agents/docs/` | `IDEA.md` (the design reference) and `USER_STORIES.md`. |
 | `.agents/skills/` | Shared agent skills. Copilot CLI loads these automatically. See its README. |
 | `.github/instructions/` | Always-on response and code-discipline rules. |
 

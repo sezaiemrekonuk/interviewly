@@ -57,6 +57,39 @@ namespace — a skill is referenced by its bare name. Re-apply after any re-sync
 grep -rl "superpowers:" .agents/skills | xargs sed -i '' 's/superpowers://g'
 ```
 
+## Frontend design
+
+Vendored from the `frontend-design` skill in
+[anthropics/claude-plugins-official](https://github.com/anthropics/claude-plugins-official)
+(Claude Code's official `frontend-design` plugin). Use for aesthetic direction,
+typography, and layout choices when building or reshaping UI — avoids templated,
+generic-looking output. Re-sync:
+
+```bash
+cp -R ~/.claude/plugins/marketplaces/claude-plugins-official/plugins/frontend-design/skills/frontend-design/. .agents/skills/frontend-design/
+```
+
+`.claude/skills/frontend-design` and `.github/skills/frontend-design` are symlinks
+to this directory (no per-provider content, so one copy serves all).
+
+## Impeccable
+
+Not vendored here — installed natively per provider via the upstream CLI, because
+its skill payload is generated per-provider (agent/tool syntax differs) rather than
+plain markdown. Covers UI design, redesign, critique, audit, polish, accessibility,
+and design-system work; run `/impeccable init` once per project to set up design
+context.
+
+Installed from [pbakaus/impeccable](https://github.com/pbakaus/impeccable) into
+`.claude/skills/impeccable` and `.github/skills/impeccable` (project scope), plus
+`~/.claude/skills/impeccable` and `~/.github/skills/impeccable` (global scope).
+Re-sync either scope:
+
+```bash
+npx impeccable install --providers=claude,copilot --scope=project --no-hooks
+npx impeccable install --providers=claude,copilot --scope=global --no-hooks
+```
+
 ## Always-on rules
 
 Not skills — these load on every request, from `.github/instructions/`:
