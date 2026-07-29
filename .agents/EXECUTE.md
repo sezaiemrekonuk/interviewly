@@ -32,7 +32,7 @@ Ledger rows carry an `Owner` column in `STATE.md`. To claim a task:
 
 1. `git pull`
 2. Put your name in that task's `Owner` cell and flip `Status` to `in_progress`.
-3. Commit **only that one-line change** and push immediately: `git commit -m "chore(ledger): claim F02"`.
+3. Stage only, don't commit any changes.
 
 Push the claim *before* you start working. A claim that lives on your laptop for an hour
 is not a claim, and two people implementing `schema.prisma` is the expensive version of
