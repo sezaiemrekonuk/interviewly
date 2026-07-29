@@ -737,6 +737,51 @@ Notes:
   it). Seed: `prisma/seed.ts` → demo admin, sample interview, personas, occupation
   clusters.
 
+### K14 — Edge proxy: Caddy, single origin
+
+Everything the browser touches goes through one origin. `http://localhost` in development,
+one domain later.
+
+```
+localhost {
+  handle /api/*     → api:4000
+  handle /events/*  → api:4000        # SSE, unbuffered
+  handle /assets/*  → bucket:9000     # public avatar prefix, strip → interviewly/
+  handle /*         → web:3000
+}
+```
+
+**Why an edge exists at all:**
+
+- **One origin kills CORS.** `web` on `:3000` and `api` on `:4000` are different origins.
+  Without a proxy that means a CORS config, a credentials allowlist, an origin env var, and
+  a class of cookie bugs that only appear once TLS is involved. With a proxy, none of it is
+  written.
+- **Avatar URLs stop being infrastructure.** `/assets/personas/…` instead of
+  `http://localhost:9000/interviewly/personas/…`. Swapping MinIO for real S3 becomes a
+  proxy config line; no application code or seeded key knows the difference.
+- **One URL in `SETUP.md`.** "Open `http://localhost`" instead of "frontend is on 3000, API
+  on 4000, Kibana on 5601". The evaluator's first thirty seconds get easier.
+- **Nothing else needs published ports.** `ai-gateway`, `db`, `cache`, `es` are
+  internal-only on the compose network. Only the edge publishes `:80`. This is a real
+  hardening win, not tidiness.
+- **`deployable at the end` becomes a one-line change** (§11.3): swap `localhost` for the
+  domain and Caddy provisions TLS automatically.
+
+**Why Caddy and not nginx:** ~15 lines against ~50; automatic TLS with no certbot sidecar;
+sane SSE behaviour out of the box. nginx needs explicit `proxy_buffering off` on the SSE
+route or the live transcript arrives in chunks after the interview has ended — a bug that
+looks like a frontend problem for a day. nginx is an acceptable swap if the team knows it
+better; the routing table above is unchanged.
+
+**Not routed through the edge:** the Kibana and MinIO console UIs keep host-published ports
+in `compose.override.yaml` (dev only). Putting Kibana on a subpath needs `server.basePath`
+and buys nothing.
+
+**Added now, not at deploy time.** Retrofitting an origin change later means rewriting the
+CORS setup, the cookie configuration, the avatar keys and the env. Doing it on day one
+costs one ~15 MB container.
+
 ---
 
 ## 7. Security
@@ -899,9 +944,10 @@ per variable, and is the contract `SETUP.md` refers to:
 
 ```dotenv
 # ---- Core ----
+# Single origin behind the edge proxy (K14). Everything the browser touches is here.
 NODE_ENV=development
+PUBLIC_ORIGIN=http://localhost
 API_PORT=4000
-WEB_ORIGIN=http://localhost:3000
 
 # ---- Database / cache ----
 DATABASE_URL=postgresql://interviewly:interviewly@db:5432/interviewly
@@ -924,8 +970,10 @@ ELEVENLABS_AGENT_ID_HR=
 ELEVENLABS_AGENT_ID_TECH=
 
 # ---- Storage (MinIO in dev, S3 in prod — only the endpoint changes) ----
+# S3_ENDPOINT is server-side only. Browsers reach public objects via /assets/* on the edge.
 S3_ENDPOINT=http://bucket:9000
 S3_BUCKET=interviewly
+S3_PUBLIC_PREFIX=/assets
 S3_ACCESS_KEY=minioadmin
 S3_SECRET_KEY=minioadmin
 
@@ -953,17 +1001,25 @@ cannot be evaluated. This section exists to reduce that risk to zero.
 
 ### 10.1 Container inventory
 
-| Service | Image / build | Port | Profile | Why separate |
+**Published** = reachable from the host. Everything else is internal to the compose
+network only.
+
+| Service | Image / build | Published | Profile | Why separate |
 |---|---|---|---|---|
-| `web` | build `./frontend` (Next.js) | 3000 | default | Different runtime, different scaling profile |
-| `api` | build `./backend` | 4000 | default | Business logic + state machine + auth |
-| `ai-gateway` | build `./ai-gateway` | 4100 | default | Different failure character, timeout and retry policy |
+| `edge` | `caddy:2-alpine` | **80** | default | Single origin, TLS later (K14) |
+| `web` | build `./frontend` (Next.js) | — | default | Different runtime, different scaling profile |
+| `api` | build `./backend` | — | default | Business logic + state machine + auth |
+| `ai-gateway` | build `./ai-gateway` | — | default | Different failure character, timeout and retry policy |
 | `worker` | build `./worker` | — | default | Report jobs must not eat API request threads (K10) |
-| `db` | `postgres:16-alpine` | 5432 | default | Single source of truth |
-| `cache` | `redis:7-alpine` | 6379 | default | Session, rate limiting, BullMQ |
-| `bucket` | `minio/minio` | 9000/9001 | default | S3-compatible storage (K12) |
-| `es` | `elasticsearch:8.x` | 9200 | `observability` | Observability only |
-| `kibana` | `kibana:8.x` | 5601 | `observability` | Depends on `es`, debug UI |
+| `db` | `postgres:16-alpine` | — | default | Single source of truth |
+| `cache` | `redis:7-alpine` | — | default | Session, rate limiting, BullMQ |
+| `bucket` | `minio/minio` | — | default | S3-compatible storage (K12) |
+| `es` | `elasticsearch:8.x` | — | `observability` | Observability only |
+| `kibana` | `kibana:8.x` | 5601 (dev override) | `observability` | Depends on `es`, debug UI |
+
+`edge` is the only service publishing a port in the default configuration. Direct host
+access to `db`, `cache`, `bucket` and `ai-gateway` is added in `compose.override.yaml` for
+development convenience and does not exist otherwise.
 
 ### 10.2 Profile split
 
@@ -1040,10 +1096,12 @@ scale benefit at this size. `DECISIONS.md` presents this as a decision, not a ga
 
 - **local** — `docker compose up`. **This is the only environment that matters right now.**
   Evaluation happens here. First priority, no exceptions.
-- **deployable at the end** — the same compose file on a single VPS behind Caddy (automatic
-  TLS, three lines of config). Not built now; the constraint is only that nothing we build
-  makes it impossible later. Concretely: no hardcoded `localhost`, all URLs from env, no
-  writes to the local filesystem, no `NODE_ENV`-conditional business logic.
+- **deployable at the end** — the same compose file on a single VPS. The Caddy edge is
+  already in the stack from day one (K14), so this reduces to swapping `localhost` for a
+  domain in the Caddyfile and `PUBLIC_ORIGIN`; TLS is provisioned automatically. Nothing
+  else changes. Constraints that keep it that way: no hardcoded `localhost` in application
+  code, all URLs from env, no writes to the local filesystem, no `NODE_ENV`-conditional
+  business logic.
 
 No Kubernetes, no Helm, no Terraform.
 
@@ -1138,6 +1196,7 @@ No longer open. If any changes, it is recorded in `DECISIONS.md` as a supersedin
 | Model chain | OpenAI `gpt-4.1-mini` → Gemini → Groq; missing key = hard failure |
 | ORM | Prisma + Prisma Migrate |
 | Queue | BullMQ on the existing Redis. No separate broker. `worker/` container |
+| Edge proxy | Caddy from day one. Single origin, `edge` is the only published port. No nginx |
 | Bucket | MinIO (S3-compatible) |
 | PDF parsing | `unpdf`, max 10 MB, no OCR |
 | Avatar assets | Produced by the team, stored in the bucket, public-read + immutable, preloaded in the lobby, uploaded by seed |
