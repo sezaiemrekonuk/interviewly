@@ -219,6 +219,21 @@ the repo-specific overrides the skill does not know.
   Point the skill at them in Phase 1 so it does not re-interrogate settled decisions.
 - **A ledger is a vertical slice** (IDEA.md §5.2): schema → API → UI → tests → criteria
   green. "Backend of feature X" is not a ledger. "Feature X, working" is.
+- **Team model — put this in the skill's Phase 1 input.** Three AI-native generalists
+  (Sezai, Ahmet, Fatih), no service owner. The parallel unit is the **ledger, not the
+  task**: decompose so one person can own a ledger end to end. Tasks are fine-grained —
+  one session each (read STATE → one task → verify → commit → stop) — and each declares
+  its dependencies, so the slice reads as one ordered chain, **not** backend/frontend/db
+  carved up across three people. Independence lives *between* ledgers; `F01`–`F03` are the
+  only tasks built independent *within* a scope so three people start day one.
+- **Decompose one-by-one, never in bulk.** Each task is the smallest thing that ends with
+  one runnable `## Verification`. Never fold two behaviours into one task to "save a
+  session," and never emit a placeholder task to fill later — an unwritten task is not a
+  claim, it is a hole someone else falls into. When two tasks in the same ledger genuinely
+  have no dependency between them, say so on both so either order is safe; otherwise they
+  are a chain with a single owner. A dependency that crosses into *another* ledger is a
+  scheduling fact — record it in `STATE.md` so the waiting ledger blocks on a green task,
+  never on someone's half-done branch.
 - **`## Verification` on every task runs the feature file.** The literal command, e.g.
   `npm run test:acceptance -- --tags @interview-flow`. Not "confirm the flow works".
 

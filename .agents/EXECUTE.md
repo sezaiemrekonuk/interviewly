@@ -38,7 +38,23 @@ Push the claim *before* you start working. A claim that lives on your laptop for
 is not a claim, and two people implementing `schema.prisma` is the expensive version of
 this mistake.
 
+**Claim a ledger, not a lone task.** The norm is one owner per ledger — you run its chain
+task-by-task, one session each, until the slice is green. The per-task `Owner` column
+exists so a dependent chain can be handed off cleanly, **not** so three people carve up one
+feature into backend/frontend/db and then block each other. Do not claim a task whose
+dependency is `in_progress` under someone else's name; pick an unblocked ledger instead.
+Parallelism is three people on three *different* ledgers — `F01`–`F03` are the one
+deliberate exception, three independent tasks in a single scope on day one.
+
 If you need to drop a task, flip it back to `todo`, clear the Owner, push, and say so.
+
+**Agent: if you don't know who you are, ask — don't guess.** The pointer and the `Owner`
+column only tell you which task to pick once you know *whose* seat you're in. If the
+session did not tell you your identity (Sezai, Ahmet or Fatih) — so you cannot tell which
+`Owner` rows are yours or which pointer to follow — stop and ask the human, then **persist
+the answer to memory** (`store_memory`) so the next session inherits it and you never
+re-ask. Same for any other feature-level decision the ledger does not settle: ask once,
+save it, reuse it.
 
 ---
 
