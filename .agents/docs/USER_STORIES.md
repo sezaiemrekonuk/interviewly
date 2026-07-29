@@ -1,83 +1,313 @@
-# User Stories For Interviewly
+# User Stories — Interviewly
 
-Format: one flow per story, arrow-chained, from the user's point of view.
-Sources: `Mock Interview Idea Document.docx` (body + inline comments), `IDEA.md`.
+**Status:** review draft. Reorganised from the original arrow-flow draft, the candidate
+story list collected from the case brief, and the meeting blockers of 2026-07-29.
 
----
+**Authority:** `IDEA.md` is the parent document. Where a story here conflicted with it, the
+story was rewritten, not kept — the rulings are listed in §D so nothing looks like an
+oversight. Anything that survives review graduates into `.agents/specs/*.md` and then into
+`.agents/features/*.feature`.
 
-## 1. Instant interview (happy path, voice)
+**Format:** `US-nn` — a permanent ID. One story statement, then the flow that satisfies it,
+then the `IDEA.md` sections it binds to. IDs are never renumbered.
 
-User enters a related keyword to find application -> User clicks on the Home Page link -> Lands on home page, sees Start Your Interview CTA Button -> Clicks Button -> User is redirected to `/dashboard?instant=1` -> directly sees the text area zone -> pastes job listing description -> waits several seconds to attend meeting (in that time we show "wait until the hosts accept your join request", and user can check his/hers mic and camera) -> Host allows to join (agent is loaded with Q's) -> User joins in, sees a HR Agent with camera on, a technical agent with camera off -> HR Agent serves a warm welcome, then asks first question -> user loops until the HR Agent's questions are done -> HR Agent closes their camera, technical agent flow starts. Same loop; when a non-talkable question comes, a UI interface is shown to the user to fill in -> interview ends, answers and report are saved -> user sees the recent interviews with reports and the recording.
-
-## 2. Signing in and keeping the interview
-
-Guest user finishes pasting the job listing on `/dashboard?instant=1` -> before the room opens, we ask to sign in (email/password or Google) -> user picks Google, one click, comes back to the same lobby with the pasted listing still there -> joins the interview -> at the end, the interview is attached to the account, not to a browser session -> user opens `/me/interviews` and sees it in the list.
-
-## 3. Lobby setup with a PDF listing
-
-User is signed in -> goes to Dashboard -> clicks "Set up interview" -> sees the lobby form: paste text **or** upload the listing PDF, pick a target question count, pick which rounds to run -> uploads a PDF -> we extract the text, detect the occupation from the listing and normalize it into an occupation cluster (`cluster.prompt.yaml`), and detect the listing language -> lobby shows "Backend Developer · Turkish · ~8 questions" as an editable summary -> user corrects the occupation if wrong -> clicks Join.
-
-## 4. Mic & camera check before joining
-
-User is in the waiting screen -> sees own camera preview and a mic level bar -> toggles camera off, mic stays on -> a note says the camera image never leaves the browser and nothing is recorded server-side -> both interviewers are already visible in the lobby, cameras on/off as they choose -> user clicks "Ready" -> host accepts -> room opens with the exact device state chosen in the lobby.
-
-## 5. HR round with a real interviewer feel
-
-User joins the room -> HR persona (name, voice, avatar all coming from the `personas` table, not hardcoded) greets by name and explains the format -> asks question 1, the progress dot bar shows `1 / 8` -> user answers out loud, live transcript appears on the right so the user sees what was understood -> after some answers the interviewer occasionally says "let me note that down, one second" / thinking beat before the next question -> the avatar switches between idle and speaking clips, and between multiple avatars for the same character depending on the conversation -> user cannot jump to question 3; the interviewer only moves on when the current answer is submitted.
-
-## 6. Round handover
-
-HR round's last answer is submitted -> screen shows "HR round completed, connecting you to the technical interviewer" interstitial -> HR persona's camera goes off -> technical persona's camera turns on and greets -> user sees the round marker change in the transcript panel -> technical questions start from the listing's technologies.
-
-Note (from comment): "technical" is not the right word for every occupation. For non-engineering listings the second round is labelled a **competency / yeterlilik** round, and the questions are drawn from the occupation cluster instead of a tech stack.
-
-## 7. Non-talkable question
-
-Technical round is running -> a question comes that cannot be answered by speaking (write a SQL query / pick from options / order the steps) -> the interviewer says "I'm sending this one to your screen" -> a UI panel opens in the room: code box, multiple choice, or ordering widget -> mic is muted while the user works -> user submits -> panel closes, interviewer reacts to the submitted answer and continues -> the submitted content is stored as the answer for that question, same as a spoken one.
-
-## 8. Adaptive difficulty
-
-User gives a weak answer on "SQL indexes" -> next question stays on indexing but drops one difficulty level, and the interviewer frames it as a follow-up, not a repeat -> user answers strongly this time -> the following question moves up a level and to a new topic -> user never sees a difficulty label, only that the interview follows what they said.
-
-## 9. Interview length adapts to the conversation
-
-User picked "8 questions" in the lobby -> during the round a background `interview_heartbeat` agent watches the conversation -> user is giving deep, on-point answers -> the round is cut short and closed early with a positive note -> or, answers are thin and the topic is unresolved -> the round is extended with extra questions -> the progress indicator updates accordingly (target, not a fixed count) -> the report explains why the interview ran long or short.
-
-## 10. Voice drops, interview survives
-
-User is mid-answer in voice mode -> the voice connection dies (network, permission revoked, provider outage) -> the room shows "Voice connection lost, continuing in text" -> the same question stays on screen with a text box -> everything answered so far is intact -> user types the rest of the interview -> report is produced normally, and the report notes that part of the interview was in text mode.
-
-## 11. Refresh / come back later
-
-User is on question 4 of 8, closes the tab by accident -> reopens the app -> Dashboard shows the interview as "in progress — continue" -> user clicks it -> rejoins the room at question 4, previous answers still there, interviewer picks up where it left off -> if the user never comes back, the interview turns into `abandoned` and shows up in the "unfinished" statistic.
-
-## 12. Report
-
-Interview ends -> user sees a "preparing your evaluation" screen -> report page opens: overall impression, strengths, areas to improve, per-round evaluation, and a per-question score breakdown -> extra signals shown: answer duration, speaking pace, filler word count ("eee", "yani"), STAR structure fit -> user opens a question row and sees their own transcript next to the note about that answer -> clicks "Download PDF" -> gets the same report as a file.
-
-Note (from comment): if the HR round goes badly, the user is **not** eliminated — they always continue to the second round, and the report carries a "HR round was weak" note instead.
-
-## 13. Interview history
-
-User opens `/me/interviews` -> sees past interviews with occupation, date, duration, state (completed / unfinished) and score -> filters by occupation -> opens one, sees the report and the recording/transcript -> deletes an old one -> it disappears from their list immediately -> the data stays on the admin side flagged as deleted (soft delete), it is not erased.
-
-## 14. Admin — interviews and cost
-
-Admin signs in -> sees the admin panel instead of the normal dashboard -> opens "All interviews" -> filters by occupation, state, user -> sees a deleted interview still listed with a "deleted" badge -> opens it, sees which prompt version produced each question, tokens spent, and cost in USD -> voice (STT/TTS) usage shows in the same cost list as a separate provider row -> total cost for the interview is one number at the top.
-
-## 15. Admin — statistics
-
-Admin opens Dashboards -> sees interview count per occupation, average duration, completed vs. abandoned ratio, total tokens and total cost -> narrows to one occupation cluster -> sees which questions are most often answered weakly -> uses it to decide which prompt version to roll back.
-
-## 16. Admin — tracing a bad report
-
-A user complains about a report -> admin opens the interview and copies its `traceId` -> opens Kibana -> sees, under that one trace, the request log, every prompt/completion, the model, the latency, and the cost of each call -> the same trace also carries the room's own events (join, round switch, voice drop, fallback to text) -> admin identifies the prompt version that produced the bad section and rolls it back.
+**Language:** authored in English (IDEA.md language policy). The product ships English UI
+with Turkish selectable; the interview language is a separate axis (§3.4).
 
 ---
 
-## Open points that change these stories
+## A. Candidate stories
 
-- **Language**: interview runs in the listing's language automatically (story 3 assumes this). Confirm.
-- **Camera**: assumed on-by-default but toggleable, never uploaded, never recorded.
-- **Question types**: open-ended by default, non-talkable types only in the second round (story 7).
-- **Avatar**: option B (idle/speaking video loops, multiple avatars per character) assumed in stories 5 and 6.
+### A1. Account and access
+
+**US-01 — Sign in with email or Google**
+As a candidate, I want to sign in with my email and password or with my Google account, so
+that I can reach the system quickly and safely.
+→ Landing CTA routes to sign-in → email/password or Google (Authorization Code + PKCE) →
+session cookie → dashboard.
+*Binds:* K8, K8.5. *Note:* no anonymous interviews — sign-in always precedes setup.
+
+**US-02 — Register in under a minute**
+As a new candidate, I want to create an account with just an email and a password, so that
+nothing stands between me and my first interview.
+→ `POST /auth/register`, password ≥ 10 characters → signed in immediately, no email
+verification step.
+*Binds:* K8.5. *Note:* no email verification and no password reset — a recorded scope
+decision, not a gap.
+
+**US-03 — Google sign-in links to my existing account**
+As a candidate who registered with a password, I want a later Google sign-in on the same
+email to land in the same account, so that I don't end up with two histories.
+→ Google returns `email_verified: true` → accounts link. Otherwise rejected with
+`ACCOUNT_LINK_REQUIRES_PASSWORD`.
+*Binds:* K8.5.
+
+### A2. Setting up an interview
+
+**US-04 — Paste or upload the job listing**
+As a candidate, I want to paste the listing text of the position I'm applying for or upload
+it as a PDF, so that the questions are prepared for that specific listing.
+→ Dashboard → "Set up interview" → paste text **or** upload PDF (≤ 10 MB, ≤ 30 pages) →
+text extracted.
+*Binds:* K12, §3.1. *Note:* a scanned PDF that yields under 200 characters asks the
+candidate to paste the text instead. No OCR.
+
+**US-05 — See and correct what the system understood**
+As a candidate, I want the lobby to show me the detected occupation, the interview language
+and the question split before I commit, so that a wrong guess doesn't ruin the interview.
+→ Lobby shows `Backend Developer · Turkish · 3 HR + 5 technical` → occupation and language
+are both editable → Join.
+*Binds:* §3.4, §3.7, §15.2 (story 3 ruling: editable summary adopted).
+
+**US-06 — Choose how long the interview should be**
+As a candidate, I want to set a target question count, so that the session fits the time I
+actually have.
+→ Slider/select of N → split shown as `hr = max(2, round(N * 0.4))`, `tech = N - hr`.
+*Binds:* K5, §3.7. *Note:* N is a **ceiling, not a quota** — see US-14 and §C.
+
+**US-07 — Answer 2-3 short profile questions**
+As a candidate, I want to answer a couple of short questions about my experience before the
+interview starts, so that the questions reflect who I am rather than the listing alone.
+→ Lobby form: years of experience, areas of interest, target seniority → stored as
+`candidate_profile` → bound into every generation prompt.
+*Binds:* §3.3. *Note:* skippable; skipping sends an explicit "no profile provided" marker.
+
+**US-08 — Wait seconds, not minutes**
+As a candidate, I want the position-specific questions to be ready within a few seconds, so
+that I can start practising without waiting.
+→ "Waiting for the host to accept your join request" screen covers the HR batch generation
+(< 8 s budget) → the technical batch generates during the HR round, so the handover is
+never a loading screen.
+*Binds:* §3.7, §8.1.
+
+**US-09 — Check my mic and camera first (voice mode)**
+As a candidate, I want to see my camera preview and mic level before joining, so that I'm
+not fighting my devices in front of an interviewer.
+→ Waiting screen shows preview + level bar → camera toggle (**off by default**) → a note
+states the camera image never leaves the browser and nothing is recorded → "Ready" → room
+opens with exactly the device state chosen.
+*Binds:* §3.2, §14. *Note:* text mode has no device check and no self-tile.
+
+### A3. Inside the interview room
+
+**US-10 — Meet a warm HR interviewer first**
+As a candidate, I want the opening, easier questions to come from a warm, reassuring HR
+interviewer with a voice and a face, so that I can settle into the interview.
+→ Room opens → HR persona (name, voice, avatar, system prompt all from the `personas`
+table) greets and explains the format → asks question 1.
+*Binds:* §3.1, §3.6.
+
+**US-11 — Meet a second, more formal interviewer for the hard part**
+As a candidate, I want the technical/competency questions to come from a different, more
+formal interviewer, so that the panel feels like a real one.
+→ HR questions exhausted → "HR round completed, connecting you to the technical
+interviewer" interstitial → second persona takes over.
+*Binds:* §3.1, §15.2 (story 6 ruling: interstitial adopted). *Note:* for non-engineering
+listings this round is a **competency** round, driven by the occupation cluster, not a tech
+stack.
+
+**US-12 — See who I'm talking to**
+As a candidate, I want the avatar and the name label to change when the interviewer
+changes, so that I can tell which of them I'm speaking with.
+→ Avatar image set swaps, name/role label updates, the transcript panel marks the round
+boundary.
+*Binds:* §3.6. *Note:* avatars are **5 static images per persona**
+(`idle | listening | thinking | speaking | acknowledging`), not video loops.
+
+**US-13 — Know where I am**
+As a candidate, I want a clear progress indicator such as "3 / 8", so that I know how much
+is left.
+→ Dot bar + counter driven by `current_index` (global, 1..N across both rounds).
+*Binds:* K2. *Note:* N is the target; if the interview is wrapped up early the indicator
+reflects that (US-14).
+
+**US-14 — Be wrapped up early when it isn't going anywhere**
+As a candidate, I want the interviewer to take the initiative and close the interview early
+when I clearly cannot answer, so that I'm not marched through five more questions I'll fail
+the same way.
+→ Repeated unanswerable/empty answers → the interviewer closes with a short, non-punitive
+note → `ended_reason = 'cut_short'` → the report explains why it ended early.
+*Binds:* K5, K2 (`cut_short`), §C blocker 1 and 4. *Note:* the interview is **never
+extended** past N.
+
+**US-15 — Answer by speaking, or by typing**
+As a candidate, I want to speak my answer, and to type it instead when speaking isn't
+possible, so that the interview works whatever my setup is.
+→ Voice mode: live transcript on the right shows what was understood → "finish answer".
+Text mode: the question types itself in, the answer goes in a text box → "Submit answer".
+*Binds:* §3.2, §3.8. *Note:* text mode is the MVP mode and is not a degraded skin — same
+room, animated avatar, same conversation panel.
+
+**US-16 — Answer non-speakable questions on screen**
+As a candidate, I want multiple choice, ordering and short code/SQL questions rendered as a
+widget, so that I don't have to dictate a query out loud.
+→ Question `kind` marks it → widget panel opens → mic muted in voice mode → submit → stored
+as an answer with `input_mode = 'widget'`, exactly like a spoken one.
+*Binds:* §3.9.
+
+**US-17 — Not be able to skip or go back**
+As a candidate, I want to be unable to return to a passed question or skip ahead, so that I
+feel real interview pressure.
+→ Server-side state machine; an out-of-turn submission is rejected with
+`QUESTION_NOT_CURRENT` and the interview stays where it was.
+*Binds:* K2, `features/interview_flow.feature`. *Note:* enforced on the server, not by
+hiding a button — `curl` is the actual threat.
+
+**US-18 — Be interviewed in my own language**
+As a candidate, I want the interview to run in the language of the listing, and to follow me
+if I switch, so that I practise in the language I'll be interviewed in.
+→ Language auto-detected at setup, overridable in the lobby → two consecutive answers in
+another language switch `interviews.language` and the persona continues there.
+*Binds:* §3.4.
+
+**US-19 — Leave the room and come back**
+As a candidate, I want to close the tab or drop off and rejoin where I left off, so that a
+dead battery doesn't cost me the whole interview.
+→ Dashboard shows "in progress — continue" → rejoin at the current question, previous
+answers intact → 24 h of no activity turns it into `abandoned`.
+*Binds:* K2, K11 (nudge-then-refetch makes resume fall out for free), §C blocker 3.
+
+**US-20 — Survive a voice failure**
+As a candidate, I want the interview to continue in writing when the voice connection dies,
+so that I don't lose what I've already answered.
+→ "Voice connection lost, continuing in text" → same question, text box → mode becomes
+`text` → answers preserved → the report notes the mode change.
+*Binds:* §3.2, K3, `features/voice_fallback.feature`. *Note:* downgrade only. Text never
+upgrades back to voice mid-interview.
+
+### A4. After the interview
+
+**US-21 — Get a reasoned report**
+As a candidate, I want a short "evaluating" wait and then a report covering my overall
+impression, my strengths and what I need to improve, so that I can act on it.
+→ Last answer → `evaluating` → queued report job → SSE nudge → report page: overall
+impression + score, strengths, improvements, per-round evaluation, per-question score with
+the reason for that score, answer duration, STAR adherence.
+*Binds:* K15, K10, §8.1 (< 60 s). *Note:* a weak HR round **never** eliminates the
+candidate — the round carries a note and the interview continues.
+
+**US-22 — Keep my reports**
+As a candidate, I want completed interviews and their reports kept in my history, so that I
+can reread them later.
+→ `/me/interviews` lists occupation, date, duration, state, score → open one → report +
+transcript.
+*Binds:* §13 of the original draft, K13. *Note:* "the recording" in the source document
+means **the transcript**. No audio or video is ever recorded (§3.2).
+
+**US-23 — Delete an interview I don't want**
+As a candidate, I want to remove an interview from my history, so that the list stays tidy.
+→ Delete → gone from my list immediately → soft-deleted, still visible to admin with a
+`deleted` badge and its cost intact.
+*Binds:* K13 soft-delete rule, `features/admin_cost.feature`.
+
+**US-24 — Download the report as a PDF**
+As a candidate, I want the report as a file, so that I can keep or share it.
+→ "Download PDF" → rendered server-side in `worker` → signed URL, 5 min TTL.
+*Binds:* K15, K12. *Note:* last bonus bucket (§12) — the first thing cut if the deadline
+squeezes, and cutting it costs nothing mandatory.
+
+---
+
+## B. Admin stories
+
+**US-25 — Admins sign in with a password only**
+As an admin, I must be unable to sign in with Google, so that the privileged path has one
+controlled entry.
+→ Google callback and session creation both reject an admin account with
+`ADMIN_MUST_USE_PASSWORD`; no session is created.
+*Binds:* K8.4, `features/admin_auth.feature`. *Note:* brief-mandated negative requirement,
+enforced twice on purpose.
+
+**US-26 — See every interview and what it cost**
+As an admin, I want a list of all interviews filterable by occupation, state and user, with
+tokens and USD cost, so that I can see what the system is spending.
+→ Deleted interviews still listed with a badge → open one → per-call rows including which
+prompt version produced each question → voice usage appears as its own provider row
+(`unit_kind = 'second'`) → total cost as one number at the top.
+*Binds:* K13 (`llm_calls`), §3.5 reconciliation.
+
+**US-27 — See statistics by occupation**
+As an admin, I want charts of interview count per occupation cluster, average duration,
+completed vs. unfinished, total tokens and total cost, so that I can judge how the product
+is used.
+→ Dashboards → filter to one cluster → which questions are most often answered weakly.
+*Binds:* K11 metric definitions (they are fixed there precisely so two people don't produce
+two numbers), K15 `report_questions`.
+
+**US-28 — Trace a bad report**
+As an admin, I want to follow one interview through the logs, so that I can find the prompt
+version that produced a bad section and roll it back.
+→ Copy `interviewId` → Kibana (or `docker compose logs api | grep <interviewId>`) → request
+log, every prompt/completion, model, latency, cost, plus room events (join, round switch,
+voice drop, fallback).
+*Binds:* K6. *Note:* Kibana is profile-gated and may not be running at demo time — the same
+trace must be answerable from `docker compose logs`.
+
+**US-29 — See when the system defended itself**
+As an admin, I want prompt-injection suspicions and budget/time trips surfaced in the panel,
+so that security and cost events aren't buried in a log file.
+→ `SECURITY_PROMPT_INJECTION_SUSPECTED`, `budget_exhausted`, `time_exhausted` visible per
+interview.
+*Binds:* §7.1, §7.3.
+
+---
+
+## C. Blocker resolutions (meeting, 2026-07-29)
+
+| # | Raised as | Resolution | Where it lives |
+|---|---|---|---|
+| 1 | End the interview early when the candidate can't answer | **Adopted.** The interviewer takes the initiative and closes with `ended_reason = 'cut_short'`; the report says why. | US-14, K5 |
+| 2 | A fixed question count makes no sense — each question opens another; time-based would be better | **Partly adopted.** The count stays, because the brief has the user choose it and exceeding it reads as a violated requirement. It is a **ceiling, not a quota**. The time dimension already exists as the voice ceiling (12 min/round, 25 min/interview) and as `ended_reason = 'time_exhausted'`. | US-06, US-14, K5, §7.3 |
+| 3 | Should leaving and rejoining the meeting be possible? | **Yes.** Resume was already required by the refresh case; leaving is the same mechanism. 24 h idle → `abandoned`. | US-19, K2 |
+| 4 | "Take initiative" — set a count but end when it makes sense | **Adopted as the rule for both.** The interviewer may shorten, never extend. | US-14, K5 |
+
+---
+
+## D. Rewritten against IDEA.md
+
+Recorded so the changes don't look like accidents.
+
+| Original story | Claim | Ruling |
+|---|---|---|
+| 1, 2 | Guest pastes a listing at `/dashboard?instant=1`, signs in later, listing preserved | **Cut.** No anonymous flow (K8). Sign-in precedes setup, so the preservation trick is unnecessary. |
+| 1, 13 | The recording is saved and viewable | **Cut.** Transcript only; no audio or video is recorded (§3.2). |
+| 3 | Lobby lets the user pick which rounds to run | **Cut.** Both rounds always run — a state-machine branch and a second report shape for no scored requirement. |
+| 3 | Editable occupation summary | **Kept** (US-05). LLM extraction is fallible and `occupation` backs a scored filter. |
+| 5, 6 | Idle/speaking video loops, multiple avatars per character | **Cut.** 5 static images per persona (§3.6). |
+| 9 | A heartbeat agent extends or shortens the round | **Halved.** Shortening kept (US-14). Extension cut. |
+| 12 | Report shows speaking pace and filler-word count | **Cut.** Both need raw audio or a disfluency-preserving ASR; we record no audio and ElevenLabs returns cleaned text (§2.1). Answer duration and STAR adherence stay. |
+| 4 | Camera on by default | **Flipped.** Off by default (§14). |
+
+---
+
+## E. Not in IDEA.md — needs a decision before it becomes a story
+
+The candidate story list included a CV-driven track that `IDEA.md` does not cover at all.
+Written down rather than silently dropped, but **not numbered**, because numbering implies
+scope.
+
+- Upload a CV to complete the profile.
+- System detects standout skills from the CV and serves a 2-3 question skill test to verify
+  them.
+- Profile is enriched with both CV content and skill-test results.
+- "Search jobs based on my CV" — automatic filtering of job listings against experience,
+  skills and interests.
+- Start an interview directly from a matched listing.
+
+**Why this is a real scope question, not a small addition:** it needs a job-listing corpus
+we don't have, a matching/search surface, CV parsing beyond `unpdf`, and a second profile
+model. The existing profiling stage (US-07) already satisfies the brief's "pre-questions
+personalise the generated questions" bonus with a 3-field lobby form. Recommendation: keep
+the CV track out, or reduce it to **CV upload feeding `candidate_profile`** (one field, no
+job board, no skill test) if the profiling bonus needs more weight.
+
+---
+
+## F. Still open
+
+1. **Interview language confirmation** — auto-detect from the listing is assumed everywhere
+   above and settled in §3.4; confirm the lobby override is enough.
+2. **ElevenLabs agent provisioning** — console by hand or created via API at startup?
+   Affects `.env`, seeding and `SETUP.md` (IDEA §15.1).
+3. **ElevenLabs SDK audio surface** — determines whether the amplitude-driven avatar exists
+   at all (IDEA §15.1). No story above depends on the answer.
