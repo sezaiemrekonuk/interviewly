@@ -244,7 +244,7 @@ row here in the same commit that creates the ledger folder.
 
 | Ledger slug | Task prefix | ADR prefix | Scope band (§12) | Status |
 |---|---|---|---|---|
-| `foundations` | `F` | `ADR-F` | blocks everything | unclaimed |
+| `foundations` | `F` | `ADR-F` | blocks everything | written |
 | `auth` | `A` | `ADR-A` | MVP | unclaimed |
 | `interview-core` | `I` | `ADR-I` | MVP | unclaimed |
 | `report` | `R` | `ADR-R` | MVP | unclaimed |
