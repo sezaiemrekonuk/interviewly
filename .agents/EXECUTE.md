@@ -1,97 +1,138 @@
-# EXECUTE — how we run ledger tasks
+# EXECUTE — the execution prompt
 
-For Sezai, Ahmet and Fatih. This is the team contract: how a task gets claimed, executed,
-verified and merged, and the rules that keep three people working in parallel from
-colliding.
+For Sezai, Ahmet and Fatih. **This file is the prompt.** Paste it, or reference it:
 
-**This file is not the execution prompt.** Each ledger ships its own
-`.agents/ledgers/<slug>/EXECUTION_PROMPT.md` — that is what you paste into a fresh agent
-session. This file is what *you* need to know before and after that session.
+> Please execute @.agents/EXECUTE.md, do relevant tasks. I am Sezai. If you face any
+> problems, /superpowers:brainstorm to fix and update the task/ledgers.
 
-Design reference: `.agents/docs/IDEA.md`. Doc-authoring prompts: `.agents/prompts/AUTHOR_DOCS.md`.
+Part 1 is what the agent obeys. Part 2 is what the humans need. Design reference:
+`.agents/docs/IDEA.md`. Doc-authoring prompts: `.agents/prompts/AUTHOR_DOCS.md`.
 
 ---
 
-## The five rules
+# Part 1 — the prompt
 
-- **The ledger is the memory.** Nothing important lives in a chat transcript. If it
-  mattered, it is in a file and committed.
-- **One session = one task.** Read STATE → read one task file → do it → verify → commit →
-  stop. An agent that rolls into task two has stopped being reviewable.
-- **IDs are permanent addresses.** Never renumbered, never reused. Scope changed? Append a
-  new ID.
-- **Decisions are append-only.** A superseded ADR still explains why the code looks the way
-  it does. Never edit a past entry.
-- **Verification is a command, not a wish.** No task is done because it looks done.
+## 1. Who you are
 
----
+The invocation names you: Sezai, Ahmet or Fatih. **If it does not, stop and ask.** Never
+guess — guessing writes to another person's ledger, and two people implementing
+`schema.prisma` is the expensive version of that mistake.
 
-## Claiming work
+| Person | Ledgers |
+|---|---|
+| Sezai | foundations `F03`, interview-core (`I01`–`I15`) |
+| Ahmet | foundations `F01`, auth (`A01`–`A06`), report (`R01`–`R03`) |
+| Fatih | foundations `F02`, admin (`N01`–`N02`), voice (`V01`–`V05`), adaptive (`D01`–`D03`) |
 
-Ledger rows carry an `Owner` column in `STATE.md`. To claim a task:
+Task-ID prefixes are unique per ledger — `F` foundations, `A` auth, `I` interview-core,
+`R` report, `N` admin, `V` voice, `D` adaptive — so an ID alone tells you whose it is.
+Foundations is the one per-task split; every other ledger belongs wholly to one person.
 
-1. `git pull`
-2. Put your name in that task's `Owner` cell and flip `Status` to `in_progress`.
-3. Stage only, don't commit any changes.
+**This table is the only authority on who owns what.** There is deliberately no `Owner`
+column in any `STATE.md`: 37 cells to maintain where three rows already say it is 37 chances
+to drift. Never work a task this table does not give you.
 
-Push the claim *before* you start working. A claim that lives on your laptop for an hour
-is not a claim, and two people implementing `schema.prisma` is the expensive version of
-this mistake.
-
-**Claim a ledger, not a lone task.** The norm is one owner per ledger — you run its chain
-task-by-task, one session each, until the slice is green. The per-task `Owner` column
-exists so a dependent chain can be handed off cleanly, **not** so three people carve up one
-feature into backend/frontend/db and then block each other. Do not claim a task whose
-dependency is `in_progress` under someone else's name; pick an unblocked ledger instead.
-Parallelism is three people on three *different* ledgers — `F01`–`F03` are the one
-deliberate exception, three independent tasks in a single scope on day one.
-
-If you need to drop a task, flip it back to `todo`, clear the Owner, push, and say so.
-
-**Agent: if you don't know who you are, ask — don't guess.** The pointer and the `Owner`
-column only tell you which task to pick once you know *whose* seat you're in. If the
-session did not tell you your identity (Sezai, Ahmet or Fatih) — so you cannot tell which
-`Owner` rows are yours or which pointer to follow — stop and ask the human, then **persist
-the answer to memory** (`store_memory`) so the next session inherits it and you never
-re-ask. Same for any other feature-level decision the ledger does not settle: ask once,
-save it, reuse it.
-
----
-
-## The loop
+## 2. Preflight
 
 ```bash
-git pull
-git switch -c <id>-<slug>            # e.g. f02-prisma-schema
+git pull --rebase origin master
+git status --porcelain
 ```
 
-Then open an agent session and paste `.agents/ledgers/<slug>/EXECUTION_PROMPT.md` verbatim.
-The agent will:
+`git status --porcelain` must be empty. A dirty tree means a previous run's work is still
+uncommitted; **stop and report it.** Verification against a dirty tree proves nothing, and
+this file never commits, so the previous run's output is still sitting there waiting for a
+human.
 
-1. Read `STATE.md` in full — ledger, statuses, Current task pointer.
-2. Pick the task (the pointer, or your explicit ID, or the first eligible `todo`).
-3. Read `REFERENCE.md` once.
-4. Read **only** that task's file.
-5. Check `MODELS.md` for the recommended tier.
-6. Do the work, ticking `## Steps` checkboxes.
-7. Run the task's `## Verification` command **exactly as written**.
-8. Fill `## Notes`, update the STATE ledger row, repoint Current task, rewrite
-   "Last session ended".
-9. Write `.agents/devlogs/<id>-<slug>.md` — see § Devlog below. Not optional, not later.
-10. Commit as `<id>: <title>`, including the ledger *and* devlog file changes.
-11. **Stop.**
-
-Then you:
+## 3. The dependency graph
 
 ```bash
-npm run lint && npm run typecheck && npm test          # before you push, not after
-npm run test:acceptance                                 # if the task touched behaviour
-git push -u origin <id>-<slug>
-gh pr create                                            # PR body links the task file
+awk -F'|' 'NF>=6 {
+  id=$2; s=$5; d=$6
+  gsub(/^[ \t]+|[ \t]+$/,"",id); gsub(/^[ \t]+|[ \t]+$/,"",s); gsub(/^[ \t]+|[ \t]+$/,"",d)
+  if (id ~ /^[A-Z][0-9]+$/ && s ~ /^(todo|in_progress|done|blocked)$/) printf "%-4s %-12s <- %s\n", id, s, d
+}' .agents/ledgers/*/STATE.md
 ```
 
-Copilot code review takes the first pass. A **human on the team approves** — never
-self-merge on an agent's approval alone.
+37 lines: every task in the project, its status, and its complete direct-dependency list.
+The `Depends on` column is machine truth — cross-ledger IDs included — so this one command
+is the whole graph, and you never read another ledger's prose to find out what blocks you.
+
+The status filter is not optional: it is what separates real task rows from the ID-shaped
+rows in each ledger's narrative "Cross-ledger dependencies" tables. Without it those leak in
+and the picture is wrong.
+
+## 4. Pick your task
+
+Apply these in order:
+
+1. **A row of yours already `in_progress`?** Resume it. Finish what you started before you
+   start anything else.
+2. **Otherwise your task is the first row that is yours, `todo`, and has every ID in its
+   `Depends on` at status `done`.** Order: `F` before `A` before `I` before `R` before `N`
+   before `V` before `D`, then ascending number. Direct dependencies are enough — a
+   dependency cannot be `done` unless its own dependencies were.
+3. **Nothing eligible?** Walk your blocked row's dependencies until you reach a not-`done`
+   task that is not yours, or one whose status is `blocked`. That is the root blocker — the
+   one to chase, not the direct dependency. Print exactly:
+
+   ```
+   BLOCKED <your ID> needs <blocker ID> (<status>, owner <name>)
+   ```
+
+   and **end the run.** Do not pick a task from another ledger, do not work around it, do not
+   start the blocker yourself — it is someone else's seat. Say it in the group chat.
+4. **Every row of yours `done`?** Say so and end the run.
+5. **A `Depends on` names an ID that appears in no row, or a chain loops back on itself?** The
+   ledger contradicts itself. Print what you found and end the run — do not guess your way
+   past it. That is a `/superpowers:brainstorm` job, which is what the invocation asks you to
+   do with problems like this.
+
+Worked example of rule 3: `A02` is blocked by `A01`, which is blocked by `F03`. `A01` is
+Ahmet's own row, so the walk continues through it and reports
+`BLOCKED A02 needs F03 (todo, owner Sezai)` — naming the task that actually has to move.
+
+## 5. Check the tier before you start
+
+Read the task's row in its ledger's `MODELS.md`:
+
+- `claude-opus-*` → opus-tier. `claude-sonnet-*` → sonnet-tier.
+- haiku, mini or flash anywhere in that row: **stop.** Banned for this repo.
+- **The tier must match the model you are running.** If it does not, print
+  `TIER <ID> needs <tier>, running <your model>` and end the run. The human relaunches on
+  the right tier. Do not proceed on the wrong tier and note it in the devlog instead — the
+  tier is a requirement, not a preference.
+
+Practical consequence today: `F03` is sonnet-tier, so Sezai's first run must be a Sonnet
+session.
+
+## 6. The loop
+
+For the task § 4 gave you:
+
+1. Flip its `Status` to `in_progress` in that ledger's `STATE.md`.
+2. Read that ledger's `REFERENCE.md` — **once per ledger per run**, not once per task. Trust
+   it; patch it only if your task made it stale.
+3. Read **only** that task's file under `tasks/`. Other task files belong to other sessions.
+4. Do the work, ticking each `## Steps` checkbox as you go.
+5. Run the task's `## Verification` command **exactly as written**. If it fails, fix the
+   code — never the command. If it passes on the first run before you wrote any code, the
+   test is wrong; fix the test.
+6. Fill the task file's `## Notes` — hand-off content only, for the next session.
+7. Flip the `STATE.md` row to `done`, repoint "Current task", rewrite "Last session ended".
+8. Write `.agents/devlogs/<same basename as the task file>.md`. Not optional, not later. Full
+   contract: Part 2 § Devlog.
+9. Re-run § 3 and § 4. Continue while they hand you an eligible task whose tier matches.
+   Stop when a § 4 rule says stop, or when § 5 says the next task needs a different tier.
+
+**Do not commit between tasks.** The working tree accumulates; the end-of-run report is what
+makes it reviewable.
+
+**One task at a time — do not dispatch subagents to run tasks concurrently.** Parallelism on
+this project is three people on three seats, which the § 1 map makes conflict-free: no two
+people's ledgers overlap, so no two runs write the same `STATE.md`. Inside a run there is no
+isolation boundary — one working tree, no commits between tasks — so two concurrent agents
+would interleave edits.
 
 ### ATDD ordering, non-negotiable
 
@@ -103,8 +144,71 @@ The feature file is written and **red** before implementation. IDEA.md §5.3:
 4. Vitest unit tests inside; Cucumber outside.
 5. Refactor. The feature file did not change, so behaviour is preserved.
 
-If a task's verification command passes on the first run before you wrote any code, the
-test is wrong. Fix the test, never the command.
+## 7. Gates
+
+After the loop, if a root `package.json` exists:
+
+```bash
+npm run lint && npm run typecheck && npm test
+npm run test:acceptance          # only if the run touched behaviour
+```
+
+If it does not exist — which is the case until F03 lands — **skip these and say so
+explicitly in the report.** The task `## Verification` commands were the only gate that ran.
+Silently skipping a gate is how a branch reaches CI red.
+
+## 8. Never
+
+- Commit. Push. Open a PR. The human does all three.
+- Work a task the § 1 map does not give you.
+- Touch `schema.prisma` outside F02 (Part 2 § Migration protocol).
+- Renumber or reuse a task ID. Scope changed? Append a new ID.
+- Edit a past ADR entry. Decisions are append-only; a superseded ADR still explains why the
+  code looks the way it does.
+- Guess at credentials, API keys, external config, or a decision the team owns.
+
+## 9. When you are blocked mid-task
+
+1. Flip that ledger row to `blocked`.
+2. Write it into that ledger's `STATE.md` → `## Open blockers`: what is needed, who can
+   provide it, which task IDs it unblocks.
+3. End the run and say it in the group chat. Do not silently switch to another task — § 4
+   decides what is next, not you.
+
+## 10. End-of-run report
+
+Per completed task: the ID, the verification command and its actual output, and the files
+changed. Then:
+
+- gates run, or named as skipped and why
+- which § 4 or § 5 rule ended the run, and its printed line
+- the exact commands for the human to finish:
+
+```bash
+git switch -c <first-id>-<slug>
+git add -A && git commit -m "<ID>: <title>"    # one commit per task ID
+git push -u origin <first-id>-<slug>
+gh pr create                                    # PR body links the task files
+```
+
+Copilot code review takes the first pass. A **human on the team approves** — never
+self-merge on an agent's approval alone.
+
+---
+
+# Part 2 — team reference
+
+## The five rules
+
+- **The ledger is the memory.** Nothing important lives in a chat transcript. If it
+  mattered, it is in a file.
+- **§ 4 decides what is next.** Not the "Current task" pointer, not you. One run drains one
+  person's eligible same-tier chain and stops.
+- **IDs are permanent addresses.** Never renumbered, never reused. Scope changed? Append a
+  new ID.
+- **Decisions are append-only.** A superseded ADR still explains why the code looks the way
+  it does. Never edit a past entry.
+- **Verification is a command, not a wish.** No task is done because it looks done.
 
 ---
 
@@ -113,7 +217,7 @@ test is wrong. Fix the test, never the command.
 `AI_DEVLOG.md` is a scored deliverable (IDEA.md §13) and it is judged on *transparency*.
 A devlog assembled from memory at the end of the project reads like one, and loses the
 points it was written to win. So it is not assembled at the end: **every session writes its
-own devlog file, in the session, and commits it with the task.**
+own devlog file, in the session.**
 
 **One file per task ID:** `.agents/devlogs/<id>-<slug>.md`, where `<id>-<slug>` mirrors the
 task's filename exactly — `tasks/A01-backend-auth-module.md` pairs with
@@ -122,7 +226,7 @@ task's filename exactly — `tasks/A01-backend-auth-module.md` pairs with
 - **No merge conflicts, ever.** Three people appending prose to one shared file on three
   branches conflict on every PR. A file named after a task ID is touched by exactly one
   owner on exactly one branch.
-- **IDs are permanent addresses** (rule 3). No date in the filename — a task that spans two
+- **IDs are permanent addresses.** No date in the filename — a task that spans two
   sessions appends a second `## Session N` block to the *same* file rather than spawning a
   second one. Dates live in frontmatter; git has them anyway.
 
@@ -154,9 +258,9 @@ spec §7.2 AC-2 → `auth.feature:41` → red (`INVALID_CREDENTIALS` undefined) 
 Frontmatter is structured so the `AI_DEVLOG.md` summary table can be generated from the
 heads alone, without parsing prose. Keep the five keys; add none.
 
-- `model` vs `model_recommended` — the recommendation comes from `MODELS.md`. If you
-  switched mid-task, they differ, and the prose says why. **Those disagreements are the
-  most useful content in the file.** Do not quietly align them.
+- `model` vs `model_recommended` — the recommendation comes from `MODELS.md`. Part 1 § 5 ends
+  the run on a tier mismatch rather than proceeding, so these should agree; if they ever
+  differ, the prose says why. **Do not quietly align them.**
 - `iterations` — red→green cycles, counted honestly. `1` is a fine answer. So is `7`.
 - `## What I rejected and rewrote by hand` — generated code you threw away, and why. This
   is the section that evidences the "code is owned, not accepted" criterion (§2, 5 points).
@@ -176,7 +280,7 @@ hashing call by hand" is devlog content; it has no business in a hand-off note.
 
 | When | Who | What |
 |---|---|---|
-| every session, before the commit | task owner | write or append `.agents/devlogs/<id>-<slug>.md` |
+| every task, inside the run | the run | write or append `.agents/devlogs/<id>-<slug>.md` |
 | a ledger goes green | ledger owner | regenerate the `AI_DEVLOG.md` session table, write that ledger's narrative paragraph from its devlogs |
 | before the demo | one person | `npm run eval` output, intro, methodology section, final read |
 
@@ -195,14 +299,19 @@ human check at PR review: no devlog, no approval.
 ## What blocks what
 
 ```
-F01 design tokens · i18n scaffold · error-code registry  →  all UI work
-F02 schema.prisma (full) · migrations · seed · repo helpers  →  all API work
-F03 workspaces · compose · Caddyfile · logger · env schema · CI  →  everything
+F03 workspaces · compose · Caddyfile · logger · env schema · CI  →  F01, F02, and everything
+F01 design tokens · i18n scaffold · error-code registry          →  all UI work
+F02 schema.prisma (full) · migrations · seed · repo helpers       →  all API work
 ```
 
-Three tasks, three people, no cross-dependency, day one. **Feature ledgers start when all
-three are green.** Starting a feature ledger against a half-landed F02 produces a migration
-you will have to unpick.
+**F03 goes first, alone.** F01's verification is `npm run -w @interviewly/types build`, which
+needs the root workspace `package.json` F03 creates; F02's needs a live Postgres from F03's
+`compose.yaml`. F03's own verification is `docker compose config`, which needs nothing. The
+earlier "three tasks, three people, no cross-dependency, day one" reading was wrong, and the
+`Depends on` column now says so.
+
+Feature ledgers start when all three are green. Starting a feature ledger against a
+half-landed F02 produces a migration you will have to unpick.
 
 Scope order after that (IDEA.md §12): MVP text mode → voice → bonus. The voice layer is
 the attractive part and half the score sits in the mandatory functions. **If voice fails,
@@ -219,7 +328,7 @@ unacceptable.
 
 - **The entire schema lands in F02**, including tables no ledger has reached yet.
 - Feature ledgers may add **indexes and nullable columns only**, each in its own migration.
-- **Rebase before merge**, always. `git pull --rebase origin <main>` then re-run
+- **Rebase before merge**, always. `git pull --rebase origin master` then re-run
   `npx prisma migrate dev` if the head moved.
 - Any structural change — new table, dropped column, changed relation — is a change to
   **F02's scope**. It gets discussed in the group, recorded as an ADR, and merged as its
@@ -268,7 +377,9 @@ CI on every PR, all blocking except the last:
 | `commit-hygiene` | commitlint + commit count | warning |
 
 Run `lint`, `unit` and `acceptance` locally before pushing. CI is the safety net, not the
-first run.
+first run. An `EXECUTE.md` run does this for you when a root `package.json` exists and tells
+you when it could not — until F03 lands, the task `## Verification` commands are the only
+gate, so read the run's report before you push.
 
 ---
 
@@ -277,10 +388,11 @@ first run.
 Do not guess at credentials, API keys, external config or a decision the team owns.
 
 1. Flip the ledger row to `blocked`.
-2. Write it into `STATE.md` → `## Open blockers`: what is needed, who can provide it, and
-   which task IDs it unblocks.
-3. Push, and say it in the group chat.
-4. Pick up a different eligible task.
+2. Write it into that ledger's `STATE.md` → `## Open blockers`: what is needed, who can
+   provide it, and which task IDs it unblocks.
+3. Say it in the group chat.
+4. Do **not** pick up a different task. Part 1 § 4 decides what is next, and a blocked seat
+   is a signal for the team, not a prompt to go find other work.
 
 ---
 
@@ -290,12 +402,14 @@ These are from IDEA.md §15.1 and must be closed by a human.
 
 | # | Blocker | Blocks | Decide by |
 |---|---|---|---|
-| 1 | **Branch name: `master` or `main`.** The remote and local clones disagree. Pick one, delete the other, before any parallel work. | every PR, every rebase | before F01–F03 start |
 | 2 | **ElevenLabs agent provisioning** — hand-configured in the console, or created via API at startup? Console is less work now but makes `SETUP.md` depend on a manual step in someone else's dashboard. | `voice` ledger, `.env`, seed | before the voice spec |
 | 3 | **ElevenLabs web SDK audio surface** — does it expose an `AudioNode`/`MediaStream` for agent output? Determines whether `AmplitudeAvatarDriver` exists at all. | avatar driver task only | before the frontend spec |
 
-Blocker 1 is the live one. Two candidates for "the main branch" on a three-person team is a
-merge accident waiting to happen, and nothing below F01 should start until it is settled.
+**Blocker 1 (branch name) is closed, 2026-07-30: `master`.** `upstream/HEAD` already pointed
+at it and it was the only remote branch; the stale local `main` was deleted and the remote
+was renamed `upstream` → `origin`, so every standard command and `gh` default works
+unmodified. Blockers 2 and 3 gate `voice` tasks only — no voice task is eligible under
+Part 1 § 4 until its dependencies are green anyway.
 
 ---
 

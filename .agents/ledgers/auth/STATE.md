@@ -5,12 +5,16 @@ Last session ended: **—** Ledger written; no task has started yet.
 
 ## Execution protocol (follow exactly)
 
-Read this file → read `REFERENCE.md` once → read only the current task's file →
-check `MODELS.md` for the recommended model → do the work, ticking checkboxes →
-run the task's `## Verification` command verbatim → fill in the task's `## Notes` →
-update this file's ledger row, "Current task" pointer, and "Last session ended" line →
-write `.agents/devlogs/{ID}-<slug>.md` (EXECUTE.md § Devlog) →
-commit as `{ID}: <title>` → **STOP. Do not roll into the next task.**
+Do not start from this file. `.agents/EXECUTE.md` is the prompt, and its § 4 decides which
+task is yours — not the "Current task" pointer below, which is a human-readable summary and
+can lag.
+
+Read this file → read `REFERENCE.md` once → read only the task § 4 gave you →
+check `MODELS.md` for the required tier and stop if it is not yours → do the work, ticking
+checkboxes → run the task's `## Verification` command verbatim → fill in the task's
+`## Notes` → update this file's ledger row, "Current task" pointer, and "Last session ended"
+line → write `.agents/devlogs/{ID}-<slug>.md` (EXECUTE.md § Devlog) → **do not commit** →
+re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
@@ -58,7 +62,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 
 | ID | Title | Repo | Status | Depends on |
 |----|-------|------|--------|------------|
-| A01 | Creating the backend auth module: register, login, logout, session cookie, and `/me` | | todo | — |
+| A01 | Creating the backend auth module: register, login, logout, session cookie, and `/me` | | todo | F01, F02, F03 |
 | A02 | Adding Google OAuth (arctic PKCE), account linking, and admin password restriction | | todo | A01 |
 | A03 | Building the frontend login and register forms | | todo | A02 |
 | A04 | Building email verification: tokens, the mail job, the gate, and the two screens | | todo | A03 |

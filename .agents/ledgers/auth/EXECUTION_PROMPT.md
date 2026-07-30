@@ -1,7 +1,7 @@
 # Auth — Execution Prompt
 
 Paste this verbatim as the prompt for each new session working the `.agents/ledgers/auth/`
-ledger. One session = one task. The session has no memory of prior sessions — everything
+ledger. `.agents/EXECUTE.md` is the prompt; its § 4 picks the task and its § 6 drains the chain. The session has no memory of prior sessions — everything
 needed lives in these files.
 
 ---
@@ -15,17 +15,14 @@ do not improvise scope beyond the task file.
 1. **Read `.agents/ledgers/auth/STATE.md` in full** — ledger, statuses, cross-ledger
    dependencies, and the "Current task" pointer.
 
-2. **Check the cross-ledger gate.** If the "Cross-ledger dependencies" table in STATE.md
-   shows F01, F02, or F03 as anything other than `done` in the foundations ledger
-   (`.agents/ledgers/foundations/STATE.md`), **stop and report**. Auth tasks cannot run
-   until all three foundations tasks are green.
-
-3. **Pick the task:**
-   - If "Current task" names one, use it — unless the user's message this session names a
-     different ID, in which case the user wins.
-   - Otherwise take the first `todo` row in the ledger table whose `Depends on` is empty
-     or all-`done`. Ties go to the earlier row (the table is dependency-sorted).
-   - If nothing is eligible, stop and report — don't invent work.
+2. **Do not pick the task yourself.** Apply `.agents/EXECUTE.md` Part 1 § 4: the assignment
+   map, the dependency dump, and the five rules. Work the ID it gives you. If a rule ends the
+   run, print its line and stop. The "Current task" pointer in `STATE.md` is a
+   human-readable summary and can lag behind the `Depends on` column, which is the truth.
+3. **Task selection already happened in step 2.** `.agents/EXECUTE.md` Part 1 § 4 gave you
+   the ID; work that one. Do not re-derive it from the "Current task" pointer, and do not
+   fall back to "the first `todo` row" — that reading ignores cross-ledger dependencies the
+   `Depends on` column now carries in full.
 
 4. **Read `.agents/ledgers/auth/REFERENCE.md` once.** Trust it; patch it if stale.
 
@@ -80,11 +77,10 @@ do not improvise scope beyond the task file.
     task's `## Notes`**: Notes hand off to the next session, the devlog reports how the work
     was done. Do not duplicate between them. Full contract: `.agents/EXECUTE.md` § Devlog.
 
-11. **Commit** as `{ID}: <title>`, e.g. `A01: Creating backend auth module`.
-    Include the `.agents/ledgers/auth/` and `.agents/devlogs/` file changes in the same
-    commit.
-
-12. **STOP.** The next task is the next session's job.
+11. **Do not commit.** Report the files you changed and the verification output; the human
+    commits, pushes and opens the PR. See `.agents/EXECUTE.md` Part 1 § 10.
+12. **Re-apply `.agents/EXECUTE.md` Part 1 § 4** and continue with what it gives you. Stop
+    when a rule there ends the run, or when § 5 says the next task needs a different tier.
 
 ### If blocked mid-task
 

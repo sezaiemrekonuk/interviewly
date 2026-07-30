@@ -5,12 +5,16 @@ Last session ended: **—** Ledger written; no task has started yet.
 
 ## Execution protocol (follow exactly)
 
-Read this file → read `REFERENCE.md` once → read only the current task's file →
-check `MODELS.md` for the recommended model → do the work, ticking checkboxes →
-run the task's `## Verification` command verbatim → fill in the task's `## Notes` →
-update this file's ledger row, "Current task" pointer, and "Last session ended" line →
-write `.agents/devlogs/{ID}-<slug>.md` (EXECUTE.md § Devlog) →
-commit as `{ID}: <title>` → **STOP. Do not roll into the next task.**
+Do not start from this file. `.agents/EXECUTE.md` is the prompt, and its § 4 decides which
+task is yours — not the "Current task" pointer below, which is a human-readable summary and
+can lag.
+
+Read this file → read `REFERENCE.md` once → read only the task § 4 gave you →
+check `MODELS.md` for the required tier and stop if it is not yours → do the work, ticking
+checkboxes → run the task's `## Verification` command verbatim → fill in the task's
+`## Notes` → update this file's ledger row, "Current task" pointer, and "Last session ended"
+line → write `.agents/devlogs/{ID}-<slug>.md` (EXECUTE.md § Devlog) → **do not commit** →
+re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
@@ -65,9 +69,9 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 
 | ID | Title | Repo | Status | Depends on |
 |----|-------|------|--------|------------|
-| D01 | Adaptive score→question selector and malformed-score guard (pure module) | | todo | — |
-| D02 | Next-question candidate pre-generation during a turn | | todo | — |
-| D03 | Score-driven promotion and malformed-score fallback (greens `@adaptive-questions`) | | todo | D01, D02 |
+| D01 | Adaptive score→question selector and malformed-score guard (pure module) | | todo | F01, F02, F03, I01 |
+| D02 | Next-question candidate pre-generation during a turn | | todo | F01, F02, F03, I01, I02, I04 |
+| D03 | Score-driven promotion and malformed-score fallback (greens `@adaptive-questions`) | | todo | D01, D02, I02, I06 |
 
 D01 and D02 are **genuinely independent** of each other — either order is safe. D03 depends on
 both. Both D01 and D02 also carry cross-ledger dependencies (below) that must be green first.

@@ -1,7 +1,7 @@
 # Foundations — Execution Prompt
 
 Paste this verbatim as the prompt for each new session working the
-`.agents/ledgers/foundations/` ledger. One session = one task. The session has no memory
+`.agents/ledgers/foundations/` ledger. `.agents/EXECUTE.md` is the prompt; its § 4 picks the task and its § 6 drains the chain. The session has no memory
 of prior sessions — everything needed lives in these files.
 
 ---
@@ -14,14 +14,10 @@ steps, do not batch multiple tasks, do not improvise scope beyond the task file.
 
 1. **Read `.agents/ledgers/foundations/STATE.md` in full** — ledger, statuses, and the
    "Current task" pointer.
-2. **Pick the task:**
-   - If "Current task" names one and the user's message this session does not override it,
-     use it.
-   - Otherwise take the first `todo` row whose `Depends on` is `—` or all-`done`. In this
-     ledger all three rows have `Depends on: —`, so the first `todo` row by ID is eligible.
-   - If a `Repo` column named another repo, confirm you are in it before doing anything
-     else.
-   - If nothing is eligible, stop and report — don't invent work.
+2. **Do not pick the task yourself.** Apply `.agents/EXECUTE.md` Part 1 § 4: the assignment
+   map, the dependency dump, and the five rules. Work the ID it gives you. If a rule ends the
+   run, print its line and stop. The "Current task" pointer in `STATE.md` is a
+   human-readable summary and can lag behind the `Depends on` column, which is the truth.
 3. **Mark the task `in_progress`** in `STATE.md` before touching any other file.
 4. **Read `.agents/ledgers/foundations/REFERENCE.md` once.** Trust it; patch it only if
    stale after your task lands.
@@ -66,10 +62,10 @@ steps, do not batch multiple tasks, do not improvise scope beyond the task file.
     Notes hand off to the next session, the devlog reports how the work was done. No
     duplication. Full contract: `.agents/EXECUTE.md` § Devlog.
 
-11. **Commit** as `{ID}: <title>`, e.g. `F01: design tokens, next-intl scaffold,
-    error-code registry, @interviewly/types`. Include the `.agents/ledgers/foundations/`
-    and `.agents/devlogs/` file changes in the same commit.
-12. **STOP.** The next task is the next session's job.
+11. **Do not commit.** Report the files you changed and the verification output; the human
+    commits, pushes and opens the PR. See `.agents/EXECUTE.md` Part 1 § 10.
+12. **Re-apply `.agents/EXECUTE.md` Part 1 § 4** and continue with what it gives you. Stop
+    when a rule there ends the run, or when § 5 says the next task needs a different tier.
 
 ### If blocked mid-task
 

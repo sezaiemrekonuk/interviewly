@@ -1,7 +1,7 @@
 # Voice — Execution Prompt
 
 Paste this verbatim as the prompt for each new session working the `.agents/ledgers/voice/`
-ledger. One session = one task. The session has no memory of prior sessions — everything needed
+ledger. `.agents/EXECUTE.md` is the prompt; its § 4 picks the task and its § 6 drains the chain. The session has no memory of prior sessions — everything needed
 lives in these files.
 
 ---
@@ -16,18 +16,14 @@ the task file.
    dependencies, the "Current task" pointer, and the "Open blockers" (the CSP/SDK forks you must
    NOT resolve yourself).
 
-2. **Check the cross-ledger gate.** The "Cross-ledger dependencies (blocks this ledger)" table in
-   STATE.md lists the foundations/auth/interview-core tasks each voice task needs. If any listed
-   dependency is not `done` in its ledger's STATE.md, **stop and report** — a voice task cannot run
-   until its `Depends on` are green. (Voice blocks nothing; no other ledger waits on you.)
-
-3. **Pick the task:**
-   - If "Current task" names one, use it — unless the user's message this session names a different
-     ID, in which case the user wins.
-   - Otherwise take the first `todo` row whose `Depends on` is empty or all-`done`. Ties go to the
-     earlier row (the table is dependency-sorted). V02 and V03 are independent — either is eligible
-     once V01 is done.
-   - If nothing is eligible, stop and report — don't invent work.
+2. **Do not pick the task yourself.** Apply `.agents/EXECUTE.md` Part 1 § 4: the assignment
+   map, the dependency dump, and the five rules. Work the ID it gives you. If a rule ends the
+   run, print its line and stop. The "Current task" pointer in `STATE.md` is a
+   human-readable summary and can lag behind the `Depends on` column, which is the truth.
+3. **Task selection already happened in step 2.** `.agents/EXECUTE.md` Part 1 § 4 gave you
+   the ID; work that one. Do not re-derive it from the "Current task" pointer, and do not
+   fall back to "the first `todo` row" — that reading ignores cross-ledger dependencies the
+   `Depends on` column now carries in full.
 
 4. **Read `.agents/ledgers/voice/REFERENCE.md` once.** Trust it; patch it only if stale.
 
@@ -82,10 +78,10 @@ the task file.
     task's `## Notes`**: Notes hand off to the next session, the devlog reports how the work
     was done. Do not duplicate between them. Full contract: `.agents/EXECUTE.md` § Devlog.
 
-11. **Commit** as `{ID}: <title>`, e.g. `V02: ElevenLabs webhook authentication`. Include the
-    `.agents/ledgers/voice/` and `.agents/devlogs/` file changes in the same commit.
-
-12. **STOP.** The next task is the next session's job.
+11. **Do not commit.** Report the files you changed and the verification output; the human
+    commits, pushes and opens the PR. See `.agents/EXECUTE.md` Part 1 § 10.
+12. **Re-apply `.agents/EXECUTE.md` Part 1 § 4** and continue with what it gives you. Stop
+    when a rule there ends the run, or when § 5 says the next task needs a different tier.
 
 ### If blocked mid-task
 
