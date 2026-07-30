@@ -54,7 +54,8 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
-    command: ["npx", "prisma", "migrate", "deploy"]
+    # The image WORKDIR is the workspace root, so the schema needs an explicit path (F02).
+    command: ["npx", "prisma", "migrate", "deploy", "--schema", "backend/prisma/schema.prisma"]
     env_file: [.env]
     depends_on:
       db:

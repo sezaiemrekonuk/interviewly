@@ -284,3 +284,32 @@ verifies it rather than reimplementing it). `backend/`, `worker/`, and `packages
 first-ever ESLint config as a direct consequence — F04 folds in the pre-existing "root
 `eslint.config.js` missing" backlog gap rather than leaving it to a third task, since a hook
 can't lint a command that doesn't run.
+
+---
+
+## ADR-F13 — 2026-07-30 — Prisma 6 for the schema toolchain, not the specced `^5`
+
+**Context:** The F02 task file pins `@prisma/client@^5` / `prisma@^5`. At execution time
+Prisma's `latest` is 7.9.1 and 5.x is two majors behind. Three options: (A) `^5` as written;
+(B) `^6` (6.19.3); (C) `^7`.
+
+**Decision:** Option B, `6.19.3`. Prisma 6 still ships the `prisma-client-js` generator that
+the task's schema block and `db` spec assume, so **not one line of the schema text changed** —
+the swap is confined to two `package.json` version ranges. `npx prisma validate`,
+`migrate dev`, `migrate deploy` and `migrate diff --exit-code` were all exercised on Node 25.
+
+**Why not A:** `npm audit --audit-level=high` is a blocking CI job (§11.4). Starting a
+greenfield 2026 project on a major that is already out of active support puts a foreseeable
+advisory on the critical path of every future PR, for zero benefit — nothing in the spec uses
+a Prisma-5-only behaviour.
+
+**Why not C:** Prisma 7 replaces `prisma-client-js` with the `prisma-client` generator and a
+required output path. That is a migration of the one artefact the ledger calls
+highest-blast-radius, bundled into the task that creates it. The schema is the wrong place to
+also be validating a generator rewrite; 7 is a scoped follow-up, not a day-one bet.
+
+**Consequences:** `package.json#prisma` (the `seed` entry the task prescribes) is deprecated in
+6 and emits a warning on every CLI call; it is removed in 7, so the eventual 7 upgrade must
+also introduce `prisma.config.ts`. Both are backlogged in `STATE.md`. Feature ledgers run
+`npx prisma migrate dev` from `backend/` against Prisma 6 — a ledger that installs its own
+Prisma version will produce a migration history the others cannot apply.

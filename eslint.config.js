@@ -22,7 +22,13 @@ module.exports = [
     ],
   },
   {
-    files: ["backend/src/**/*.ts", "packages/*/src/**/*.ts", "worker/src/**/*.ts"],
+    // backend/prisma holds seed.ts (F02) — TypeScript, so it needs the TS parser too.
+    files: [
+      "backend/src/**/*.ts",
+      "backend/prisma/**/*.ts",
+      "packages/*/src/**/*.ts",
+      "worker/src/**/*.ts",
+    ],
     languageOptions: {
       parser: tsparser,
       parserOptions: { sourceType: "module" },

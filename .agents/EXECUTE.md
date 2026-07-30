@@ -163,6 +163,30 @@ If it does not exist — which is the case until F03 lands — **skip these and 
 explicitly in the report.** The task `## Verification` commands were the only gate that ran.
 Silently skipping a gate is how a branch reaches CI red.
 
+### Two CI jobs are currently false greens — read this before you trust them
+
+CI (`.github/workflows/ci.yml`) went green on 2026-07-30 with two jobs that pass because
+they have nothing to run, not because anything was proven:
+
+- **`unit`** runs `vitest run --passWithNoTests`. The repo has zero vitest files. **The first
+  session to write a vitest test must drop `--passWithNoTests` from
+  `backend/package.json` → `test:unit`** in that same PR. Leave it in and every later run
+  that finds no test files stays green.
+- **`acceptance`** runs `cucumber-js` with no config file and no `backend/features/`
+  directory, so it reports `0 scenarios` and exits 0. **The first ATDD session must add
+  `cucumber.js` (or `cucumber.json`) and the `features/` + step-definition layout in the same
+  PR as its first `.feature` file**, and confirm the job actually goes red before it goes
+  green. `@cucumber/cucumber` and `vitest` are already installed as `backend` devDependencies
+  — you do not need to add them, only to wire them.
+
+A job that cannot fail is worse than a missing job: it reports safety it never checked. Both
+are tracked in `.agents/ledgers/foundations/STATE.md` → `## Backlog`.
+
+Also non-blocking on purpose: **`audit`** carries `continue-on-error: true`. `next` has an
+unfixed high advisory (vulnerable range `9.3.4-canary.0 - 16.3.0-preview.7`; latest stable is
+16.2.12, i.e. there is no fixed release to move to). Findings still print in the job log —
+read them; do not add new high-severity dependencies on the strength of a green tick.
+
 ## 8. Never
 
 - Commit. Push. Open a PR. The human does all three.

@@ -1,7 +1,24 @@
 # Foundations — State
 
 Last updated: 2026-07-30
-Last session ended: **F04 done** (executed by Sezai). Root `eslint.config.js` added
+Last session ended: **F02 done** (executed by Sezai, out of ownership order — F02 is Fatih's
+row, taken over on the owner's request as an explicit blocker-clearing exception, the same
+pattern as F01; full deviation record in `tasks/F02-prisma-schema-migrate-seed.md` → `## Notes`).
+**Foundations is now green and every feature ledger is unblocked.** `backend/prisma/schema.prisma`
+holds all 15 tables, 18 enums and the 7 §8.1 indexes; migration `20260730130638_init` is
+generated and applied; `prisma/seed.ts` is idempotent and produces the demo admin, 10 occupation
+clusters, 2 personas, the 5-pose mascot set, the sample-listing fixture and one finished sample
+interview with a ready report; `backend/src/lib/db.ts` ships `userInterviews`, `activeInterview`
+and `recordLlmCall` plus a self-check that was proven red before being trusted. Verification
+(`prisma migrate diff --exit-code`) exits 0, all 17 FKs are `ON DELETE RESTRICT` with no cascade
+delete, and the whole path was re-run from destroyed volumes so "on an empty database" was
+literally tested. **Prisma is 6.19.3, not the task's `^5`** — ADR-F13. Five one-line changes
+landed outside `backend/prisma`, each needed for a fresh clone to boot seeded: `compose.yaml`
+(`migrate` gets `--schema`), `backend/Dockerfile` (`prisma generate`), `eslint.config.js` and
+`tsconfig.json` (both now reach `backend/prisma/*.ts`), `.env.example` (`SEED_ADMIN_PASSWORD`).
+`npm run lint` and `npm run typecheck` exit 0; `npm test` still does not exist (backlog, below).
+
+Previously: **F04 done** (executed by Sezai). Root `eslint.config.js` added
 (`@typescript-eslint` recommended over `backend/src`, `packages/*/src`, `worker/src`;
 `frontend/**` explicitly excluded since it lints itself). `npm run lint` at root now exits 0.
 `husky` + `lint-staged` installed; `.husky/pre-commit` runs `npx lint-staged`, wired via
@@ -47,17 +64,33 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**F01, F03, F04 are done. F02 (Fatih) is the only foundations task left, still `todo` — it
-blocks every feature ledger (`Depends on` includes F02 across `I`, `A`, `R`, `N`, `V`, `D`).
-Foundations has no more tasks for Sezai.** Apply `.agents/EXECUTE.md` Part 1 § 4 to confirm
-before starting anything.
+**Foundations is green. F01, F02, F03, F04 are all `done` — there is no next foundations
+task for anyone.** Every feature ledger (`auth`, `interview-core`, `report`, `admin`, `voice`,
+`adaptive`) is now unblocked at its root: `A01`, `I01`, `I14`, `I15` and `D01` have all of
+`F01`/`F02`/`F03` satisfied. Apply `.agents/EXECUTE.md` Part 1 § 4 against your own ledger.
 
 ## Environment
 
-Nothing is installed yet. Each task's `## Steps` lists the exact commands to set up its
-own scope. A fresh clone needs only `node` ≥ 22 and Docker Desktop installed. The
-`compose.yaml` does not exist until F03 lands; F01 and F02 can be verified without it
-(see their individual `## Verification` commands).
+A fresh clone needs `node` ≥ 22 and Docker Desktop, then `npm ci` and
+`cp .env.example .env`. All four foundations tasks have landed, so the stack is real:
+
+```bash
+docker compose up                                         # full stack; migrate runs itself
+docker compose run --rm api npm run seed                   # personas, clusters, demo admin
+
+# Host-side loop against just the two stateful services:
+docker compose -f compose.yaml -f compose.dev.yaml up -d db bucket
+cd backend
+export DATABASE_URL=postgresql://interviewly:interviewly@localhost:5432/interviewly
+export SHADOW_DATABASE_URL=postgresql://interviewly:interviewly@localhost:5432/interviewly_shadow
+export S3_ENDPOINT=http://localhost:9000 S3_BUCKET=interviewly \
+       S3_ACCESS_KEY=minioadmin S3_SECRET_KEY=minioadmin
+npx prisma migrate deploy && npm run seed && npm run db:check
+```
+
+`.env` is gitignored and its `DATABASE_URL` is container-side (`db:5432`) — host-side Prisma
+needs the `localhost` overrides above, which is why they are exported rather than written into
+the file. Demo admin: `admin@demo.com` / `AdminDemo1!`.
 
 ## Open blockers / decisions for the user
 
@@ -73,18 +106,21 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | ID | Title | Repo | Status | Depends on |
 |----|-------|------|--------|------------|
 | F01 | Creating design tokens, next-intl scaffold, error-code registry, and @interviewly/types package | | done | F03 |
-| F02 | Creating full Prisma schema, migrations, seed, and soft-delete repo helpers | | todo | F03 |
+| F02 | Creating full Prisma schema, migrations, seed, and soft-delete repo helpers | | done | F03 |
 | F03 | Creating npm workspaces root, compose.yaml, Caddyfile, logger, env schema, and CI workflow | | done | — |
 | F04 | Local pre-commit hooks (husky + lint-staged) for backend, frontend, packages | | done | F03 |
 
 ## Critical path
 
-**F03 → {F01, F02} in parallel** → all three green → every feature ledger (auth,
-interview-core, report, admin, voice, adaptive) may start.
+**Walked, in order: F03 → F01 → F04 → F02. All four are green, so the critical path is
+clear** and every feature ledger (auth, interview-core, report, admin, voice, adaptive) may
+start.
 
 The earlier "three tasks, three people, no cross-dependency, day one" reading was wrong:
 F01 and F02 cannot run their own verification commands until F03 exists, and rule 5 is that
-verification is a command, not a wish.
+verification is a command, not a wish. In the end F03/F01/F04/F02 ran sequentially rather than
+in parallel — the three-seat split never materialised on foundations, and all four were
+executed by Sezai.
 
 **F04 is off the critical path.** It depends only on F03 (done) and gates nothing — no feature
 ledger's `Depends on` names F04. It exists so local commits get caught before CI does; land it
@@ -92,6 +128,41 @@ whenever Sezai picks it up, in parallel with F02.
 
 ## Backlog (deferred, unnumbered — promote to a task when its trigger fires)
 
+- **`unit` CI job is a false green.** `backend/package.json` → `test:unit` is
+  `vitest run --passWithNoTests`, because the repo has no vitest files and `vitest run`
+  exits 1 on an empty suite. Promote — i.e. delete the flag — in the same PR as the first
+  vitest test. Also flagged in `.agents/EXECUTE.md` § 7 so every session sees it.
+- **`acceptance` CI job is a false green.** `cucumber-js` runs with no config file and no
+  `backend/features/` directory, reports `0 scenarios`, exits 0. Needs `cucumber.js` +
+  `features/` + step definitions. Promote in the same PR as the first `.feature` file, and
+  see the job go red first (EXECUTE.md § 6, ATDD ordering). `@cucumber/cucumber` and `vitest`
+  are already `backend` devDependencies — only the wiring is missing.
+- **`npm audit` is non-blocking.** The `audit` job carries `continue-on-error: true`. Cause:
+  `next` itself has a high advisory whose vulnerable range (`9.3.4-canary.0 -
+  16.3.0-preview.7`) covers every stable release including the current latest, 16.2.12 — so
+  there is nothing to upgrade to. The other 11 highs *are* fixable and are collateral of the
+  same tree: `postcss` (≤8.5.17, fix 8.5.18+) and `sharp` (<0.35.0, fix 0.35.3) can be forced
+  with root `overrides`, and the eslint chain (`eslint`, `@eslint/config-array`,
+  `@eslint/eslintrc`, `brace-expansion`, `minimatch`, `eslint-config-next`) needs an eslint 9
+  → 10 major bump. Both were left alone deliberately: overriding `sharp` under `next` risks
+  image optimisation at runtime, and an eslint major is its own task. Promote when `next`
+  ships a fixed stable — do the eslint bump and the overrides then, and drop
+  `continue-on-error` in the same PR.
+- **Cold `npm ci` costs ~6 min in CI.** Measured 2026-07-30: `npm cache is not found`, 557
+  packages, native builds (`sharp`, `next-swc`, `@node-rs/argon2`, prisma engines,
+  `@aws-sdk/client-s3`). `--prefer-offline --no-audit --fund=false` is now on every job, but
+  the real win is a warm `~/.npm`, and `actions/setup-node`'s cache is only written by a run
+  on the base branch — so it stays cold until a green run lands on `master`. Promote if it is
+  still slow after that: cache `node_modules` by `package-lock.json` hash instead.
+- **Prisma Client must be generated explicitly in every CI job that typechecks or imports
+  it.** `@prisma/client` hoists to the workspace root, its postinstall finds no
+  `./prisma/schema.prisma` there (the schema lives in `backend/prisma/`), and it silently
+  emits a stub client with zero models — which surfaces as `TS2305`/`TS2694` on every Prisma
+  type. `typecheck`, `unit` and `acceptance` each run
+  `npx prisma generate --schema backend/prisma/schema.prisma`; `backend/Dockerfile` already
+  did. Promote to a root `postinstall` only if the Dockerfile `deps` stages are reworked —
+  today they run `npm ci` with the schema not yet copied into the image, so a root
+  postinstall would break `docker compose build`.
 - **Root `"test"` script missing.** `npm test` at repo root fails ("Missing script"). Only
   `test:acceptance` is wired; no aggregate unit-test script exists yet (backend has its own
   `test:unit` via vitest, scoped to its workspace). Promote alongside the `unit` CI job once a
@@ -105,3 +176,17 @@ whenever Sezai picks it up, in parallel with F02.
 - **Elasticsearch / Kibana Compose wiring** — `observability` profile services; F03 creates
   the skeleton. Full index-template and dashboard config deferred to a parallel
   observability task outside MVP scope.
+- **Public-read bucket policy for the `personas/` and `mascot/` prefixes.** F02's seed creates
+  the bucket and PUTs all 15 objects, but they are not anonymously readable, so
+  `/assets/mascot/*.webp` at the edge returns 403. Infra spec §7 owns this boundary
+  (public-read on two prefixes, default-deny everywhere else). Promote when the first screen
+  needs to actually render an avatar or the mascot — `ui`/`infra` scope, not a schema change.
+- **`backend/tsconfig.json` missing.** `backend/package.json` declares
+  `"build": "tsc -p tsconfig.json"` but no such file exists, so `npm run -w backend build`
+  fails; the Dockerfile hides it with `|| true`. Predates F02 (F01 and F03 both added files
+  under `backend/src` with the same gap). Promote before anything needs a compiled backend
+  artefact — the `build` CI job currently only runs `docker compose build`.
+- **`prisma.config.ts` migration.** The `package.json#prisma` seed entry that F02's task
+  prescribes is deprecated in Prisma 6 (it warns on every CLI call) and removed in Prisma 7.
+  Promote together with the Prisma 7 upgrade, which also swaps the `prisma-client-js`
+  generator for `prisma-client` (ADR-F13).

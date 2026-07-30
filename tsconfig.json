@@ -16,6 +16,6 @@
       "@interviewly/types": ["packages/types/src/index.ts"]
     }
   },
-  "include": ["backend/src", "frontend/src", "packages/*/src", "worker/src"],
+  "include": ["backend/src", "backend/prisma", "frontend/src", "packages/*/src", "worker/src"],
   "exclude": ["node_modules", "**/dist", "**/.next"]
 }
