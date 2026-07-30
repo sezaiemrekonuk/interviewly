@@ -246,11 +246,11 @@ row here in the same commit that creates the ledger folder.
 |---|---|---|---|---|
 | `foundations` | `F` | `ADR-F` | blocks everything | written |
 | `auth` | `A` | `ADR-A` | MVP | written |
-| `interview-core` | `I` | `ADR-I` | MVP | unclaimed |
-| `report` | `R` | `ADR-R` | MVP | unclaimed |
-| `admin` | `N` | `ADR-N` | MVP | unclaimed |
-| `voice` | `V` | `ADR-V` | differentiation | unclaimed |
-| `adaptive` | `D` | `ADR-D` | bonus | unclaimed |
+| `interview-core` | `I` | `ADR-I` | MVP | written |
+| `report` | `R` | `ADR-R` | MVP | written |
+| `admin` | `N` | `ADR-N` | MVP | written |
+| `voice` | `V` | `ADR-V` | differentiation | written |
+| `adaptive` | `D` | `ADR-D` | bonus | written |
 
 IDEA.md §5.2 names the three foundations tasks `F-a`, `F-b`, `F-c`. In the ledger they are
 `F01`, `F02`, `F03` in that order — the skill's IDs are zero-padded numerals. Record the
