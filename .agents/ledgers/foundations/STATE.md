@@ -33,6 +33,11 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 **F01 is done, F02 (Fatih) is the only foundations task left, still `todo`.** Apply
 `.agents/EXECUTE.md` Part 1 § 4 to confirm before starting anything.
+**F03 is done.** F01 (Ahmet) and F02 (Fatih) are both now eligible and genuinely parallel —
+their dependency on F03 is satisfied. Apply `.agents/EXECUTE.md` Part 1 § 4 to confirm.
+**F01 is done. Two foundations tasks remain, both `todo`: F02 (Fatih, blocks all feature
+ledgers) and F04 (Sezai, local pre-commit hooks — does not block feature ledgers, independent
+of F02).** Apply `.agents/EXECUTE.md` Part 1 § 4 to confirm before starting anything.
 
 ## Environment
 
@@ -47,7 +52,7 @@ None at ledger-write time. The two open questions in the `ui` spec (styling laye
 optional second `speaking` avatar) are decided or deferred in ADR-F01 and F01's task
 steps. The `voice` CSP open question does not block foundations.
 
-## Task ledger (F01–F03)
+## Task ledger (F01–F04)
 
 Statuses: todo → in_progress → done → (blocked if waiting on user).
 `Repo`: blank = this repo.
@@ -57,6 +62,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | F01 | Creating design tokens, next-intl scaffold, error-code registry, and @interviewly/types package | | done | F03 |
 | F02 | Creating full Prisma schema, migrations, seed, and soft-delete repo helpers | | todo | F03 |
 | F03 | Creating npm workspaces root, compose.yaml, Caddyfile, logger, env schema, and CI workflow | | done | — |
+| F04 | Local pre-commit hooks (husky + lint-staged) for backend, frontend, packages | | todo | F03 |
 
 ## Critical path
 
@@ -67,13 +73,12 @@ The earlier "three tasks, three people, no cross-dependency, day one" reading wa
 F01 and F02 cannot run their own verification commands until F03 exists, and rule 5 is that
 verification is a command, not a wish.
 
+**F04 is off the critical path.** It depends only on F03 (done) and gates nothing — no feature
+ledger's `Depends on` names F04. It exists so local commits get caught before CI does; land it
+whenever Sezai picks it up, in parallel with F02.
+
 ## Backlog (deferred, unnumbered — promote to a task when its trigger fires)
 
-- **Root `eslint.config.js` missing.** `npm run lint` at repo root crashes ("ESLint couldn't
-  find an eslint.config file") — F03 wired the `lint` script but never added the flat config.
-  `frontend`'s own `npm run -w frontend lint` (from `create-next-app`) passes clean, so this is
-  scoped to root-level tooling only. Blocks CI's `lint` job. Promote when someone picks up
-  root-level ESLint config, or before the first PR that needs the `lint` gate green.
 - **Root `"test"` script missing.** `npm test` at repo root fails ("Missing script"). Only
   `test:acceptance` is wired; no aggregate unit-test script exists yet (backend has its own
   `test:unit` via vitest, scoped to its workspace). Promote alongside the `unit` CI job once a
