@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "dom", "dom.iterable"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "baseUrl": ".",
+    "paths": {
+      "@interviewly/types": ["packages/types/src/index.ts"]
+    }
+  },
+  "include": ["backend/src", "frontend/src", "packages/*/src", "worker/src"],
+  "exclude": ["node_modules", "**/dist", "**/.next"]
+}

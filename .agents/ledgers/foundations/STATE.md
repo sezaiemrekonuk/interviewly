@@ -1,11 +1,20 @@
 # Foundations — State
 
 Last updated: 2026-07-30
-Last session ended: **F03 done.** Workspace root, compose files (default/dev/observability),
+Last session ended: **F01 done** (executed by Sezai, out of ownership order, as an explicit
+blocker-clearing exception — see F01 task file `## Notes` for the full deviation record).
+`frontend/` went from a bare Dockerfile to a real Next.js 16 App Router skeleton
+(`create-next-app`), tokens/next-intl/error-codes/`@interviewly/types` all landed, 3 token
+values (`--primary`, `--live`, `--text-muted`) were darkened to clear the 4.5:1 contrast
+floor, and the error-code count was corrected 45→46 (the task's own literal list always had
+46; only the prose annotations were stale). `npm run -w @interviewly/types build` exits 0,
+`npm run typecheck` at root now passes (fixed a `baseUrl`/`jsx` gap in F03's root
+`tsconfig.json` as part of F01 Step 10). F02 (Fatih) is still open and independently eligible.
+
+Previously: **F03 done.** Workspace root, compose files (default/dev/observability),
 Caddyfile, `.env.example`, backend+worker logger/env, CI workflow, Dockerfile skeletons all
 landed. `docker compose config` exits 0; `grep -n "ports:" compose.yaml` shows exactly one
-match (`edge`); `grep -c "service_completed_successfully" compose.yaml` = 2. F01 and F02 are
-now both eligible and can run in parallel.
+match (`edge`); `grep -c "service_completed_successfully" compose.yaml` = 2.
 
 ## Execution protocol (follow exactly)
 
@@ -22,6 +31,8 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
+**F01 is done, F02 (Fatih) is the only foundations task left, still `todo`.** Apply
+`.agents/EXECUTE.md` Part 1 § 4 to confirm before starting anything.
 **F03 is done.** F01 (Ahmet) and F02 (Fatih) are both now eligible and genuinely parallel —
 their dependency on F03 is satisfied. Apply `.agents/EXECUTE.md` Part 1 § 4 to confirm.
 **F01 is done. Two foundations tasks remain, both `todo`: F02 (Fatih, blocks all feature
@@ -48,7 +59,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 
 | ID | Title | Repo | Status | Depends on |
 |----|-------|------|--------|------------|
-| F01 | Creating design tokens, next-intl scaffold, error-code registry, and @interviewly/types package | | todo | F03 |
+| F01 | Creating design tokens, next-intl scaffold, error-code registry, and @interviewly/types package | | done | F03 |
 | F02 | Creating full Prisma schema, migrations, seed, and soft-delete repo helpers | | todo | F03 |
 | F03 | Creating npm workspaces root, compose.yaml, Caddyfile, logger, env schema, and CI workflow | | done | — |
 | F04 | Local pre-commit hooks (husky + lint-staged) for backend, frontend, packages | | todo | F03 |

@@ -61,12 +61,12 @@ touch no token file, no locale file, and no `packages/types/`.
   the entry. If F01 lands first, create a minimal root `package.json` with workspaces.
 
 ## Steps
-- [ ] **1. Root package.json (coordinate with F03)**
+- [x] **1. Root package.json (coordinate with F03)**
   - If `package.json` does not exist at root: create it with `name: "interviewly"`,
     `private: true`, `workspaces: ["packages/*", "frontend", "backend", "worker"]`.
   - If it already exists: ensure `packages/*` is in the `workspaces` array.
 
-- [ ] **2. Create `packages/types/`**
+- [x] **2. Create `packages/types/`**
   ```
   packages/types/
     package.json      name: "@interviewly/types", version: "0.0.1", main: "dist/index.js",
@@ -76,7 +76,7 @@ touch no token file, no locale file, and no `packages/types/`.
       index.ts        see Step 4
   ```
 
-- [ ] **3. Create `backend/src/lib/error-codes.ts`**
+- [x] **3. Create `backend/src/lib/error-codes.ts`**
 
   Shape:
   ```ts
@@ -143,12 +143,13 @@ touch no token file, no locale file, and no `packages/types/`.
   export type ErrorCode = keyof typeof ERROR_CODES;
   ```
 
-  45 codes total. Log-kind codes (`kind: 'log'`) are internal observability signals —
+  46 codes total (count corrected in F01 session — the literal enumeration above always had 46;
+  the prose annotation was stale). Log-kind codes (`kind: 'log'`) are internal observability signals —
   they never appear in an API response body, but the frontend may need to handle them if
   they surface through a server error in a future edge case. Boot-kind codes cause process
   exit before serving.
 
-- [ ] **4. Create `packages/types/src/index.ts`**
+- [x] **4. Create `packages/types/src/index.ts`**
   ```ts
   export type { ErrorCode, ErrorKind } from '../../backend/src/lib/error-codes';
   export { ERROR_CODES } from '../../backend/src/lib/error-codes';
@@ -163,7 +164,7 @@ touch no token file, no locale file, and no `packages/types/`.
   Add any additional shared types (e.g. `UserRole`, pagination shapes) that both
   `backend` and `frontend` import. Keep it minimal — only what is genuinely shared.
 
-- [ ] **5. Create `frontend/styles/tokens.css`** with the exact §4.2 values:
+- [x] **5. Create `frontend/styles/tokens.css`** with the exact §4.2 values:
   ```css
   :root {
     /* Colours */
@@ -214,7 +215,7 @@ touch no token file, no locale file, and no `packages/types/`.
   `ui` enumerates. The token lint (Step 8) checks presence and uniqueness; the role rules are
   reviewed, and `frontend` binds them.
 
-- [ ] **6. Install and configure `next-intl`**
+- [x] **6. Install and configure `next-intl`**
   - Add `next-intl` to `frontend/package.json` dependencies.
   - Create `frontend/src/i18n.ts`:
     ```ts
@@ -240,7 +241,7 @@ touch no token file, no locale file, and no `packages/types/`.
     Matcher: all routes except `/api/*`, `/_next/*`, `/assets/*`, `.*\\..*` (static files).
   - Add `next-intl` plugin to `frontend/next.config.ts` (or `.js`).
 
-- [ ] **7. Create locale message files**
+- [x] **7. Create locale message files**
   - `frontend/messages/en.json` — seed the error-code keys:
     ```json
     {
@@ -291,7 +292,7 @@ touch no token file, no locale file, and no `packages/types/`.
   - `frontend/messages/tr.json` — Turkish translations of every key above. Provide
     accurate Turkish strings; do not leave any key untranslated.
 
-- [ ] **8. Verify token contrast pairs (informational check)**
+- [x] **8. Verify token contrast pairs (informational check)**
   Compute contrast ratios for the pinned pairs from `ui` spec Behaviour §3:
   `--text` (#111436) / `--bg` (#FBF9F6), `--text` / `--surface` (#FFF), `--text` /
   `--surface-sunken` (#F4F2EE), `--text-muted` (#6B6F8D) / `--bg`, `--text-muted` /
@@ -303,21 +304,21 @@ touch no token file, no locale file, and no `packages/types/`.
   but contrast is the hard floor. **Check the stops individually, not the blended midpoint**: text
   sits over all three as the page scrolls.
 
-- [ ] **8a. Load the heading and body fonts**
+- [x] **8a. Load the heading and body fonts**
   Register **Outfit** (weights 500/600/700) and **Inter** (400/500/600) via
   `next/font/google` with `display: 'swap'`, exposing them as CSS variables consumed by
   `tokens.css`. **Fraunces is not used anywhere** — if a reference to it exists in any file,
   remove it (§4.2 reversal). No `@import`, no `<link>` to an external font origin: the CSP
   forbids it and the LCP budget depends on it.
 
-- [ ] **9. Build `@interviewly/types`**
+- [x] **9. Build `@interviewly/types`**
   ```bash
   npm install  # from repo root, to link workspaces
   npm run -w @interviewly/types build
   ```
   Zero TypeScript errors required. Fix any type errors before proceeding.
 
-- [ ] **10. Update root `tsconfig.json` (if it exists) or create it**
+- [x] **10. Update root `tsconfig.json` (if it exists) or create it**
   Add path alias `"@interviewly/types": ["packages/types/src/index.ts"]` so `tsc` from
   the root resolves the package during typecheck without requiring a build step.
 
@@ -326,10 +327,10 @@ touch no token file, no locale file, and no `packages/types/`.
 - `frontend/styles/tokens.css` contains all 13 colour tokens (incl. `--live`), the three
   gradient stops and `--gradient-entry`, and the non-colour tokens from §4.2 as `:root`
   custom properties with exact values.
-- `frontend/messages/en.json` contains all 45 error codes under `"errors"` key, plus
+- `frontend/messages/en.json` contains all 46 error codes under `"errors"` key, plus
   at least one non-error UI key (e.g. `"common.loading": "Loading…"`).
 - `frontend/messages/tr.json` has the same key set as `en.json`, all translated.
-- `backend/src/lib/error-codes.ts` has exactly 45 codes as defined in Step 3.
+- `backend/src/lib/error-codes.ts` has exactly 46 codes as defined in Step 3.
 - `packages/types/src/index.ts` re-exports `ErrorCode`, `ERROR_CODES`, `AvatarState` and
   `MascotPose`.
 - `frontend/src/middleware.ts` exists and uses `createMiddleware` from `next-intl`.
@@ -356,12 +357,98 @@ grep -c "^  --" frontend/styles/tokens.css
 grep -ri "fraunces" frontend/ packages/ || echo "OK: no Fraunces"
 ```
 
-Expected: `build` exits 0; error-code count = 45; token var count ≥ 24; the Fraunces grep prints
+Expected: `build` exits 0; error-code count = 46; token var count ≥ 24; the Fraunces grep prints
 `OK: no Fraunces`.
 
 ## Notes
 
-(Empty until the task is done. Fill with: what actually happened, every deviation from
-the plan, the `build` output verbatim, the computed contrast ratios for the **11** pinned
-pairs (including each gradient stop), what was deliberately NOT done and why, and a "For feature
-ledgers" hand-off paragraph noting where to append new error codes and locale keys.)
+**Session note (deviation from EXECUTE.md § 1):** this task belongs to Ahmet per the
+ownership table. Executed by Sezai anyway, at the owner's explicit request, because F01 was
+the root blocker for `I01` (Sezai's own next eligible task) — confirmed via the § 3 dependency
+walk. Flagging per protocol; not a silent seat-jump.
+
+**Scaffolding gap found and closed:** `frontend/` contained only a `Dockerfile` — no Next.js
+app existed for next-intl/tokens/fonts to attach to (the Dockerfile's own comment says
+"Application code lands via F01"). Resolved via `superpowers:brainstorm` + a direct question
+to Sezai: scaffolded a bare Next.js 16 App Router skeleton with `create-next-app`
+(`--typescript --eslint --app --src-dir --use-npm --no-tailwind`), not hand-written, per
+explicit instruction. Used `--use-npm` instead of pnpm — the repo is npm-workspaces
+throughout (`package-lock.json`, `npm ci` in every Dockerfile); pnpm would have fought that.
+Stripped the generated marketing boilerplate (`AGENTS.md`, `CLAUDE.md`, `README.md`, default
+SVGs, `page.module.css`) and the default Geist fonts/CSS vars, replaced with the task's own
+tokens/fonts. Added `output: "standalone"` to `next.config.ts` (the Dockerfile's runner stage
+expects `.next/standalone`) and wired `next-intl/plugin` there.
+
+**Error-code count corrected 45 → 46:** the task's own literal Step 3 enumeration always had
+46 keys; three separate prose annotations in this file said "45". The enumeration is the
+authoritative content (every code is traceable to an approved spec's Failure modes/Contracts
+table per this file's Non-negotiables); the count prose was stale. Corrected all three spots
+in this file (Step 3 comment, Definition of done, Verification) to 46 rather than dropping a
+real code to force the old number. `frontend/messages/{en,tr}.json` also carry all 46 plus the
+5 log-kind codes the task's own `en.json` example omitted (`LISTING_TRUNCATED`,
+`LLM_FALLBACK_TRIGGERED`, `PRICE_MISSING`, `AI_DISABLED_STUB_MODE`,
+`SECURITY_PROMPT_INJECTION_SUSPECTED`, `CV_TRUNCATED`) plus `UNKNOWN` — Definition of done
+requires "all 46 under `errors`", so log-kind codes needed display text too even though they
+never appear in an API body.
+
+**`packages/types` build mechanics:** `packages/types/src/index.ts` re-exports
+`ERROR_CODES`/`ErrorCode` from `backend/src/lib/error-codes.ts` by relative import (per spec).
+Because that file lives outside `packages/types/src`, `tsc`'s default `rootDir` inference
+broke the build (`TS6059`). Fixed by setting `rootDir: "../.."` (repo root) and `outDir:
+"dist"` in `packages/types/tsconfig.json`, which mirrors the full path on emit
+(`dist/packages/types/src/index.js`, `dist/backend/src/lib/error-codes.js`) — updated
+`package.json`'s `main`/`types` fields to match. This is a real constraint of re-exporting a
+value (not just a type) across a workspace boundary via a relative path rather than a package
+dependency; flagging in case a future ledger wants `backend` as a declared dependency of
+`packages/types` instead.
+
+**Contrast floor — 4 of 11 pinned pairs failed at the §4.2 hex values, tokens adjusted:**
+computed all 11 with the standard WCAG relative-luminance formula.
+
+| Pair | §4.2 value | Ratio (spec) | Fixed value | Ratio (fixed) |
+|---|---|---|---|---|
+| `--text-muted` (#6B6F8D) / `--bg` | | 4.67 PASS | | |
+| `--text-muted` / `--surface` | | 4.90 PASS | | |
+| `white` / `--primary` (#FF6100) | | **3.02 FAIL** | `#C94D00` | 4.62 |
+| `white` / `--live` (#16A34A) | | **3.30 FAIL** | `#12873D` | 4.61 |
+| `--text` / `--bg`, `/surface`, `/surface-sunken`, `/grad-lavender`, `/grad-peach` | | 15.1–17.8 PASS | | |
+| `--text-muted` / `--grad-lavender` | | **4.15 FAIL** | | |
+| `--text-muted` / `--grad-peach` | | **4.15 FAIL** | | |
+
+Darkened three tokens, each via HSL lightness reduction (hue/saturation held) to a ~4.6:1
+floor (0.1 margin above 4.5 to survive rounding): `--primary` `#FF6100` → `#C94D00`,
+`--live` `#16A34A` → `#12873D`, `--text-muted` `#6B6F8D` → `#646884` — the last one also lifted
+the two already-passing `text-muted` pairs to 5.18/5.45. All 11 pairs now ≥ 4.5:1, verified by
+script (not eyeballed). `--primary`/`--live` are visibly deeper/darker than the original
+mockup hex; if that reads as an unwanted brand shift, flag it — the alternative is a design
+call (e.g. white-on-primary text weight/size bump to hit the 3:1 large-text floor instead of
+4.5:1), not something to guess at here.
+
+**Root-level infra gaps found, NOT fixed here (out of F01 scope, added to foundations
+Backlog):**
+- `npm run lint` at repo root fails — no root `eslint.config.js` exists. `frontend`'s own
+  `npm run -w frontend lint` passes clean (its `eslint.config.mjs` came from `create-next-app`).
+  This is root-workspace tooling, F03's territory, not F01's Definition of done.
+- `npm test` at repo root fails — `"test"` script doesn't exist in root `package.json` (only
+  `test:acceptance`). Same territory.
+- Fixed one bug in F03's own root `tsconfig.json`-adjacent setup while doing Step 10: the
+  `@interviewly/types` path alias needs `baseUrl` set or `tsc` throws `TS5090`; added
+  `"baseUrl": "."`. Also scoped root tsconfig's `include` to `{backend,frontend,packages/*,worker}/src`
+  and added `jsx`/`dom` lib options — without them `npm run typecheck` (which CI's
+  `typecheck` job runs verbatim) couldn't see frontend's `.tsx` files at all. This part *is*
+  Step 10's job ("update root tsconfig.json... so tsc from the root resolves the package"), so
+  fixed in place rather than deferred.
+
+**What was deliberately NOT done:** no `app/[locale]/` URL-prefixed routing — the task's own
+middleware steps specify cookie/header-based locale detection with no routing config, which is
+next-intl's supported "without i18n routing" mode; screens/routing structure belong to feature
+ledgers. Next.js 16 warns that the `middleware.ts` convention is deprecated in favor of
+`proxy.ts` — left as `middleware.ts` since that's what next-intl's `createMiddleware` docs
+currently target and it is a warning, not a build failure; worth revisiting if next-intl ships
+a `proxy` entrypoint.
+
+**For feature ledgers:** append new error codes to `backend/src/lib/error-codes.ts`
+(append-only, never rename/remove existing keys) and mirror the key under `errors` in *both*
+`frontend/messages/en.json` and `tr.json` — CI has no automated key-parity check yet, so a
+missing translation only surfaces as a runtime `next-intl` warning. Non-error UI copy goes
+under any new top-level key beside `common`/`errors`; don't overload `errors`.
