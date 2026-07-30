@@ -15,10 +15,14 @@ pasteable prompt below. Run one stage per session, one area per session.
                                         EXECUTION_PROMPT, tasks/
    ↓
 code + tests                            see EXECUTE.md
+   ↓                                    each session also writes
+.agents/devlogs/<id>-<slug>.md          one per task, by the person who did it
+   ↓  Stage 4
+AI_DEVLOG.md · DECISIONS.md             compiled deliverables (IDEA.md §13)
 ```
 
-**Stage 1 and Stage 2 write no code.** Stage 3 writes no code either. Code happens in
-`EXECUTE.md`.
+**Stage 1 and Stage 2 write no code.** Stage 3 writes no code either, and neither does
+Stage 4. Code happens in `EXECUTE.md`.
 
 ---
 
@@ -252,6 +256,11 @@ row here in the same commit that creates the ledger folder.
 | `voice` | `V` | `ADR-V` | differentiation | written |
 | `adaptive` | `D` | `ADR-D` | bonus | written |
 
+Devlog files reuse these task IDs verbatim (`.agents/devlogs/A01-…`), so this table governs
+their names too. A session with no task ID — spec authoring, ledger writing, a debugging
+spike, the `eval` run — files its devlog as `meta-<date>-<slug>.md` and claims no prefix
+here.
+
 IDEA.md §5.2 names the three foundations tasks `F-a`, `F-b`, `F-c`. In the ledger they are
 `F01`, `F02`, `F03` in that order — the skill's IDs are zero-padded numerals. Record the
 mapping in the foundations `PLAN.md` so §5.2 stays readable.
@@ -268,3 +277,85 @@ each in its own migration, rebased before merge. Any structural change is a chan
 F02's scope and gets discussed, not merged. Every ledger you write must state this in its
 PLAN.md `Out of scope` section — it is the week-one collision that breaks
 `docker compose up` on a fresh clone, which §10 calls the one unacceptable failure.
+
+---
+
+## Stage 4 — Compile `AI_DEVLOG.md` and `DECISIONS.md`
+
+Both are scored deliverables (IDEA.md §13) and both are **harvested from committed files,
+never composed from memory**. Run 4a when a ledger goes green; run 4b once the architecture
+has stopped moving, then again before the demo.
+
+**The rule that makes this work, and it is the whole point:** every sentence you write
+traces to a file in the repo. If the devlogs do not say it, you do not know it, and you do
+not write it. An invented "we chose X because Y" in a transparency deliverable is worse than
+an empty section — it is the one thing a grader can catch and cannot un-catch.
+
+### 4a — `AI_DEVLOG.md` (per ledger going green)
+
+You are compiling `AI_DEVLOG.md` for Interviewly. You edit exactly two kinds of thing: the
+generated session table, and prose sections in `AI_DEVLOG.md`. You write no code and you
+modify no devlog, task, spec or ledger file — those are the source, and the source is
+append-only history.
+
+**Read first:** `.agents/EXECUTE.md` § Devlog (the contract these files were written to),
+the current `AI_DEVLOG.md`, then every `.agents/devlogs/*.md` for the ledger that just went
+green, then that ledger's `DECISIONS.md` and `STATE.md`.
+
+Then:
+
+1. **Regenerate the session table** between the `<!-- BEGIN GENERATED: session-table -->`
+   markers, from devlog **frontmatter only** — one row per devlog file, all ledgers, task ID
+   order with `meta-` entries last. Do not read prose to fill the table. Do not hand-edit
+   rows outside the markers.
+2. **Write that ledger's `## 4. Per-ledger narrative` subsection** — 2–4 paragraphs. What
+   the slice was, how the work actually went, where the plan was wrong. Cite task IDs.
+3. **Append to `## 5. What was hard`** from the devlogs' `## Friction` sections. Merge
+   repeats into one entry naming every task it hit — a problem that recurred across three
+   tasks is a more interesting finding than three separate bullets.
+4. **Append to `## 6. What we rejected`** from the `## What I rejected and rewrote by hand`
+   sections. Keep the specifics: which generated construct, why it was wrong, what replaced
+   it. This section carries the "code is owned, not accepted" criterion — vagueness here is
+   the expensive kind.
+5. **Update `## 1. Tooling` and `## 2. Methodology`** only where this ledger's devlogs
+   contradict or extend what is already there. A model switch (`model` ≠
+   `model_recommended`) that happened more than once is a tooling finding, not an anecdote —
+   promote it, and consider whether `MODELS.md` is now wrong.
+
+**Before you finish, self-review:**
+
+- [ ] Every table row has a devlog file; every devlog file has a row.
+- [ ] Every prose claim traces to a devlog, an ADR, or a task's Notes. No exceptions.
+- [ ] Nothing outside the generated markers was machine-written; nothing inside was
+      hand-written.
+- [ ] No section left as a heading with no body. Empty is a signal — say "nothing to report
+      for this ledger" rather than padding.
+- [ ] `## 7. Quality evaluation` untouched unless you personally ran `npm run eval`.
+
+Then stop. Report which sections changed and any devlog whose frontmatter was malformed or
+whose `iterations`/`model` fields looked implausible — do not silently fix them, the owner
+does that.
+
+### 4b — `DECISIONS.md`
+
+You are compiling root `DECISIONS.md`. IDEA.md §13 fixes its four required parts:
+
+1. **High-level design document** — the system in prose, from `IDEA.md` §6, §10, §11.
+   §13 says those sections *move* here, the K1.1 reversal included.
+2. **Logical design diagram** — mermaid, in-repo. Modules, data flow, trust boundaries.
+3. **Physical deployment diagram** — mermaid. Containers, networks, which ports are
+   published on a bare `docker compose up` versus only under `compose.dev.yaml`, and the
+   tunnel's role in voice mode (§3.5).
+4. **Every decision with its rejected alternatives** — collected from every
+   `.agents/ledgers/*/DECISIONS.md`, preserving ADR IDs and dates so the ledgers stay the
+   authority and this file stays a view.
+
+**This is where the 6-point technology-and-framework criterion is earned** (§2). A decision
+without its rejected alternative and the reason for rejection scores nothing — it reads as a
+default, not a choice. Both diagrams are mermaid so they render on GitHub and stay
+reviewable in a diff; no image files.
+
+Never edit or reword a past ADR while copying it. If a decision was superseded, both entries
+appear here, in date order, with the supersession stated. That history is the evidence.
+
+Then stop.

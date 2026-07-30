@@ -9,6 +9,7 @@ Read this file → read `REFERENCE.md` once → read only the current task's fil
 check `MODELS.md` for the recommended model → do the work, ticking checkboxes →
 run the task's `## Verification` command verbatim → fill in the task's `## Notes` →
 update this file's ledger row, "Current task" pointer, and "Last session ended" line →
+write `.agents/devlogs/{ID}-<slug>.md` (EXECUTE.md § Devlog) →
 commit as `{ID}: <title>` → **STOP. Do not roll into the next task.**
 
 ## Current task

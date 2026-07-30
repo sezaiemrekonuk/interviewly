@@ -35,10 +35,41 @@ steps, do not batch multiple tasks, do not improvise scope beyond the task file.
    seeing it pass. If it fails, fix the code — never the command.
 9. **Mark it done:** fill the task file's `## Notes`; flip the STATE.md ledger row to
    `done`; repoint "Current task"; rewrite "Last session ended".
-10. **Commit** as `{ID}: <title>`, e.g. `F01: design tokens, next-intl scaffold,
+10. **Write your devlog:** create `.agents/devlogs/<basename of the task file>` — same
+    basename, so `tasks/F01-design-tokens-types-i18n-errors.md` pairs with
+    `devlogs/F01-design-tokens-types-i18n-errors.md`. Feeds the scored `AI_DEVLOG.md`
+    deliverable; written now, because nobody reconstructs this later.
+
+    ```markdown
+    ---
+    task: F01
+    author: <Sezai | Ahmet | Fatih — ask if you were not told; do not guess>
+    sessions: [YYYY-MM-DD]
+    model: <the model that actually ran>
+    model_recommended: <what MODELS.md said>
+    iterations: <red→green cycles, counted honestly>
+    tools: [<skills, MCPs, subagents you used>]
+    ---
+
+    ## Session 1 — YYYY-MM-DD
+
+    ### What I asked for / what came back
+    ### Methodology trace
+    spec §… AC-n → `<feature file>:<line>` → red (<the failure>) → green
+    ### Friction
+    ### What I rejected and rewrote by hand
+    ```
+
+    A `model` differing from `model_recommended` needs the reason in prose — do not quietly
+    align them. The last section evidences that the code is owned rather than accepted; if
+    you rejected nothing, say so and why. **Different document from the task's `## Notes`**:
+    Notes hand off to the next session, the devlog reports how the work was done. No
+    duplication. Full contract: `.agents/EXECUTE.md` § Devlog.
+
+11. **Commit** as `{ID}: <title>`, e.g. `F01: design tokens, next-intl scaffold,
     error-code registry, @interviewly/types`. Include the `.agents/ledgers/foundations/`
-    file changes in the same commit.
-11. **STOP.** The next task is the next session's job.
+    and `.agents/devlogs/` file changes in the same commit.
+12. **STOP.** The next task is the next session's job.
 
 ### If blocked mid-task
 

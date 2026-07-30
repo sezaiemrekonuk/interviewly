@@ -50,10 +50,42 @@ steps, do not batch multiple tasks, do not improvise scope beyond the task file.
    repoint "Current task" to the next eligible `todo` task; rewrite "Last session ended" with
    what landed, which files changed, and what the next task must know.
 
-10. **Commit** as `{ID}: <title>`, e.g. `I01: @interviewly/ai scaffold`. Include the
-    `.agents/ledgers/interview-core/` file changes in the same commit.
+10. **Write your devlog:** create `.agents/devlogs/<basename of the task file>` — same
+    basename, so `tasks/I01-interviewly-ai-scaffold.md` pairs with
+    `devlogs/I01-interviewly-ai-scaffold.md`. Feeds the scored `AI_DEVLOG.md`
+    deliverable; written now, in this session, because nobody reconstructs it later.
 
-11. **STOP.** The next task is the next session's job.
+    ```markdown
+    ---
+    task: I01
+    author: <Sezai | Ahmet | Fatih — ask if you were not told; do not guess>
+    sessions: [YYYY-MM-DD]
+    model: <the model that actually ran>
+    model_recommended: <what MODELS.md said>
+    iterations: <red→green cycles, counted honestly>
+    tools: [<skills, MCPs, subagents you used>]
+    ---
+
+    ## Session 1 — YYYY-MM-DD
+
+    ### What I asked for / what came back
+    ### Methodology trace
+    spec §… AC-n → `<feature file>:<line>` → red (<the failure>) → green
+    ### Friction
+    ### What I rejected and rewrote by hand
+    ```
+
+    If `model` and `model_recommended` differ, the prose must say why you switched — those
+    disagreements are the most useful content in the file, so do not quietly align them.
+    The last section is what evidences that the code is owned rather than accepted; if you
+    genuinely rejected nothing, say so and say why. This is a **different document from the
+    task's `## Notes`**: Notes hand off to the next session, the devlog reports how the work
+    was done. Do not duplicate between them. Full contract: `.agents/EXECUTE.md` § Devlog.
+
+11. **Commit** as `{ID}: <title>`, e.g. `I01: @interviewly/ai scaffold`. Include the
+    `.agents/ledgers/interview-core/` and `.agents/devlogs/` file changes in the same commit.
+
+12. **STOP.** The next task is the next session's job.
 
 ### If blocked mid-task
 

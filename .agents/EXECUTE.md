@@ -77,8 +77,9 @@ The agent will:
 7. Run the task's `## Verification` command **exactly as written**.
 8. Fill `## Notes`, update the STATE ledger row, repoint Current task, rewrite
    "Last session ended".
-9. Commit as `<id>: <title>`, including the ledger file changes.
-10. **Stop.**
+9. Write `.agents/devlogs/<id>-<slug>.md` — see § Devlog below. Not optional, not later.
+10. Commit as `<id>: <title>`, including the ledger *and* devlog file changes.
+11. **Stop.**
 
 Then you:
 
@@ -104,6 +105,90 @@ The feature file is written and **red** before implementation. IDEA.md §5.3:
 
 If a task's verification command passes on the first run before you wrote any code, the
 test is wrong. Fix the test, never the command.
+
+---
+
+## Devlog
+
+`AI_DEVLOG.md` is a scored deliverable (IDEA.md §13) and it is judged on *transparency*.
+A devlog assembled from memory at the end of the project reads like one, and loses the
+points it was written to win. So it is not assembled at the end: **every session writes its
+own devlog file, in the session, and commits it with the task.**
+
+**One file per task ID:** `.agents/devlogs/<id>-<slug>.md`, where `<id>-<slug>` mirrors the
+task's filename exactly — `tasks/A01-backend-auth-module.md` pairs with
+`devlogs/A01-backend-auth-module.md`. Two reasons, both load-bearing:
+
+- **No merge conflicts, ever.** Three people appending prose to one shared file on three
+  branches conflict on every PR. A file named after a task ID is touched by exactly one
+  owner on exactly one branch.
+- **IDs are permanent addresses** (rule 3). No date in the filename — a task that spans two
+  sessions appends a second `## Session N` block to the *same* file rather than spawning a
+  second one. Dates live in frontmatter; git has them anyway.
+
+Sessions with no task ID — spec authoring, ledger writing, a debugging spike, the `eval`
+run — are `.agents/devlogs/meta-<date>-<slug>.md`.
+
+### The shape
+
+```markdown
+---
+task: A01
+author: Ahmet
+sessions: [2026-08-04]
+model: claude-opus-4.8
+model_recommended: claude-opus-4.8
+iterations: 3
+tools: [superpowers:test-driven-development, context7, cavecrew-investigator]
+---
+
+## Session 1 — 2026-08-04
+
+### What I asked for / what came back
+### Methodology trace
+spec §7.2 AC-2 → `auth.feature:41` → red (`INVALID_CREDENTIALS` undefined) → green
+### Friction
+### What I rejected and rewrote by hand
+```
+
+Frontmatter is structured so the `AI_DEVLOG.md` summary table can be generated from the
+heads alone, without parsing prose. Keep the five keys; add none.
+
+- `model` vs `model_recommended` — the recommendation comes from `MODELS.md`. If you
+  switched mid-task, they differ, and the prose says why. **Those disagreements are the
+  most useful content in the file.** Do not quietly align them.
+- `iterations` — red→green cycles, counted honestly. `1` is a fine answer. So is `7`.
+- `## What I rejected and rewrote by hand` — generated code you threw away, and why. This
+  is the section that evidences the "code is owned, not accepted" criterion (§2, 5 points).
+  A devlog where nothing was ever rejected is not a credible devlog.
+
+### Devlog vs `## Notes` — different readers, no overlap
+
+| | Reader | Contains |
+|---|---|---|
+| task `## Notes` | the next agent session | hand-off: what exists now, deviations from plan, verification output, "For A02" |
+| devlog file | the grader, and us at write-up time | how the work was done: model, iterations, friction, what got rejected |
+
+Do not duplicate between them. "Agent produced wrong argon2 params twice and I rewrote the
+hashing call by hand" is devlog content; it has no business in a hand-off note.
+
+### Cadence
+
+| When | Who | What |
+|---|---|---|
+| every session, before the commit | task owner | write or append `.agents/devlogs/<id>-<slug>.md` |
+| a ledger goes green | ledger owner | regenerate the `AI_DEVLOG.md` session table, write that ledger's narrative paragraph from its devlogs |
+| before the demo | one person | `npm run eval` output, intro, methodology section, final read |
+
+Root `AI_DEVLOG.md` is **compiled, never hand-linked** — hand-linking 25 entries
+reintroduces the shared-file conflict one line at a time. It gets touched about seven times
+by one person each time, not twenty-five times by three. The harvest prompt is
+`.agents/prompts/AUTHOR_DOCS.md` § Stage 4. `DECISIONS.md` is compiled the same way, from
+the ledgers' ADR logs plus IDEA.md §6, §10 and §11.
+
+There is a sketch of a coverage check at `ci/check-devlogs.sh` — every `done` task has a
+devlog file. **It is not wired into CI yet** (CI itself is F03). Until it is, this is a
+human check at PR review: no devlog, no approval.
 
 ---
 
