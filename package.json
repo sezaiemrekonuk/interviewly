@@ -11,7 +11,7 @@
     "build": "npm run -w @interviewly/types build && npm run -w frontend build && npm run -w backend build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint . --ext .ts,.tsx",
-    "test:acceptance": "npm run -w backend test:acceptance",
+    "test:acceptance": "npm run -w backend test:acceptance --",
     "seed": "npm run -w backend seed",
     "prepare": "husky"
   },
