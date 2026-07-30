@@ -31,6 +31,8 @@ this is correct and expected (COVERAGE.md db/infra out-of-ring note).
 
 Repo root (post-foundations):
   package.json                  ← npm workspaces (F03)
+  eslint.config.js              ← flat config for backend/worker/packages (F04)
+  .husky/pre-commit             ← lint-staged hook (F04)
   compose.yaml                  ← service inventory (F03)
   compose.dev.yaml              ← dev overrides (F03)
   Caddyfile                     ← edge routes (F03)
@@ -82,6 +84,7 @@ No cross-service calls exist yet — foundations is pure scaffolding.
 | ADR-F09 | Where the `mail` (Mailpit) service lives | **Default** compose profile, port published only via the git-ignored override | Registration always enqueues a verification mail (K8.6); with no sink a default `up` dead-letters a job on first signup. ~20 MB is cheaper than that failure. |
 | ADR-F10 | Heading typeface | **Outfit** via `next/font/google`; Fraunces dropped | §4.2 revision: the direction is a bold geometric sans, which both references use. Inter stays for body — Outfit reads worse at the 13–14 px steps. |
 | ADR-F11 | Gradient as a token, not a component style | `--gradient-entry` in the `:root` registry + a closed route list in `ui` | A gradient applied ad hoc per screen drifts; one token plus an enumerated route list is lintable. |
+| ADR-F12 | Local pre-commit enforcement | `husky` + `lint-staged`, staged-files-only, `tsc` excluded from the hook | CI-only feedback is too slow; a full-repo hook on every commit trains people to `--no-verify` past it. |
 | ADR-F03 | Build context for every service image | Repo root (`context: .`) with per-service `dockerfile:` path | npm workspaces put `@interviewly/types` and `@interviewly/ai` at root; a service-scoped context cannot see them. |
 | ADR-F04 | Dev extras in compose.dev.yaml, not compose.override.yaml | `compose.override.yaml` is git-ignored; dev config in explicit `-f compose.dev.yaml` | Compose auto-loads `override.yaml`, which would silently publish `db`/`cache` ports and break K14. |
 | ADR-F05 | next-intl locale routing | Cookie-based, no URL segment prefix | §4.5 mandates a cookie; URL segments would require `[locale]/` nesting across all routes. |
@@ -102,6 +105,9 @@ authored in this ledger. See `tasks/F02-*.md` for the complete table/column list
 
 0. Day-zero parallel (F01, F02, F03) — all three start the same day, all independent.
 1. All three green → feature ledgers may start.
+2. F04 (pre-commit hooks) — added post-day-zero (2026-07-30, ADR-F12). Depends only on F03,
+   gates no feature ledger, runs whenever picked up — it is repo hygiene, not part of the
+   "all three green" invariant.
 
 ## Out of scope (post-foundations)
 

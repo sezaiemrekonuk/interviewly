@@ -250,3 +250,37 @@ surfaces where the gradient actively hurts — a live face and a data table.
 **Consequences:** `tokens.css` carries the three stops and the composed gradient; the AA-contrast
 check gains six pairs (text and muted-text against each stop individually, since text sits over
 all three as the page scrolls).
+
+---
+
+## ADR-F12 — 2026-07-30 — Local pre-commit enforcement via husky + lint-staged, staged-files-only
+
+**Context:** CI is currently the only place `lint`/`typecheck` run — a broken commit surfaces
+minutes later in a PR check, not at commit time. Options: (A) no local hook, keep CI as the
+sole gate; (B) `husky` + `lint-staged`, staged-files-only; (C) a full-repo `pre-commit`
+(Python tool, common outside the JS ecosystem) running the complete `lint`/`typecheck` suite on
+every commit.
+
+**Decision:** Option B. `husky` manages the git hook itself (`.husky/pre-commit` → `npx
+lint-staged`); `lint-staged` scopes ESLint to the files actually staged, split by workspace:
+`frontend/**` reuses its own existing `eslint-config-next` setup, `{backend,worker,packages/*}/**`
+get one new root-level flat config (F04). `tsc --noEmit` is explicitly **not** run in the hook —
+TypeScript project-wide typechecking on a file subset isn't meaningful, so that stays a
+CI/manual gate (`npm run typecheck`).
+
+**Why not A:** the whole point is catching a broken commit before it costs a CI round-trip;
+"CI is the safety net, not the first run" (EXECUTE.md, Part 2) already states the intent, it
+was just never wired locally.
+
+**Why not C:** both `pre-commit` (the tool) and a full-repo lint on every commit are wrong for
+this stack — `pre-commit` is a second package manager/dependency system (Python) for a repo
+that's npm end to end, and a full-repo lint on every commit scales with repo size, not commit
+size; it's the kind of hook people learn to `--no-verify` past within a week.
+
+**Consequences:** `husky` and `lint-staged` become root `devDependencies`; a `"prepare": "husky"`
+script runs on every `npm install`, including in CI/Docker build contexts, so it must no-op
+safely with no `.git` directory present (husky v9's generated hook already guards this — F04
+verifies it rather than reimplementing it). `backend/`, `worker/`, and `packages/*/` get their
+first-ever ESLint config as a direct consequence — F04 folds in the pre-existing "root
+`eslint.config.js` missing" backlog gap rather than leaving it to a third task, since a hook
+can't lint a command that doesn't run.
