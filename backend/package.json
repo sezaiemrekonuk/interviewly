@@ -1,0 +1,16 @@
+{
+  "name": "@interviewly/backend",
+  "version": "0.0.1",
+  "private": true,
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "seed": "tsx prisma/seed.ts",
+    "test:unit": "vitest run",
+    "test:acceptance": "cucumber-js"
+  },
+  "dependencies": {
+    "pino": "^9",
+    "zod": "^3"
+  }
+}

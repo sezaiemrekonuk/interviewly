@@ -1,0 +1,26 @@
+localhost {
+    handle /api/* {
+        reverse_proxy api:4000
+    }
+    handle /events/* {
+        reverse_proxy api:4000 {
+            flush_interval -1
+        }
+    }
+    handle /webhooks/* {
+        reverse_proxy api:4000
+    }
+    handle /assets/* {
+        reverse_proxy bucket:9000
+    }
+    handle {
+        reverse_proxy web:3000
+    }
+
+    header {
+        X-Content-Type-Options nosniff
+        Referrer-Policy strict-origin-when-cross-origin
+        X-Frame-Options DENY
+        Content-Security-Policy "default-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'"
+    }
+}

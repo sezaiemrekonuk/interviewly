@@ -1,7 +1,11 @@
 # Foundations — State
 
 Last updated: 2026-07-30
-Last session ended: **—** Ledger written; no task has started yet.
+Last session ended: **F03 done.** Workspace root, compose files (default/dev/observability),
+Caddyfile, `.env.example`, backend+worker logger/env, CI workflow, Dockerfile skeletons all
+landed. `docker compose config` exits 0; `grep -n "ports:" compose.yaml` shows exactly one
+match (`edge`); `grep -c "service_completed_successfully" compose.yaml` = 2. F01 and F02 are
+now both eligible and can run in parallel.
 
 ## Execution protocol (follow exactly)
 
@@ -18,13 +22,8 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**F03 first, alone.** F01 and F02 depend on it: F01's verification is
-`npm run -w @interviewly/types build`, which needs the root workspace `package.json` F03
-creates, and F02's needs a live Postgres from F03's `compose.yaml`. F03's own verification
-is `docker compose config` — it needs nothing but Docker.
-
-Once F03 is `done`, F01 and F02 are both eligible and genuinely parallel. Do not start
-either against a half-landed F03; apply `.agents/EXECUTE.md` Part 1 § 4 and let the rules decide.
+**F03 is done.** F01 (Ahmet) and F02 (Fatih) are both now eligible and genuinely parallel —
+their dependency on F03 is satisfied. Apply `.agents/EXECUTE.md` Part 1 § 4 to confirm.
 
 ## Environment
 
@@ -48,7 +47,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 |----|-------|------|--------|------------|
 | F01 | Creating design tokens, next-intl scaffold, error-code registry, and @interviewly/types package | | todo | F03 |
 | F02 | Creating full Prisma schema, migrations, seed, and soft-delete repo helpers | | todo | F03 |
-| F03 | Creating npm workspaces root, compose.yaml, Caddyfile, logger, env schema, and CI workflow | | todo | — |
+| F03 | Creating npm workspaces root, compose.yaml, Caddyfile, logger, env schema, and CI workflow | | done | — |
 
 ## Critical path
 
