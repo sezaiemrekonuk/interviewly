@@ -1,0 +1,128 @@
+name: interviewly
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: interviewly
+      POSTGRES_PASSWORD: interviewly
+      POSTGRES_DB: interviewly
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U interviewly"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  cache:
+    image: redis:7-alpine
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  bucket:
+    image: minio/minio:RELEASE.2024-11-07T00-52-20Z
+    command: server /data
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  mail:
+    # K8.6 — SMTP sink for verification/reset mail. Default profile, not `dev`:
+    # registration always enqueues a mail, so a stack without a sink dead-letters a
+    # job on first signup. Its web inbox port is published only in compose.dev.yaml.
+    image: axllent/mailpit:v1.21
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8025/readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["npx", "prisma", "migrate", "deploy"]
+    env_file: [.env]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file: [.env]
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+      bucket:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  worker:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    env_file: [.env]
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+      bucket:
+        condition: service_healthy
+      mail:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    env_file: [.env]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  edge:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      web:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  redisdata:
+  miniodata:
+
+# Profile-gated services in compose.dev.yaml and compose.observability.yaml

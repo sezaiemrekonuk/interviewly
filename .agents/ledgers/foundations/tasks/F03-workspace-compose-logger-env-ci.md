@@ -73,7 +73,7 @@ F01 and F02 are fully independent.
   `service_healthy` for long-running services.
 
 ## Steps
-- [ ] **1. Write or extend root `package.json`**
+- [x] **1. Write or extend root `package.json`**
   ```json
   {
     "name": "interviewly",
@@ -100,7 +100,7 @@ F01 and F02 are fully independent.
   module.exports = { extends: ['@commitlint/config-conventional'] };
   ```
 
-- [ ] **2. Create `db/init.sql`**
+- [x] **2. Create `db/init.sql`**
   ```sql
   -- Creates application DB and shadow DB for Prisma Migrate.
   SELECT 'CREATE DATABASE interviewly'
@@ -109,7 +109,7 @@ F01 and F02 are fully independent.
     WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'interviewly_shadow')\gexec
   ```
 
-- [ ] **3. Write `compose.yaml`**
+- [x] **3. Write `compose.yaml`**
 
   Full service inventory. Key rules:
   - All images: pin to minor version tags (never `latest`).
@@ -254,7 +254,7 @@ F01 and F02 are fully independent.
   loaded with `--profile observability` (or explicitly with `-f compose.observability.yaml`).
   Create a minimal skeleton for those in `compose.observability.yaml`.
 
-- [ ] **4. Write `compose.dev.yaml`**
+- [x] **4. Write `compose.dev.yaml`**
   Developer extras — host port publishing, tunnel. This file is loaded explicitly with
   `-f compose.dev.yaml`:
   ```yaml
@@ -278,7 +278,7 @@ F01 and F02 are fully independent.
           condition: service_started
   ```
 
-- [ ] **5. Write `Caddyfile`**
+- [x] **5. Write `Caddyfile`**
   ```caddyfile
   localhost {
       handle /api/* {
@@ -312,7 +312,7 @@ F01 and F02 are fully independent.
   emitted — without this, Caddy buffers the stream and the live transcript arrives in a
   lump after the interview ends (K14 note).
 
-- [ ] **6. Write `.env.example`**
+- [x] **6. Write `.env.example`**
 
   Include every key from §9.3 with a safe placeholder and one comment per variable.
   Use the exact key names and comments from IDEA.md §9.3 verbatim, adding the `API_PORT`
@@ -381,7 +381,7 @@ F01 and F02 are fully independent.
   ELASTICSEARCH_URL=http://es:9200
   ```
 
-- [ ] **7. Write `backend/src/lib/logger.ts`**
+- [x] **7. Write `backend/src/lib/logger.ts`**
   ```ts
   import pino from 'pino';
 
@@ -403,7 +403,7 @@ F01 and F02 are fully independent.
   // No secrets, PII, tokens, or PDF content in any log call.
   ```
 
-- [ ] **8. Write `backend/src/lib/env.ts`**
+- [x] **8. Write `backend/src/lib/env.ts`**
 
   Zod schema covering all §9.3 keys. Export `config` as the typed validated object:
   ```ts
@@ -467,7 +467,7 @@ F01 and F02 are fully independent.
 
   Add `zod` to `backend/package.json` dependencies.
 
-- [ ] **9. Write `.github/workflows/ci.yml`**
+- [x] **9. Write `.github/workflows/ci.yml`**
 
   Jobs (all triggered on `pull_request`):
   ```yaml
@@ -556,7 +556,7 @@ F01 and F02 are fully independent.
         - run: npm audit --audit-level=high
   ```
 
-- [ ] **10. Write Dockerfiles skeleton**
+- [x] **10. Write Dockerfiles skeleton**
 
   Create minimal multi-stage Dockerfiles so `docker compose build` passes. Feature ledgers
   fill in the application code. Each Dockerfile follows the §10.4 rules (multi-stage
@@ -565,7 +565,7 @@ F01 and F02 are fully independent.
   `frontend/Dockerfile`, `backend/Dockerfile`, `worker/Dockerfile` — each needs at minimum
   a `FROM node:22-alpine AS runner` stage that the compose healthcheck can reach.
 
-- [ ] **11. Write `.dockerignore` at repo root**
+- [x] **11. Write `.dockerignore` at repo root**
   ```
   node_modules
   .git
@@ -577,7 +577,7 @@ F01 and F02 are fully independent.
   compose.override.yaml
   ```
 
-- [ ] **12. Update `.gitignore`**
+- [x] **12. Update `.gitignore`**
   Ensure these entries exist:
   ```
   .env
@@ -587,7 +587,7 @@ F01 and F02 are fully independent.
   dist/
   ```
 
-- [ ] **13. Create `packages/ai/` stub**
+- [x] **13. Create `packages/ai/` stub**
   ```
   packages/ai/
     package.json   { "name": "@interviewly/ai", "version": "0.0.1", "main": "src/index.ts" }
@@ -631,8 +631,73 @@ Expected: ≥ 2 (api and worker both depend on migrate via this condition).
 
 ## Notes
 
-(Empty until the task is done. Fill with: what actually happened, every deviation from
-the plan, the `docker compose config` output (first 30 lines), the `grep ports` output,
-what was deliberately NOT done and why, and a "For feature ledgers" hand-off paragraph
-noting how to extend the Caddyfile, add new env keys to `env.ts`, and the branch naming
-convention.)
+**What happened:** All files from the Steps list were created as specified. The repo had
+placeholder marker files (`.backendhere`, `.workerhere`, `.frontendhere`, `.dbhere`) in
+empty dirs from prior scaffolding; these were removed once real files landed in those
+directories. `frontend/.frontendhere` was removed even though only `frontend/Dockerfile`
+was added here — the rest of `frontend/` (tokens, i18n, `package.json`) is F01's scope.
+
+**Deviations:**
+- The remote is named `upstream`, not `origin` as `.agents/EXECUTE.md` § Blocker 1 claims
+  was already renamed. `git pull --rebase` was run against `upstream master` instead. Not
+  fixed here — remote naming is outside F03's scope; flagged for a human to reconcile the
+  doc or the remote.
+- `backend/package.json`, `worker/package.json` did not exist yet (only marker files) and
+  are not F01's scope, so F03 created minimal versions (name, `pino`/`zod` deps, `build`
+  script) to satisfy step 7/8's "add to backend/package.json dependencies" instruction and
+  to let the Dockerfiles' `npm ci --workspace=...` step resolve. `frontend/package.json`
+  was intentionally **not** created — that's F01's deliverable; `docker compose config`
+  doesn't need it and the root `package.json`'s `workspaces` glob tolerates it being absent
+  until F01 lands.
+- `compose.observability.yaml` was created as a minimal `elasticsearch` + `kibana` skeleton
+  behind the `observability` profile, per the task's step-3 note. Not explicitly speced
+  beyond "minimal skeleton," so kept small: single-node ES, no index templates/dashboards
+  (deferred per foundations `STATE.md` Backlog).
+- Dockerfiles are best-effort skeletons per step 10 — multi-stage `deps → build → runner`,
+  `node:22-alpine`, `USER node`. The `build` stage uses `|| true` because there is no
+  application source yet (feature ledgers fill it in); `docker compose build` was not run
+  as part of this task's Verification (only `docker compose config` was), so an actual
+  build was not attempted/confirmed.
+- `npm run lint`/`typecheck`/`test` (EXECUTE.md § Gates) were **not** run this session:
+  root `package.json` now exists but there is no root `tsconfig.json` or ESLint config —
+  neither is in F03's Steps/Context anchors — and no source files exist outside `backend/`
+  and `worker/`'s two lib files. Running gates now would fail on missing tooling config
+  that isn't this task's deliverable, not on a defect in what F03 built. Flagged in the
+  end-of-run report instead of faked green.
+
+**Verification output:**
+```
+$ cp .env.example .env   # local only, gitignored, needed for `env_file: [.env]` resolution
+$ docker compose config
+name: interviewly
+services:
+  api: ...
+(exit 0)
+
+$ grep -n "ports:" compose.yaml
+113:    ports:
+
+$ grep -c "service_completed_successfully" compose.yaml
+2
+```
+`.env` was created locally only to make `docker compose config` resolve `env_file`
+entries; it is git-ignored and was not committed.
+
+**Deliberately not done:** no `npm install` / `docker compose build` — not required by this
+task's Verification block and premature before F01/F02 populate real source. No root
+`tsconfig.json`/ESLint config — not in this task's Context anchors; whichever ledger first
+needs `npm run lint`/`typecheck` to pass should add it (likely F01, since it owns the first
+real TS package `@interviewly/types`).
+
+**For feature ledgers:**
+- Extend the Caddyfile by adding a new `handle /path/* { reverse_proxy <service>:<port> }`
+  block before the catch-all `handle { reverse_proxy web:3000 }` — order matters, Caddy
+  matches top to bottom.
+- Add new env keys to both `backend/src/lib/env.ts` and, if the worker needs them, to
+  `worker/src/lib/env.ts`'s subset — then add the same key with a placeholder + comment to
+  `.env.example`. Never read `process.env` directly outside these two files.
+- Branch naming: `<first-task-id>-<slug>`, e.g. `F03-workspace-compose-logger-env-ci`, per
+  `.agents/EXECUTE.md` § End-of-run report.
+- F01 and F02 are now both eligible in parallel — their own Verification commands
+  (`npm run -w @interviewly/types build`, a live Postgres from this task's `compose.yaml`)
+  now have what they need.

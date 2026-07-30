@@ -1,0 +1,19 @@
+{
+  "name": "interviewly",
+  "private": true,
+  "workspaces": ["packages/*", "frontend", "backend", "worker"],
+  "scripts": {
+    "build": "npm run -w @interviewly/types build && npm run -w frontend build && npm run -w backend build",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint . --ext .ts,.tsx",
+    "test:acceptance": "npm run -w backend test:acceptance",
+    "seed": "npm run -w backend seed"
+  },
+  "devDependencies": {
+    "typescript": "^5",
+    "eslint": "^9",
+    "@typescript-eslint/eslint-plugin": "^8",
+    "@commitlint/cli": "^19",
+    "@commitlint/config-conventional": "^19"
+  }
+}

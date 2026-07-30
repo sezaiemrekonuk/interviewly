@@ -1,0 +1,8 @@
+node_modules
+.git
+.next
+internal_docs
+.agents
+*.md
+!README.md
+compose.override.yaml
