@@ -1,8 +1,9 @@
 # Foundations — REFERENCE (read this once, then you don't need to spelunk)
 
-Single orientation doc for any agent executing a foundations task. These paths do not
-exist yet — foundations creates them. Verified against the authored specs as of 2026-07-30
-(pre-code). If reality diverges after a task lands, trust the code and patch this file.
+Single orientation doc for any agent executing a foundations task. **All four foundations
+tasks have landed, so every path below now exists**; re-verified against the code as of
+2026-07-30 (post-F02). If reality diverges after a task lands, trust the code and patch this
+file.
 
 ## Services, ports, roles (post-foundations)
 
@@ -64,10 +65,11 @@ npx prisma migrate diff --from-schema-datasource prisma/schema.prisma --to-schem
 | `frontend/src/middleware.ts` | Locale detection middleware (F01) |
 | `packages/types/src/index.ts` | `@interviewly/types` barrel — re-exports `ErrorCode`, `AvatarState`, shared API types (F01) |
 | `backend/src/lib/error-codes.ts` | Error-code registry: `const ERROR_CODES = { … }` (F01) |
-| `backend/prisma/schema.prisma` | Complete Prisma schema — all 15 tables (F02) |
-| `backend/prisma/migrations/` | Timestamped Prisma migrations, starting with `0001_init` (F02) |
-| `backend/prisma/seed.ts` | Seed script: admin user, personas, occupation clusters, sample interview (F02) |
-| `backend/src/lib/db.ts` | Prisma client singleton + repo helpers (`userInterviews`, `activeInterview`) (F02) |
+| `backend/prisma/schema.prisma` | Complete Prisma schema — 15 tables, 18 enums, 7 indexes (F02) |
+| `backend/prisma/migrations/` | Timestamped Prisma migrations; the first is `20260730130638_init` (F02) |
+| `backend/prisma/seed.ts` | Seed script: admin user, personas, occupation clusters, mascot set, sample interview (F02) |
+| `backend/prisma/fixtures/sample-listing.txt` | The *Try a sample listing* job text, §4.3.1 (F02) |
+| `backend/src/lib/db.ts` | Prisma client singleton + repo helpers (`userInterviews`, `activeInterview`, `recordLlmCall`) (F02) |
 | `backend/src/lib/logger.ts` | Pino logger factory — `logger.info({…, traceId, interviewId}, "EVENT")` (F03) |
 | `backend/src/lib/env.ts` | Zod env schema + fail-fast startup check (F03) |
 | `compose.yaml` | Service inventory — default profile (F03) |
@@ -90,9 +92,17 @@ onboarding), `cv_upload_id` and `onboarding_completed_at`; `uploads` carries `ki
 
 Full column list in `tasks/F02-*.md` and `backend/prisma/schema.prisma`.
 
-Soft-delete helpers in `backend/src/lib/db.ts`:
-- `userInterviews(userId)` — non-deleted interviews, paginated.
+Helpers in `backend/src/lib/db.ts` — user-facing modules use these, never
+`prisma.interview.findMany` (K13):
+- `userInterviews(userId, { cursor?, limit? })` — non-deleted interviews, newest first, paginated.
 - `activeInterview(id)` — single non-deleted interview or `null`.
+- `recordLlmCall(data)` — inserts the `llm_calls` row and increments `spent_usd` in **one**
+  transaction (K13, §7.3); returns committed totals plus `exhausted`.
+
+Prisma is **6.19.3** (ADR-F13, not the `^5` the F02 task file names). Feature ledgers add
+indexes and nullable columns only, each in its own `npx prisma migrate dev --name <slug>` run
+from `backend/`, rebased before merge. `npm run -w backend db:check` runs `db.ts`'s soft-delete
+self-check against a seeded database.
 
 ## Conventions
 

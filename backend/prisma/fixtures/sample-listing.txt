@@ -1,0 +1,28 @@
+Senior Backend Engineer (Node.js / TypeScript)
+
+About the role
+We are looking for a senior backend engineer to own the services behind our
+scheduling platform. You will design HTTP APIs, shape the data model, and keep a
+Postgres-backed system fast and predictable under load. The team is small, so you
+will be close to the product decisions and to the people using what you build.
+
+What you will do
+- Design and build TypeScript services on Node.js, deployed as containers.
+- Model data in PostgreSQL: migrations, indexing, query performance.
+- Own reliability for the services you ship: structured logs, metrics, alerts.
+- Review code and mentor two mid-level engineers.
+- Work with the frontend team on API contracts before either side writes code.
+
+What we are looking for
+- 5+ years building backend services, at least 2 with TypeScript or Node.js.
+- Strong SQL and a real working knowledge of relational modelling.
+- Experience with asynchronous work: queues, retries, idempotency.
+- Comfortable with Docker and CI pipelines.
+- Clear written communication — most of our design work happens in documents.
+
+Nice to have
+- Experience with Redis, BullMQ, or a comparable job runner.
+- Exposure to observability tooling (OpenTelemetry, Elasticsearch, Grafana).
+- Having been on call for a system you built.
+
+We work remotely with two overlapping hours in Central European Time.

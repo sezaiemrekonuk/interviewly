@@ -1,5 +1,5 @@
 # F02 — Creating full Prisma schema, migrations, seed, and soft-delete repo helpers
-REPO: (this repo) · Depends: — · Status: todo
+REPO: (this repo) · Depends: F03 · Status: done
 Read first: STATE.md, REFERENCE.md, then this.
 **Model: claude-opus-4.8** — schema is the highest-blast-radius artefact in the project; every downstream task binds to its column names, types, and constraints. Get it right once.
 
@@ -65,14 +65,14 @@ any structural change is a change to F02's scope (ADR-F02, §5.2).
   groups wrong — fix it in the seed, not in a later migration.
 
 ## Steps
-- [ ] **1. Add Prisma to `backend/package.json`**
+- [x] **1. Add Prisma to `backend/package.json`**
   ```json
   "dependencies": { "@prisma/client": "^5" },
   "devDependencies": { "prisma": "^5", "tsx": "^4" },
   "prisma": { "seed": "tsx prisma/seed.ts" }
   ```
 
-- [ ] **2. Write `backend/prisma/schema.prisma`**
+- [x] **2. Write `backend/prisma/schema.prisma`**
 
   Generator + datasource:
   ```prisma
@@ -354,7 +354,7 @@ any structural change is a change to F02's scope (ADR-F02, §5.2).
 
   Cross-check: 14 models match K13's list. 15 enums match `db` spec.
 
-- [ ] **3. Run initial migration**
+- [x] **3. Run initial migration**
   ```bash
   cd backend
   npx prisma migrate dev --name init
@@ -363,7 +363,7 @@ any structural change is a change to F02's scope (ADR-F02, §5.2).
   file. If `SHADOW_DATABASE_URL` is not set (F03 not landed yet), use
   `--create-only` and apply manually with `prisma migrate deploy` against a running DB.
 
-- [ ] **4. Write `backend/src/lib/db.ts`**
+- [x] **4. Write `backend/src/lib/db.ts`**
   ```ts
   import { PrismaClient } from '@prisma/client';
 
@@ -396,7 +396,7 @@ any structural change is a change to F02's scope (ADR-F02, §5.2).
   }
   ```
 
-- [ ] **5. Write `backend/prisma/seed.ts`**
+- [x] **5. Write `backend/prisma/seed.ts`**
 
   The seed must produce (in order, idempotent via `upsert`):
   1. `OccupationCluster` rows — a canonical list of cluster keys and labels covering the
@@ -429,10 +429,10 @@ any structural change is a change to F02's scope (ADR-F02, §5.2).
 
   Run the seed with: `npx tsx prisma/seed.ts` (or via `npm run seed` in `backend/`).
 
-- [ ] **6. Verify schema and migration health**
+- [x] **6. Verify schema and migration health**
   See `## Verification` below.
 
-- [ ] **7. Verify repo helpers**
+- [x] **7. Verify repo helpers**
   Write a minimal self-check at the bottom of `db.ts` (behind `if (require.main === module)`)
   that calls `userInterviews` and `activeInterview` against the seeded DB, printing counts.
   This is the "runnable check" that fails if the helper logic breaks.
@@ -485,8 +485,194 @@ npx tsx prisma/seed.ts
 
 ## Notes
 
-(Empty until the task is done. Fill with: what actually happened, every deviation from
-the plan — especially any column name or type that differs from the spec, the exact
-migration timestamp, the seed completion output verbatim, what was deliberately NOT done
-and why, and a "For feature ledgers" hand-off paragraph stating the migration rule and
-where to find the repo helpers.)
+Executed 2026-07-30 by **Sezai**, out of ownership order. F02 is Fatih's row; it was taken
+over as an explicit blocker-clearing exception on the owner's request — F02 was the last
+`todo` foundations task and every `I`, `A`, `R`, `N`, `V` and `D` row lists it in
+`Depends on`, so nothing else in the project could start. Same exception pattern as F01.
+
+### What exists now
+
+| Path | Contents |
+|---|---|
+| `backend/prisma/schema.prisma` | 15 models, 18 enums, 7 §8.1 indexes, 17 FKs |
+| `backend/prisma/migrations/20260730130638_init/migration.sql` | generated, never hand-edited |
+| `backend/prisma/seed.ts` | idempotent seed; prints `Seed complete.` |
+| `backend/prisma/fixtures/sample-listing.txt` | the *Try a sample listing* text (§4.3.1) |
+| `backend/src/lib/db.ts` | client singleton + `userInterviews` / `activeInterview` / `recordLlmCall` + self-check |
+
+**No column name or type differs from the `db` spec's Contracts > Tables table.** Every
+deviation below is structural or tooling, none of them rename or retype a column.
+
+### Deviations from the task file
+
+1. **Prisma 6.19.3, not `^5`.** Prisma 5 is two majors behind and `npm audit --audit-level=high`
+   is a blocking CI gate; 6 keeps the `prisma-client-js` generator the task's schema block
+   assumes, so the schema text needed no change. Prisma 7 was rejected — it replaces that
+   generator. ADR-F13.
+2. **`@@map` added to all 15 models.** The task's Prisma block had no `@@map`, which would
+   have produced PascalCase tables (`User`, `EmailToken`) and failed db spec AC-1, which names
+   all 15 tables in snake_case. Column names were already snake_case, so no `@map` was needed.
+3. **The task's Prisma block does not validate as written.** `ReportQuestion.question` had no
+   opposite relation field on `Question`, and `Answer` carried a `report_questions
+   ReportQuestion[]` back-relation to a foreign key that does not exist (`report_questions` FKs
+   to `reports` and `questions` only, per the spec's table). Fixed by moving
+   `report_questions ReportQuestion[]` from `Answer` to `Question`. This matches the spec; the
+   task file's block was the thing that was wrong.
+4. **Counts in the task's prose were stale**, and the generated SQL is the arbiter: **15**
+   models (the "Cross-check: 14 models" line undercounts), **18** enums (not 15), **7** §8.1
+   indexes (the DoD's "all five" undercounts — the spec's Indexes block lists seven).
+5. **`prisma migrate dev --name init` ran normally** — `db/init.sql` from F03 already creates
+   `interviewly_shadow`, so the `--create-only` fallback the task allowed for was not needed.
+6. **The seed uses deterministic primary keys** (`seed-persona-hr`, `seed-interview-demo`, …).
+   `personas` has no natural unique key, so `upsert` needs a known id; supplying ids also lets
+   the avatar keys under `personas/{id}/` be computed before the row is written. The schema
+   still defaults `id` to `cuid()` for every non-seed row.
+7. **Avatar keys follow `infra`, not the task file.** The task suggested
+   `personas/<id>/idle-placeholder.webp`; `infra` §K12 and `ui` §3.6 pin
+   `personas/{personaId}/{state}-{sha256}.webp`. Used the content-addressed form so the seeded
+   keys are the real layout, not a shape that has to be migrated later.
+8. **The sample job listing is a committed fixture, not a row.** No table models a job listing,
+   and the task explicitly allowed either. The seed reads the fixture and uses it as the sample
+   interview's `job_text`, so the file is exercised rather than merely present.
+9. **`recordLlmCall()` was added to `db.ts`.** The task's non-negotiable requires the
+   `spent_usd`/`llm_calls` single-transaction contract (K13, §7.3) to be documented for
+   downstream modules; a helper that performs the insert and the increment in one
+   `prisma.$transaction` makes the contract executable instead of a comment three ledgers can
+   each get wrong. It returns committed totals plus `exhausted`; the pre-call budget decision
+   and the `BUDGET_EXCEEDED` mapping stay with `ai`/`backend`.
+10. **`seed.ts` reads `process.env` directly** instead of importing `src/lib/env.ts`. Deliberate,
+    with the reasoning in a comment at the top of the file: `env.ts` fails fast on the *service*
+    schema (`SESSION_SECRET`, `SMTP_HOST`, `MAIL_FROM`), none of which seeding touches, and
+    `npm run seed` should not require them. Defaults in the script match `.env.example`.
+
+### Files outside `backend/prisma` and `backend/src` that had to change
+
+Each is one line, each is load-bearing for "a fresh clone boots seeded with no manual step":
+
+- `compose.yaml` — `migrate` now runs `prisma migrate deploy --schema backend/prisma/schema.prisma`.
+  The image `WORKDIR` is the workspace root, so the bare command found no schema.
+- `backend/Dockerfile` — added `npx prisma generate` to the build stage. Prisma Client is
+  generated code; without it `api`, `worker` and `migrate` ship an empty `@prisma/client`.
+- `eslint.config.js` — added `backend/prisma/**/*.ts` to the TS-parser `files` glob. `eslint .`
+  reaches `seed.ts`, and without the glob it was parsed as plain JS (`Parsing error: Unexpected
+  token {` on `import type`).
+- `tsconfig.json` — added `backend/prisma` to `include`, so `seed.ts` is typechecked rather than
+  silently skipped.
+- `.env.example` — added `SEED_ADMIN_PASSWORD` (default `AdminDemo1!`), the override that keeps
+  the demo credential out of any real deployment.
+
+### Verification output
+
+`## Verification` command, verbatim, from `backend/`:
+
+```
+npx prisma migrate diff --from-schema-datasource prisma/schema.prisma \
+  --to-schema-datamodel prisma/schema.prisma --exit-code
+→ No difference detected.        MIGRATE_DIFF_EXIT=0
+```
+
+Run **red first**, before the migration existed: the same command printed a full add/change
+diff and exited non-zero.
+
+Table count — **16, not the 15 the task predicts.** The query counts
+`information_schema.tables`, which includes Prisma's own `_prisma_migrations` bookkeeping
+table. Excluding it gives exactly 15. Both were run; the task's expected value is off by that
+one row, the schema is not.
+
+```
+SELECT count(*) … table_schema='public';                                   → 16
+SELECT count(*) … table_schema='public' AND table_name <> '_prisma_migrations'; → 15
+enum types in public                                                        → 18
+SELECT confdeltype, count(*) FROM pg_constraint WHERE contype='f'          → r|17
+```
+
+`confdeltype = r` on all 17 foreign keys: every FK is `ON DELETE RESTRICT` and **no cascade
+delete exists anywhere** (AC-11). Prisma also emits `ON UPDATE CASCADE`, which is not a
+cascade delete and can never fire — primary keys are cuids and are never updated.
+
+Constraint behaviour, checked by provoking the failures:
+
+```
+duplicate (round_id, order_index)  → ERROR: duplicate key value violates unique constraint
+                                            "questions_round_id_order_index_key"     (AC-5)
+uploads.kind = 'passport'          → ERROR: invalid input value for enum "UploadKind" (AC-2)
+budget_usd / spent_usd defaults    → 0.500000 | 0.000000                             (AC-4)
+```
+
+`prisma/seed.ts`, verbatim:
+
+```
+Seeding interviewly @ http://localhost:9000 and the database...
+  occupation_clusters: 10
+  mascot/: 5 objects
+  personas: 2 (each with 5 avatar objects)
+  users: demo admin admin@demo.com (password: AdminDemo1!)
+  sample listing: 1378 chars from prisma/fixtures/
+  interviews: 1 sample (2 rounds, 4 questions, 1 ready report)
+Seed complete.
+```
+
+15 objects land in the bucket (5 `mascot/`, 10 `personas/`). Running the seed twice produces
+byte-identical output and no duplicate rows.
+
+`backend/src/lib/db.ts` self-check (`npm run -w backend db:check`):
+
+```
+userInterviews(admin) -> 1 row(s)
+db.ts self-check passed.
+```
+
+Proven red before being trusted: with `deleted_at: null` stripped from both helpers it fails
+with `AssertionError: a soft-deleted interview leaked into userInterviews`.
+
+**The whole path was re-run from destroyed volumes** (`docker compose down -v` → `up db bucket`
+→ `migrate deploy` → seed → self-check → `migrate diff`), so AC-1's "on an empty database"
+is literally what was tested, not inferred.
+
+Also run: `docker compose config` (exit 0), `docker compose build migrate` (image built,
+`node_modules/.prisma/client` present inside it), and `docker compose run --rm migrate`
+(`No pending migrations to apply.`) — the `docker compose up` path resolves the schema.
+
+Gates: `npm run lint` and `npm run typecheck` both exit 0. **`npm test` does not exist** —
+`npm error Missing script: "test"`, the pre-existing backlog gap in `STATE.md`, unchanged by
+this task. `npm run test:acceptance` was not run: no Cucumber harness exists yet and this task
+added no HTTP behaviour.
+
+### Deliberately not done
+
+- **Bucket policy for the public `personas/` and `mascot/` prefixes.** The seed creates the
+  bucket and PUTs the objects; making them anonymously readable at `/assets` is `infra`'s
+  boundary enforcement (infra spec §7), not F02's. Until it lands, `/assets/mascot/*.webp`
+  returns 403. Backlogged in `STATE.md`.
+- **Avatar and mascot artwork.** Every one of the 15 objects is the same valid 34-byte 1x1
+  WebP. The keys and the DB shape are real; the pixels are a placeholder to be overwritten at
+  the same keys.
+- **`backend/tsconfig.json`.** Still missing, so `npm run -w backend build` still fails — an
+  F03 gap that predates this task and is hidden by `|| true` in the Dockerfile. Backlogged, not
+  fixed here.
+- **`prisma.config.ts`.** `package.json#prisma` (which the task prescribes) is deprecated and
+  warns on every Prisma 6 CLI call; it is removed in Prisma 7. Left as specced. Backlogged.
+- **No `uploads` or `email_tokens` rows in the seed.** Neither is needed for a working room and
+  neither is in the DoD; `auth` and `interview-core` create them in their own flows.
+
+### For feature ledgers
+
+`backend/src/lib/db.ts` is the only module that may talk to `interviews` on a user's behalf.
+Import `userInterviews(userId, { cursor?, limit? })` and `activeInterview(id)` from it —
+`prisma.interview.findMany` in a user-facing module is a review rejection (K13). An
+admin/analytics read that must count deleted interviews bypasses the helpers **and says so at
+the call site**. Every provider call records through `recordLlmCall()`; do not insert
+`llm_calls` and increment `spent_usd` separately.
+
+The schema is closed. You may add **indexes and nullable columns only**, each in its own
+`npx prisma migrate dev --name <slug>` migration from `backend/`, rebased on `master` before
+merge (`git pull --rebase origin master`, then re-run the migration if the head moved). A new
+table, a dropped column, a changed relation, **or a new enum value** — including widening
+`QuestionKind` or `ChatRole`, both of which the `db` spec flags as provisional — is a change to
+F02's scope: raise it in the group, record an ADR, merge it as its own task. Do not let it ride
+along in a feature PR.
+
+Local loop: `docker compose -f compose.yaml -f compose.dev.yaml up -d db bucket`, then from
+`backend/` with `DATABASE_URL`/`SHADOW_DATABASE_URL` pointed at `localhost:5432`,
+`npx prisma migrate deploy && npm run seed`. Demo admin is `admin@demo.com` / `AdminDemo1!`
+(pre-verified, `role=admin`), overridable with `SEED_ADMIN_PASSWORD`.
