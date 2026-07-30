@@ -71,20 +71,20 @@ is caught in seconds instead of at the next CI run.
   unless Step 4 finds it genuinely needs a local `commit-msg` hook too (see Out of scope).
 
 ## Steps
-- [ ] **1. Root ESLint flat config** — create `eslint.config.js` at repo root covering
+- [x] **1. Root ESLint flat config** — create `eslint.config.js` at repo root covering
   `backend/src/**/*.ts`, `packages/*/src/**/*.ts`, `worker/src/**/*.ts` (glob; fine if the
   directory doesn't exist). Use `@typescript-eslint` (already a root `devDependency`) with a
   reasonable recommended ruleset. **Explicitly ignore `frontend/**`** (it lints itself),
   `**/dist/**`, `**/.next/**`, `**/node_modules/**`, `packages/types/dist/**`.
-- [ ] **2. Fix `npm run lint` at root** — confirm `npm run lint` (root) now exits 0 on the
+- [x] **2. Fix `npm run lint` at root** — confirm `npm run lint` (root) now exits 0 on the
   current tree (or fails only on genuine lint violations, none of which should exist yet).
-- [ ] **3. Install husky + lint-staged** — `npm install -D husky lint-staged` at root; add
+- [x] **3. Install husky + lint-staged** — `npm install -D husky lint-staged` at root; add
   `"prepare": "husky"` to root `package.json` scripts; run `npx husky init` (or the
   equivalent manual `.husky/pre-commit` file creation for husky v9) so `.husky/pre-commit`
   exists and runs `npx lint-staged`. Confirm the `prepare` script no-ops safely in a
   non-interactive/CI/Docker-build context (husky v9's generated hook already does this; verify
   it, don't fight it).
-- [ ] **4. Configure lint-staged** — add a `"lint-staged"` key to root `package.json` (or a
+- [x] **4. Configure lint-staged** — add a `"lint-staged"` key to root `package.json` (or a
   `.lintstagedrc.json`) mapping staged-file globs to commands, at minimum:
   - `frontend/**/*.{ts,tsx}` → `npm run -w frontend lint -- --file` (or equivalent scoped
     invocation — check what `eslint-config-next`'s CLI actually accepts; fall back to a plain
@@ -93,13 +93,13 @@ is caught in seconds instead of at the next CI run.
   - Do **not** run `tsc --noEmit` per-file in lint-staged (TypeScript project-wide typecheck
     doesn't work meaningfully on a file subset) — typecheck stays a CI/manual gate
     (`npm run typecheck`), not a pre-commit one. Document this choice in `## Notes`.
-- [ ] **5. Add `backend`'s missing `"lint"` script** to `backend/package.json` (and
+- [x] **5. Add `backend`'s missing `"lint"` script** to `backend/package.json` (and
   `packages/types/package.json`, `packages/ai/package.json` if they don't have one) pointing at
   the new root config, so `npm run -w @interviewly/backend lint` works standalone too, not just
   through lint-staged.
-- [ ] **6. Remove the "Root `eslint.config.js` missing" line** from foundations `STATE.md` →
+- [x] **6. Remove the "Root `eslint.config.js` missing" line** from foundations `STATE.md` →
   `## Backlog` once Step 2 is verified green.
-- [ ] **7. Run the `## Verification` command(s).**
+- [x] **7. Run the `## Verification` command(s).**
 
 ## Definition of done
 - `npm run lint` at repo root exits 0.
@@ -159,7 +159,73 @@ either way). (5) `npm ci` / `docker compose build` succeeds unmodified from F03'
   `npm run typecheck`).
 
 ## Notes
-_(fill in when the task is done: what actually happened, the exact lint-staged config chosen,
-why `--file` vs plain `eslint --fix` for the frontend command, and confirmation that
-`docker compose build` / `npm ci` was actually exercised in Step 3's verification, not just
-assumed.)_
+
+**Backlog anchor was stale.** Step 6 said to remove a "Root `eslint.config.js` missing" line
+from `STATE.md` → `## Backlog`. That line does not exist in the current `STATE.md` (checked
+with grep) — either never actually landed there or was already removed by a prior session.
+Nothing to remove; not treating this as a failure, just documenting the deviation per rule 5's
+spirit (verification is a command, not a wish — grep confirmed absence).
+
+**Root ESLint flat config** (`eslint.config.js`) covers `backend/src/**/*.ts`,
+`packages/*/src/**/*.ts`, `worker/src/**/*.ts` with `@typescript-eslint` recommended rules.
+Also had to explicitly ignore `.agents/**`, `ci/**`, `db/**`, `docs/**`, `edge/**`,
+`elasticsearch/**`, `internal_docs/**`, `kibana/**` — not in the task's anchor list, but `eslint
+. --ext .ts,.tsx` walks the whole repo tree, and a stray example `.ts` file under
+`.agents/skills/systematic-debugging/` (deliberately-broken TS syntax used as a debugging-skill
+fixture) crashed the parser before this was added. Scope is now exactly the four code-writable
+workspaces named in the task Goal.
+
+**`--file` does not exist** on ESLint 9's CLI (confirmed via `eslint --help`) — used the task's
+documented fallback instead: `eslint --fix` scoped to the matched files, with `--config` pointed
+at the right config file (root `eslint.config.js` for backend/worker/packages, `frontend/
+eslint.config.mjs` for frontend) so lint-staged doesn't accidentally pick up the wrong config for
+either group.
+
+**`--max-warnings=0` was required, not optional.** `eslint-config-next`'s `no-unused-vars` is
+`warn`, not `error` — a lint-staged command without `--max-warnings=0` exits 0 on a warning and
+silently lets the commit through. Added it to both lint-staged commands (frontend and
+backend/worker/packages) for symmetry, even though the `@typescript-eslint` recommended ruleset
+already errors on `no-unused-vars` — cheap insurance against a future rule-severity change
+silently defeating the hook.
+
+**Flat-config `files` globs are relative to `process.cwd()`, not the config file's directory —
+this bit the per-workspace standalone `lint` scripts.** First pass wrote
+`"lint": "eslint --config ../eslint.config.js src"` for `backend`/`worker` (and `../../
+eslint.config.js` for `packages/*`) — since `npm run -w <pkg> lint` sets cwd to the workspace
+directory, the config's `backend/src/**/*.ts` pattern silently matched **zero files** (ESLint
+prints "File ignored because no matching configuration was supplied" only when a specific file
+is named, not when a directory arg matches nothing — the first attempt exited 0 with no output,
+which read as success but wasn't). Verified the false-green by lint-staged directly against a
+single file before trusting the directory-mode result. Fixed by having each workspace's `lint`
+script `cd` back to repo root first, e.g. `"lint": "cd .. && eslint --config eslint.config.js
+backend/src"` (`cd ../..` for `packages/*`), so the config's root-relative globs resolve
+correctly. Re-verified all four standalone scripts (`backend`, `worker`, `packages/types`,
+`packages/ai`) against both a clean file and a deliberately unused-var file to confirm they
+actually catch violations now, not just exit 0.
+
+**lint-staged itself was unaffected by the cwd bug** — lint-staged always runs its commands
+with cwd = git root (not the matched file's directory), so the `frontend/**/*.{ts,tsx}` and
+`{backend,worker,packages/*}/**/*.ts` lint-staged commands worked correctly from the first
+write; only the workspace-local `npm run -w X lint` scripts needed the `cd` fix.
+
+**Docker/CI safety (Step 3 non-negotiable) verified for real, not assumed:** read
+`node_modules/husky/index.js` — its install function returns early with `` `.git can't be
+found` `` when no `.git` directory exists, no throw. Then built a scratch copy of the committed
+tree (`git archive HEAD`) plus the new root `package.json`/`package-lock.json`, with no `.git`
+directory, and ran `npm ci` there directly — exit 0, prepare script printed `.git can't be
+found` and continued. Deleted the scratch dir afterward.
+
+**Full `## Verification` block run against the real repo**, including staging genuinely bad
+files under both `backend/` and `frontend/` and attempting `git commit` (both blocked, exit 1,
+no orphan commits — confirmed via `git log` unchanged), plus a positive-path clean-file commit
+that succeeded and was then `git reset --soft` back out to leave the tree exactly as this task
+found it (only the intended file changes remain in `git status`).
+
+**Files changed:** `eslint.config.js` (new, root), `.husky/pre-commit` (new, via `husky init`
+then edited from its `npm test` default to `npx lint-staged`), `package.json` (root — added
+`husky`+`lint-staged` devDependencies, `"prepare": "husky"` script, `"lint-staged"` config key),
+`package-lock.json`, `backend/package.json`, `worker/package.json`, `packages/types/package.json`,
+`packages/ai/package.json` (all four: added `"lint"` script).
+
+**Deliberately not done** (see `## Out of scope`): no `commit-msg`/commitlint local hook, no
+root `"test"` script, no Prettier, no per-file `tsc --noEmit` in the hook.

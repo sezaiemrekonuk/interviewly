@@ -5,6 +5,7 @@
   "main": "src/index.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "lint": "cd .. && eslint --config eslint.config.js backend/src",
     "seed": "tsx prisma/seed.ts",
     "test:unit": "vitest run",
     "test:acceptance": "cucumber-js"

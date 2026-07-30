@@ -122,8 +122,14 @@ For the task § 4 gave you:
 7. Flip the `STATE.md` row to `done`, repoint "Current task", rewrite "Last session ended".
 8. Write `.agents/devlogs/<same basename as the task file>.md`. Not optional, not later. Full
    contract: Part 2 § Devlog.
-9. Re-run § 3 and § 4. Continue while they hand you an eligible task whose tier matches.
-   Stop when a § 4 rule says stop, or when § 5 says the next task needs a different tier.
+9. **Stop. One task per session, no exceptions.** Do not re-run § 3/§ 4 to pick up another
+   task in this same run — a session that finishes a task ends the run right there, even if
+   another eligible same-tier task exists. Report what you did (§ 10) and end.
+
+**Strictly one task per session.** A session is one task, start to finish: `in_progress` →
+work → verification → `## Notes` → `done` → devlog → stop. Never chain a second task onto the
+same run, whatever § 4 would hand you next. The human starts a fresh session for the next
+task; that is the natural checkpoint for review before more work lands on top.
 
 **Do not commit between tasks.** The working tree accumulates; the end-of-run report is what
 makes it reviewable.
@@ -177,19 +183,25 @@ Silently skipping a gate is how a branch reaches CI red.
 
 ## 10. End-of-run report
 
-Per completed task: the ID, the verification command and its actual output, and the files
-changed. Then:
-
-- gates run, or named as skipped and why
-- which § 4 or § 5 rule ended the run, and its printed line
-- the exact commands for the human to finish:
+State that the task is done — nothing more (no verification transcript, no file list, no
+gates recap; those live in the devlog and `## Notes` already). Then give the human the exact
+commands to finish, in order, using **Conventional Commits** (`type(scope): description` —
+`feat`, `fix`, `chore`, `docs`, etc.; scope is the touched area, e.g. `frontend`, `ci`,
+`backend`):
 
 ```bash
-git switch -c <first-id>-<slug>
-git add -A && git commit -m "<ID>: <title>"    # one commit per task ID
-git push -u origin <first-id>-<slug>
-gh pr create                                    # PR body links the task files
+git switch -c <id>-<slug>
+git add -A && git commit -m "$(cat <<'EOF'
+<type>(<scope>): <short description>
+
+Task: <ID>
+EOF
+)"
+git push -u origin <id>-<slug>
+gh pr create --title "<type>(<scope>): <short description>" --body "Task: <ID>"
 ```
+
+Never run these — the human executes them.
 
 Copilot code review takes the first pass. A **human on the team approves** — never
 self-merge on an agent's approval alone.
