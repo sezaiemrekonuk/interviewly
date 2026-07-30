@@ -4,7 +4,8 @@
   "private": true,
   "main": "src/index.ts",
   "scripts": {
-    "build": "tsc -p tsconfig.json"
+    "build": "tsc -p tsconfig.json",
+    "lint": "cd .. && eslint --config eslint.config.js worker/src"
   },
   "dependencies": {
     "pino": "^9",

@@ -1,19 +1,31 @@
 {
   "name": "interviewly",
   "private": true,
-  "workspaces": ["packages/*", "frontend", "backend", "worker"],
+  "workspaces": [
+    "packages/*",
+    "frontend",
+    "backend",
+    "worker"
+  ],
   "scripts": {
     "build": "npm run -w @interviewly/types build && npm run -w frontend build && npm run -w backend build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint . --ext .ts,.tsx",
     "test:acceptance": "npm run -w backend test:acceptance",
-    "seed": "npm run -w backend seed"
+    "seed": "npm run -w backend seed",
+    "prepare": "husky"
   },
   "devDependencies": {
-    "typescript": "^5",
-    "eslint": "^9",
-    "@typescript-eslint/eslint-plugin": "^8",
     "@commitlint/cli": "^19",
-    "@commitlint/config-conventional": "^19"
+    "@commitlint/config-conventional": "^19",
+    "@typescript-eslint/eslint-plugin": "^8",
+    "eslint": "^9",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.2.0",
+    "typescript": "^5"
+  },
+  "lint-staged": {
+    "frontend/**/*.{ts,tsx}": "eslint --config frontend/eslint.config.mjs --fix --max-warnings=0",
+    "{backend,worker,packages/*}/**/*.ts": "eslint --config eslint.config.js --fix --max-warnings=0"
   }
 }

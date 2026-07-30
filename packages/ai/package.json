@@ -2,5 +2,8 @@
   "name": "@interviewly/ai",
   "version": "0.0.1",
   "private": true,
-  "main": "src/index.ts"
+  "main": "src/index.ts",
+  "scripts": {
+    "lint": "cd ../.. && eslint --config eslint.config.js packages/ai/src"
+  }
 }

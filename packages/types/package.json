@@ -6,6 +6,7 @@
   "types": "dist/packages/types/src/index.d.ts",
   "scripts": {
     "build": "tsc",
+    "lint": "cd ../.. && eslint --config eslint.config.js packages/types/src",
     "typecheck": "tsc --noEmit"
   }
 }

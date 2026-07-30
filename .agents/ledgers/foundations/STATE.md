@@ -1,7 +1,23 @@
 # Foundations — State
 
 Last updated: 2026-07-30
-Last session ended: **F01 done** (executed by Sezai, out of ownership order, as an explicit
+Last session ended: **F04 done** (executed by Sezai). Root `eslint.config.js` added
+(`@typescript-eslint` recommended over `backend/src`, `packages/*/src`, `worker/src`;
+`frontend/**` explicitly excluded since it lints itself). `npm run lint` at root now exits 0.
+`husky` + `lint-staged` installed; `.husky/pre-commit` runs `npx lint-staged`, wired via
+`"prepare": "husky"` and `core.hooksPath`. lint-staged blocks a bad commit under both
+`backend/` (root config, `@typescript-eslint/no-unused-vars` is `error`) and `frontend/`
+(`frontend/eslint.config.mjs`, required `--max-warnings=0` since `eslint-config-next`'s
+`no-unused-vars` is only `warn`) — both verified live via real staged files + `git commit`
+attempts, both blocked, no orphan commits. `npm ci` with no `.git` dir verified safe (husky's
+install no-ops). All four workspaces (`backend`, `worker`, `packages/types`, `packages/ai`)
+got a standalone `"lint"` script; caught a real bug along the way — flat-config `files` globs
+resolve relative to `process.cwd()`, not the config file's location, so the first draft of
+these scripts silently matched zero files (false green) until fixed to `cd` back to repo root
+first. Full deviation record in `tasks/F04-precommit-hooks.md` → `## Notes`. F02 (Fatih) is
+still open and independently eligible — F04 was off the critical path throughout.
+
+Previously: **F01 done** (executed by Sezai, out of ownership order, as an explicit
 blocker-clearing exception — see F01 task file `## Notes` for the full deviation record).
 `frontend/` went from a bare Dockerfile to a real Next.js 16 App Router skeleton
 (`create-next-app`), tokens/next-intl/error-codes/`@interviewly/types` all landed, 3 token
@@ -9,7 +25,7 @@ values (`--primary`, `--live`, `--text-muted`) were darkened to clear the 4.5:1 
 floor, and the error-code count was corrected 45→46 (the task's own literal list always had
 46; only the prose annotations were stale). `npm run -w @interviewly/types build` exits 0,
 `npm run typecheck` at root now passes (fixed a `baseUrl`/`jsx` gap in F03's root
-`tsconfig.json` as part of F01 Step 10). F02 (Fatih) is still open and independently eligible.
+`tsconfig.json` as part of F01 Step 10).
 
 Previously: **F03 done.** Workspace root, compose files (default/dev/observability),
 Caddyfile, `.env.example`, backend+worker logger/env, CI workflow, Dockerfile skeletons all
@@ -31,13 +47,10 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**F01 is done, F02 (Fatih) is the only foundations task left, still `todo`.** Apply
-`.agents/EXECUTE.md` Part 1 § 4 to confirm before starting anything.
-**F03 is done.** F01 (Ahmet) and F02 (Fatih) are both now eligible and genuinely parallel —
-their dependency on F03 is satisfied. Apply `.agents/EXECUTE.md` Part 1 § 4 to confirm.
-**F01 is done. Two foundations tasks remain, both `todo`: F02 (Fatih, blocks all feature
-ledgers) and F04 (Sezai, local pre-commit hooks — does not block feature ledgers, independent
-of F02).** Apply `.agents/EXECUTE.md` Part 1 § 4 to confirm before starting anything.
+**F01, F03, F04 are done. F02 (Fatih) is the only foundations task left, still `todo` — it
+blocks every feature ledger (`Depends on` includes F02 across `I`, `A`, `R`, `N`, `V`, `D`).
+Foundations has no more tasks for Sezai.** Apply `.agents/EXECUTE.md` Part 1 § 4 to confirm
+before starting anything.
 
 ## Environment
 
@@ -62,7 +75,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | F01 | Creating design tokens, next-intl scaffold, error-code registry, and @interviewly/types package | | done | F03 |
 | F02 | Creating full Prisma schema, migrations, seed, and soft-delete repo helpers | | todo | F03 |
 | F03 | Creating npm workspaces root, compose.yaml, Caddyfile, logger, env schema, and CI workflow | | done | — |
-| F04 | Local pre-commit hooks (husky + lint-staged) for backend, frontend, packages | | todo | F03 |
+| F04 | Local pre-commit hooks (husky + lint-staged) for backend, frontend, packages | | done | F03 |
 
 ## Critical path
 
