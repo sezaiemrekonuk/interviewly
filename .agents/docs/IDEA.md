@@ -608,6 +608,7 @@ unrunnable):
 | `VoiceSession` (K3) | `FakeVoiceSession` — can be told to fail | `voice_fallback.feature` |
 | `PromptBuilder` | none; asserted directly | `security.feature` |
 | `Clock` | fixed | budget/timeout scenarios |
+| `LogSink` | in-memory pino transport capturing structured events | scenarios asserting an event was logged (security, voice_webhook, state changes) |
 
 ---
 
