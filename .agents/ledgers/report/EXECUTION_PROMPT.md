@@ -1,0 +1,94 @@
+# Report — Execution Prompt
+
+Paste this verbatim as the prompt for each new session working the `.agents/ledgers/report/`
+ledger. One session = one task. The session has no memory of prior sessions — everything needed
+lives in these files.
+
+---
+
+## Prompt (copy from here down)
+
+You are executing one task from the Report ledger in `.agents/ledgers/report/`.
+Follow this protocol exactly, in order. Do not skip steps, do not batch multiple tasks, do not
+improvise scope beyond the task file.
+
+1. **Read `.agents/ledgers/report/STATE.md` in full** — ledger, statuses, cross-ledger
+   dependencies, and the "Current task" pointer.
+
+2. **Check the cross-ledger gate.** In `.agents/ledgers/report/STATE.md`'s "Cross-ledger
+   dependencies (blocks this ledger)" table, confirm every task the current report task depends
+   on shows `done` in its own ledger (`.agents/ledgers/foundations/STATE.md` for F01–F03,
+   `.agents/ledgers/interview-core/STATE.md` for I01/I02/I06/I07/I09/I12). If any is not `done`,
+   **stop and report** — the report worker has nothing to dequeue, no `runReport` to call, or no
+   `storage`/`applyTransition` to reuse.
+
+3. **Pick the task:**
+   - If "Current task" names one, use it — unless the user's message this session names a
+     different ID, in which case the user wins.
+   - Otherwise take the first `todo` row whose `Depends on` is empty or all-`done`. Ties go to
+     the earlier row (the table is dependency-sorted). R02 and R03 both depend only on R01 and
+     are independent of each other — either is eligible once R01 is `done`.
+   - If nothing is eligible, stop and report — don't invent work.
+
+4. **Read `.agents/ledgers/report/REFERENCE.md` once.** Trust it; patch it if stale.
+
+5. **Read only the current task's file** (e.g. `tasks/R01-*.md`). Other task files belong to
+   other sessions.
+
+6. **Check `.agents/ledgers/report/MODELS.md`** for this task's recommended model. R03 requires
+   `claude-opus-4.8` (retry/dead-letter correctness). If you are not running that model on R03,
+   say so before proceeding.
+
+7. **Do the work.** Tick each `## Steps` checkbox as you go. Stay in scope — note adjacent work
+   in the STATE.md Backlog section, don't fold it in. In particular: **do not re-implement
+   `runReport`, the `ReportPayload` schema gate, or the `evaluating → completed | failed`
+   transition** — they are I09's and you call them (PLAN.md scope boundary).
+
+8. **Run the `## Verification` command exactly as written.** Don't claim done without seeing it
+   pass. The report acceptance path is `npm run test:acceptance -- --tags "@report"`; worker-
+   observable behaviour is `npm run -w worker test`. If it fails, fix the code — never the
+   command.
+
+9. **Mark it done:** fill the task file's `## Notes`; flip the STATE.md ledger row to `done`;
+   repoint "Current task" to the next `todo` task; rewrite "Last session ended" with what
+   actually landed, which files changed, and what the next task must know.
+
+10. **Commit** as `{ID}: <title>`, e.g. `R01: Worker service + BullMQ report consumer`.
+    Include the `.agents/ledgers/report/` file changes in the same commit.
+
+11. **STOP.** The next task is the next session's job.
+
+### If blocked mid-task
+
+Set the row to `blocked`, write the blocker into STATE.md's "Open blockers" section (what's
+needed, which tasks it unblocks), and stop. Don't guess at credentials, bucket config, or a
+`runReport`/`applyTransition` signature the interview-core owner must confirm — read the code.
+
+### Guardrails that apply regardless of task
+
+- **A report is delivered only after its `ReportPayload` passed I09's schema gate.** Do not
+  render, store, or mark `ready` a report whose payload `runReport` did not persist. (K15, §5.5)
+- **`interviews.state` is written only through `applyTransition` (I07).** The worker never issues
+  a raw `prisma.interview.update({ data: { state } })` — that bypasses the guarded transition
+  table and can drive an illegal edge. (K2)
+- **`jobId = interviewId`.** The producer's idempotency and "exactly one report job per
+  interview" (AC-20) depend on it. Every consumer path must be safe to run twice (a retry
+  re-runs the processor). Finalise is an upsert, never a blind insert. (K10)
+- **A schema-gate `failed` is never retried; a transient throw is.** `runReport` sets `failed`
+  and returns without throwing on a schema-invalid payload — that job is complete. Only a thrown
+  error is retried (3 attempts, backoff) then dead-lettered `→ failed`. Do not convert a schema
+  failure into a retry. (ADR-R04, K10)
+- **No `payload`, PDF bytes, signed URL, transcript, PII or secret in any log line.** (K6, §7.2)
+- **Migration rule (ADR-F02):** no new table, no column type change, no new enum value. A new
+  index is a new migration file rebased on F02's migration, never an edit to the existing SQL.
+- **Verification command is not negotiable.** It must exit 0 with the named scenarios/tests
+  passing. Do not skip or modify the command.
+
+---
+
+## Why this file exists
+
+`STATE.md`'s "Execution protocol" is the source of truth (keep them in sync). This file is the
+same protocol shaped as a standalone pasteable prompt, and it front-loads the cross-ledger gate
+check and the scope-boundary guardrail (never re-implement `runReport`) that applies to every
+report task.
