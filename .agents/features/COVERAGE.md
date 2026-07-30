@@ -8,7 +8,10 @@ The acceptance ring is Cucumber against the HTTP API with a live Postgres/Redis 
 stubbed AI module (IDEA.md §5.3). Anything only observable in a browser, in the compose
 topology, in a migration run, in CI, or on real hardware is **out of the acceptance ring**.
 
-## backend — all 20 in-ring
+**Revised 2026-07-30** for the K8.6 (verification/reset), K8.7/§3.3 (onboarding profile, CV) and
+§4.2.1 (mascot) additions. New criteria are appended to each spec's list, never renumbered.
+
+## backend — all 35 in-ring
 
 | AC | Covered by |
 |---|---|
@@ -32,8 +35,27 @@ topology, in a migration run, in CI, or on real hardware is **out of the accepta
 | 18 | `admin_cost.feature::Admin interview and stats endpoints require admin role` |
 | 19 | `reliability.feature::Probes report live process and ready dependencies` + `::Readiness fails when a dependency is unreachable` |
 | 20 | `report.feature::Entering evaluation nudges clients and exposes the ready report once` |
+| 21 | `email_verification.feature::Registration sends exactly one verification mail without waiting on SMTP` |
+| 22 | `email_verification.feature::A verification token works once and is never replayable` + `::An expired verification token is refused and distinguishable from an unknown one` + `::Google sign-in with a verified email marks our account verified` |
+| 23 | `email_verification.feature::Two concurrent confirmations of one token yield exactly one success` |
+| 24 | `email_verification.feature::Resending is cooldown-limited and then rate-limited` |
+| 25 | `password_reset.feature::A reset request never reveals whether an account exists` |
+| 26 | `password_reset.feature::Completing a reset revokes every existing session` + `::A rejected password leaves the reset token usable` + `::A reset token is single-use and expires in an hour` |
+| 27 | `password_reset.feature::A Google-only account sets its first password through reset` |
+| 28 | `email_verification.feature::Registration sends exactly one verification mail…` (no token in logs) + `password_reset.feature::Reset log lines carry the user but never the token` |
+| 29 | `email_verification.feature::The verification gate applies to interview start only, and only when required` + `::With the gate off an unverified account can interview` |
+| 30 | `onboarding_profile.feature::Each card saves independently and later cards do not erase earlier ones` + `::Education rows are capped at five` |
+| 31 | `onboarding_profile.feature::An abandoned flow resumes from the server profile` + `::Skipping completes onboarding with a partial profile and no error` |
+| 32 | `onboarding_profile.feature::A CV upload is retained privately and its text is cached on the profile` + `::An oversized CV is truncated rather than rejected` |
+| 33 | `onboarding_profile.feature::The interview profile is a merged snapshot without the date of birth` |
+| 34 | `onboarding_profile.feature::Editing the account profile does not rewrite an existing interview snapshot` |
+| 35 | `onboarding_profile.feature::The routing inputs come from one server answer` (the "no URL-fetch endpoint exists" half is a static/API-surface check, out of ring) |
 
-## ai — all 13 in-ring
+Also extended: `upload.feature::The upload kind is required and closed` covers the `kind`
+validation added to AC-14, and `rate_limits.feature` gains no new scenario — the verification and
+reset limits are asserted inside their own feature files, next to the flows they protect.
+
+## ai — all 13 in-ring (+4 appended)
 
 | AC | Covered by |
 |---|---|
@@ -50,12 +72,16 @@ topology, in a migration run, in CI, or on real hardware is **out of the accepta
 | 11 | `schema_validation.feature::A malformed report never reaches the caller` |
 | 12 | `adaptive_questions.feature::The answer score drives the next question's difficulty and topic` + `::A malformed answer score never selects a graded next question` |
 | 13 | `language_detection.feature::Language classification runs without an LLM call` + `::A below-margin turn does not advance a language switch` |
+| 2 (extended) | `profiling.feature::A missing CV compiles to the explicit no-cv marker` |
+| 3a | `security.feature::A CV is treated exactly like a listing, not as instructions` |
+| 3b | `profiling.feature::A date of birth is stripped before any prompt is compiled` |
+| 4a | `profiling.feature::The CV reaches report generation as data` + `security.feature::A candidate cv is hard-truncated to 12000 characters` |
 
-## db — 2 in-ring, 4 folded, 6 out-of-ring
+## db — 2 in-ring, 4 folded, 6 out-of-ring (+5 appended)
 
 | AC | Classification |
 |---|---|
-| 1 | **out-of-ring** — `prisma migrate deploy` creates 14 tables + enums; migration verification (infra F02 / migrate-check), not HTTP-driven |
+| 1 | **out-of-ring** — `prisma migrate deploy` creates 15 tables + enums; migration verification (infra F02 / migrate-check), not HTTP-driven |
 | 2 | **out-of-ring** — enum rejects out-of-set literal at the DB level; DB-constraint verification in migration ring |
 | 3 | in-ring: `upload.feature::A byte-identical PDF reuses the stored upload instead of duplicating it` (sha256 dedup); email_lower uniqueness folded into `auth.feature::Email uniqueness is case-insensitive` |
 | 4 | **out-of-ring** — `budget_usd`/`spent_usd` defaults and six-decimal precision; schema-default verification in migration ring |
@@ -67,8 +93,13 @@ topology, in a migration run, in CI, or on real hardware is **out of the accepta
 | 10 | **out-of-ring** — `prisma/seed.ts` produces admin user, occupation_clusters, personas, sample interview; seed verification (also `infra` AC-1) |
 | 11 | **out-of-ring** — all FKs `ON DELETE RESTRICT`, no cascade; migration/constraint verification |
 | 12 | folded into `admin_cost.feature::Admin interview and stats endpoints require admin role` — lowest-scoring `report_questions` (weakestQuestions) is a plain relational query |
+| 13 | folded into `email_verification.feature::A verification token works once and is never replayable` + `::Two concurrent confirmations of one token yield exactly one success` — UNIQUE `token_hash`, guarded consume, row retained |
+| 14 | folded into `password_reset.feature::Completing a reset revokes every existing session` — the password rewrite and the session revocation are one transaction |
+| 15 | folded into `onboarding_profile.feature::Each card saves independently…` and `::A CV upload is retained privately…` — partial `users.profile` merge and the `cv` upload pointer |
+| 16 | **out-of-ring** — `email_tokens(user_id, kind)` / `uploads(user_id, kind)` indexes and the `MascotPose`/`UploadKind` enum constraints; migration verification |
+| 17 | **out-of-ring** — seed produces the mascot set, the sample listing and a pre-verified admin; seed verification (also `infra` AC-1) |
 
-## infra — 2 in-ring, 10 out-of-ring
+## infra — 2 in-ring, 10 out-of-ring (+1 appended)
 
 | AC | Classification |
 |---|---|
@@ -84,6 +115,7 @@ topology, in a migration run, in CI, or on real hardware is **out of the accepta
 | 10 | **out-of-ring** — CI pipeline (lint→typecheck→build→migrate-check→Cucumber) and bad-migration gate; CI verification |
 | 11 | **out-of-ring** — one image across environments, no `NODE_ENV`-branched business logic; CI/static verification |
 | 12 | **out-of-ring** — `.env.example` committed with every validated key; repo/CI verification |
+| 6a | **out-of-ring** — a registration lands one mail in the `mail` sink and stopping `mail` retries the job without failing the request; compose/queue verification (the enqueue half is in-ring via `email_verification.feature` AC-21) |
 
 ## voice — 8 in-ring, 2 out-of-ring
 
@@ -99,16 +131,24 @@ topology, in a migration run, in CI, or on real hardware is **out of the accepta
 | 8 | **out-of-ring** — self-camera tile + `getUserMedia` local binding; browser/hardware, not curl-observable |
 | 9 | **out-of-ring** — built voice room opens exactly one cross-origin `wssOrigin` connection; browser/edge-CSP observable only |
 | 10 | `voice_webhook.feature::Voice webhook log lines carry the interviewId but never a session secret or transcript` (asserted via the `LogSink` seam) |
+| 11 | **out-of-ring** — pre-join precedes the mint and a denied mic creates no `voice_sessions` row; the *absence* of a row is assertable but the device denial that triggers it is browser-only. The downgrade itself is covered by `voice_fallback.feature` |
+| 12 | **out-of-ring** — one active speaker per round drives ring/waveform; browser-observable only (the underlying one-live-question guarantee is `interview_flow.feature`) |
+| 13 | **out-of-ring** — no `REC` indicator and no recording artifact exists; DOM/static verification |
 
-## frontend — all 14 out-of-ring (non-acceptance-ring by spec header)
+## frontend — all 26 out-of-ring (non-acceptance-ring by spec header)
 
 The `frontend` spec's Acceptance-criteria header states Cucumber drives the HTTP API, not a
-browser: all 14 criteria are verified at the **component/integration ring** (React Testing
-Library over a mocked API + `EventSource`) or as **Playwright smokes**. Server-reducible
-criteria already live in `backend`/`ai` and are not duplicated. No Gherkin scenarios.
+browser: all 26 criteria (14 original + 15–26 for first-run routing, onboarding, the auth family,
+the setup screen, the room panel, pre-join, mobile and mascot placement) are verified at the
+**component/integration ring** (React Testing Library over a mocked API + `EventSource`) or as
+**Playwright smokes**. Server-reducible criteria already live in `backend`/`ai` — the profile,
+verification, reset and snapshot behaviours are covered by `onboarding_profile.feature`,
+`email_verification.feature` and `password_reset.feature` — and are not duplicated here. No
+Gherkin scenarios.
 
-## ui — all 12 out-of-ring (non-acceptance-ring by spec header)
+## ui — all 17 out-of-ring (non-acceptance-ring by spec header)
 
 The `ui` spec's Acceptance-criteria header states these are verified as **build/seed checks**
-(token lint, computed AA-contrast assertion, avatar-set validation) and **component/visual
+(token lint, computed AA-contrast assertion including each gradient stop, avatar-set and
+mascot-set validation, the gradient route list, the shadow-tier check) and **component/visual
 smokes**, not acceptance-ring Gherkin. No Gherkin scenarios.

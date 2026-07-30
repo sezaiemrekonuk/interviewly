@@ -78,7 +78,10 @@ No cross-service calls exist yet — foundations is pure scaffolding.
 | ADR | Decision | Chosen | Reason |
 |-----|----------|--------|--------|
 | ADR-F01 | Where does the error-code registry live? | `backend/src/lib/error-codes.ts`, re-exported via `@interviewly/types` | Both API and frontend need stable codes (§4.5); single source prevents divergence. |
-| ADR-F02 | Entire schema in F02, structural changes locked | All 14 tables in one initial migration; feature ledgers add indexes/nullable cols only | §5.2 migration protocol: parallel structural changes break `docker compose up` on a fresh clone. |
+| ADR-F02 | Entire schema in F02, structural changes locked | All 15 tables in one initial migration; feature ledgers add indexes/nullable cols only | §5.2 migration protocol: parallel structural changes break `docker compose up` on a fresh clone. |
+| ADR-F09 | Where the `mail` (Mailpit) service lives | **Default** compose profile, port published only via the git-ignored override | Registration always enqueues a verification mail (K8.6); with no sink a default `up` dead-letters a job on first signup. ~20 MB is cheaper than that failure. |
+| ADR-F10 | Heading typeface | **Outfit** via `next/font/google`; Fraunces dropped | §4.2 revision: the direction is a bold geometric sans, which both references use. Inter stays for body — Outfit reads worse at the 13–14 px steps. |
+| ADR-F11 | Gradient as a token, not a component style | `--gradient-entry` in the `:root` registry + a closed route list in `ui` | A gradient applied ad hoc per screen drifts; one token plus an enumerated route list is lintable. |
 | ADR-F03 | Build context for every service image | Repo root (`context: .`) with per-service `dockerfile:` path | npm workspaces put `@interviewly/types` and `@interviewly/ai` at root; a service-scoped context cannot see them. |
 | ADR-F04 | Dev extras in compose.dev.yaml, not compose.override.yaml | `compose.override.yaml` is git-ignored; dev config in explicit `-f compose.dev.yaml` | Compose auto-loads `override.yaml`, which would silently publish `db`/`cache` ports and break K14. |
 | ADR-F05 | next-intl locale routing | Cookie-based, no URL segment prefix | §4.5 mandates a cookie; URL segments would require `[locale]/` nesting across all routes. |
@@ -88,7 +91,9 @@ No cross-service calls exist yet — foundations is pure scaffolding.
 
 ## Data model additions
 
-Migration `0001_init` — created by F02. DDL creates all 14 tables plus enums in a single
+Migration `0001_init` — created by F02. DDL creates all 15 tables (the 14 original plus
+`email_tokens`, K8.6) with the `users` profile/verification columns, `uploads.kind`, and every
+enum including `EmailTokenKind`, `UploadKind` and `MascotPose`, in a single
 `prisma migrate dev --name init` run. The shadow database (`SHADOW_DATABASE_URL`) is
 assumed to exist (created by F03's `db/init.sql`). No further structural migration is
 authored in this ledger. See `tasks/F02-*.md` for the complete table/column list.

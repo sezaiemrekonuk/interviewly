@@ -161,6 +161,17 @@ F01 and F02 are fully independent.
         timeout: 5s
         retries: 10
 
+    mail:
+      # K8.6 — SMTP sink for verification/reset mail. Default profile, not `dev`:
+      # registration always enqueues a mail, so a stack without a sink dead-letters a
+      # job on first signup. Its web inbox port is published only in compose.override.yaml.
+      image: axllent/mailpit:v1.21
+      healthcheck:
+        test: ["CMD", "wget", "-qO-", "http://localhost:8025/readyz"]
+        interval: 10s
+        timeout: 5s
+        retries: 10
+
     migrate:
       build:
         context: .
@@ -202,6 +213,8 @@ F01 and F02 are fully independent.
         cache:
           condition: service_healthy
         bucket:
+          condition: service_healthy
+        mail:
           condition: service_healthy
         migrate:
           condition: service_completed_successfully
@@ -253,6 +266,8 @@ F01 and F02 are fully independent.
       ports: ["6379:6379"]
     bucket:
       ports: ["9000:9000"]
+    mail:
+      ports: ["8025:8025"]     # Mailpit web inbox — where verification/reset links are read
     api:
       ports: ["4000:4000"]
     tunnel:
@@ -320,6 +335,20 @@ F01 and F02 are fully independent.
   SESSION_SECRET=change-me-32-chars-minimum-xxxxxxxx
   SESSION_TTL_DAYS=7
   SESSION_COOKIE_SECURE=true
+  GOOGLE_CLIENT_ID=
+  GOOGLE_CLIENT_SECRET=
+  # K8.6 — gates POST /interviews only. Ships false: SETUP.md must never need an inbox.
+  EMAIL_VERIFICATION_REQUIRED=false
+  EMAIL_VERIFY_TTL_HOURS=24
+  PASSWORD_RESET_TTL_MINUTES=60
+
+  # ---- Mail (K8.6) ----
+  # Dev: the `mail` container. Read the link at http://localhost:8025 (compose.dev.yaml).
+  SMTP_HOST=mail
+  SMTP_PORT=1025
+  SMTP_USER=
+  SMTP_PASSWORD=
+  MAIL_FROM="Interviewly <no-reply@interviewly.local>"
 
   # ---- LLM providers ----
   OPENAI_API_KEY=
@@ -393,6 +422,17 @@ F01 and F02 are fully independent.
     SESSION_COOKIE_SECURE:       z.coerce.boolean().default(true),
     GOOGLE_CLIENT_ID:            z.string().optional(),
     GOOGLE_CLIENT_SECRET:        z.string().optional(),
+    // K8.6 — config, not behaviour: one gate reads this flag (§11.3)
+    EMAIL_VERIFICATION_REQUIRED: z.coerce.boolean().default(false),
+    EMAIL_VERIFY_TTL_HOURS:      z.coerce.number().default(24),
+    PASSWORD_RESET_TTL_MINUTES:  z.coerce.number().default(60),
+    SMTP_HOST:                   z.string(),
+    SMTP_PORT:                   z.coerce.number().default(1025),
+    // Legitimately empty against the dev sink — a required-but-blank credential
+    // would fail a clean boot for no security gain.
+    SMTP_USER:                   z.string().optional(),
+    SMTP_PASSWORD:               z.string().optional(),
+    MAIL_FROM:                   z.string(),
     OPENAI_API_KEY:              z.string().optional(),
     GEMINI_API_KEY:              z.string().optional(),
     ELEVENLABS_API_KEY:          z.string().optional(),
@@ -559,9 +599,12 @@ F01 and F02 are fully independent.
 - Only `edge` has a `ports:` block in `compose.yaml` — confirmed by `grep -n "ports:" compose.yaml`.
 - `migrate` service has no `healthcheck:` and uses `service_completed_successfully` in
   its dependents' `depends_on` blocks.
-- `.env.example` is committed and contains every key from §9.3.
+- `.env.example` is committed and contains every key from §9.3, including the K8.6 auth and
+  mail groups.
+- `compose.yaml` includes the `mail` service in the **default** profile with a healthcheck, and
+  `worker` depends on it `service_healthy`; `mail`'s host port appears only in `compose.dev.yaml`.
 - `backend/src/lib/env.ts` exits the process non-zero if `SESSION_SECRET` is shorter than
-  32 characters.
+  32 characters, and accepts an **empty** `SMTP_USER`/`SMTP_PASSWORD` without failing.
 - `backend/src/lib/logger.ts` exports a pino `logger` with the K6 contract comment.
 - `.github/workflows/ci.yml` contains all 7 jobs: lint, typecheck, build, compose-check,
   migrate-check, unit, acceptance, audit.

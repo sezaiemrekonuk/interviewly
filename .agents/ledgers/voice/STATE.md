@@ -87,10 +87,18 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | V02 | ElevenLabs webhook authentication: the four gates + submit_answer/next_question/end_round + log redaction | | todo | V01, I06, I07 |
 | V03 | Voice → text downgrade on a fatal voice failure | | todo | V01, I06, I07 |
 | V04 | Post-call usage reconciliation worker job (idempotent `spent_usd` + `llm_calls` transaction) | | todo | V02, I08 |
+| V05 | Pre-join device check + active-speaker signal for the two persona tiles | | todo | V01, V03 |
 
 **V02 and V03 are genuinely independent** — both depend on V01, I06 and I07 but not on each other;
 either order is safe for the single ledger owner. V04 depends on V02 (it reuses V02's HMAC +
 freshness signature verifier).
+
+**V05 (added 2026-07-30)** covers the two surfaces the §3.2 room revision adds: the `/interviews/:id/
+pre-join` device check — which must run **before** a session is minted, so a denied microphone
+downgrades to text without spending a token — and the amplitude/event signal that drives the
+active-speaker ring on the round's persona tile. It depends on V03 because a denied permission uses
+V03's downgrade path rather than a second one. `frontend` owns the screens; V05 owns what they test
+and the signal they render.
 
 ## Critical path
 

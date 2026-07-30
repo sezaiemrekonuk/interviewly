@@ -36,7 +36,7 @@ rebuild types as part of their own verification.
 Naive parallel schema work produces timestamped migration folders that collide and a broken
 `prisma migrate deploy` on a fresh clone — §10's one unacceptable failure (§5.2).
 
-**Decision:** The complete `schema.prisma` (all 14 tables K13 names, plus enums, indexes,
+**Decision:** The complete `schema.prisma` (all 15 tables K13 names, plus enums, indexes,
 and the soft-delete repo helpers) lands in F02 in a single initial migration. After merge,
 feature ledgers may add indexes and nullable columns only, each in its own migration,
 rebased before merge. Any structural change (new table, dropped column, changed relation,
@@ -187,3 +187,66 @@ either works or doesn't.
 **Consequences:** `zod` is a runtime dependency of `backend` and `worker`. The schema is
 the documentation of every env key; a key not in the schema cannot be used in application
 code by construction (TypeScript narrows the type).
+
+---
+
+## ADR-F09 — 2026-07-30 — `mail` (Mailpit) in the default Compose profile
+
+**Context:** K8.6 adds email verification and password reset, and registration *always*
+enqueues an `email.send` job. Options for where the SMTP sink lives: (A) `dev` profile,
+(B) default profile, (C) no sink — swallow the job when SMTP is unset.
+
+**Decision:** Option B. `mail` (Mailpit) runs in the **default** profile with a healthcheck;
+`worker` depends on it `service_healthy`. Its web inbox port is published only in
+`compose.dev.yaml`, so "only `edge` publishes a port in `compose.yaml`" stays true (K14).
+
+**Why not A:** a bare `docker compose up` — the thing §10 says must work — would then
+dead-letter a job on the first signup. A stack that "works" while failing a queue job on the
+most common action is worse than one that visibly needs a flag.
+
+**Why not C:** a silently swallowed send makes a broken mailer indistinguishable from a
+working one, and the retry/dead-letter machinery (K10) is exactly what tells us which it is.
+
+**Consequences:** ~20 MB and one more container in the default up. `SETUP.md` names the inbox
+URL and states that an evaluator never needs it, because `EMAIL_VERIFICATION_REQUIRED` ships
+`false` and seeded accounts are pre-verified.
+
+---
+
+## ADR-F10 — 2026-07-30 — Outfit replaces Fraunces for headings; Inter stays for body
+
+**Context:** §4.2 originally set headings in the Fraunces serif. The reviewed visual direction
+is a **bold geometric sans set large**, and both references (Cambly, Jotform) are geometric
+sans throughout — the serif was carrying "warm" alone, against the grain of everything else on
+the screen. Options: (A) keep Fraunces, (B) one geometric sans for headings *and* body,
+(C) Outfit headings + Inter body.
+
+**Decision:** Option C. Outfit (500/600/700) for headings, Inter (400/500/600) for body and UI,
+both `next/font/google` with `display: swap`.
+
+**Why not B:** the direction said "body in the same family", but Outfit at the 13–14 px steps of
+the type scale reads measurably worse than Inter, and two of the six scale steps are body sizes.
+
+**Why not A:** it fights the rest of the system, and the reversal is cheaper now than after
+screens exist.
+
+**Consequences:** one extra `next/font` call, still zero external font requests (CSP + LCP
+unaffected). F01's verification greps the repo for `fraunces` and must find nothing.
+
+---
+
+## ADR-F11 — 2026-07-30 — The entry gradient is a token plus a closed route list
+
+**Context:** §4.2 adds a pastel lavender→cream→peach ground for entry surfaces. Options:
+(A) per-screen background styles, (B) a `--gradient-entry` token applied wherever a screen
+wants it, (C) the token **plus** an enumerated list of routes it grounds (`ui` Behaviour 5a).
+
+**Decision:** Option C, with the room, report, dashboard and admin explicitly on flat `--bg`.
+
+**Why not A/B:** "apply where it feels right" drifts within a week and cannot be reviewed. An
+enumerated list makes a gradient on the wrong route a defect with a name, and it protects the two
+surfaces where the gradient actively hurts — a live face and a data table.
+
+**Consequences:** `tokens.css` carries the three stops and the composed gradient; the AA-contrast
+check gains six pairs (text and muted-text against each stop individually, since text sits over
+all three as the page scrolls).

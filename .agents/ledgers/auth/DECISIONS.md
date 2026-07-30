@@ -85,3 +85,120 @@ adds ~200 MB to the image and a slow `npm install` in every CI run.
 `argon2` package (`hash`, `verify` instead of `argon2.hash`, `argon2.verify`). Tasks must
 use the `@node-rs/argon2` API. Algorithm parameters default to argon2id with secure
 defaults; no custom parameter tuning is in scope.
+
+---
+
+## ADR-A04 — 2026-07-30 — One `email_tokens` table, hashed, single-use via guarded consume
+
+**Context:** K8.6 reverses the earlier cut of email verification and password reset. Both need a
+short-lived, single-use secret delivered by mail. Options: (A) two tables (`verification_tokens`,
+`password_reset_tokens`), (B) one table with a `kind` discriminator, (C) signed stateless tokens
+(JWT/HMAC) with no table at all.
+
+**Decision:** Option B. `email_tokens(user_id, kind ∈ {verify, reset}, token_hash, expires_at,
+consumed_at)`. Store **only** `sha256(token)`. Consume with a guarded update
+(`… WHERE id = $id AND consumed_at IS NULL`) and treat `count === 0` as `EMAIL_TOKEN_INVALID`.
+
+**Why not A:** identical columns, identical lifecycle, identical bugs to fix twice.
+
+**Why not C:** a stateless token cannot be revoked or made single-use without a store, and
+"single-use" is the property that stops a leaked mail (forwarded thread, shared inbox, browser
+history) from being replayable. Adding a store to a stateless design is just design B with extra
+signing code.
+
+**Why hashed:** a stored token is a stored credential. A database dump of `token_hash` yields
+nothing usable; a dump of plaintext tokens is an account-takeover kit with a 1-hour fuse.
+
+**Why guarded, not read-then-write:** two clicks on the same link (mail clients prefetch; users
+double-tap) race. Read-then-write passes a single-threaded test and verifies twice in production.
+
+**Consequences:** one extra table in F02's initial migration and one shared helper
+(`modules/auth/tokens.ts`) used by both A04 and A05. Absent and consumed are deliberately
+indistinguishable to the caller; expired is its own code because a new link is the fix.
+
+---
+
+## ADR-A05 — 2026-07-30 — Verification is enforced at one gate, behind a config flag shipped `false`
+
+**Context:** Where should an unverified email be refused? Options: (A) at sign-in, (B) on every
+authenticated request, (C) on `POST /interviews` only, behind `EMAIL_VERIFICATION_REQUIRED`.
+
+**Decision:** Option C, flag default `false`, seeded accounts pre-verified.
+
+**Why not A:** it makes `SETUP.md` — a scored deliverable (§10, §13) — depend on an evaluator
+finding a link in a dev mail sink. Trading a scored item for a feature the brief never asked for is
+the wrong direction.
+
+**Why not B:** middleware-wide enforcement multiplies the surface that can lock a user out, and
+every endpoint then needs its own "what does an unverified user see" answer.
+
+**Why a flag rather than always-off:** always-off means the enforcement path is never exercised and
+rots. The flag is *configuration* — one gate reads it, no `NODE_ENV` branch, so the same image
+behaves per config (§11.3) — and `email_verification.feature` runs it both ways.
+
+**Consequences:** `EMAIL_NOT_VERIFIED` exists in the registry and the frontend routes it to
+`/verify-email` while preserving the typed listing. The verification mail is always sent and always
+prompted regardless of the flag, so turning it on later changes enforcement, not the UX.
+
+---
+
+## ADR-A06 — 2026-07-30 — Reset is enumeration-safe and revokes every session
+
+**Context:** `POST /auth/password-reset/request` reveals account existence in three ways if you are
+careless: the status/body, the rate-limit response, and timing. And a reset that leaves old sessions
+alive does not evict an attacker.
+
+**Decision:** always `202` with an empty body; rate-limit the endpoint by **IP**, not by user; do
+the account-dependent work (mint + enqueue) after responding. Confirm rewrites `password_hash` and
+sets `revoked_at` on **all** the user's sessions in one transaction, sets `email_verified_at` if
+null, and validates password length *before* consuming the token.
+
+**Why IP-keyed:** a per-user limiter leaks existence through its own `429` — an attacker probes
+addresses and watches which ones get limited.
+
+**Why revoke everything:** the button's whole purpose is "someone else may be in my account".
+Leaving the attacker's session valid makes the flow theatre.
+
+**Why validate before consuming:** otherwise a mistyped short password burns the link and the user
+needs another mail — a self-inflicted support case.
+
+**Consequences:** the caller's own cookie dies on reset; the screen says "you have been signed out
+everywhere" and routes to `/sign-in`. A `sessions(user_id)` index is promoted from backlog into A05.
+Google-only accounts gain their first password through this flow, which is also the supported way
+to satisfy the K8 admin password-only rule.
+
+---
+
+## ADR-A07 — 2026-07-30 — Onboarding is an auth-ledger task, and the profile merge is a snapshot
+
+**Context:** §3.3 adds an account-level onboarding profile (three cards + optional CV) on top of the
+existing per-interview pre-questions. Two questions followed: where does the work live, and how does
+the account profile reach a generation prompt?
+
+**Decision (placement):** A06 in this ledger. The data is account state on `users`, and the K8.7
+routing rule that consumes it fires on sign-in success — this ledger's surface. A dedicated
+`onboarding` ledger would have duplicated `REFERENCE.md`, `MODELS.md` and the execution protocol to
+own two tasks against a table this ledger already owns.
+
+**Decision (merge):** `interviews.candidate_profile` is a **snapshot** written once by
+interview-core: `{ account: <users.profile minus dateOfBirth>, cvText?, perInterview }`. Not a
+foreign key, not a join at prompt-build time.
+
+**Why a snapshot:** a profile edited in March must not change what a January report was reasoned
+from. Reports are the scored artifact (K15) and must stay attributable to the inputs that produced
+them — the same argument that puts `prompt_uuid`/`prompt_version` on the report row (K9).
+
+**Why layer 2 survives layer 1:** the brief's bonus is worded "before moving to the interview
+questions the system asks the candidate a few short pre-questions". The per-interview form *is* that
+sentence; the account profile is an addition, not a replacement. Deleting the form to avoid
+duplication would trade a scored bonus for tidiness.
+
+**Why `date_of_birth` is collected but never sent:** the onboarding card asks for it because the
+reference flow does, and it is ordinary account data. Passing an age to an evaluating model invites
+age-correlated output we cannot defend, so it is stripped at the backend boundary **and** dropped
+defensively in the prompt builder (`PROFILE_DOB_STRIPPED`). The screen says so next to the field.
+
+**Consequences:** `GET /me` grows three routing fields; `POST /uploads` grows a `kind`; the CV joins
+the private storage class with a 5-minute signed URL. `onboarding_profile.feature`'s
+snapshot-immutability scenario spans two ledgers and is the one place A06 and interview-core must
+agree.

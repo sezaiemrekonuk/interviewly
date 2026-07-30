@@ -7,10 +7,16 @@ Read first: STATE.md, REFERENCE.md, then this.
 Owner's ask:
 
 > "The `/sign-in` and `/register` screens with the email+password forms and the Google
-> sign-in button. Error codes rendered as localised messages. On success redirect to
-> `/dashboard`. `UNAUTHENTICATED` on any protected route redirects back here preserving
+> sign-in button. Error codes rendered as localised messages. On success run the first-run
+> routing rule (K8.7). `UNAUTHENTICATED` on any protected route redirects back here preserving
 > the return path."
 > — auth ledger task decomposition, frontend spec route map
+
+**Changed 2026-07-30:** success no longer redirects unconditionally to `/dashboard`. It runs the
+K8.7 rule from `GET /me`: onboarding incomplete → `/onboarding/[first unfilled step]`; onboarding
+done with zero interviews → `/interviews/new`; otherwise → `/dashboard`. `/sign-in` also carries a
+**Forgot password?** link to `/forgot-password` (A05). Both screens sit on the
+`--gradient-entry` ground with the `wave` mascot (`ui` §4.2, §4.2.1).
 
 This task produces the two auth screens in `frontend/app/(auth)/`, the error-display
 wiring (error code → `next-intl` `errors.<CODE>` key), the Google button, and a Playwright
@@ -52,7 +58,8 @@ the running app.
       "passwordLabel": "Password",
       "googleButton": "Continue with Google",
       "alreadyHaveAccount": "Already have an account?",
-      "noAccount": "Don't have an account?"
+      "noAccount": "Don't have an account?",
+      "forgotPassword": "Forgot password?"
     }
   }
   ```

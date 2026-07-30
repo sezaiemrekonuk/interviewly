@@ -129,12 +129,21 @@ touch no token file, no locale file, and no `packages/types/`.
     // --- UI / assets ---
     AVATAR_STATE_INCOMPLETE:         { kind: 'boot' as ErrorKind, http: undefined, owner: 'ui' },
     AVATAR_KEY_MISMATCH:             { kind: 'boot' as ErrorKind, http: undefined, owner: 'ui' },
+    MASCOT_POSE_INCOMPLETE:          { kind: 'boot' as ErrorKind, http: undefined, owner: 'ui' },
+    // --- Account lifecycle (K8.6) ---
+    EMAIL_NOT_VERIFIED:              { kind: 'api' as ErrorKind, http: 403, owner: 'backend' },
+    EMAIL_TOKEN_INVALID:             { kind: 'api' as ErrorKind, http: 400, owner: 'backend' },
+    EMAIL_TOKEN_EXPIRED:             { kind: 'api' as ErrorKind, http: 400, owner: 'backend' },
+    EMAIL_RESEND_COOLDOWN:           { kind: 'api' as ErrorKind, http: 429, owner: 'backend' },
+    // --- Profile / CV (K8.7, §3.3) ---
+    CV_TRUNCATED:                    { kind: 'log' as ErrorKind, http: undefined, owner: 'backend' },
+    PROFILE_DOB_STRIPPED:            { kind: 'log' as ErrorKind, http: undefined, owner: 'ai' },
   } as const;
 
   export type ErrorCode = keyof typeof ERROR_CODES;
   ```
 
-  39 codes total. Log-kind codes (`kind: 'log'`) are internal observability signals —
+  45 codes total. Log-kind codes (`kind: 'log'`) are internal observability signals —
   they never appear in an API response body, but the frontend may need to handle them if
   they surface through a server error in a future edge case. Boot-kind codes cause process
   exit before serving.
@@ -145,6 +154,7 @@ touch no token file, no locale file, and no `packages/types/`.
   export { ERROR_CODES } from '../../backend/src/lib/error-codes';
 
   export type AvatarState = 'idle' | 'listening' | 'thinking' | 'speaking' | 'acknowledging';
+  export type MascotPose = 'wave' | 'point' | 'think' | 'cheer' | 'shrug';   // ui §4.2.1
 
   // Shared API response envelope — used by both backend and frontend
   export interface ApiError { error: { code: ErrorCode; message?: string } }
@@ -165,18 +175,27 @@ touch no token file, no locale file, and no `packages/types/`.
     --primary:         #FF6100;
     --primary-soft:    #FFF1E8;
     --accent:          #6F76F1;
+    --live:            #16A34A;   /* interview-room live state ONLY (ui §4.2) */
     --success:         #10B981;
     --warning:         #F59E0B;
     --danger:          #EF4444;
     --border:          #E8E4DE;
 
+    /* Entry-surface gradient (ui §4.2 — closed route list) */
+    --grad-lavender:   #EFE9FF;
+    --grad-cream:      #FBF9F6;
+    --grad-peach:      #FFE8D6;
+    --gradient-entry:  linear-gradient(160deg, var(--grad-lavender) 0%, var(--grad-cream) 52%, var(--grad-peach) 100%);
+
     /* Radius */
-    --radius-card:     12px;
-    --radius-input:    10px;
+    --radius-panel:    24px;
+    --radius-card:     16px;
+    --radius-input:    12px;
     --radius-button:   999px;
 
-    /* Shadow */
-    --shadow-sm:       0 1px 2px rgba(0,0,0,.08);
+    /* Shadow — two tiers, nothing else */
+    --shadow-hairline: 0 1px 2px rgba(17,20,54,.06);
+    --shadow-soft:     0 8px 24px -12px rgba(17,20,54,.12);
 
     /* Motion */
     --duration-default: 200ms;
@@ -189,6 +208,11 @@ touch no token file, no locale file, and no `packages/types/`.
     }
   }
   ```
+
+  **`--live` and `--gradient-entry` are role-restricted, not general-purpose.** `--live` is only
+  the room's `LIVE` badge and active-speaker ring; `--gradient-entry` only grounds the entry routes
+  `ui` enumerates. The token lint (Step 8) checks presence and uniqueness; the role rules are
+  reviewed, and `frontend` binds them.
 
 - [ ] **6. Install and configure `next-intl`**
   - Add `next-intl` to `frontend/package.json` dependencies.
@@ -255,6 +279,11 @@ touch no token file, no locale file, and no `packages/types/`.
         "VOICE_SESSION_EXPIRED": "Voice session has expired.",
         "AVATAR_STATE_INCOMPLETE": "Persona avatar set is incomplete.",
         "AVATAR_KEY_MISMATCH": "Persona avatar key does not match content.",
+        "MASCOT_POSE_INCOMPLETE": "Mascot pose set is incomplete.",
+        "EMAIL_NOT_VERIFIED": "Please verify your email address to start an interview.",
+        "EMAIL_TOKEN_INVALID": "This link is no longer valid. Request a new one.",
+        "EMAIL_TOKEN_EXPIRED": "This link has expired. Request a new one.",
+        "EMAIL_RESEND_COOLDOWN": "Please wait a moment before requesting another email.",
         "UNKNOWN": "An unexpected error occurred."
       }
     }
@@ -266,10 +295,20 @@ touch no token file, no locale file, and no `packages/types/`.
   Compute contrast ratios for the pinned pairs from `ui` spec Behaviour §3:
   `--text` (#111436) / `--bg` (#FBF9F6), `--text` / `--surface` (#FFF), `--text` /
   `--surface-sunken` (#F4F2EE), `--text-muted` (#6B6F8D) / `--bg`, `--text-muted` /
-  `--surface`, white (#FFF) / `--primary` (#FF6100). All must be ≥ 4.5:1. Document
-  the computed ratios in `## Notes`. If any pair fails, adjust the token value and
-  record the change in `## Notes` — the §4.2 values are the target, but contrast is the
-  hard floor.
+  `--surface`, white (#FFF) / `--primary` (#FF6100), white / `--live` (#16A34A), and
+  **`--text` and `--text-muted` against each gradient stop individually** —
+  `--grad-lavender` (#EFE9FF), `--grad-cream` (#FBF9F6), `--grad-peach` (#FFE8D6). Eleven
+  pairs. All must be ≥ 4.5:1. Document the computed ratios in `## Notes`. If any pair fails,
+  adjust the token value and record the change in `## Notes` — the §4.2 values are the target,
+  but contrast is the hard floor. **Check the stops individually, not the blended midpoint**: text
+  sits over all three as the page scrolls.
+
+- [ ] **8a. Load the heading and body fonts**
+  Register **Outfit** (weights 500/600/700) and **Inter** (400/500/600) via
+  `next/font/google` with `display: 'swap'`, exposing them as CSS variables consumed by
+  `tokens.css`. **Fraunces is not used anywhere** — if a reference to it exists in any file,
+  remove it (§4.2 reversal). No `@import`, no `<link>` to an external font origin: the CSP
+  forbids it and the LCP budget depends on it.
 
 - [ ] **9. Build `@interviewly/types`**
   ```bash
@@ -284,15 +323,19 @@ touch no token file, no locale file, and no `packages/types/`.
 
 ## Definition of done
 - `packages/types/` builds (`npm run -w @interviewly/types build`) with zero errors.
-- `frontend/styles/tokens.css` contains all 12 colour tokens and the non-colour tokens
-  from §4.2 as `:root` custom properties with exact values.
-- `frontend/messages/en.json` contains all 39 error codes under `"errors"` key, plus
+- `frontend/styles/tokens.css` contains all 13 colour tokens (incl. `--live`), the three
+  gradient stops and `--gradient-entry`, and the non-colour tokens from §4.2 as `:root`
+  custom properties with exact values.
+- `frontend/messages/en.json` contains all 45 error codes under `"errors"` key, plus
   at least one non-error UI key (e.g. `"common.loading": "Loading…"`).
 - `frontend/messages/tr.json` has the same key set as `en.json`, all translated.
-- `backend/src/lib/error-codes.ts` has exactly 39 codes as defined in Step 3.
-- `packages/types/src/index.ts` re-exports `ErrorCode`, `ERROR_CODES`, and `AvatarState`.
+- `backend/src/lib/error-codes.ts` has exactly 45 codes as defined in Step 3.
+- `packages/types/src/index.ts` re-exports `ErrorCode`, `ERROR_CODES`, `AvatarState` and
+  `MascotPose`.
 - `frontend/src/middleware.ts` exists and uses `createMiddleware` from `next-intl`.
-- No literal hex colour, off-scale type size (`px` not in `13/14/16/20/28/40`), or
+- Outfit and Inter are loaded via `next/font/google` with `display: 'swap'`; **Fraunces appears
+  nowhere in the repo**.
+- No literal hex colour, off-scale type size (`px` not in `13/14/16/20/28/40/56`), or
   spacing not a multiple of 4 appears outside `tokens.css`.
 
 ## Verification
@@ -303,19 +346,22 @@ npm run -w @interviewly/types build
 The build must exit 0. Then confirm:
 
 ```bash
-# Count error codes — should print 39
+# Count error codes — should print 45
 node -e "const ec = require('./backend/src/lib/error-codes'); console.log(Object.keys(ec.ERROR_CODES).length)"
 
-# Confirm token file has all 12 colour vars
+# Confirm token file carries the colour, gradient and radius vars
 grep -c "^  --" frontend/styles/tokens.css
+
+# Fraunces must be gone (expect no output, exit 1)
+grep -ri "fraunces" frontend/ packages/ || echo "OK: no Fraunces"
 ```
 
-Expected: `build` exits 0; error-code count ≥ 39; token var count ≥ 16 (12 colours + 4+
-non-colour tokens).
+Expected: `build` exits 0; error-code count = 45; token var count ≥ 24; the Fraunces grep prints
+`OK: no Fraunces`.
 
 ## Notes
 
 (Empty until the task is done. Fill with: what actually happened, every deviation from
-the plan, the `build` output verbatim, the computed contrast ratios for the 6 pinned
-pairs, what was deliberately NOT done and why, and a "For feature ledgers" hand-off
-paragraph noting where to append new error codes and locale keys.)
+the plan, the `build` output verbatim, the computed contrast ratios for the **11** pinned
+pairs (including each gradient stop), what was deliberately NOT done and why, and a "For feature
+ledgers" hand-off paragraph noting where to append new error codes and locale keys.)

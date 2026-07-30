@@ -24,16 +24,42 @@ with Turkish selectable; the interview language is a separate axis (§3.4).
 As a candidate, I want to sign in with my email and password or with my Google account, so
 that I can reach the system quickly and safely.
 → Landing CTA routes to sign-in → email/password or Google (Authorization Code + PKCE) →
-session cookie → dashboard.
-*Binds:* K8, K8.5. *Note:* no anonymous interviews — sign-in always precedes setup.
+session cookie → **where I belong**: onboarding if I have not done it, the setup screen if I have no
+interviews yet, otherwise my history (K8.7).
+*Binds:* K8, K8.5, K8.7. *Note:* no anonymous interviews — sign-in always precedes setup. The
+destination is decided from one server answer, so two screens can never disagree about it.
 
 **US-02 — Register in under a minute**
 As a new candidate, I want to create an account with just an email and a password, so that
 nothing stands between me and my first interview.
-→ `POST /auth/register`, password ≥ 10 characters → signed in immediately, no email
-verification step.
-*Binds:* K8.5. *Note:* no email verification and no password reset — a recorded scope
-decision, not a gap.
+→ `POST /auth/register`, password ≥ 10 characters → signed in immediately → a verification mail is
+sent and prompted, but nothing blocks on it.
+*Binds:* K8.5, K8.6. *Revised 2026-07-30:* email verification and password reset are **in scope**
+(K8.6), reversing the earlier cut. Verification never gates sign-in — enforcement is one flag on
+`POST /interviews`, shipped off — so registering and interviewing still costs one screen.
+
+**US-02a — Confirm my email address**
+As a candidate, I want to confirm my address from a link in my inbox, so that the account is
+demonstrably mine and recoverable.
+→ `/verify-email` shows a pending state with a 60-second resend countdown → the link consumes a
+single-use token → verified.
+*Binds:* K8.6. *Note:* the link works once. A second click says so and offers a new one.
+
+**US-02b — Get back into my account**
+As a candidate who forgot my password, I want to reset it from my email, so that a forgotten
+password is not a lost history.
+→ `/forgot-password` → identical confirmation whether or not the address has an account → the
+tokened form sets a new password (≥ 10 characters) → **every existing session is signed out**.
+*Binds:* K8.6. *Note:* a Google-only account uses this same flow to set its first password.
+
+**US-02c — Tell the system who I am, once**
+As a new candidate, I want to answer a few things about myself right after signing up and upload my
+CV, so that every interview I ever run is already personalised.
+→ Three cards (identity · education · interests), each saved on its own, **Skip for now** on every
+card, optional CV PDF → stored on my account → bound into question *and* report generation.
+*Binds:* §3.3 layer 1, K8.7, K12. *Note:* closing the browser mid-flow loses nothing — the next
+sign-in resumes on the card I left. My date of birth is collected but never sent to the interviewer
+AI (§3.3), and the form says so.
 
 **US-03 — Google sign-in links to my existing account**
 As a candidate who registered with a password, I want a later Google sign-in on the same
@@ -47,10 +73,12 @@ email to land in the same account, so that I don't end up with two histories.
 **US-04 — Paste or upload the job listing**
 As a candidate, I want to paste the listing text of the position I'm applying for or upload
 it as a PDF, so that the questions are prepared for that specific listing.
-→ Dashboard → "Set up interview" → paste text **or** upload PDF (≤ 10 MB, ≤ 30 pages) →
-text extracted.
-*Binds:* K12, §3.1. *Note:* a scanned PDF that yields under 200 characters asks the
-candidate to paste the text instead. No OCR.
+→ Setup screen: **one big text box** carries the screen (paste), with *Upload listing PDF*
+(≤ 10 MB, ≤ 30 pages) as a secondary action → text extracted. Suggestion chips prefill common
+roles; *Try a sample listing* loads a seeded one so I can start with nothing of my own.
+*Binds:* K12, §3.1, §4.3.1. *Note:* a scanned PDF that yields under 200 characters asks the
+candidate to paste the text instead. No OCR. **There is no "import from a URL"** — it is an SSRF
+surface with no requirement behind it (§4.3.1), and the text box already does the job.
 
 **US-05 — See and correct what the system understood**
 As a candidate, I want the lobby to show me the detected occupation, the interview language
@@ -68,9 +96,14 @@ actually have.
 **US-07 — Answer 2-3 short profile questions**
 As a candidate, I want to answer a couple of short questions about my experience before the
 interview starts, so that the questions reflect who I am rather than the listing alone.
-→ Lobby form: years of experience, areas of interest, target seniority → stored as
-`candidate_profile` → bound into every generation prompt.
-*Binds:* §3.3. *Note:* skippable; skipping sends an explicit "no profile provided" marker.
+→ Setup-screen form: years of experience, areas of interest, target seniority → **merged with my
+account profile and CV (US-02c) into `candidate_profile` as a snapshot** → bound into every
+generation prompt.
+*Binds:* §3.3. *Note:* skippable; skipping sends an explicit "no profile provided" marker. This
+per-interview form is **not** replaced by the account onboarding — the brief's bonus is worded
+"before moving to the interview questions", and these are the role-specific answers the account
+profile cannot know. The merge is snapshotted at setup, so editing my profile later never rewrites
+an older report's inputs.
 
 **US-08 — Wait seconds, not minutes**
 As a candidate, I want the position-specific questions to be ready within a few seconds, so
@@ -83,10 +116,12 @@ never a loading screen.
 **US-09 — Check my mic and camera first (voice mode)**
 As a candidate, I want to see my camera preview and mic level before joining, so that I'm
 not fighting my devices in front of an interviewer.
-→ Waiting screen shows preview + level bar → camera toggle (**off by default**) → a note
-states the camera image never leaves the browser and nothing is recorded → "Ready" → room
-opens with exactly the device state chosen.
-*Binds:* §3.2, §14. *Note:* text mode has no device check and no self-tile.
+→ **A pre-join screen of its own** (`/interviews/:id/pre-join`) shows preview + level bar → camera
+toggle (**off by default**) → a note states the camera image never leaves the browser and nothing is
+recorded → "Join" → room opens with exactly the device state chosen.
+*Binds:* §3.2, §4.3, §14. *Note:* text mode has no device check and no self-tile. The check runs
+**before** a voice session is minted, so denying the microphone drops me into text mode without
+having spent anything — landing in a broken room is the failure this screen exists to prevent.
 
 ### A3. Inside the interview room
 
@@ -107,12 +142,17 @@ listings this round is a **competency** round, driven by the occupation cluster,
 stack.
 
 **US-12 — See who I'm talking to**
-As a candidate, I want the avatar and the name label to change when the interviewer
-changes, so that I can tell which of them I'm speaking with.
-→ Avatar image set swaps, name/role label updates, the transcript panel marks the round
-boundary.
-*Binds:* §3.6. *Note:* avatars are **5 static images per persona**
-(`idle | listening | thinking | speaking | acknowledging`), not video loops.
+As a candidate, I want to see both interviewers on the call and know without thinking which one is
+speaking to me right now, so that a two-person panel does not feel like a mess.
+→ **Both persona tiles are on screen the whole time.** The round's interviewer is the active
+speaker: full opacity, a green ring, name and role lit. The other is dimmed and labelled *up next*
+or *done*. The handover shows an interstitial, moves the ring, and announces itself to screen
+readers. The current question stays in a banner that never scrolls away.
+*Binds:* §3.2, §3.6, §4.3. *Note:* avatars are **5 static images per persona**
+(`idle | listening | thinking | speaking | acknowledging`), not video loops. Only one agent ever
+holds the turn — the rounds are sequential and the server has exactly one live question, so there is
+no cross-talk to untangle. The room shows a `LIVE` badge and **no `REC` badge**, because nothing is
+recorded (§3.2).
 
 **US-13 — Know where I am**
 As a candidate, I want a clear progress indicator such as "3 / 8", so that I know how much
@@ -277,6 +317,10 @@ Recorded so the changes don't look like accidents.
 | 9 | A heartbeat agent extends or shortens the round | **Halved.** Shortening kept (US-14). Extension cut. |
 | 12 | Report shows speaking pace and filler-word count | **Cut.** Both need raw audio or a disfluency-preserving ASR; we record no audio and ElevenLabs returns cleaned text (§2.1). Answer duration and STAR adherence stay. |
 | 4 | Camera on by default | **Flipped.** Off by default (§14). |
+| — | "No dashboard — show the setup screen instead" (reference UI direction, 2026-07-30) | **Halved.** First run routes to setup, so a new user never meets an empty dashboard (K8.7). The dashboard itself stays: interview history list/view/delete is a mandatory 5-point requirement (US-22, US-23). |
+| — | `REC / LIVE` indicator in the room (reference UI direction) | **Halved.** `LIVE` stays; `REC` is **cut** and no consent screen exists — nothing is recorded (§3.2), and a recording badge on a product that records nothing is a claim a user would act on. |
+| — | Setup-screen *Practice mode* and *template library* option cards | **Cut.** Every interview here is practice, so a "practice mode" toggle means nothing; the template library is reduced to one seeded sample listing (§4.3.1). |
+| — | Setup-screen *Import job URL* | **Cut.** Server-side fetching of a user-supplied URL is an SSRF surface (internal services, cloud metadata) with no scored requirement behind it (§4.3.1). |
 
 ---
 
@@ -300,6 +344,13 @@ model. The existing profiling stage (US-07) already satisfies the brief's "pre-q
 personalise the generated questions" bonus with a 3-field lobby form. Recommendation: keep
 the CV track out, or reduce it to **CV upload feeding `candidate_profile`** (one field, no
 job board, no skill test) if the profiling bonus needs more weight.
+
+**Resolved 2026-07-30 — the reduced option was taken, and slightly more.** CV upload is in scope as
+**US-02c**: the PDF is uploaded through the existing `POST /uploads` path, **the file is retained**
+in the private bucket (`uploads.kind = 'cv'`, `users.cv_upload_id`), and its extracted text feeds
+question generation *and* report generation — the evaluation may compare a claim on the CV against
+the answer given for it (K15). Still **cut**: the job board, CV↔listing matching, and the skill test.
+Those need the corpus and the second profile model this section was written to flag.
 
 ---
 

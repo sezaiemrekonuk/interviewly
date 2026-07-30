@@ -21,7 +21,7 @@ Feature ledgers may **add indexes and nullable columns only** after this task la
 any structural change is a change to F02's scope (ADR-F02, §5.2).
 
 ## Non-negotiables
-- **The entire schema lands here.** All 14 tables, all enums, all §8.1 indexes, all FKs
+- **The entire schema lands here.** All 15 tables, all enums, all §8.1 indexes, all FKs
   as `ON DELETE RESTRICT`. No table is deferred to a feature ledger.
 - **All FKs are `ON DELETE RESTRICT`, no cascades.** Deletion is soft (interviews only)
   or never (all other tables in scope). A cascade on any relation is a defect.
@@ -105,24 +105,37 @@ any structural change is a change to F02's scope (ADR-F02, §5.2).
   enum ChosenReason    { score_low score_mid score_high language_switch fallback }
   enum UnitKind        { token second character }
   enum AvatarState     { idle listening thinking speaking acknowledging }
+  enum MascotPose      { wave point think cheer shrug }        // ui §4.2.1 — no column binds it
   enum ChatRole        { user assistant system }
+  enum EmailTokenKind  { verify reset }                        // K8.6
+  enum UploadKind      { listing cv }                          // K12, §3.3
   ```
+
+  `MascotPose` has **no column**: it exists so the seed and the frontend cannot disagree about the
+  mascot storage keys, the same reason `AvatarState` is an enum (§4.2.1). Declare it; do not attach
+  it.
 
   All models (column names and types from `db` spec Contracts > Tables):
 
   ```prisma
   model User {
-    id            String    @id @default(cuid())
-    email_lower   String    @unique
-    password_hash String?
-    google_sub    String?   @unique
-    role          Role      @default(user)
-    locale        String    @default("en")
-    created_at    DateTime  @default(now())
+    id                       String    @id @default(cuid())
+    email_lower              String    @unique
+    password_hash            String?
+    google_sub               String?   @unique
+    role                     Role      @default(user)
+    locale                   String    @default("en")
+    email_verified_at        DateTime?                 // K8.6
+    profile                  Json?                     // §3.3 layer 1 — partial is normal
+    cv_upload_id             String?                   // §3.3 — pointer, not a history
+    onboarding_completed_at  DateTime?                 // K8.7
+    created_at               DateTime  @default(now())
 
-    sessions    Session[]
-    interviews  Interview[]
-    uploads     Upload[]
+    cv_upload    Upload?  @relation("UserCv", fields: [cv_upload_id], references: [id], onDelete: Restrict)
+    sessions     Session[]
+    email_tokens EmailToken[]
+    interviews   Interview[]
+    uploads      Upload[]  @relation("UploadOwner")
   }
 
   model Session {
@@ -133,6 +146,20 @@ any structural change is a change to F02's scope (ADR-F02, §5.2).
     created_at DateTime  @default(now())
 
     user User @relation(fields: [user_id], references: [id], onDelete: Restrict)
+  }
+
+  model EmailToken {                                   // K8.6 — one table, two kinds
+    id          String          @id @default(cuid())
+    user_id     String
+    kind        EmailTokenKind
+    token_hash  String          @unique                // sha256(token) — never the token
+    expires_at  DateTime
+    consumed_at DateTime?
+    created_at  DateTime        @default(now())
+
+    user User @relation(fields: [user_id], references: [id], onDelete: Restrict)
+
+    @@index([user_id, kind])
   }
 
   model Persona {
@@ -274,16 +301,20 @@ any structural change is a change to F02's scope (ADR-F02, §5.2).
   }
 
   model Upload {
-    id          String   @id @default(cuid())
+    id          String     @id @default(cuid())
     user_id     String
+    kind        UploadKind                        // K12, §3.3 — listing | cv
     storage_key String
     mime        String
     size_bytes  Int
-    sha256      String   @unique
-    created_at  DateTime @default(now())
+    sha256      String     @unique
+    created_at  DateTime   @default(now())
 
-    user       User        @relation(fields: [user_id], references: [id], onDelete: Restrict)
+    user       User        @relation("UploadOwner", fields: [user_id], references: [id], onDelete: Restrict)
+    cv_of      User[]      @relation("UserCv")
     interviews Interview[]
+
+    @@index([user_id, kind])
   }
 
   model ChatMessage {
@@ -376,10 +407,19 @@ any structural change is a change to F02's scope (ADR-F02, §5.2).
      `avatar_set` populated with all five `AvatarState` keys pointing to placeholder
      storage keys (e.g. `personas/<id>/idle-placeholder.webp`). These keys become real
      when actual avatar images are uploaded; the seed provides the DB shape.
+  2a. The shared **mascot set** — five objects under `mascot/{pose}-{sha256}.webp`, one per
+     `MascotPose` (§4.2.1). No table references them; the seed's job is to make the keys exist so
+     entry screens are never the first request for a mascot image.
   3. One demo admin `User` — `email_lower: "admin@demo.com"`, `role: admin`,
-     `password_hash` set to an argon2id hash of a known demo password (e.g. `"AdminDemo1!"`).
-     **Do not commit the plaintext password to source; hash it in the seed script at
+     `password_hash` set to an argon2id hash of a known demo password (e.g. `"AdminDemo1!"`),
+     **and `email_verified_at` set to `now()`**. A seeded account that cannot start an interview
+     when `EMAIL_VERIFICATION_REQUIRED=true` would make the demo depend on reading a mailbox
+     (K8.6). **Do not commit the plaintext password to source; hash it in the seed script at
      write time using `@node-rs/argon2`.** `upsert` on `email_lower`.
+  3a. One **sample job listing** — the text behind the setup screen's *Try a sample listing*
+     option card (§4.3.1), so an evaluator can reach the room without owning a job ad. A seeded
+     row or a committed fixture the setup route reads; either is fine, but it must exist after a
+     bare `up` + seed.
   4. One sample `Interview` for the demo admin — `state: completed`, `mode: text`,
      a placeholder `job_text`, linked to one of the occupation clusters, with
      `started_at` and `ended_at` set, `ended_reason: completed`. Add linked
@@ -398,8 +438,12 @@ any structural change is a change to F02's scope (ADR-F02, §5.2).
   This is the "runnable check" that fails if the helper logic breaks.
 
 ## Definition of done
-- `prisma migrate deploy` on an empty database creates all 14 tables and all enums with
-  no error (db spec AC-1).
+- `prisma migrate deploy` on an empty database creates all **15** tables (incl. `email_tokens`)
+  and all enums (incl. `EmailTokenKind`, `UploadKind`, `MascotPose`) with no error (db spec AC-1).
+- `email_tokens.token_hash` is UNIQUE and `email_tokens(user_id, kind)` and
+  `uploads(user_id, kind)` indexes exist (db spec AC-16).
+- `users` carries `email_verified_at`, `profile`, `cv_upload_id` and `onboarding_completed_at`;
+  `uploads` carries `kind` (db spec AC-15).
 - `prisma migrate diff` from schema-datasource to schema-datamodel exits 0 (no drift,
   CI gate).
 - `userInterviews(userId)` never returns a row with a non-null `deleted_at` (db spec AC-6).
@@ -410,8 +454,8 @@ any structural change is a change to F02's scope (ADR-F02, §5.2).
   without truncation (db spec AC-4).
 - All five §8.1 indexes exist after migration (db spec AC-5).
 - `prisma/seed.ts` runs to completion on a fresh DB with no error, producing the demo
-  admin, two personas with all five `avatar_set` keys, occupation clusters, and one
-  sample interview (db spec AC-10).
+  admin (pre-verified), two personas with all five `avatar_set` keys, the five-pose mascot set,
+  the sample job listing, occupation clusters, and one sample interview (db spec AC-10, AC-17).
 - All FKs are `ON DELETE RESTRICT`; no cascade exists (db spec AC-11).
 
 ## Verification
@@ -431,7 +475,7 @@ Then confirm the table count:
 psql "$DATABASE_URL" -c \
   "SELECT count(*) FROM information_schema.tables WHERE table_schema='public';"
 ```
-Expected: 14 rows.
+Expected: 15 rows.
 
 And the seed:
 ```bash

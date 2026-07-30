@@ -17,6 +17,23 @@ This task adds the upload endpoint, the validation pipeline, the text extraction
 dedup. It does **not** wire the object bucket's real credentials (infra) or the signed-URL
 download (I12) — it stores bytes via the storage wrapper and returns an `uploadId`.
 
+**Added 2026-07-30 — `kind ∈ {listing, cv}` (§3.3, K12).** The field is **required** and
+Zod-validated; a missing or unknown value is `VALIDATION_ERROR` (422) (`upload.feature::The upload
+kind is required and closed`). Every limit above is identical for both kinds — the only difference
+is what references the row afterwards:
+
+- `listing` → referenced by an interview (`interviews.upload_id`).
+- `cv` → referenced by `users.cv_upload_id`, with the extracted text cached on
+  `users.profile.cv_text`, truncated to 12 000 characters with a `CV_TRUNCATED` log line. **Auth
+  A06 owns those two writes**; this task's job is to accept the `kind`, validate it, and store the
+  object. If A06 has not landed, accept and validate `kind` anyway — the column exists in F02 and a
+  later task filling the pointer must not require re-uploading.
+
+**Both kinds are private objects.** A CV is the most personal document a user gives us; it is never
+public-read, never routable through `/assets`, and reachable only by a 5-minute signed URL (I12,
+K12). The dedup key stays the bytes (`sha256`), not `(sha256, kind)` — the same PDF sent once as a
+listing and once as a CV is one stored object, and the referencing side records the role it played.
+
 ## Security boundaries
 - **Validate MIME *and* magic bytes.** A `renamed-text-file.pdf` (text bytes, `.pdf` name,
   `application/pdf` header) is rejected `UNSUPPORTED_MEDIA_TYPE` (415) on the magic-byte

@@ -13,6 +13,13 @@ Owner's ask:
 > the real worker."
 > — report ledger decomposition (K10, ADR-R01, ADR-R02)
 
+**Note added 2026-07-30 — `worker/` now hosts a second job.** Auth A04 adds an `email.send`
+consumer (K8.6) to the same workspace and the same BullMQ connection. Whichever task lands first
+scaffolds `worker/`; the second one **registers another queue consumer and does not restructure the
+first**. Keep the queue registration a list, not a hard-coded single worker, so the second job is an
+append. The report job stays low-concurrency (K10); `email.send` is cheap and does not change that
+setting.
+
 This task scaffolds the `worker/` workspace, creates the shared `report`-queue producer, backs
 I07's `enqueueReport` stub with the real `Queue.add`, and runs the BullMQ `Worker` that calls
 `runReport(interviewId)` (I09) and walks `reports.status` `generating → ready`. It does **not**

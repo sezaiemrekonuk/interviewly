@@ -64,7 +64,7 @@ npx prisma migrate diff --from-schema-datasource prisma/schema.prisma --to-schem
 | `frontend/src/middleware.ts` | Locale detection middleware (F01) |
 | `packages/types/src/index.ts` | `@interviewly/types` barrel — re-exports `ErrorCode`, `AvatarState`, shared API types (F01) |
 | `backend/src/lib/error-codes.ts` | Error-code registry: `const ERROR_CODES = { … }` (F01) |
-| `backend/prisma/schema.prisma` | Complete Prisma schema — all 14 tables (F02) |
+| `backend/prisma/schema.prisma` | Complete Prisma schema — all 15 tables (F02) |
 | `backend/prisma/migrations/` | Timestamped Prisma migrations, starting with `0001_init` (F02) |
 | `backend/prisma/seed.ts` | Seed script: admin user, personas, occupation clusters, sample interview (F02) |
 | `backend/src/lib/db.ts` | Prisma client singleton + repo helpers (`userInterviews`, `activeInterview`) (F02) |
@@ -79,10 +79,14 @@ npx prisma migrate diff --from-schema-datasource prisma/schema.prisma --to-schem
 
 ## Schema (post-F02)
 
-14 tables (all RESTRICT FKs, soft-delete on `interviews` only):
-`users`, `sessions`, `personas`, `occupation_clusters`, `interviews`,
+15 tables (all RESTRICT FKs, soft-delete on `interviews` only):
+`users`, `sessions`, `email_tokens`, `personas`, `occupation_clusters`, `interviews`,
 `interview_rounds`, `questions`, `answers`, `reports`, `report_questions`,
 `voice_sessions`, `uploads`, `chat_messages`, `llm_calls`.
+
+`email_tokens` (K8.6) holds `sha256(token)` only, two `kind`s (`verify`, `reset`), single-use via a
+guarded `consumed_at` update. `users` additionally carries `email_verified_at`, `profile` (§3.3
+onboarding), `cv_upload_id` and `onboarding_completed_at`; `uploads` carries `kind ∈ {listing, cv}`.
 
 Full column list in `tasks/F02-*.md` and `backend/prisma/schema.prisma`.
 

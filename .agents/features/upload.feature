@@ -15,6 +15,19 @@ Feature: PDF upload validation
     Then the response status is 201
     And the response contains an uploadId
 
+  @upload @backend @AC-14
+  Scenario: The upload kind is required and closed
+    Given I am signed in as a candidate
+    When I upload "valid-3-page-listing.pdf" to POST "/uploads" with no kind
+    Then the response status is 422
+    And the response error code is "VALIDATION_ERROR"
+    When I upload "valid-3-page-listing.pdf" to POST "/uploads" with kind "resume"
+    Then the response status is 422
+    And the response error code is "VALIDATION_ERROR"
+    When I upload "valid-3-page-listing.pdf" to POST "/uploads" with kind "listing"
+    Then the response status is 201
+    And the response carries an upload id with kind "listing"
+
   @upload @db @AC-3
   Scenario: A byte-identical PDF reuses the stored upload instead of duplicating it
     Given I am signed in as a candidate

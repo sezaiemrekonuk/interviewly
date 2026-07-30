@@ -18,6 +18,20 @@ ownership resolver, and the CSRF middleware (built here, first *asserted* in I05
 **not** generate questions (I04 owns generation and the `profiling → hr_round` transition)
 or enforce rate limits (I13).
 
+**Added 2026-07-30 — two edits from the spec revision:**
+
+1. **The verification gate (K8.6).** When `config.EMAIL_VERIFICATION_REQUIRED` is true,
+   `POST /interviews` requires a non-null `users.email_verified_at` → `EMAIL_NOT_VERIFIED` (403),
+   and creates nothing. **This is the only gated endpoint in the system** — do not add the check to
+   `GET /state`, the answer flow, or anything else. It reads a config flag; it is not an
+   environment branch (§11.3). If auth A04 has not landed, the flag simply has no `email_verified_at`
+   to read yet and the gate is inert — note that in `## Notes` rather than faking the column.
+2. **The room-state shape gains nothing.** The two-tile room (§3.2) resolves the *second* persona
+   from the interview's rounds, which the client already has; `persona` stays single-valued and
+   describes the **active** speaker. Do not add a second persona field to room-state — one live
+   question means one live speaker (K2), and a second field would be a second source of truth about
+   whose turn it is.
+
 ## Security boundaries
 - **A non-owned or soft-deleted `:id` is `INTERVIEW_NOT_FOUND` (404), never 403**
   (ADR-I11). Ownership resolves through `activeInterview`/`userInterviews` (soft-delete

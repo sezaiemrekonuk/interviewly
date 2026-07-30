@@ -12,6 +12,28 @@ Owner's ask:
 > (profiling), AC-7 (HR generation) and AC-1 (round count) green."
 > — interview-core decomposition (§3.7, ADR-I07)
 
+**Added 2026-07-30 — the profile is now two layers and this handler owns the merge (§3.3).**
+The request body carries only the **per-interview** pre-questions (`{ perInterview }` or
+`{ skip: true }`). This handler builds `interviews.candidate_profile` as a **snapshot**:
+
+```jsonc
+{ "account": <users.profile minus dateOfBirth>, "cvText": "…", "perInterview": { … } }
+```
+
+- **A snapshot, not a join.** Read `users.profile` once, here, and store the result. A later profile
+  edit must not change what an older report was reasoned from (ADR-A07).
+- **`dateOfBirth` is stripped in this handler**, before the value goes anywhere near `AiClient`.
+  The prompt builder drops it again defensively (`PROFILE_DOB_STRIPPED`), but that alarm should never
+  fire because of this code path.
+- **`cvText` is passed to `AiClient` as `candidateCv`**, a separate variable from
+  `candidateProfile` — the builder gives it its own `<candidate_cv>` block, neutralised and
+  truncated like the listing (§7.1). Never concatenate the CV into the profile object.
+- **Everything absent is still valid.** No account profile, no CV and a skipped form → `null`
+  `candidate_profile`, and the builder emits `no profile provided` / `no cv provided`.
+- The account profile is produced by auth **A06**. If A06 has not landed, this handler reads a
+  `users.profile` that is always `null` and the merge degrades to `{ perInterview }` — that is a
+  working state, not a blocker.
+
 This task adds the profiling handler, the round-generation module, and the row insertion.
 It consumes the `AiClient` (I02 execution behind the I01 interface) and the ownership + CSRF
 middleware (I03). It does **not** own the answer flow (I06) or the full transition table
@@ -23,7 +45,12 @@ middleware (I03). It does **not** own the answer flow (I06) or the full transiti
   package does the neutralisation. Never build a prompt string here.
 - **A skipped profile compiles to the literal `no profile provided`** (`profiling.feature`
   @AC-2), never an empty `<candidate_profile></candidate_profile>` block. This is the
-  builder's job; this task passes `profile = null` on skip.
+  builder's job; this task passes `profile = null` on skip. Same rule for `candidateCv = null`
+  → `no cv provided`.
+- **The CV is attacker-controlled text.** It is a PDF a stranger wrote, so it crosses to `ai` as
+  data only, through `PromptBuilder`, exactly like the listing. Never interpolate it here.
+- **No date of birth crosses this boundary**, in either direction: not into `candidate_profile`,
+  not into an `AiClient` argument, not into a log line (§7.2).
 - **`AI_ENABLED=false` still runs** — generation goes through `StubAiClient`, inserts a
   schema-valid batch, records a `cost_usd = 0` `llm_calls` row. A teammate with no key can
   drive a full interview.

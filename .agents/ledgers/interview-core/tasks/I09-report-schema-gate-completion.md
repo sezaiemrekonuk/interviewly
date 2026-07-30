@@ -12,6 +12,18 @@ Owner's ask:
 > `schema_validation.feature` green."
 > — interview-core decomposition (§5.5, ADR-I12, K15)
 
+**Added 2026-07-30 — the report call carries the CV (§3.3, K15).** `generateReport` receives
+`candidateProfile` **and** `candidateCv`, both read from the interview's `candidate_profile`
+snapshot (`account` / `cvText`, written by I04) — never re-read from `users` at report time, because
+the snapshot is what the report must be attributable to (ADR-A07). The CV is what lets the
+evaluation compare a claim on paper against the answer given for it. Rules that follow from it:
+
+- `candidateCv` is a **separate** argument, not concatenated into the profile; `ai` gives it its own
+  `<candidate_cv>` block, neutralised and truncated (§7.1).
+- Absent CV → pass `null`; the builder emits `no cv provided` and the report reasons from the
+  transcript alone. It must never invent CV content.
+- The snapshot carries **no `dateOfBirth`** (stripped in I04); nothing here re-introduces it.
+
 This task builds the in-process report-generation path off the `evaluating` state: it calls
 `AiClient.generateReport`, validates against the `ReportPayload` schema (I01), and branches
 to `completed` (store payload) or `failed` (no payload). It provides the runnable

@@ -125,7 +125,12 @@ so it must not be held to the unexpired-unconsumed gate. This is why V04 depends
 - **Prompt building, occupation/language logic, price tables** — `ai` (K9, K15). The voice agent
   is "a mouth and an ear".
 - **The room shell, React Query data layer, i18n, the text-mode `EventAvatarDriver` wiring** —
-  `frontend` (K11, §3.8).
+  `frontend` (K11, §3.8). Including the **two persona tiles, the question banner, the collapsible
+  transcript and the `/interviews/:id/pre-join` screen itself**: `frontend` composes them, V05
+  supplies the device check they run and the active-speaker signal they render (§3.2).
+- **Any recording affordance.** There is none, in any mode: no `REC` indicator, no consent dialog,
+  no audio or video artifact (§3.2). This is not a deferral — it is the product decision, and a
+  badge claiming otherwise would be a lie a user would act on.
 - **The CSP edge mechanics, the `cloudflared` tunnel, `.env`/key delivery** — `infra` (K14, §7.4,
   §9.3). Voice *supplies* the WSS origin and *requires* the tunnel; infra makes them serve.
 - **The avatar assets and the `AvatarState` enum** — `ui` (§3.6).

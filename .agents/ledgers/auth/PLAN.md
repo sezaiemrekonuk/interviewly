@@ -45,6 +45,12 @@ backend/src/app.ts           ← Express app; mounts modules/auth/router.ts (cre
   │     middleware.ts        ← requireAuth: cookie → sessions row → user
   │     rate-limit.ts        ← Redis sliding windows: 5/min sign-in, 3/hr register
   │     google.ts            ← arctic PKCE: /auth/google + /auth/google/callback (A02)
+  │     tokens.ts            ← NEW (A04): mint/consume email_tokens, sha256 storage (K8.6)
+  │     verify-email.ts      ← NEW (A04): request + confirm handlers, resend cooldown
+  │     password-reset.ts    ← NEW (A05): request + confirm, revoke-all-sessions
+  │
+  ├── worker/src/jobs/
+  │     email-send.ts        ← NEW (A04): BullMQ `email.send` consumer, nodemailer → SMTP
   │
   ├── src/lib/
   │     db.ts                ← Prisma singleton + userInterviews/activeInterview (F02)
@@ -57,9 +63,13 @@ backend/src/app.ts           ← Express app; mounts modules/auth/router.ts (cre
   └── Redis                  ← rate-limit counters, PKCE state/verifier (F03 cache)
 
 frontend/app/(auth)/
-  sign-in/page.tsx           ← login form + Google button (A03)
+  sign-in/page.tsx           ← login form + Google button + forgot-password link (A03)
   register/page.tsx          ← register form + Google button (A03)
-  layout.tsx                 ← unauthenticated shell (A03)
+  verify-email/page.tsx      ← pending state, resend countdown (A04)
+  verify-email/[token]/      ← confirm-on-mount (A04)
+  forgot-password/page.tsx   ← request form, enumeration-safe copy (A05)
+  reset-password/[token]/    ← new-password form (A05)
+  layout.tsx                 ← unauthenticated shell, gradient ground (A03)
 ```
 
 ## Decision table (full ADRs in DECISIONS.md)
@@ -69,6 +79,9 @@ frontend/app/(auth)/
 | ADR-A01 | Session model | DB-backed opaque token, 7-day sliding, `SameSite=Lax` | K8 cut JWT refresh families; opaque token + `revoked_at` is simpler and server-revocable without key rotation |
 | ADR-A02 | Google OAuth library | `arctic` (Authorization Code + PKCE) | IDEA.md K8 names arctic; passport.js adds a parallel user model and abstracts away PKCE steps that the spec needs to assert on |
 | ADR-A03 | Password hashing | `@node-rs/argon2` (argon2id) | K8 names it explicitly; pre-built musl binaries eliminate `python3`/`make`/`g++` on Alpine, which contradicts the same reasoning that chose `unpdf` (K12) |
+| ADR-A04 | Verification + reset token storage | One `email_tokens` table, two `kind`s, **sha256 hash only**, single-use via guarded update | K8.6. One mechanism, one table. A stored token is a stored credential; a dump must yield nothing usable, and a double-clicked link must verify once |
+| ADR-A05 | Where verification is enforced | A single gate on `POST /interviews`, read from `EMAIL_VERIFICATION_REQUIRED` (ships `false`) | K8.6. Gating sign-in would make `SETUP.md` depend on reading a mailbox — a scored item traded for a feature the brief never asked for. One gate is also one place to test |
+| ADR-A06 | Mail delivery path | BullMQ `email.send` job consumed by `worker` (nodemailer → SMTP) | K10/K8.6. The API never waits on SMTP; a mail outage becomes a retried job instead of a failed registration |
 
 ## Data model additions
 
@@ -77,23 +90,38 @@ No structural changes. This ledger **consumes** the `users` and `sessions` table
 | Table | Auth reads | Auth writes |
 |---|---|---|
 | `users` | `id`, `email_lower`, `password_hash`, `google_sub`, `role`, `locale` | `INSERT` on register; `UPDATE google_sub` on Google link |
-| `sessions` | `id`, `user_id`, `expires_at`, `revoked_at` | `INSERT` on sign-in; `UPDATE revoked_at` on logout; `UPDATE expires_at` on sliding renewal |
+| `sessions` | `id`, `user_id`, `expires_at`, `revoked_at` | `INSERT` on sign-in; `UPDATE revoked_at` on logout; **`UPDATE revoked_at` on every session of the user on reset (A05)** |
+| `email_tokens` | `id`, `user_id`, `kind`, `token_hash`, `expires_at`, `consumed_at` | `INSERT` on mint (A04/A05); guarded `UPDATE consumed_at` on confirm |
+| `users` | + `email_verified_at` | `UPDATE email_verified_at` on verification, on a Google `email_verified: true` sign-in, and on a completed reset |
 
-Deferred to backlog: `sessions(user_id)` index for "revoke all sessions for a user" — no
-current scenario requires it and adding it is a safe nullable-column-equivalent migration when
-the trigger fires.
+**`sessions(user_id)` is now required, not backlog.** A05's reset revokes every session of a
+user, which is a `user_id` lookup on the hot path of a security action. It is an index-only
+migration owned by this ledger (§5.2 permits indexes).
 
 ## Phasing / task clusters (see STATE.md ledger)
 
 0. Backend auth core (A01) — register, login, logout, session middleware, `/me`
 1. Google OAuth + admin restriction (A02) — full callback flow, account linking
-2. Frontend auth forms (A03) — login/register screens, error display, Google button
+2. Frontend auth forms (A03) — sign-in/register screens, error display, Google button
+3. Email verification (A04) — `email_tokens`, mint/consume, resend cooldown, the
+   `email.send` worker job, the one enforcement gate, and the two verification screens
+4. Password reset (A05) — request/confirm, revoke-all-sessions, the two reset screens
+5. Onboarding profile (A06) — `users.profile` API, the three cards, CV upload, first-run routing
 
-All three tasks form a linear chain: A01 → A02 → A03.
+A01 → A02 → A03, then two independent lines: A04 → A05, and A06. A04–A06 are **bonus-band** (§12):
+if the deadline squeezes, they are cut before anything mandatory, and cutting them leaves A01–A03
+green and unchanged.
+
+**Why onboarding lives here and not in its own ledger.** It is account state — `users.profile`,
+`users.cv_upload_id`, `users.onboarding_completed_at` — and the routing rule that consumes it fires
+on sign-in success, which is this ledger's surface. A separate ledger would duplicate this one's
+`REFERENCE.md`, `MODELS.md` and execution protocol to own two tasks against the same table.
 
 ## Out of scope (post-auth)
 
-- Email verification, password reset — explicitly out of scope per K8.5.
+- The `candidate_profile` **merge and snapshot** at `POST /interviews/:id/profile`, and the
+  Jotform-shaped setup screen that hosts the per-interview pre-questions — `interview-core`. A06
+  supplies the account profile; it never writes to `interviews`.
 - Profile screen, locale switcher, dashboard — `frontend` ledger.
 - `/admin/*` endpoints and admin UI — `admin` ledger.
 - Rate-limit Cucumber scenarios (`rate_limits.feature`, backend AC-12/AC-13) — those

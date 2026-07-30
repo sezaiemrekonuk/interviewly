@@ -51,7 +51,7 @@ npm run test:acceptance -- --tags "@AC-4 or @AC-5"             # A02 check
 
 None at ledger-write time.
 
-## Task ledger (A01–A03)
+## Task ledger (A01–A05)
 
 Statuses: todo → in_progress → done → (blocked if waiting on user).
 `Repo`: blank = this repo.
@@ -61,10 +61,21 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | A01 | Creating the backend auth module: register, login, logout, session cookie, and `/me` | | todo | — |
 | A02 | Adding Google OAuth (arctic PKCE), account linking, and admin password restriction | | todo | A01 |
 | A03 | Building the frontend login and register forms | | todo | A02 |
+| A04 | Building email verification: tokens, the mail job, the gate, and the two screens | | todo | A03 |
+| A05 | Building password reset: enumeration-safe request, session-revoking confirm, two screens | | todo | A04 |
+| A06 | Building the onboarding profile: three cards, CV upload, and first-run routing | | todo | A03 |
 
 ## Critical path
 
-A01 → A02 → A03 (sequential, one owner). All three depend on F01 + F02 + F03 being green.
+A01 → A02 → A03 → A04 → A05 (sequential, one owner). All depend on F01 + F02 + F03 being green.
+**A06 branches off A03** and is independent of A04/A05 — it touches `users.profile`, they touch
+`users.email_verified_at` and `email_tokens`, so the two lines can run in parallel after A03.
+
+**A04 and A05 are bonus-band (IDEA.md §12).** They are specified so that cutting them is a
+decision, not an accident: if the deadline squeezes, stop after A03 and the mandatory auth
+requirement is still complete and green. A04's one edit outside its own files is the verification
+gate in `POST /interviews` (interview-core I03) — if I03 has not landed, A04 records the gate as
+pending rather than inventing the endpoint.
 
 ## Cross-ledger dependencies (blocks this ledger)
 
@@ -80,9 +91,9 @@ because Redis (rate-limit counters) is not wired.
 
 ## Backlog (deferred, unnumbered — promote to a task when its trigger fires)
 
-- **`sessions(user_id)` index for bulk revocation** — no current scenario requires "revoke
-  all sessions for a user" (e.g. password-change logout-everywhere). Promote when that
-  feature is specced; it is a safe `CREATE INDEX` migration rebased on top of F02.
+- ~~**`sessions(user_id)` index for bulk revocation**~~ — **promoted into A05** (2026-07-30). The
+  trigger fired: K8.6's reset revokes every session of a user, which is exactly the `user_id`
+  lookup this was waiting for. A05 ships it as an index-only migration.
 - **Rate-limit Cucumber coverage (`rate_limits.feature` @AC-13)** — auth implements the
   middleware; the feature file is owned by `interview-core` since it covers interview-start
   limits alongside auth limits. Promote if auth needs to own its own coverage separately.

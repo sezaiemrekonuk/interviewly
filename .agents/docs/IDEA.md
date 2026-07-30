@@ -40,7 +40,7 @@ No mandatory requirement is dropped; the voice layer sits on top of them.
 
 | Case requirement | Weight | Our implementation |
 |---|---|---|
-| Email/password + Google sign-in | 6 | Auth module, cookie session (K8), registration in K8.5 |
+| Email/password + Google sign-in | 6 | Auth module, cookie session (K8), registration in K8.5, verification/reset in K8.6 |
 | **Admin sign-in via email/password only** | (within 6) | Negative requirement, enforced twice (K8.4) |
 | Interview history: list / view / delete | 5 | `/me/interviews` — soft delete (M-rule in K13) |
 | Job listing: free text or PDF + question count | 5 | Lobby "Set up interview" form |
@@ -50,7 +50,7 @@ No mandatory requirement is dropped; the voice layer sits on top of them.
 | Admin: interview list, token/cost | 5 | Admin panel; every provider call writes `llm_calls` |
 | Admin: occupation filter + statistics with charts | 5 | K11, grouped by `occupation_cluster` |
 | Bonus: adaptive question flow | 10 | K4 — 3 pre-generated candidates, scored selection |
-| Bonus: candidate profiling stage | 5 | `profiling` state, feeds generation prompt (§3.3) |
+| Bonus: candidate profiling stage | 5 | `profiling` state + account onboarding and CV, feeds generation prompt (§3.3) |
 | Bonus: other extras | 5 | §2.1 |
 | Performance | 3 | §8.1 budget table |
 | Maintainability | 5 | §8.2 |
@@ -61,11 +61,19 @@ No mandatory requirement is dropped; the voice layer sits on top of them.
 
 ### 2.1 Extra-credit list (deliberately scoped to what the stack can actually produce)
 
+The brief's "Diğer Konular" states the listed requirements are a **minimum** and that
+well-reasoned additions are scored (`Diğer ekstra işlevler`, 5 points). Everything below is
+an addition we can actually finish.
+
 - Per-question score breakdown with reasons (K15).
 - Answer duration per question — derived from turn timestamps, not from audio.
 - STAR-format adherence — judged by LLM from the transcript.
 - Occupation-cluster-aware second round (technical vs competency).
 - Prompt version attribution on every generated artifact (K9).
+- **Account-level onboarding profile** — three "get to know you" cards (identity, education,
+  interests) plus **CV upload**, bound into question *and* report generation (§3.3).
+- **Email verification and password reset** — the ordinary account lifecycle the brief does
+  not ask for (K8.5).
 
 **Cut from the extra-credit list:** filler-word counting ("um", "yani") and speaking pace.
 Both need raw audio or a disfluency-preserving ASR. We record no audio (§3.2) and
@@ -79,13 +87,18 @@ is worse than not promising them.
 ### 3.1 Flow
 
 ```
-Sign in (required)   → no anonymous interviews.
+Register / sign in   → no anonymous interviews.
+  ↓                    email verification is sent and prompted (K8.5)
+Onboarding           → three "get to know you" cards + optional CV upload (§3.3)
+                       once per account, saved per card, resumable, skippable
   ↓
-Lobby                → paste/upload listing, question count, mode (voice|text),
-                       mic & camera check (voice mode only)
+Setup                → one big listing box (paste text or PDF), question count,
+                       mode (voice|text), detected occupation/language, correctable
   ↓
-Profiling            → 2-3 short questions, answered in the lobby (state: profiling)
-                       answers bind into every downstream generation prompt
+Pre-questions        → 2-3 short role-specific questions (state: profiling)
+                       merged with the account profile into every generation prompt
+  ↓
+Pre-join             → mic & camera check (voice mode only)
   ↓
 Round 1 — HR         → female persona
                        introduction, motivation, experience, soft skills
@@ -101,20 +114,43 @@ Report               → queued (K10), per-round + overall
 
 ### 3.2 The interview room (voice mode)
 
+The room is a **video-call surface, not a form**: both interviewers are participants in it
+from the first second, the way a two-person panel is present on a call before either of them
+speaks.
+
 ```
-┌──────────────────────────────────────────────┐
-│  ┌────────────────────┐   ┌───────────────┐  │
-│  │                    │   │ Question 3/8  │  │
-│  │   INTERVIEWER      │   │  ●●●○○○○○     │  │
-│  │   (avatar, speaks) │   │               │  │
-│  │                    │   │  Live         │  │
-│  └────────────────────┘   │  transcript   │  │
-│  ┌──────────┐             │               │  │
-│  │ YOU (cam)│             │               │  │
-│  └──────────┘             └───────────────┘  │
-│   [ 🎤 ]  [ 📷 ]  [ ⏭ finish answer ] [ ⏹ ] │
-└──────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────┐
+│ ● LIVE                                      Question 3/8  │
+│ ┌─────────────────┐ ┌─────────────────┐  ┌─────────────┐  │
+│ │ ((( HR AGENT )))│ │  TECH AGENT     │  │ Transcript  │  │
+│ │  speaking ring  │ │  dimmed·up next │  │ (collapse ▸)│  │
+│ └─────────────────┘ └─────────────────┘  │             │  │
+│ ┌──────────┐                             │             │  │
+│ │ YOU (cam)│                             │             │  │
+│ └──────────┘                             └─────────────┘  │
+│ ┌───────────────────────────────────────────────────────┐ │
+│ │ "Tell me about a time you disagreed with a teammate." │ │
+│ └───────────────────────────────────────────────────────┘ │
+│      [ 🎤 ]  [ 📷 ]  [ CC ]  [ ⏭ finish answer ]  [ ⏹ ]   │
+└───────────────────────────────────────────────────────────┘
 ```
+
+**Panel presence, active speaker and turn-taking — final.** Two agents on a call with one
+candidate is a turn-taking problem, and an ambiguous "whose turn is it" is the fastest way to
+make the room feel broken:
+
+- **Both persona tiles are mounted for the whole interview.** The round's persona is the
+  **active speaker**: full opacity, a ring in `--live`, name/role label lit. The other tile is
+  dimmed and labelled `up next` (before its round) or `done` (after it).
+- **Only one agent ever holds the turn** — rounds are strictly sequential (§3.1) and the state
+  machine has exactly one live question (K2). There is no cross-talk to arbitrate.
+- The **round handover is an explicit interstitial** ("connecting you to the technical
+  interviewer", §15.2 story 6), after which the ring moves to the other tile.
+- The **current question is a persistent banner**, not a line that scrolls away in the
+  transcript — a candidate who lost the thread must never have to scroll to recover it.
+- **`● LIVE` only. There is no `REC` indicator and no consent screen**, because nothing is
+  recorded (below). A recording badge on a product that records nothing is a lie the user
+  would reasonably act on.
 
 **Camera and recording — final:**
 
@@ -128,19 +164,67 @@ Report               → queued (K10), per-round + overall
 same interview continues in writing (§3.8). The case's mandatory requirements must never
 depend on the voice layer. Architectural rule, not preference.
 
-### 3.3 Profiling stage
+### 3.3 Profiling — two layers, one merged payload
 
-The brief requires that pre-questions **personalise the generated questions**. Questions
-are generated before they are answered, so profiling must precede generation — the HR
-round cannot double as the profiling round.
+The brief requires that pre-questions **personalise the generated questions** (`Aday tanıma
+aşaması`, 5-point bonus). Questions are generated before they are answered, so profiling must
+precede generation — the HR round cannot double as the profiling round.
 
-- 2-3 short questions, presented in the lobby as a form, not as a spoken round: years of
-  experience, areas of interest, target seniority.
-- Stored as `interviews.candidate_profile jsonb`.
-- Bound into every generation prompt as `{{candidateProfile}}`.
-- State: `created → profiling → hr_round`.
-- Skippable. If skipped, `candidate_profile` is `null` and prompts receive an explicit
-  "no profile provided" marker rather than an empty string.
+Profiling has **two layers**, because the two kinds of information have different lifetimes:
+
+**Layer 1 — account onboarding (once per account).** Three "get to know you" cards, shown
+immediately after registration, before the first setup screen:
+
+| Card | Fields |
+|---|---|
+| 1 — Identity | full name, current job title, date of birth |
+| 2 — Education | repeatable rows: school, degree, field, graduation year (max 5 rows) |
+| 3 — Interests | hobby chips + free-text interests |
+
+- Stored as `users.profile jsonb`; `users.onboarding_completed_at` marks the flow finished.
+- **Saved per card, not on finish.** Closing the browser on card 2 loses nothing — the next
+  sign-in resumes on card 2. A three-card sequence with an all-or-nothing save is a drop-off
+  cliff.
+- **Skippable at any card.** Skipping still sets `onboarding_completed_at`; the profile simply
+  stays partial. A partially filled profile is normal data, not an error state.
+- **CV upload (optional, same layer).** A PDF through the existing `POST /uploads` path (K12:
+  ≤ 10 MB, ≤ 30 pages, `unpdf`, no OCR). **The file is kept in the bucket** as a private
+  object (`uploads.kind = 'cv'`, `users.cv_upload_id`); the extracted text is kept as
+  `users.profile.cv_text`. There is no job board, no CV/listing matching and no skill test
+  (§15.2 — the rest of the CV track stays cut).
+
+**Layer 2 — per-interview pre-questions (every interview).** 2-3 short role-specific
+questions on the setup screen — years of experience *for this role*, areas of interest,
+target seniority. This layer is what the brief's bonus literally describes ("before moving to
+the interview questions the system asks the candidate a few short pre-questions"), so it
+stays even though layer 1 exists.
+
+**The merge is snapshotted, not referenced.** At `POST /interviews/:id/profile` the two layers
+are merged into `interviews.candidate_profile jsonb`:
+
+```jsonc
+{
+  "account":      { /* users.profile at setup time, minus date_of_birth */ },
+  "cvText":       "…",        // optional, from users.profile.cv_text
+  "perInterview": { "yearsExperience": 2, "interests": "…", "targetSeniority": "mid" }
+}
+```
+
+A snapshot rather than a foreign key, because a profile edited in March must not silently
+change what a January report was reasoned from.
+
+- Bound into every generation prompt as `{{candidateProfile}}`, and the CV as a separate
+  `{{candidateCv}}` variable (K9).
+- **The CV also reaches report generation** (K15) — the evaluation should be able to say "you
+  claimed five years of Spring on your CV but could not explain a transaction boundary".
+- **`date_of_birth` never enters a prompt and never enters a log line.** It is profile data the
+  user chose to give us; feeding an age into an evaluation invites age bias in the output, and
+  §7.2 already bans PII in logs.
+- **CV text is attacker-controlled text reaching an LLM**, exactly like the job listing. It is
+  neutralised and truncated identically (§7.1) inside a `<candidate_cv>` block.
+- State: `created → profiling → hr_round` — layer 2 is what the `profiling` state waits for.
+- Skippable at both layers. When nothing is provided, prompts receive an explicit "no profile
+  provided" marker rather than an empty string.
 
 ### 3.4 Interview language
 
@@ -278,21 +362,26 @@ MVP ships in text mode (§12), so this screen carries the visual and UX score be
 voice room exists. It is the same room, not a different page.
 
 ```
-┌──────────────────────────────────────────────┐
-│  ┌────────────────────┐   ┌───────────────┐  │
-│  │                    │   │ Question 3/8  │  │
-│  │   INTERVIEWER      │   │  ●●●○○○○○     │  │
-│  │   (avatar, static) │   │               │  │
-│  │                    │   │  Conversation │  │
-│  └────────────────────┘   │  (Q & A so    │  │
-│                           │   far)        │  │
-│  ┌──────────────────────┐ │               │  │
-│  │ Type your answer…    │ └───────────────┘  │
-│  └──────────────────────┘                    │
-│              [ Submit answer ]               │
-└──────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────┐
+│ ● LIVE                                      Question 3/8  │
+│ ┌─────────────────┐ ┌─────────────────┐  ┌─────────────┐  │
+│ │ ((( HR AGENT )))│ │  TECH AGENT     │  │ Conversation│  │
+│ │  avatar, static │ │  dimmed·up next │  │ (Q & A so   │  │
+│ └─────────────────┘ └─────────────────┘  │  far)       │  │
+│ ┌───────────────────────────────────────┐│             │  │
+│ │ "Tell me about a time you disagreed…" ││             │  │
+│ └───────────────────────────────────────┘└─────────────┘  │
+│ ┌───────────────────────────────────────────────────────┐ │
+│ │ Type your answer…                                     │ │
+│ └───────────────────────────────────────────────────────┘ │
+│                    [ Submit answer ]                      │
+└───────────────────────────────────────────────────────────┘
 ```
 
+- **Same panel layout as voice mode** (§3.2): both persona tiles mounted, active-speaker ring
+  in `--live` on the round's persona, the other dimmed `up next` / `done`, persistent current-
+  question banner, collapsible conversation panel. What text mode drops is the mic/camera
+  controls and the candidate's own tile — not the room.
 - **Avatar is present and animated**, driven by `EventAvatarDriver` (§3.6): `thinking`
   while the next question is being prepared, `speaking` while the question types itself
   in, `listening` while the user writes. The room must not feel like a form.
@@ -342,8 +431,24 @@ the blend works instead of fighting itself.
 
 | Surface | Direction | Density |
 |---|---|---|
-| Landing, lobby, interview room, report | Cambly — warm, calm, face-first | Airy |
+| Landing, auth, onboarding, setup, interview room, report | Cambly — warm, calm, face-first | Airy |
 | Admin panel, forms, tables, dashboards | Jotform — structured, confident | Compact |
+
+**Jotform's "Describe your form" screen is the direct model for the setup screen** (§4.3): one
+large obvious input, everything else a secondary shortcut around it. That discipline is the
+reason the layout works and is the thing to protect when the screen grows.
+
+**Two additions to the blend, both scoped:**
+
+- **A pastel gradient ground on entry surfaces only** — lavender → cream → peach. It carries
+  the "friendly practice space, not a clinical assessment" tone through landing, auth,
+  onboarding and setup. It stops at the room door: the interview room, the report and the admin
+  panel keep the flat warm ground, because a gradient behind a live face is noise and behind a
+  data table is worse.
+- **One illustrated mascot, used sparingly** — a guide on landing, auth, verification and the
+  onboarding cards, and beside the setup input. **Never in the interview room** (the
+  interviewer's face is the subject there, and a cartoon next to it undercuts the one screen
+  that has to feel real) and **never in admin** (Jotform density, no decoration).
 
 ### 4.2 Design tokens
 
@@ -357,13 +462,17 @@ the blend works instead of fighting itself.
 | `--primary` | `#FF6100` — the single unmistakable action colour |
 | `--primary-soft` | `#FFF1E8` |
 | `--accent` | `#6F76F1` — informational only, never a CTA |
+| `--live` | `#16A34A` — **interview-room live state only** (LIVE badge, active-speaker ring). Never a CTA, never a success message |
 | `--success` / `--warning` / `--danger` | `#10B981` / `#F59E0B` / `#EF4444` |
 | `--border` | `#E8E4DE` |
-| Radius | `12px` card · `10px` input · `999px` button |
-| Shadow | Layer separation over drop shadows; `0 1px 2px` max |
-| Headings | **Fraunces**, via `next/font/google`, `display: swap`, weights 400/600 |
+| `--grad-lavender` / `--grad-cream` / `--grad-peach` | `#EFE9FF` / `#FBF9F6` / `#FFE8D6` |
+| `--gradient-entry` | `linear-gradient(160deg, var(--grad-lavender) 0%, var(--grad-cream) 52%, var(--grad-peach) 100%)` — entry surfaces only (§4.3) |
+| Radius | `24px` panel · `16px` card · `12px` input · `999px` button |
+| `--shadow-hairline` | `0 1px 2px rgba(17,20,54,0.06)` — the only shadow allowed in the room |
+| `--shadow-soft` | `0 8px 24px -12px rgba(17,20,54,0.12)` — entry surfaces and cards only |
+| Headings | **Outfit**, via `next/font/google`, `display: swap`, weights 500/600/700 |
 | Body & UI | **Inter**, via `next/font/google`, weights 400/500/600 |
-| Scale | 13 / 14 / 16 / 20 / 28 / 40 |
+| Scale | 13 / 14 / 16 / 20 / 28 / 40 / 56 |
 | Spacing | Multiples of 4 |
 | Motion | 150–250 ms `ease-out`; near-zero in the interview room |
 
@@ -371,25 +480,106 @@ Self-hosted through `next/font` — no external font request, which the LCP budg
 and the CSP (§7.4) both require. **No CSS is written before these land** (foundations
 ledger F-a, §5.2).
 
+**Why Outfit and not Fraunces (a reversal, recorded).** An earlier draft used the Fraunces
+serif for headings. The direction that survived review is a **bold geometric sans, set large** —
+which is also what both references actually use, so the serif was carrying the "warm" idea by
+itself against the grain of everything around it. Outfit replaces it (geometric, friendly, wide
+weight range, on `next/font/google`). **Inter stays for body and UI** rather than setting
+everything in one family: Outfit at 13–14 px is measurably worse to read than Inter, and the
+cost of keeping both is one extra `next/font` call and zero external requests.
+
+**The gradient is a surface, not a decoration budget.** `--gradient-entry` is applied to the
+page ground of entry surfaces only (§4.3). Cards on top of it use `--surface`. `--text` must
+clear WCAG AA against **each** gradient stop, not just the average (§4.4).
+
+### 4.2.1 Mascot asset set
+
+One illustrated character, five poses, used per §4.1's placement rule. The set is a **shared
+enum** because seed and frontend both hardcode the keys, exactly like `AvatarState` (§3.6):
+
+```ts
+type MascotPose = 'wave' | 'point' | 'think' | 'cheer' | 'shrug'
+```
+
+| Pose | Used on |
+|---|---|
+| `wave` | landing hero, register, sign-in |
+| `point` | setup screen (beside the input), onboarding card 1 |
+| `think` | verification pending, onboarding card 2 |
+| `cheer` | onboarding card 3, onboarding complete |
+| `shrug` | empty and error states |
+
+- **Storage:** `mascot/{pose}-{sha256}.webp` — content-addressed, public-read, same immutable
+  cache header as avatars (§3.6, K12). One shared set, not per-persona.
+- **Budget:** ~40 KB per image, ~200 KB for the set.
+- **Only the poses a screen actually uses are preloaded** — unlike the avatar set (§3.6), the
+  mascot is never mid-interview, so preloading all five would spend LCP budget (§8.1) for
+  nothing.
+- `alt` is developer-authored UI copy (`next-intl`), never model output.
+
 ### 4.3 Per-screen direction
 
-- **Landing** — one screen, large heading, one CTA, three-step visual explanation. No long
-  marketing page.
-- **Lobby** — waiting-room feel. In voice mode: camera preview, mic level bar, both
-  interviewers visible. In text mode: the profile questions and the listing summary carry
-  the screen. The "join request sent" beat covers HR question generation (§3.7).
-- **Interview room** — UI recedes, face remains. Controls collect into a bottom bar and
-  fade when idle. Both modes share the layout (§3.8).
-- **Report** — readability first. Single column, 65–75 character measure, expandable
-  per-question cards. Scores always carry a reason.
-- **Admin** — Jotform density. Tables, filters, charts. A different register here is
-  correct.
+Desktop-first at 1440×900, responsive down to 390 px. `frontend` owns the route map and
+composition; this is the direction each screen is built to.
+
+| # | Screen | Ground | Direction |
+|---|---|---|---|
+| 1 | **Landing** | gradient | One screen: large heading, one subline, one CTA, three-step visual explanation, `wave` mascot. No long marketing page. |
+| 2 | **Register** | gradient | Email + password, "Continue with Google", inline validation (password ≥ 10 chars — K8.5), text link to sign-in. |
+| 3 | **Sign in** | gradient | Mirror of register, plus "Forgot password?" (K8.5). |
+| 4 | **Verification pending** | gradient | `think` mascot, "check your inbox", what happens next, resend with a **60 s cooldown** shown as a countdown (K8.5). |
+| 5 | **Forgot password / reset** | gradient | Request form, then the tokened reset form. Success is always reported identically (no account enumeration — K8.5). |
+| 6–8 | **Onboarding cards 1–3** | gradient | One centred card at a time, `1/3 · 2/3 · 3/3` progress, Continue + Back, **Skip for now** on every card, a different mascot pose per card, one short friendly line above the fields (§3.3). |
+| 9 | **Setup** | gradient | Modelled on Jotform's "Describe your form": mascot left, large centred heading, **one big listing textarea** with a soft glowing focus border, secondary actions in the input footer (**Upload listing PDF**, **Upload CV**, **Talk** = voice mode), primary **Go on**, suggestion chips below, and three large option cards along the bottom (§4.3.1). Shown **instead of the dashboard on first run**. |
+| 10 | **Pre-join** (voice only) | gradient | Camera preview, mic level bar, permission prompt, camera **off by default**, the "nothing is recorded" note (§3.2). Text mode skips this screen entirely. |
+| 11 | **Interview room** | flat | UI recedes, faces remain. Two persona tiles, active-speaker ring, persistent question banner, collapsible transcript, bottom control bar that fades when idle (§3.2, §3.8). |
+| 12 | **Report** | flat | Readability first. Single column, 65–75 character measure, expandable per-question cards. Scores always carry a reason. |
+| 13 | **History / dashboard** | flat | The brief's mandatory list / view / delete (5 points). Compact rows; not a metrics dashboard. |
+| 14 | **Admin** | flat | Jotform density. Tables, filters, charts. A different register here is correct. |
+
+**Every screen ships its loading, empty and error state**, and screens 2, 4, 9 and 11 have
+those states specified explicitly (`frontend`) because they are the ones a user is most likely
+to first meet the product through, or to be stuck on.
+
+**Mobile (390 px) is specified for screens 9 and 11**, the two whose desktop layout does not
+survive a naïve reflow: the setup screen's option cards stack and its chips scroll
+horizontally; the room collapses to the active tile with the other persona in a strip, the
+transcript becomes a bottom sheet, and the control bar pins to the bottom edge.
+
+#### 4.3.1 Setup-screen secondary actions — what is in and what is not
+
+The reference layout suggested more entry points than we should ship. Ruled here so the screen
+does not grow a graveyard of dead affordances:
+
+| Affordance | Ruling |
+|---|---|
+| Big listing textarea | **In.** The one obvious input; everything else is secondary to it. |
+| Upload listing PDF | **In.** Already the K12 path. |
+| Upload CV | **In.** Feeds the account profile and report generation (§3.3). |
+| Talk / voice | **In.** Sets `interviews.mode = 'voice'`, which routes through pre-join (screen 10). |
+| Suggestion chips | **In.** Prefill common occupations + "paste a job listing". Client-side only. |
+| Option card — *Start from scratch* | **In.** Clears the box and focuses it. |
+| Option card — *Use my CV* | **In.** Prefills the per-interview pre-questions from `users.profile`. |
+| Option card — *Try a sample listing* | **In.** One seeded listing, so an evaluator can reach the room without owning a job ad. |
+| Option card — *Practice mode* | **Cut.** Every interview here is practice; a mode that means nothing is a button that teaches the user the UI lies. |
+| Option card — *Template library* | **Cut.** Reduced to the single seeded sample listing above. A corpus we don't have is not a feature. |
+| **Import job URL** | **Cut — deliberately.** Server-side fetching of a user-supplied URL is an SSRF surface (internal services, cloud metadata endpoints) that would need DNS-resolution filtering, redirect pinning and an egress policy to be safe. It buys nothing the textarea does not already do, and no scored requirement asks for it. |
 
 ### 4.4 Accessibility (floor, non-negotiable)
 
 Full keyboard navigation, visible focus ring, WCAG AA contrast, `aria-live` on the live
 transcript, `alt` on every image, `prefers-reduced-motion` respected (the typing animation
 in §3.8 resolves instantly under it).
+
+Three floors the new surfaces add:
+
+- **AA against every gradient stop.** `--text` and `--text-muted` are checked against
+  `--grad-lavender`, `--grad-cream` and `--grad-peach` individually (§4.2).
+- **The setup input's glow is not its focus indicator.** The glowing border is decoration and
+  is present at rest; the focus ring is a separate, visible, non-colour-only indicator.
+- **Active speaker is never colour-only.** The `--live` ring is paired with the lit name/role
+  label and an `aria-live` announcement of the round handover, so "who is speaking" survives
+  both colour blindness and a screen reader.
 
 ### 4.5 Internationalisation
 
@@ -520,6 +710,28 @@ Feature: Candidate profiling personalises generation
     When the HR round is generated
     Then the generation request included the candidate profile
     And the recorded prompt name is "interview.question.generate"
+
+  Scenario: Date of birth never reaches the model
+    Given my account profile has a date of birth
+    When the HR round is generated
+    Then the generation request contains no date of birth
+
+# features/onboarding_profile.feature
+Feature: Account onboarding builds the profile
+
+  Scenario: Each card is saved on its own
+    Given I completed onboarding card 1
+    When I abandon the flow and sign in again
+    Then my card 1 answers are present
+    And onboarding resumes at card 2
+
+# features/email_verification.feature
+Feature: Email verification
+
+  Scenario: A used verification link cannot be replayed
+    Given I verified my email with a token
+    When I submit the same token again
+    Then the request is rejected with code "EMAIL_TOKEN_INVALID"
 
 # features/adaptive_questions.feature
 Feature: Adaptive question flow
@@ -854,8 +1066,6 @@ The evaluator's first action is to register. That path must be specified.
 - `POST /auth/register` — email + password. Password: minimum 10 characters, no other
   composition rules (length beats character classes). Rejected with `PASSWORD_TOO_SHORT`.
 - Email is unique, case-insensitive (stored lowercased). Duplicate → `EMAIL_TAKEN`.
-- **No email verification, no password reset.** Explicitly out of scope; stated in
-  `DECISIONS.md` as a scope decision rather than an omission.
 - **Account linking:** when Google returns an email that already has a password account,
   link **only if** Google reports `email_verified: true`. Otherwise reject with
   `ACCOUNT_LINK_REQUIRES_PASSWORD`. Without this rule, anyone who can obtain an
@@ -863,7 +1073,56 @@ The evaluator's first action is to register. That path must be specified.
   alone.
 - New Google sign-ins with no existing account create a `user` with `password_hash = null`.
   Such an account cannot later be promoted to `admin` without setting a password —
-  enforced, because K8.4 would otherwise lock the account out entirely.
+  enforced, because the K8 admin restriction would otherwise lock the account out entirely
+  (K8.6 gives such an account a way to set one).
+
+#### K8.6 — Email verification and password reset (reversal of an earlier cut)
+
+An earlier draft cut both as out of scope. **They are back in.** The brief calls its
+requirement list a minimum and scores well-reasoned additions (§2.1), and a product with no way
+to recover an account is a product an evaluator will notice. Recorded as a reversal in
+`DECISIONS.md`, with the shape that keeps it cheap:
+
+- **One token table, two kinds.** `email_tokens(user_id, kind ∈ {verify, reset}, token_hash,
+  expires_at, consumed_at)`. Two tables for the same mechanism is duplication.
+- **Tokens are 32 random bytes, stored as a SHA-256 hash**, single-use (`consumed_at`), and
+  never logged. A stolen database dump must not yield usable reset links.
+- **TTL:** verification 24 h, reset **1 h**.
+- **Reset consumes every session.** A completed reset writes `revoked_at` on all of that user's
+  `sessions` — reset is the button someone presses when they think they are compromised.
+- **No account enumeration.** `POST /auth/password-reset/request` always answers `200`,
+  whether or not the email exists.
+- **Resend cooldown 60 s**, surfaced as a countdown (§4.3 screen 4), plus the §7.2 rate limits.
+- **Google sign-in with `email_verified: true` marks our account verified too** — asking
+  someone to confirm an address Google already confirmed is friction for nothing.
+- **A Google-only account (`password_hash = null`) may use reset to set its first password.**
+  That is also the supported path to satisfy the admin password-only rule (below).
+- **Enforcement is a config flag, not a code branch** (§11.3): `EMAIL_VERIFICATION_REQUIRED`
+  gates exactly one action — `POST /interviews` → `EMAIL_NOT_VERIFIED`. It ships **`false`** and
+  the seeded demo accounts are pre-verified, because `SETUP.md` working on a clean machine is a
+  scored item (§10) and "click the link in the mail we can't deliver to you" is how that score
+  is lost. The verification mail is always sent and always prompted regardless of the flag.
+- **Mail is a queue job, not an inline call.** `email.send` on the existing BullMQ (K10), run by
+  `worker`; the API never waits on SMTP. Dev delivery is a **Mailpit** container (§10.1) whose
+  web UI is where the link is read; production is any SMTP host via env (§9.3).
+
+#### K8.7 — Onboarding and first-run routing
+
+- The three onboarding cards (§3.3) are **account state, not interview state**: they live on
+  `users.profile` and `users.onboarding_completed_at`, never on `interviews`.
+- **Routing after any successful sign-in**, decided server-side from those two fields plus the
+  interview count, so it cannot drift between screens:
+
+  | Condition | Destination |
+  |---|---|
+  | `onboarding_completed_at` is null | onboarding, at the first unfilled card |
+  | Onboarding done, zero interviews | setup (§4.3 screen 9) |
+  | Otherwise | history / dashboard |
+
+- **The dashboard is not dropped.** The reference direction said "no dashboard", but interview
+  history (list / view / delete) is a mandatory 5-point requirement. What the reference was
+  really objecting to is a *first-run* empty dashboard, so first run routes to setup instead —
+  the dashboard is what a returning user lands on.
 
 ### K9 — Prompt management: versioned registry
 
@@ -886,7 +1145,12 @@ messages:
     content: |
       <job_listing>{{jobListing}}</job_listing>
       <candidate_profile>{{candidateProfile}}</candidate_profile>
+      <candidate_cv>{{candidateCv}}</candidate_cv>
 ```
+
+`{{candidateProfile}}` is the §3.3 merged snapshot **minus `date_of_birth`**; `{{candidateCv}}`
+is the retained CV text. Both are user-controlled and therefore neutralised and truncated
+exactly like the listing (§7.1) — three data blocks, one rule.
 
 `uuid` is permanent, `version` increments. Every call writes `prompt_uuid` +
 `prompt_version` to `llm_calls` → a bad report is traceable to a version, rollbackable, and
@@ -941,14 +1205,23 @@ Report generation is expensive and slow; live interviews own resource priority.
   text. **No OCR.** `ponytail:` if ever needed, it becomes another worker job.
 - **Bucket: MinIO**, S3-compatible. AWS SDK v3; switching to real S3 is an `S3_ENDPOINT`
   change.
-- Stored: listing PDFs, report PDFs, persona avatars. **No audio, no video.**
-- Keyed by `sha256`; the same file twice is stored once.
+- Stored: listing PDFs, **candidate CVs**, report PDFs, persona avatars, the mascot set.
+  **No audio, no video.**
+- Keyed by `sha256`; the same file twice is stored once. `uploads.kind ∈ {listing, cv}`
+  distinguishes the two user-uploaded classes.
+- **CVs are kept, not just parsed.** `users.cv_upload_id` points at the retained private
+  object; the extracted text lives on `users.profile.cv_text` and feeds question *and* report
+  generation (§3.3, K15). Keeping the file means a re-parse never needs the user to upload again.
 - **Two access classes, never confused:**
 
   | Class | Objects | Access | Caching |
   |---|---|---|---|
-  | Private | Listing PDFs, report PDFs | Signed URL, 5 min TTL | none — unique per request |
-  | Public | `personas/**` | public-read | `max-age=31536000, immutable` |
+  | Private | Listing PDFs, **CV PDFs**, report PDFs | Signed URL, 5 min TTL | none — unique per request |
+  | Public | `personas/**`, `mascot/**` | public-read | `max-age=31536000, immutable` |
+
+- **No fetching of user-supplied URLs.** Listings arrive by paste or PDF only; an "import from
+  URL" affordance was considered and cut (§4.3.1) — it is an SSRF surface with no scored
+  requirement behind it.
 
   Signing avatars makes them uncacheable and adds a round trip to every room load.
   Public-reading a user's PDF leaks it. Prefix-scoped policy; security review item.
@@ -957,8 +1230,11 @@ Report generation is expensive and slow; live interviews own resource priority.
 
 ```
 users              (id, email_lower UNIQUE, password_hash?, google_sub?, role,
-                    locale, created_at)
+                    locale, email_verified_at?, profile jsonb?, cv_upload_id?,
+                    onboarding_completed_at?, created_at)
 sessions           (id, user_id, expires_at, revoked_at, created_at)
+email_tokens       (id, user_id, kind[verify|reset], token_hash UNIQUE,
+                    expires_at, consumed_at?, created_at)          -- K8.6
 
 personas           (id, role, name, voice_id, avatar_set jsonb, system_prompt, active)
 
@@ -982,7 +1258,8 @@ report_questions   (id, report_id, question_id, score, reason, star_adherence)
 
 voice_sessions     (id, interview_id, nonce, expires_at, consumed_at)
 
-uploads            (id, user_id, storage_key, mime, size_bytes, sha256, created_at)
+uploads            (id, user_id, kind[listing|cv], storage_key, mime, size_bytes,
+                    sha256, created_at)
 
 chat_messages      (id, interview_id, role, content, trace_id, created_at)
 
@@ -995,6 +1272,10 @@ llm_calls          (id, interview_id, provider, model, prompt_uuid, prompt_versi
 
 Notes:
 
+- `users.profile` — the account onboarding payload (§3.3). Partial is normal; `null` means the
+  user skipped every card. `date_of_birth` inside it never reaches a prompt or a log line.
+- `email_tokens.token_hash` — SHA-256 of the token, never the token (K8.6). UNIQUE, so a lookup
+  is a hash comparison and a leaked dump yields nothing usable.
 - `order_index` — `order` is reserved in SQL.
 - `questions.candidates` — K4's unselected candidates, for admin analysis.
 - `llm_calls.units` + `unit_kind` — **ElevenLabs bills per minute, not per token.** Without
@@ -1076,7 +1357,9 @@ Nine points, tied for the heaviest single criterion. It gets a schema.
 - **STAR adherence** is judged by the LLM from the transcript.
 - Filler-word count and speaking pace are **not** in the schema — see §2.1 for why.
 - The report is generated by one prompt (`interview.report.generate`, K9) receiving the
-  full transcript, the per-answer `scores`, and the candidate profile. Its
+  full transcript, the per-answer `scores`, the candidate profile **and the CV text** (§3.3) —
+  the CV is what lets the evaluation compare a claim on paper against the answer given for it.
+  Its
   `prompt_uuid`/`version` are stored on the report so a bad report is attributable.
 - **PDF export** renders `payload` server-side in `worker`. Deferred to the last bonus
   bucket (§12) and **not required by the brief** — if the deadline squeezes, this is the
@@ -1088,11 +1371,14 @@ Nine points, tied for the heaviest single criterion. It gets a schema.
 
 ### 7.1 Prompt injection — a first-class threat
 
-The job listing is attacker-controlled text reaching an LLM that holds tool-call authority.
+The job listing is attacker-controlled text reaching an LLM that holds tool-call authority. So
+are the **CV text** and the **free-text profile fields** (§3.3) — the same rule covers all
+three; there is one neutralisation path, not three.
 
 1. **Role separation.** User content never enters the system prompt. It travels in a
-   separate user message inside `<job_listing>…</job_listing>`, and the system prompt states
-   that everything inside that block is data.
+   separate user message inside `<job_listing>…</job_listing>`,
+   `<candidate_cv>…</candidate_cv>` or `<candidate_profile>…</candidate_profile>`, and the
+   system prompt states that everything inside those blocks is data.
 2. **Neutralisation — defined, not gestured at.** Inside every user-content block, `<` and
    `>` are replaced with `&lt;` and `&gt;`. The block is hard-truncated to **12 000
    characters** (a 30-page PDF exceeds this comfortably) and truncation is logged as
@@ -1119,7 +1405,9 @@ present only inside the block, injected delimiter neutralised, event logged.
 | Passwords | `@node-rs/argon2` (argon2id) |
 | Sessions | Opaque token in httpOnly + Secure + SameSite=Lax cookie, DB-revocable |
 | CSRF | SameSite + origin check on state-changing requests |
-| Rate limiting | Redis; sign-in 5/min/IP, register 3/hour/IP, interview start 10/hour/user |
+| Rate limiting | Redis; sign-in 5/min/IP, register 3/hour/IP, interview start 10/hour/user, verification resend 5/hour/user (60 s cooldown), reset request 5/hour/IP (K8.6) |
+| Account recovery | Hashed single-use tokens, 24 h verify / 1 h reset TTL, reset revokes every session, no enumeration (K8.6) |
+| CV and profile data | CV PDF private + signed URL only; `date_of_birth` never in a prompt or a log line (§3.3) |
 | Authorisation | Ownership check on every endpoint; admin endpoints check role |
 | File upload | 10 MB, MIME + magic bytes, page ceiling, private bucket |
 | Input validation | Zod at every trust boundary |
@@ -1273,6 +1561,18 @@ SESSION_TTL_DAYS=7
 SESSION_COOKIE_SECURE=true      # config, not business logic (see §11.3)
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
+# Gates POST /interviews only (K8.6). Ships false so SETUP.md never depends on an inbox.
+EMAIL_VERIFICATION_REQUIRED=false
+EMAIL_VERIFY_TTL_HOURS=24
+PASSWORD_RESET_TTL_MINUTES=60
+
+# ---- Mail (K8.6) ----
+# Dev: the `mail` container (Mailpit), read the link at http://localhost:8025
+SMTP_HOST=mail
+SMTP_PORT=1025
+SMTP_USER=
+SMTP_PASSWORD=
+MAIL_FROM="Interviewly <no-reply@interviewly.local>"
 
 # ---- LLM providers (fallback order: openai -> gemini) ----
 # A provider referenced by any prompt file MUST have a key, unless AI_ENABLED=false.
@@ -1327,6 +1627,7 @@ be evaluated.
 | `db` | `postgres:16-alpine` | — | default | Single source of truth |
 | `cache` | `redis:7-alpine` | — | default | Sessions, rate limiting, BullMQ |
 | `bucket` | `minio/minio` | — | default | S3-compatible storage (K12) |
+| `mail` | `axllent/mailpit` | — (8025 via `compose.dev.yaml`) | default | SMTP sink + web inbox for K8.6 mail. One container, no account, no real delivery in dev. Its port is published only in the dev file, like Kibana and the MinIO console (K14) |
 | `tunnel` | `cloudflare/cloudflared` | — | `dev` | Public ingress for ElevenLabs webhooks (§3.5) |
 | `es` | `elasticsearch:8.x` | — | `observability` | Observability only |
 | `kibana` | `kibana:8.x` | 5601 | `observability` | Depends on `es`, debug UI |
@@ -1460,7 +1761,14 @@ list/filter/cost/statistics. Text mode only.
 **Then (differentiation)** — voice room, two personas, avatar sets, live transcript,
 tunnel + webhooks (§3.5).
 
-**Then (bonus)** — adaptive flow (K4), tone feedback, report PDF export.
+**Then (bonus)** — **account onboarding + CV (§3.3)**, **email verification and password reset
+(K8.6)**, adaptive flow (K4), tone feedback, report PDF export.
+
+Onboarding and K8.6 sit in the bonus bucket rather than the MVP for one reason: neither is a
+mandatory requirement, and the per-interview pre-questions (§3.3 layer 2) already satisfy the
+scored profiling bonus on their own. If the deadline squeezes, layer 1 and K8.6 are cut *before*
+anything mandatory is touched — but neither is expensive, and both are specified now so that
+cutting them is a decision rather than an accident.
 
 **Parallel, non-blocking** — observability setup (K6), deployment readiness.
 *Design tokens are **not** here; they are foundations task F-a and block all UI work
@@ -1474,7 +1782,9 @@ mandatory functions. **If voice fails, the project must still stand.**
 ## 13. Delivery Checklist
 
 - `SETUP.md` — a clean environment comes up with this file alone. Must cover: the one
-  command, seeding, and the tunnel requirement for voice mode (§3.5).
+  command, seeding, the tunnel requirement for voice mode (§3.5), and **where verification and
+  reset mail lands in dev** (the Mailpit inbox, §10.1) — including the fact that
+  `EMAIL_VERIFICATION_REQUIRED=false` means an evaluator never has to open it.
 - `AI_DEVLOG.md` — model choices and reasoning, iterations, skills/MCPs used, how
   Spec-Driven + ATDD were applied, what was hard, the `npm run eval` output.
 - `DECISIONS.md` — high-level design, logical design diagram, physical deployment diagram,
@@ -1494,6 +1804,18 @@ mandatory functions. **If voice fails, the project must still stand.**
 | Recording | None. Transcript only |
 | Anonymous use | None. Sign-in required |
 | Registration | Email + password ≥ 10 chars; Google links only on `email_verified` (K8.5) |
+| Email verification | **In scope** (K8.6). Always sent; enforcement behind `EMAIL_VERIFICATION_REQUIRED`, shipped `false` |
+| Password reset | **In scope** (K8.6). Hashed single-use token, 1 h TTL, revokes every session, no enumeration |
+| Mail delivery | BullMQ `email.send` job in `worker`; Mailpit container in dev |
+| Onboarding | Three cards + optional CV, once per account, saved per card, skippable (§3.3) |
+| CV | Optional PDF; **file retained** in the private bucket, text feeds question **and** report generation (§3.3, K15) |
+| Date of birth | Collected, never sent to a model, never logged (§3.3) |
+| Job listing intake | Paste or PDF only. **URL import cut** — SSRF surface, no scored requirement (§4.3.1) |
+| First-run routing | Onboarding → setup → dashboard, decided server-side (K8.7). The dashboard is kept — it is a mandatory requirement |
+| Room panel | Both persona tiles mounted; active-speaker ring in `--live`; persistent question banner; `LIVE` badge, no `REC` (§3.2) |
+| Mascot | One character, five poses; entry surfaces only — never in the room, never in admin (§4.2.1) |
+| Gradient | `--gradient-entry` on entry surfaces only; room, report and admin stay flat (§4.2) |
+| Heading font | **Outfit** (geometric sans). Fraunces dropped — recorded reversal (§4.2) |
 | HR elimination | None. Always proceeds; weakness noted in the report |
 | Profiling | Lobby form, 2-3 questions, feeds every generation prompt (§3.3) |
 | Question generation | Per-round batch (§3.7). K4 rewrites rows, never inserts |
@@ -1546,6 +1868,9 @@ ruled on here.
 
 | Story | Claim | Ruling |
 |---|---|---|
+| §E | CV upload, CV-driven skill test, job-listing matching, "search jobs from my CV" | **Partly adopted.** CV upload is in (§3.3): the file is retained, its text feeds question and report generation. The skill test, the job board and CV↔listing matching stay **cut** — they need a listing corpus we do not have and a second profile model. |
+| 2 | "No email verification and no password reset — a recorded scope decision" | **Superseded by K8.6.** Both are in scope. The brief's minimum-requirements clause makes them scored additions, not gold-plating. |
+| 7 | Profiling is a 2-3 field lobby form and that is all there is | **Extended, not replaced.** Layer 2 (per-interview pre-questions) is still exactly that form; layer 1 (account onboarding + CV) is new and merges into the same snapshot (§3.3). |
 | 1, 13 | "the recording" is saved and viewable | **Superseded.** No recording. Transcript only (§3.2). Read "the recording" as "the transcript". |
 | 1, 2 | Guest pastes a listing at `/dashboard?instant=1`, signs in before the room opens, listing preserved | **Superseded.** No anonymous flow (K8). The landing CTA routes to sign-in, then the lobby. The listing-preservation trick is unnecessary once sign-in precedes setup. |
 | 3 | Lobby lets the user "pick which rounds to run" | **Superseded.** Both rounds always run. Round selection adds a state-machine branch and a report shape for no scored requirement. |
@@ -1557,6 +1882,12 @@ ruled on here.
 
 ### 15.3 Deferred by decision, recorded so they are not mistaken for oversights
 
-Email verification, password reset, OCR for scanned PDFs, event replay on SSE, message
-broker, load balancer, autoscaling, image registry, Kubernetes, boundary-lint, nightly
-quality workflow, refresh-token families, Groq as a third provider.
+OCR for scanned PDFs, **job-listing import from a URL** (§4.3.1 — SSRF surface, no scored
+requirement), **a practice-mode toggle and a listing template library** (§4.3.1 — reduced to one
+seeded sample listing), **the CV-driven job board, CV↔listing matching and the CV skill test**
+(§15.2 §E), event replay on SSE, message broker, load balancer, autoscaling, image registry,
+Kubernetes, boundary-lint, nightly quality workflow, refresh-token families, Groq as a third
+provider, a second `speaking` avatar variant.
+
+**No longer deferred:** email verification and password reset moved from this list into scope as
+K8.6 — the reversal is recorded there and in `DECISIONS.md`.

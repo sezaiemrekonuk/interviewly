@@ -52,7 +52,9 @@ npx playwright test tests/smoke/auth.spec.ts
 ## HTTP contracts (auth surface)
 
 All responses use envelope `{ "error": { "code": "…" } }` for errors.
-`user` shape: `{ id, email, role, locale }` — never `password_hash`, never `google_sub`.
+`user` shape: `{ id, email, role, locale, emailVerifiedAt, onboardingCompletedAt,
+interviewCount }` — never `password_hash`, never `google_sub`, never a token. The last three
+fields exist so first-run routing is one server answer (K8.7).
 
 | Method + Path | Auth required | Success | Error codes |
 |---|---|---|---|
@@ -62,6 +64,17 @@ All responses use envelope `{ "error": { "code": "…" } }` for errors.
 | `GET /auth/google` | — | 302 → Google OAuth | — |
 | `GET /auth/google/callback` | — | 302 → app (session set) | `ADMIN_MUST_USE_PASSWORD`, `ACCOUNT_LINK_REQUIRES_PASSWORD`, `OAUTH_STATE_MISMATCH` |
 | `GET /me` | `requireAuth` | 200, `{ user }` | `UNAUTHENTICATED` |
+| `POST /auth/verify-email/request` (A04) | `requireAuth` | 202, `{ cooldownSeconds }` | `EMAIL_RESEND_COOLDOWN`, `RATE_LIMITED`, `UNAUTHENTICATED` |
+| `POST /auth/verify-email/confirm` (A04) | — | 200, `{ user }` | `EMAIL_TOKEN_INVALID`, `EMAIL_TOKEN_EXPIRED`, `VALIDATION_ERROR` |
+| `POST /auth/password-reset/request` (A05) | — | **always** 202, empty body | `RATE_LIMITED`, `VALIDATION_ERROR` |
+| `POST /auth/password-reset/confirm` (A05) | — | 200, `{}` | `EMAIL_TOKEN_INVALID`, `EMAIL_TOKEN_EXPIRED`, `PASSWORD_TOO_SHORT`, `VALIDATION_ERROR` |
+| `GET /me/profile` (A06) | `requireAuth` | 200, `{ profile, onboardingCompletedAt, cvUploadId }` | `UNAUTHENTICATED` |
+| `PATCH /me/profile` (A06) | `requireAuth` | 200, `{ profile }` | `VALIDATION_ERROR`, `RATE_LIMITED`, `UNAUTHENTICATED` |
+| `POST /me/profile/complete` (A06) | `requireAuth` | 200, `{ onboardingCompletedAt }` | `UNAUTHENTICATED` |
+
+`POST /auth/password-reset/request` answers identically for a registered, a Google-only and an
+unknown address — status, body and headers (K8.6, no enumeration). Its rate limit is keyed by **IP**,
+because a per-user limiter would leak existence through its own 429.
 
 Session cookie: name `session`, `httpOnly`, `Secure`, `SameSite=Lax`, `Max-Age=604800`
 (7 days). Cleared on logout by setting `Max-Age=0`.
@@ -87,32 +100,59 @@ All paths are relative to repo root. They will exist once the named task lands.
 | `backend/modules/auth/logout.ts` | A01 | `POST /auth/logout` handler |
 | `backend/modules/auth/me.ts` | A01 | `GET /me` handler |
 | `backend/modules/auth/google.ts` | A02 | `GET /auth/google` + callback; `arctic` PKCE flow |
-| `frontend/app/(auth)/sign-in/page.tsx` | A03 | Login form + Google button |
+| `frontend/app/(auth)/sign-in/page.tsx` | A03 | Login form + Google button + forgot-password link |
 | `frontend/app/(auth)/register/page.tsx` | A03 | Register form + Google button |
-| `frontend/app/(auth)/layout.tsx` | A03 | Unauthenticated shell (no nav) |
+| `frontend/app/(auth)/layout.tsx` | A03 | Unauthenticated shell (no nav), gradient ground |
 | `tests/smoke/auth.spec.ts` | A03 | Playwright smoke: happy-path sign-in + register |
+| `backend/modules/auth/tokens.ts` | A04 | `mintEmailToken`/`consumeEmailToken` — sha256 storage, guarded consume. The **only** code touching `email_tokens` |
+| `backend/modules/auth/verify-email.ts` | A04 | Request + confirm handlers, resend cooldown |
+| `worker/src/jobs/email-send.ts` | A04 | BullMQ `email.send` consumer (nodemailer → SMTP); both templates |
+| `backend/modules/auth/password-reset.ts` | A05 | Request (enumeration-safe) + confirm (revoke-all-sessions) |
+| `backend/modules/auth/profile.ts` | A06 | `GET/PATCH /me/profile`, `POST /me/profile/complete`; per-step Zod |
+| `frontend/src/lib/first-run.ts` | A06 | The K8.7 routing rule, called by every sign-in success path |
+| `frontend/app/(auth)/verify-email/…` | A04 | Pending state + resend countdown; confirm-on-mount |
+| `frontend/app/(auth)/forgot-password/…`, `reset-password/[token]/…` | A05 | The two reset screens |
+| `frontend/app/(onboarding)/onboarding/[step]/page.tsx` | A06 | The three cards, per-card save, server-driven resume |
 
 ## Schema (tables this ledger reads/writes)
 
-Owned by F02. Auth reads and writes only these two:
+Owned by F02. Auth reads and writes these three (plus `uploads.kind` for the A06 CV path):
 
 ```
 users
-  id            String   @id (cuid)
-  email_lower   String   @unique
-  password_hash String?
-  google_sub    String?  @unique
-  role          Role     @default(user)
-  locale        String   @default("en")
-  created_at    DateTime @default(now())
+  id                      String   @id (cuid)
+  email_lower             String   @unique
+  password_hash           String?
+  google_sub              String?  @unique
+  role                    Role     @default(user)
+  locale                  String   @default("en")
+  email_verified_at       DateTime?          ← A04/A05 write; K8.6
+  profile                 Json?              ← A06 writes; §3.3 layer 1, partial is normal
+  cv_upload_id            String?            ← A06 writes; FK → uploads.id RESTRICT
+  onboarding_completed_at DateTime?          ← A06 writes; K8.7
+  created_at              DateTime @default(now())
 
 sessions
   id         String    @id (cuid) ← the opaque token stored in the cookie
   user_id    String    FK → users.id RESTRICT
   expires_at DateTime
-  revoked_at DateTime?
+  revoked_at DateTime?             ← A05 sets this on EVERY row of the user
   created_at DateTime  @default(now())
+
+email_tokens                       ← A04/A05 only, through modules/auth/tokens.ts
+  id          String    @id (cuid)
+  user_id     String    FK → users.id RESTRICT
+  kind        EmailTokenKind        ← verify | reset
+  token_hash  String    @unique     ← sha256(token). NEVER the token itself
+  expires_at  DateTime
+  consumed_at DateTime?             ← guarded update; count 0 ⇒ EMAIL_TOKEN_INVALID
+  created_at  DateTime  @default(now())
 ```
+
+**`users.profile` shape** (§3.3): `{ fullName?, jobTitle?, dateOfBirth?, education?: [{ school,
+degree, field, graduationYear }] (max 5), hobbies?: string[], interestsText?, cvText? }`.
+**`dateOfBirth` never leaves toward `ai` and never enters a log line** — interview-core strips it
+when building `candidate_profile`, and the prompt builder drops it again defensively.
 
 **Session lookup:** `prisma.session.findUnique({ where: { id: token } })` then check
 `revoked_at IS NULL AND expires_at > now()`. Always verify both conditions.

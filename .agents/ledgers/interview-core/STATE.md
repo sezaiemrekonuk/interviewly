@@ -19,13 +19,31 @@ F01, F02, F03 being `done` (see Cross-ledger section). Do not start I01 until al
 foundations tasks are green. Once they are, read I01's file, confirm the `packages/ai/`
 entry F03 wired is empty (no prior partial work), and begin.
 
+## Spec revision of 2026-07-30 — what changed for this ledger
+
+Three edits, all inside existing tasks; no task was added or renumbered.
+
+- **I03** gains the single `EMAIL_VERIFICATION_REQUIRED` gate on `POST /interviews`
+  (`EMAIL_NOT_VERIFIED`, K8.6) and an explicit *do not* — room-state keeps one `persona` field
+  describing the **active** speaker; the two-tile room resolves the other from the rounds it already
+  has (§3.2).
+- **I04** now owns the `candidate_profile` **merge and snapshot**: `{ account: users.profile minus
+  dateOfBirth, cvText?, perInterview }`, and passes `candidateCv` to `AiClient` as its own argument
+  (§3.3). Auth **A06** supplies `users.profile`; if A06 has not landed, the merge degrades to
+  `{ perInterview }` and still works.
+- **I11** accepts a required `kind ∈ {listing, cv}` on `POST /uploads` (§3.3, K12); **I09** passes
+  the snapshot's `cvText` into report generation (K15).
+
+The Jotform-shaped setup screen (§4.3 screen 9) is `frontend`'s composition, not a new task here —
+this ledger owns the endpoints it calls, which are unchanged apart from the above.
+
 ## Environment
 
 Foundations (`F01`, `F02`, `F03`) and auth `A01` must be `done` before the tasks that
 depend on them start (per-task `Depends on` below):
 
 - **F01** provides `backend/src/lib/error-codes.ts` and `@interviewly/types`.
-- **F02** provides `backend/prisma/schema.prisma` (all 14 tables/15 enums) and
+- **F02** provides `backend/prisma/schema.prisma` (all 15 tables/18 enums) and
   `backend/src/lib/db.ts` (`prisma`, `userInterviews`, `activeInterview`).
 - **F03** provides `backend/src/lib/logger.ts`, `backend/src/lib/env.ts`, `compose.yaml`
   (Postgres + Redis), CI acceptance-runner wiring, and the empty `packages/ai/` workspace
