@@ -8,7 +8,7 @@
     "lint": "cd .. && eslint --config eslint.config.js backend/src",
     "seed": "tsx prisma/seed.ts",
     "db:check": "tsx src/lib/db.ts",
-    "test:unit": "vitest run",
+    "test:unit": "vitest run --passWithNoTests",
     "test:acceptance": "cucumber-js"
   },
   "prisma": {
@@ -22,7 +22,9 @@
     "zod": "^3"
   },
   "devDependencies": {
+    "@cucumber/cucumber": "^12.9.0",
     "prisma": "^6.19.3",
-    "tsx": "^4.23.1"
+    "tsx": "^4.23.1",
+    "vitest": "^4.1.10"
   }
 }

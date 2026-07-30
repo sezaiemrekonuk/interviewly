@@ -128,6 +128,41 @@ whenever Sezai picks it up, in parallel with F02.
 
 ## Backlog (deferred, unnumbered — promote to a task when its trigger fires)
 
+- **`unit` CI job is a false green.** `backend/package.json` → `test:unit` is
+  `vitest run --passWithNoTests`, because the repo has no vitest files and `vitest run`
+  exits 1 on an empty suite. Promote — i.e. delete the flag — in the same PR as the first
+  vitest test. Also flagged in `.agents/EXECUTE.md` § 7 so every session sees it.
+- **`acceptance` CI job is a false green.** `cucumber-js` runs with no config file and no
+  `backend/features/` directory, reports `0 scenarios`, exits 0. Needs `cucumber.js` +
+  `features/` + step definitions. Promote in the same PR as the first `.feature` file, and
+  see the job go red first (EXECUTE.md § 6, ATDD ordering). `@cucumber/cucumber` and `vitest`
+  are already `backend` devDependencies — only the wiring is missing.
+- **`npm audit` is non-blocking.** The `audit` job carries `continue-on-error: true`. Cause:
+  `next` itself has a high advisory whose vulnerable range (`9.3.4-canary.0 -
+  16.3.0-preview.7`) covers every stable release including the current latest, 16.2.12 — so
+  there is nothing to upgrade to. The other 11 highs *are* fixable and are collateral of the
+  same tree: `postcss` (≤8.5.17, fix 8.5.18+) and `sharp` (<0.35.0, fix 0.35.3) can be forced
+  with root `overrides`, and the eslint chain (`eslint`, `@eslint/config-array`,
+  `@eslint/eslintrc`, `brace-expansion`, `minimatch`, `eslint-config-next`) needs an eslint 9
+  → 10 major bump. Both were left alone deliberately: overriding `sharp` under `next` risks
+  image optimisation at runtime, and an eslint major is its own task. Promote when `next`
+  ships a fixed stable — do the eslint bump and the overrides then, and drop
+  `continue-on-error` in the same PR.
+- **Cold `npm ci` costs ~6 min in CI.** Measured 2026-07-30: `npm cache is not found`, 557
+  packages, native builds (`sharp`, `next-swc`, `@node-rs/argon2`, prisma engines,
+  `@aws-sdk/client-s3`). `--prefer-offline --no-audit --fund=false` is now on every job, but
+  the real win is a warm `~/.npm`, and `actions/setup-node`'s cache is only written by a run
+  on the base branch — so it stays cold until a green run lands on `master`. Promote if it is
+  still slow after that: cache `node_modules` by `package-lock.json` hash instead.
+- **Prisma Client must be generated explicitly in every CI job that typechecks or imports
+  it.** `@prisma/client` hoists to the workspace root, its postinstall finds no
+  `./prisma/schema.prisma` there (the schema lives in `backend/prisma/`), and it silently
+  emits a stub client with zero models — which surfaces as `TS2305`/`TS2694` on every Prisma
+  type. `typecheck`, `unit` and `acceptance` each run
+  `npx prisma generate --schema backend/prisma/schema.prisma`; `backend/Dockerfile` already
+  did. Promote to a root `postinstall` only if the Dockerfile `deps` stages are reworked —
+  today they run `npm ci` with the schema not yet copied into the image, so a root
+  postinstall would break `docker compose build`.
 - **Root `"test"` script missing.** `npm test` at repo root fails ("Missing script"). Only
   `test:acceptance` is wired; no aggregate unit-test script exists yet (backend has its own
   `test:unit` via vitest, scoped to its workspace). Promote alongside the `unit` CI job once a
