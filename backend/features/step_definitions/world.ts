@@ -137,13 +137,16 @@ export class AiWorld extends World {
     if (setCookie[0]) this.cookie = setCookie[0].split(';')[0];
   }
 
-  async httpPost(path: string, body: unknown): Promise<void> {
+  // I05: `extra` overrides the default same-site origin — the CSRF scenarios are the only
+  // callers that send anything else, so every other step keeps sending a valid request.
+  async httpPost(path: string, body: unknown, extra: Record<string, string> = {}): Promise<void> {
     const res = await fetch(`${serverState.baseUrl}${path}`, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
         origin: config.PUBLIC_ORIGIN,
         ...(this.cookie ? { cookie: this.cookie } : {}),
+        ...extra,
       },
       body: JSON.stringify(body),
     });

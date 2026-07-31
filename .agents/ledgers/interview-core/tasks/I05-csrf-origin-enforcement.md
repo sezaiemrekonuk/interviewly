@@ -1,5 +1,5 @@
 # I05 — CSRF/origin enforcement on state-changing routes
-REPO: (this repo) · Depends: I04 · Status: todo
+REPO: (this repo) · Depends: I04 · Status: done
 Read first: STATE.md, REFERENCE.md, then this.
 **Model: claude-opus-4.8** — a CSRF control is a trust boundary; a weak or bypassable origin check is a cross-site state-change hole, and the "state unchanged on rejection" property is easy to get subtly wrong.
 
@@ -49,15 +49,15 @@ lands the acceptance coverage through `/profile`. It adds no new endpoint.
   state-changing methods only.
 
 ## Steps
-- [ ] **1. Audit the router** — every non-`GET` interview route is wrapped by
+- [x] **1. Audit the router** — every non-`GET` interview route is wrapped by
   `requirePublicOrigin`; `GET` routes are not.
-- [ ] **2. Confirm fail-closed** — both `Origin` and `Referer` absent on a state-changing
+- [x] **2. Confirm fail-closed** — both `Origin` and `Referer` absent on a state-changing
   route is a mismatch, not a pass.
-- [ ] **3. Confirm ordering** — the check precedes the ownership resolver's side effects and
+- [x] **3. Confirm ordering** — the check precedes the ownership resolver's side effects and
   the handler; a rejection writes nothing and changes no state.
-- [ ] **4. Wire acceptance step-defs** for `interview_flow.feature` @AC-15 (evil origin →
+- [x] **4. Wire acceptance step-defs** for `interview_flow.feature` @AC-15 (evil origin →
   403 `CSRF_ORIGIN_MISMATCH`, state `profiling`; PUBLIC_ORIGIN → 200, state `hr_round`).
-- [ ] **5. Run the `## Verification` command.**
+- [x] **5. Run the `## Verification` command.**
 
 ## Definition of done
 - Every state-changing interview route rejects a non-PUBLIC_ORIGIN request with 403
@@ -71,4 +71,55 @@ npm run test:acceptance -- --tags "@interview-flow and @AC-15"
 ```
 
 ## Notes
-_(fill in when the task is done)_
+
+### What exists now
+
+- `csrf.ts` — `requirePublicOrigin` exempts `SAFE_METHODS` (`GET`/`HEAD`/`OPTIONS`) itself.
+  That exemption is what makes router-wide mounting possible; everything else unchanged.
+- `router.ts` — guard moved from two per-route positions to **one `router.use`, above
+  `router.param('id', …)`**. Non-`GET` coverage is now automatic.
+- `csrf.test.ts` (7 vitest) — GET exempt, Origin→Referer fallback compares `.origin` not the
+  URL, both-absent and unparseable (`"null"`) fail closed, resolver not reached on reject.
+- `csrf.steps.ts` + `httpPost(path, body, extra?)` in `world.ts` — @AC-15 green.
+
+### Deviations from plan
+
+- **Steps 1–3 were audits that failed.** The task read as assertion-only; it was not.
+  Per-route wiring (`router.post('/', requirePublicOrigin, …)`) violated the non-negotiable,
+  and `router.param` runs **before** route middleware in Express, so a cross-site POST hit
+  `activeInterview()`'s DB read before the 403. Both fixed by the single `router.use`.
+- **`@unwired` tag convention added** — see below. Owner-approved (Sezai), not in the task.
+
+### `@unwired` — READ THIS BEFORE WIRING interview_flow.feature
+
+`interview_flow.feature` is owned by four tasks. It is now in `cucumber.js` `paths`, and the
+default profile carries `tags: 'not @unwired'`. Five scenarios are tagged `@unwired`:
+
+| Scenario | Owner |
+|---|---|
+| @AC-8, @AC-9, @AC-10, @AC-16 | I06 (@AC-16 with I07) |
+| @AC-11 | I08 |
+
+**Your task DELETES its own `@unwired` tag in the PR that wires its step definitions.** Leave
+it and your scenarios silently do not run — the same trap REFERENCE.md flags for `paths`.
+`strict: true` still fails an untagged scenario whose steps are missing. A CLI `--tags`
+replaces the profile expression, so every scoped Verification command is unaffected.
+
+### For I06 / I07
+
+- **Do not pass `requirePublicOrigin` to your route.** `router.use` already covers it; adding
+  it again is the per-route drift the non-negotiable forbids. Mount plainly:
+  `router.post('/:id/answers', submitAnswer)`.
+- `GET /events/interviews/:id` (SSE, I07) is exempt by method, not by opt-out — safe wherever
+  it mounts on this router.
+- `httpPost` takes an optional third `extra` headers arg now.
+
+### Verification output
+
+```
+npm run test:acceptance -- --tags "@interview-flow and @AC-15"
+1 scenario (1 passed) · 8 steps (8 passed)
+```
+
+Gates: full acceptance 28/28 (was 27), `npm test` 82/82 (was 75), lint + typecheck clean.
+Local run needs `DATABASE_URL=…@localhost:5432` and `REDIS_URL=redis://localhost:6380`.
