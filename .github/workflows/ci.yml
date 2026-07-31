@@ -91,6 +91,9 @@ jobs:
         with: { node-version: '22', cache: 'npm' }
       - run: npm ci --prefer-offline --no-audit --fund=false
       - run: npx prisma generate --schema backend/prisma/schema.prisma
+      # env.ts process.exit(1)s at import on a missing key (F03). `npm test` loads .env via
+      # node --env-file-if-exists; vitest's own dotenv handling worked locally but not here.
+      - run: cp .env.example .env
       # One vitest run over the whole tree. `--passWithNoTests` is deliberately gone (I01):
       # it made this job green on an empty repo, which is worse than no job at all.
       - run: npm test
@@ -123,11 +126,9 @@ jobs:
       # Same one-liner build/compose-check already use; job-level env above still wins for
       # DATABASE_URL/SHADOW_DATABASE_URL/REDIS_URL (cucumber.js's loadEnvFile fills the rest).
       - run: cp .env.example .env
-      # Non-blocking: question_generation.feature's @AC-7/@AC-1 scenarios are I04's scope
-      # (not started — MODELS.md pins I04 to opus-4.8) and stay undefined until it lands.
-      # Findings stay visible in the log. Flip back to blocking once I04 wires those steps.
+      # Blocking again as of I04: question_generation @AC-7/@AC-1 are wired and the whole
+      # suite is defined, so an undefined or failing step is a real regression now.
       - run: npm run test:acceptance
-        continue-on-error: true
 
   audit:
     runs-on: ubuntu-latest

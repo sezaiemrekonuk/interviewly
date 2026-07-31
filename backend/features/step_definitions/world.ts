@@ -4,11 +4,13 @@ import { setWorldConstructor, World } from '@cucumber/cucumber';
 import { parse } from 'yaml';
 import {
   ModelPrices,
+  PROMPT_NAMES,
   ProviderCallError,
   PromptBuilder,
   StubAiClient,
   createPromptBuilder,
   loadModelPrices,
+  questionVars,
   resolveAiClient,
   type AiClient,
   type BuiltPrompt,
@@ -21,6 +23,8 @@ import {
   type Question,
 } from '@interviewly/ai';
 
+import { roundQuestionArgs } from '../../modules/interview/generation';
+import { prisma } from '../../src/lib/db';
 import { config } from '../../src/lib/env';
 
 import { serverState } from './server';
@@ -91,6 +95,42 @@ export class AiWorld extends World {
   interviewId = '';
   lastStatus = 0;
   lastBody: Record<string, unknown> | undefined;
+
+  // I04: the body `POST /interviews/:id/profile` will be sent with — `{ skip: true }` until a
+  // scenario answers the pre-questions. The two profiling.feature paths differ only here.
+  profileBody: Record<string, unknown> = { skip: true };
+  /** Seeded `users.profile` values a scenario later asserts must not (or must) reach a prompt. */
+  accountDob = '';
+  accountFullName = '';
+  accountCvText = '';
+
+  /**
+   * Injected into `generateRound` when a scenario needs a client that misbehaves in a way
+   * `StubAiClient` cannot be asked for. `undefined` means the module's own client.
+   */
+  roundClient: AiClient | undefined;
+
+  /**
+   * The HTTP-ring twin of `generateHrRound()`. `POST /interviews/:id/profile` is what
+   * generates the HR batch, and the prompt it compiled lives and dies inside the request —
+   * so the same prompt is compiled alongside it, from the production var mapping and the
+   * snapshot the handler stored. Any drift between the two is a drift in `roundQuestionArgs`,
+   * which is the thing under test.
+   */
+  async generateHrRoundOverHttp(): Promise<void> {
+    this.resetEvents();
+    await this.httpPost(`/interviews/${this.interviewId}/profile`, this.profileBody);
+
+    const interview = await prisma.interview.findUniqueOrThrow({
+      where: { id: this.interviewId },
+    });
+    this.ctx = { interviewId: this.interviewId, traceId: `trace-${this.interviewId}` };
+    this.built = this.builder().build({
+      promptName: PROMPT_NAMES.generateRoundQuestions,
+      vars: questionVars(roundQuestionArgs(interview, 'hr', this.ctx)),
+      ctx: this.ctx,
+    });
+  }
 
   private captureCookie(res: Response): void {
     const setCookie = res.headers.getSetCookie?.() ?? [];

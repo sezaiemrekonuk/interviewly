@@ -9,8 +9,17 @@
 // The feature files are read where they were authored — there is no second copy under
 // backend/. One file, one source of truth, so the spec and the runnable test cannot drift.
 //
-// Each task appends its own feature file here as it wires the steps. Next up: I04 adds
-// profiling.feature.
+// Each task appends its own feature file here as it wires the steps. Next up: I05 adds
+// security-adjacent CSRF coverage on the state-changing routes.
+//
+// I04 is the first task whose scenarios drive generation through the app's own AiClient
+// (POST /interviews/:id/profile), so the suite must never reach a real provider: the local
+// .env carries live keys, and one accidental run would bill them and make every assertion
+// non-deterministic. Forcing AI_ENABLED here — BEFORE loadEnvFile, whose semantics leave an
+// already-set variable alone — puts the whole run in §5.5 stub mode whatever the file says.
+// The provider chain itself is still covered: ai_provider.feature fakes ProviderTransport
+// inside the World and never consults this flag.
+process.env.AI_ENABLED = 'false';
 //
 // I03 is the first task whose steps import backend/src/app.ts, which loads env.ts's Zod
 // schema at require time — every key must resolve or the process exits before a single
@@ -31,6 +40,7 @@ module.exports = {
       '.agents/features/security.feature',
       '.agents/features/ai_provider.feature',
       '.agents/features/question_generation.feature',
+      '.agents/features/profiling.feature',
     ],
     require: ['backend/features/step_definitions/**/*.ts'],
     requireModule: ['tsx/cjs'],

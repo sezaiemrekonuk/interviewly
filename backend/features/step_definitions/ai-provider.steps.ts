@@ -17,6 +17,8 @@ import {
   QuestionBatchSchema,
   validateProviderKeys,
 } from '@interviewly/ai';
+import { prisma } from '../../src/lib/db';
+
 import { AiWorld, type Tier1Outcome } from './world';
 
 const CARDINALITY: Record<string, number> = { one: 1, two: 2 };
@@ -116,10 +118,20 @@ Then(
   },
 );
 
+// Two rings, like `the response status is {int}` above it. `ai_provider.feature` never
+// creates an interview and asserts on the batch the chain returned; `question_generation`
+// @AC-7 goes through POST /profile and asserts on the rows that landed (I04).
 Then(
   'exactly {int} questions exist for the HR round',
-  function (this: AiWorld, count: number) {
-    assert.equal(this.requireBatch().length, count);
+  async function (this: AiWorld, count: number) {
+    if (!this.interviewId) {
+      assert.equal(this.requireBatch().length, count);
+      return;
+    }
+    const rows = await prisma.question.count({
+      where: { round: { interview_id: this.interviewId, type: 'hr' } },
+    });
+    assert.equal(rows, count);
   },
 );
 

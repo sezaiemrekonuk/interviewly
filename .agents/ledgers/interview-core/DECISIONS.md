@@ -516,3 +516,67 @@ the first and a second definition of a shared step makes *both* feature files am
 step now runs through `resolveAiClient` rather than `StubAiClient`. `security.feature` is
 unaffected because generation still compiles through the real builder either way, which is
 exactly what ADR-I16 requires.
+
+---
+
+## ADR-I22 — 2026-07-31 — The technical batch is triggered by the HR round, not by `POST /profile`
+
+**Context:** ADR-I07 and the backend spec §3 both say the tech batch is generated "during the
+HR round (**triggered after HR generation succeeds**)". Read literally that puts the trigger
+inside `POST /interviews/:id/profile`, and both acceptance scenarios that describe the
+transition say the opposite: `question_generation.feature` @AC-7 asserts *"the technical round
+has no questions yet"* immediately after the request returns 200, and @AC-1 reconfigures the
+stub **after** profiling completes and then triggers technical generation as its own step,
+expecting zero pre-existing tech rows. Options: (A) generate HR only in the handler and expose
+the tech batch as an idempotent trigger the HR round fires; (B) fire-and-forget
+`void generateRound(tech)` after the response; (C) treat the conflict as a team decision and
+block the task.
+
+**Decision:** (A). `POST /profile` generates the HR batch and nothing else.
+`generation.ts` exports `ensureTechBatch(interview, opts)` — a no-op when tech questions
+already exist — which I06 calls from the answer handler once the HR round is under way. The
+spec's *intent* ("the round handover is never a loading screen") is preserved exactly: the
+batch still lands during the HR round, several answers before it is needed.
+
+**Why not (B):** it fails @AC-1 outright — the default stub would have inserted five valid
+tech questions before the scenario ever configures its shortfall client — and makes @AC-7 a
+race between the assertion and an unawaited promise. A green that depends on scheduler timing
+is not a green.
+
+**Why not (C):** the acceptance criteria are the contract ("verification is a command, not a
+wish"), and they are unambiguous in the same direction twice. There was nothing for a human to
+arbitrate that the feature files had not already settled.
+
+**Consequences:** `POST /profile` pays for exactly one LLM call, which also keeps the §8.1
+"< 8 s, covered by the lobby wait" budget honest. **I06 must call `ensureTechBatch` when it
+records the first HR answer** — until it does, an interview reaching the tech round finds no
+questions. Flagged in I04's `## Notes` under "For I06". The idempotence is what lets I06 call
+it on every answer rather than having to detect the first.
+
+---
+
+## ADR-I23 — 2026-07-31 — `profiling.feature`'s two report scenarios assert I04's snapshot, not I09's endpoint
+
+**Context:** I04's Verification is `--tags "@profiling or …"`, which selects all four
+`profiling.feature` scenarios. Two of them (@AC-3b, @AC-4a) end at *"the report is generated
+for that interview"*, and report generation is I09's endpoint and job — not landed. Options:
+(A) drive `AiClient.generateReport` from the step using the production helper that assembles
+the profile half of its arguments; (B) define only the @AC-2 steps, leaving two scenarios
+undefined and the Verification command red; (C) leave `profiling.feature` out of `cucumber.js`
+`paths`, so `@profiling` matches nothing and the command passes having proven nothing.
+
+**Decision:** (A). `generation.ts` exports `profileVariables(interview)` — the snapshot split
+into `candidateProfile` and `candidateCv` — and both `roundQuestionArgs` and the report steps
+feed it. What the two scenarios actually assert (a CV reaches a report prompt as data in its
+own block; a date of birth reaches neither prompt) is I04's contract, because I04 owns the
+snapshot. No report module is stubbed into existence.
+
+**Why not (C):** it is the false-green pattern EXECUTE.md § 7 names — a job that cannot fail
+reports safety it never checked — and REFERENCE.md warns about the same thing one line up.
+
+**Consequences:** **I09 must assemble `generateReport`'s profile arguments from
+`profileVariables`**, not by reading `candidate_profile` itself; if it re-derives the split,
+these two scenarios keep passing while production diverges. `I completed an 8-question
+interview` sets the end state as a database fixture because the answer walk is I06/I07 — it is
+a precondition, not the thing under test, and it becomes a real flow once I06 lands.
+ADR-I16 is the precedent: a scenario may be asserted at the ring that owns its criterion.

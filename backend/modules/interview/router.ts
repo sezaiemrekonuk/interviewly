@@ -4,6 +4,7 @@ import { requireAuth } from '../auth/middleware';
 
 import { requirePublicOrigin } from './csrf';
 import { resolveInterview } from './ownership';
+import { submitProfile } from './profile';
 import { setupInterview } from './setup';
 import { getInterviewState } from './state';
 
@@ -14,7 +15,8 @@ router.param('id', resolveInterview);
 router.post('/', requirePublicOrigin, setupInterview);
 router.get('/:id/state', getInterviewState);
 
-// I04 mounts here: router.post('/:id/profile', requirePublicOrigin, ...)
+router.post('/:id/profile', requirePublicOrigin, submitProfile);
+
 // I06 mounts here: router.post('/:id/answers', requirePublicOrigin, ...)
 // I07 mounts here: router.post('/:id/resume', requirePublicOrigin, ...)
 // I12 mounts here: router.get('/:id/report/download', ...)

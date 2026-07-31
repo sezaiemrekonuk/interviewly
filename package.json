@@ -11,7 +11,7 @@
     "build": "npm run -w @interviewly/types build && npm run -w @interviewly/ai build && npm run -w frontend build && npm run -w backend build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint . --ext .ts,.tsx",
-    "test": "vitest run",
+    "test": "node --env-file-if-exists=.env node_modules/.bin/vitest run",
     "test:acceptance": "cucumber-js",
     "seed": "npm run -w backend seed",
     "prepare": "husky"

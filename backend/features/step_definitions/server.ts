@@ -4,7 +4,7 @@
 // value stays live across the tsx/cjs interop boundary.
 import type { Server } from 'node:http';
 
-import { AfterAll, BeforeAll } from '@cucumber/cucumber';
+import { AfterAll, Before, BeforeAll } from '@cucumber/cucumber';
 
 import { redis } from '../../modules/auth/rate-limit';
 import { app } from '../../src/app';
@@ -20,6 +20,43 @@ BeforeAll(async function startServer() {
   const address = server.address();
   const port = typeof address === 'object' && address ? address.port : 0;
   serverState.baseUrl = `http://127.0.0.1:${port}`;
+});
+
+/**
+ * Two pieces of shared state a scenario must not inherit from its neighbours.
+ *
+ * **Rate-limit counters.** Registration is 3/hour per IP (A01) and every scenario in the
+ * suite arrives from 127.0.0.1, so the fourth scenario to sign someone in would 429 for
+ * reasons that have nothing to do with what it is testing. `rate_limits.feature` (I13) is
+ * where the limiter is the subject; everywhere else it is noise, and it is reset here.
+ *
+ * **Personas.** `personas` is seeded reference data (F02), but CI runs `prisma migrate
+ * deploy` without `npm run seed` — the seed PUTs avatar objects and needs a bucket CI does
+ * not start. Round creation needs a `persona_id`, so the two rows the interview flow reads
+ * are upserted on deterministic ids: idempotent against a machine that *has* been seeded.
+ */
+Before(async function resetSharedState() {
+  const keys = await redis.keys('ratelimit:*');
+  if (keys.length > 0) await redis.del(...keys);
+
+  for (const [role, name] of [
+    ['hr', 'Ada'],
+    ['tech', 'Turing'],
+  ]) {
+    await prisma.persona.upsert({
+      where: { id: `seed-persona-${role}` },
+      update: {},
+      create: {
+        id: `seed-persona-${role}`,
+        role,
+        name,
+        voice_id: `acceptance-voice-${role}`,
+        avatar_set: {},
+        system_prompt: `Acceptance ${role} persona.`,
+        active: true,
+      },
+    });
+  }
 });
 
 // Both `redis` (ioredis, module-level, eager-connects on import) and `prisma` stay open for
