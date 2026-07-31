@@ -35,6 +35,9 @@ module.exports = [
       "backend/features/**/*.ts",
       "packages/*/src/**/*.ts",
       "worker/src/**/*.ts",
+      // Playwright browser smoke (A03). Lives at the root because it drives the composed
+      // stack end to end, not any single workspace.
+      "tests/**/*.ts",
     ],
     languageOptions: {
       parser: tsparser,

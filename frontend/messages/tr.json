@@ -2,6 +2,22 @@
   "common": {
     "loading": "Yükleniyor…"
   },
+  "auth": {
+    "signIn": "Giriş yap",
+    "signInTitle": "Tekrar hoş geldiniz",
+    "signInSubtitle": "Pratiğe devam etmek için giriş yapın.",
+    "register": "Hesap oluştur",
+    "registerTitle": "Hesabınızı oluşturun",
+    "registerSubtitle": "Mülakat pratiği yapın ve her yanıtınız için rapor alın.",
+    "emailLabel": "E-posta",
+    "passwordLabel": "Şifre",
+    "googleButton": "Google ile devam et",
+    "orDivider": "veya",
+    "alreadyHaveAccount": "Zaten hesabınız var mı?",
+    "noAccount": "Hesabınız yok mu?",
+    "forgotPassword": "Şifrenizi mi unuttunuz?",
+    "submitting": "Lütfen bekleyin…"
+  },
   "errors": {
     "PASSWORD_TOO_SHORT": "Şifre en az 10 karakter olmalıdır.",
     "EMAIL_TAKEN": "Bu e-posta adresiyle bir hesap zaten mevcut.",

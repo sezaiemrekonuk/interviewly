@@ -1,0 +1,10 @@
+/* ui §4.2 — the entry surfaces sit on the gradient ground, not the flat app background. */
+.ground {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 2rem 1rem;
+  background: var(--gradient-entry);
+  background-attachment: fixed;
+}

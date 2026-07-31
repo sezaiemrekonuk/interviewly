@@ -1,9 +1,12 @@
 # Auth — State
 
 Last updated: 2026-07-31
-Last session ended: **A02 done** — Google OAuth (arctic 3.7 PKCE), account linking on strict
-`email_verified === true`, and the two-point admin restriction. AC-4 and AC-5 green, AC-1/2/3
-not regressed; `admin_auth.feature` joined the suite and AC-5 lost its `@wip` tag.
+Last session ended: **A03 blocked** — both auth screens, the shared credentials form, the
+`errors.<CODE>` wiring, the Google button, the `returnPath` guard and the `useRequireAuth`
+hook all landed, and the component ring is green (12 tests, plus 10 more for the helpers).
+The Playwright smoke is written and collects, but cannot run: `docker compose up` produces
+no `api`, no `worker` and no `edge`. Three F03 defects, all reproduced — see
+`## Open blockers`. Nothing in A03's own scope is outstanding.
 
 ## Execution protocol (follow exactly)
 
@@ -20,11 +23,11 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**A03 — Building the frontend login and register forms** is next. It depends only on A02,
-which is now `done`. Check `MODELS.md` for its tier before starting. The backend contract it
-codes against is settled: `POST /auth/register`, `POST /auth/login`, and a plain-navigation
-Google button pointing at `GET /auth/google`. Failure from the Google flow comes back as
-`/sign-in?error=<CODE>` — see A02's `## Notes` → "For A03".
+**A03 is `blocked` on BLOCKER-1 below** — not on anything in this ledger. Its own scope is
+finished and its component-ring verification is green; only the second Verification command
+(the Playwright smoke, which needs a running stack) is outstanding. Once F03's three stack
+defects are fixed, re-run `npx playwright test tests/smoke/auth.spec.ts` and flip A03 to
+`done`. No auth task should be started ahead of it: A04 and A06 both depend on A03.
 
 ## Environment
 
@@ -56,7 +59,37 @@ npm run test:acceptance -- --tags "@AC-4 or @AC-5"             # A02 check
 
 ## Open blockers / decisions for the user
 
-None at ledger-write time.
+**BLOCKER-1 (2026-07-31) — `docker compose up` does not produce a working stack.**
+Blocks: A03's Playwright smoke, and every later browser-facing task. Owner: **Sezai (F03)**.
+
+Three independent defects, each reproduced on a clean `docker compose up -d --build`:
+
+1. **`api` and `worker` images ship no build output.** Neither `backend/tsconfig.json` nor
+   `worker/tsconfig.json` exists, so `npm run -w @interviewly/backend build` fails with
+   `error TS5058: The specified path does not exist: 'tsconfig.json'`. Both Dockerfiles
+   swallow it (`RUN npm run … build || true`) and then `CMD ["node", "backend/dist/index.js"]`
+   dies with `Cannot find module '/app/backend/dist/index.js'`. Root `npm run build` fails
+   for the same reason.
+2. **`edge` never starts.** `web`'s healthcheck runs `curl`, which is not in the image
+   (`"curl": executable file not found in $PATH`), so `web` is permanently unhealthy and
+   `edge` — which waits on `web` *and* `api` — stays in `Created`. Nothing listens on :80.
+3. **Caddy cannot reach the auth routes even once `api` runs.** The Caddyfile has no
+   `/auth/*` handler, and `handle /api/*` preserves the prefix (only `handle_path` strips),
+   while the backend mounts at `/auth` and `/me`. So `/api/auth/login` arrives at the API as
+   `/api/auth/login` → 404, and `/auth/google/callback` — A02's `REDIRECT_URI` — falls
+   through to the catch-all and lands on Next.js instead of the API.
+
+**Which fix for (3):** `handle /api/*` → `handle_path /api/*`, and A02's `REDIRECT_URI`
+becomes `${PUBLIC_ORIGIN}/api/auth/google/callback`. Every ledger already names `/api/*`
+as the browser-facing prefix (F03's task file route table, both REFERENCE files, and F01's
+next-intl matcher, which excludes `/api/*`), and nothing anywhere mounts the backend under
+`/api` — so the strip belongs at the edge and no backend mount path or acceptance-test URL
+has to move. A03 is coded against `/api/*` on that basis; the prefix lives in exactly one
+place, `frontend/src/lib/api.ts` → `API_BASE`.
+
+Note that CI is green on all three: the `build` job's `docker compose build` passes because
+of the `|| true`, and `compose-check` only validates YAML. Neither job ever starts a
+container. Worth a foundations backlog entry on its own.
 
 ## Task ledger (A01–A05)
 
@@ -67,7 +100,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 |----|-------|------|--------|------------|
 | A01 | Creating the backend auth module: register, login, logout, session cookie, and `/me` | | done | F01, F02, F03 |
 | A02 | Adding Google OAuth (arctic PKCE), account linking, and admin password restriction | | done | A01 |
-| A03 | Building the frontend login and register forms | | todo | A02 |
+| A03 | Building the frontend login and register forms | | blocked | A02 |
 | A04 | Building email verification: tokens, the mail job, the gate, and the two screens | | todo | A03 |
 | A05 | Building password reset: enumeration-safe request, session-revoking confirm, two screens | | todo | A04 |
 | A06 | Building the onboarding profile: three cards, CV upload, and first-run routing | | todo | A03 |

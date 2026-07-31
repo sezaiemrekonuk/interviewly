@@ -2,6 +2,22 @@
   "common": {
     "loading": "Loading…"
   },
+  "auth": {
+    "signIn": "Sign in",
+    "signInTitle": "Welcome back",
+    "signInSubtitle": "Sign in to continue practising.",
+    "register": "Create account",
+    "registerTitle": "Create your account",
+    "registerSubtitle": "Practise interviews and get a report on every answer.",
+    "emailLabel": "Email",
+    "passwordLabel": "Password",
+    "googleButton": "Continue with Google",
+    "orDivider": "or",
+    "alreadyHaveAccount": "Already have an account?",
+    "noAccount": "Don't have an account?",
+    "forgotPassword": "Forgot password?",
+    "submitting": "Please wait…"
+  },
   "errors": {
     "PASSWORD_TOO_SHORT": "Password must be at least 10 characters.",
     "EMAIL_TAKEN": "An account with this email already exists.",
