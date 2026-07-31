@@ -35,7 +35,7 @@ Feature: User authentication
     Then the response status is 200
     And the current user email is "login@example.com"
 
-  @auth @backend @AC-5 @wip
+  @auth @backend @AC-5
   Scenario: Google links password accounts only with verified email
     Given a password account exists for "link@example.com"
     When Google sign-in completes for "link@example.com" with email_verified false

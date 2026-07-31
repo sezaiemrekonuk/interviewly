@@ -202,3 +202,41 @@ defensively in the prompt builder (`PROFILE_DOB_STRIPPED`). The screen says so n
 the private storage class with a 5-minute signed URL. `onboarding_profile.feature`'s
 snapshot-immutability scenario spans two ledgers and is the one place A06 and interview-core must
 agree.
+
+---
+
+## ADR-A08 — 2026-07-31 — Google identity resolves from `google_sub` first, and the test seam is the real code path
+
+**Context:** A02 had to turn K8/K8.5 into code. The task file's sketch resolved the Google
+identity by email alone, and Cucumber cannot follow a redirect to `accounts.google.com`.
+
+**Decision (resolution order):** `findUnique({ google_sub })` first, then
+`findUnique({ email_lower })`. The admin check runs on whichever row matched, before anything
+else. An already-linked row short-circuits; only an unlinked row faces the strict
+`email_verified === true` gate.
+
+**Why:** email-first would send a Google-only account through the verification gate on *every*
+sign-in and lock it out if Google ever omitted the claim. Sub-first weakens nothing — a row can
+only acquire a `google_sub` by passing the strict gate once, and Google subs are stable and
+unique per account.
+
+**Decision (`email_verified` stays `unknown`):** the Zod userinfo schema types it `z.unknown()`
+and the only test on it is `=== true`. No boolean coercion anywhere in the path.
+
+**Why:** coercion is what the K8.5 trap is about. `Boolean("false")` is `true`. Keeping the raw
+value means a truthy string, a `1`, or an absent claim all read as unverified by construction
+rather than by a rule someone has to remember.
+
+**Decision (test seam):** `POST /test/auth/simulate-google-callback`, mounted only when
+`config.NODE_ENV === 'test'`, calling the same exported `resolveGoogleIdentity` and
+`issueSessionForUser` the real callback calls. `mountTestSeam()` throws at mount time
+elsewhere, so a misconfigured deploy dies at startup instead of serving an auth bypass.
+
+**Why not mock Google in the test:** a mock would prove the mock. The seam skips exactly two
+things — the browser redirect and the token exchange — and nothing about the rules, so a bug in
+the linking or admin logic fails the acceptance suite.
+
+**Consequences:** `issueSessionForUser` is now the only place a `sessions` row is created;
+`register.ts` and `login.ts` were refactored onto it, which is what makes the second K8 check
+unbypassable. `OAUTH_STATE_MISMATCH` answers 400 JSON on the callback URL while the admin and
+link refusals redirect to `/sign-in?error=<CODE>`, so A03 handles two shapes, not one.

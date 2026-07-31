@@ -61,8 +61,8 @@ fields exist so first-run routing is one server answer (K8.7).
 | `POST /auth/register` | — | 201, cookie set, `{ user }` | `PASSWORD_TOO_SHORT`, `EMAIL_TAKEN`, `VALIDATION_ERROR`, `RATE_LIMITED` |
 | `POST /auth/login` | — | 200, cookie set, `{ user }` | `INVALID_CREDENTIALS`, `VALIDATION_ERROR`, `RATE_LIMITED` |
 | `POST /auth/logout` | `requireAuth` | 204, cookie cleared | `UNAUTHENTICATED` |
-| `GET /auth/google` | — | 302 → Google OAuth | — |
-| `GET /auth/google/callback` | — | 302 → app (session set) | `ADMIN_MUST_USE_PASSWORD`, `ACCOUNT_LINK_REQUIRES_PASSWORD`, `OAUTH_STATE_MISMATCH` |
+| `GET /auth/google` | — | 302 → Google OAuth | `NOT_READY` (no client credentials configured) |
+| `GET /auth/google/callback` | — | 302 → `/dashboard` (session set) | `OAUTH_STATE_MISMATCH` (400 JSON); `ADMIN_MUST_USE_PASSWORD` / `ACCOUNT_LINK_REQUIRES_PASSWORD` as `302 → /sign-in?error=<CODE>` |
 | `GET /me` | `requireAuth` | 200, `{ user }` | `UNAUTHENTICATED` |
 | `POST /auth/verify-email/request` (A04) | `requireAuth` | 202, `{ cooldownSeconds }` | `EMAIL_RESEND_COOLDOWN`, `RATE_LIMITED`, `UNAUTHENTICATED` |
 | `POST /auth/verify-email/confirm` (A04) | — | 200, `{ user }` | `EMAIL_TOKEN_INVALID`, `EMAIL_TOKEN_EXPIRED`, `VALIDATION_ERROR` |
@@ -89,7 +89,7 @@ All paths are relative to repo root. They will exist once the named task lands.
 | `backend/src/lib/db.ts` | F02 | Prisma singleton, `userInterviews()`, `activeInterview()` |
 | `backend/src/lib/logger.ts` | F03 | Pino factory: `logger.<level>({obj}, "EVENT_NAME")` |
 | `backend/src/lib/env.ts` | F03 | Zod env config; `config` export has typed env vars |
-| `backend/src/lib/session.ts` | A01 | `generateToken()`, `issueCookie(res, token)`, `revokeCookie(res)` |
+| `backend/src/lib/session.ts` | A01, A02 | `generateToken()`, `issueCookie(res, token)`, `revokeCookie(res)`, `issueSessionForUser(user, res, source)` — the only place a `sessions` row is created, and the second K8 admin check |
 | `backend/src/app.ts` | A01 | Express app, global middleware, router mounts |
 | `backend/src/index.ts` | A01 | `app.listen(config.PORT)` entry point |
 | `backend/modules/auth/router.ts` | A01 | Mounts register, login, logout, me; extended by A02 for google routes |
@@ -99,7 +99,8 @@ All paths are relative to repo root. They will exist once the named task lands.
 | `backend/modules/auth/login.ts` | A01 | `POST /auth/login` handler |
 | `backend/modules/auth/logout.ts` | A01 | `POST /auth/logout` handler |
 | `backend/modules/auth/me.ts` | A01 | `GET /me` handler |
-| `backend/modules/auth/google.ts` | A02 | `GET /auth/google` + callback; `arctic` PKCE flow |
+| `backend/modules/auth/google.ts` | A02 | `GET /auth/google` + callback; `arctic` PKCE flow. `resolveGoogleIdentity()` is the shared trust boundary (admin check, link rule, create) |
+| `backend/modules/auth/test-seam.ts` | A02 | `POST /test/auth/simulate-google-callback`, mounted **only** under `NODE_ENV=test`; `mountTestSeam()` throws at startup anywhere else |
 | `frontend/app/(auth)/sign-in/page.tsx` | A03 | Login form + Google button + forgot-password link |
 | `frontend/app/(auth)/register/page.tsx` | A03 | Register form + Google button |
 | `frontend/app/(auth)/layout.tsx` | A03 | Unauthenticated shell (no nav), gradient ground |
@@ -168,7 +169,9 @@ If a new code is needed, add it to the registry file as part of the task steps.
 **Log shape**: `logger.info({ userId, traceId }, "AUTH_LOGIN_OK")` — structured object
 first, event name second. No display strings. Auth events to emit: `AUTH_REGISTERED`,
 `AUTH_LOGIN_OK`, `AUTH_LOGIN_FAILED`, `AUTH_GOOGLE_LINKED`, `AUTH_ADMIN_GOOGLE_BLOCKED`,
-`AUTH_LOGOUT`. Never log `password_hash`, tokens, or `google_sub`.
+`AUTH_LOGOUT`. A02 added `AUTH_GOOGLE_STARTED`, `AUTH_GOOGLE_EXCHANGE_FAILED` and the boot
+warning `AUTH_GOOGLE_NOT_CONFIGURED`. Never log `password_hash`, tokens, `google_sub`, the
+OAuth authorization code, the PKCE verifier, or the token-endpoint response.
 
 **Validation**: Zod at every trust boundary (`POST /auth/register` body, `/auth/login`
 body, Google callback `?code&state` query params). Return `VALIDATION_ERROR` (422) for

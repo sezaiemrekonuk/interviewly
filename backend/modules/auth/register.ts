@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { ApiError } from '../../src/lib/api-error';
 import { prisma } from '../../src/lib/db';
 import { logger } from '../../src/lib/logger';
-import { generateToken, issueCookie, sessionExpiry } from '../../src/lib/session';
+import { issueSessionForUser } from '../../src/lib/session';
 
 import { publicUser } from './user-view';
 
@@ -25,11 +25,7 @@ export const register: RequestHandler = async (req, res) => {
       if ((err as { code?: string } | null)?.code === 'P2002') throw new ApiError('EMAIL_TAKEN');
       throw err;
     });
-  const token = generateToken();
-  await prisma.session.create({
-    data: { id: token, user_id: user.id, expires_at: sessionExpiry() },
-  });
-  issueCookie(res, token);
+  await issueSessionForUser(user, res, 'password');
 
   logger.info({ userId: user.id, traceId: req.traceId }, 'AUTH_REGISTERED');
   res.status(201).json({ user: publicUser(user) });

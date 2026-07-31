@@ -1,9 +1,9 @@
 # Auth — State
 
-Last updated: 2026-07-30
-Last session ended: **A01 done** — backend auth module (register/login/logout/`/me`, session
-cookie, `requireAuth`, rate limits) green on AC-1/2/3; first ATDD harness + CI acceptance
-services wired.
+Last updated: 2026-07-31
+Last session ended: **A02 done** — Google OAuth (arctic 3.7 PKCE), account linking on strict
+`email_verified === true`, and the two-point admin restriction. AC-4 and AC-5 green, AC-1/2/3
+not regressed; `admin_auth.feature` joined the suite and AC-5 lost its `@wip` tag.
 
 ## Execution protocol (follow exactly)
 
@@ -20,11 +20,11 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**A02 — Adding Google OAuth (arctic PKCE), account linking, and admin password restriction**
-is next. It depends only on A01, which is now `done`. A02 is opus-tier (`MODELS.md`). Extend
-`modules/auth/router.ts` at the marked comment; reuse the exported `redis` client and the
-`src/lib/session.ts` helpers; implement AC-4/AC-5 and remove the `@wip` tag from the AC-5
-scenario in `.agents/features/auth.feature`.
+**A03 — Building the frontend login and register forms** is next. It depends only on A02,
+which is now `done`. Check `MODELS.md` for its tier before starting. The backend contract it
+codes against is settled: `POST /auth/register`, `POST /auth/login`, and a plain-navigation
+Google button pointing at `GET /auth/google`. Failure from the Google flow comes back as
+`/sign-in?error=<CODE>` — see A02's `## Notes` → "For A03".
 
 ## Environment
 
@@ -66,7 +66,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | ID | Title | Repo | Status | Depends on |
 |----|-------|------|--------|------------|
 | A01 | Creating the backend auth module: register, login, logout, session cookie, and `/me` | | done | F01, F02, F03 |
-| A02 | Adding Google OAuth (arctic PKCE), account linking, and admin password restriction | | todo | A01 |
+| A02 | Adding Google OAuth (arctic PKCE), account linking, and admin password restriction | | done | A01 |
 | A03 | Building the frontend login and register forms | | todo | A02 |
 | A04 | Building email verification: tokens, the mail job, the gate, and the two screens | | todo | A03 |
 | A05 | Building password reset: enumeration-safe request, session-revoking confirm, two screens | | todo | A04 |
@@ -107,3 +107,10 @@ because Redis (rate-limit counters) is not wired.
 - **Locale-switcher form element in auth screens** — `frontend` ledger owns the switcher
   component; A03 hard-codes the default locale display. Promote when the switcher is
   specced.
+- **Lazy the shared Redis client so auth can have vitest unit tests** — `rate-limit.ts`
+  constructs `new Redis(...)` at module load with `maxRetriesPerRequest: null`, so importing
+  anything in `modules/auth/` from a unit test opens a connection that retries forever. The
+  `unit` CI job has no Redis service, so the test would hang rather than fail. Until this is
+  a lazy getter, auth cannot drop `--passWithNoTests` from `backend` → `test:unit`, and the
+  `unit` job stays the false green that foundations' backlog tracks. Trigger: the first auth
+  task that needs a unit test, or foundations fixing the false green.

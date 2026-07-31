@@ -1,5 +1,5 @@
 # A02 — Adding Google OAuth (arctic PKCE), account linking, and admin password restriction
-REPO: (this repo) · Depends: A01 · Status: todo
+REPO: (this repo) · Depends: A01 · Status: done
 Read first: STATE.md, REFERENCE.md, then this.
 **Model: claude-opus-4.8** — OAuth trust boundary (PKCE state validation, `email_verified` link rule, admin restriction) — a subtle bug here creates an account-takeover vector or silently hands an admin session to a Google-only flow.
 
@@ -72,19 +72,19 @@ embedded, per K8). The frontend Google button wiring is A03.
   `prisma.user.update` (to set `google_sub`).
 
 ## Steps
-- [ ] **1. Install `arctic`**
+- [x] **1. Install `arctic`**
   ```bash
   cd backend && npm install arctic
   ```
 
-- [ ] **2. Confirm A01 artefacts exist**
+- [x] **2. Confirm A01 artefacts exist**
   - `backend/modules/auth/router.ts` exports a Router with the comment marking where to
     add Google routes.
   - `backend/src/lib/session.ts` exports `generateToken`, `issueCookie`, `revokeCookie`.
   - `backend/modules/auth/rate-limit.ts` exports a Redis client.
   If any is missing, set this task to `blocked` and stop.
 
-- [ ] **3. Extend `backend/src/lib/session.ts` with `issueSessionForUser`**
+- [x] **3. Extend `backend/src/lib/session.ts` with `issueSessionForUser`**
   ```ts
   export async function issueSessionForUser(
     user: User,
@@ -105,7 +105,7 @@ embedded, per K8). The frontend Google button wiring is A03.
   instead of the inline session creation. This centralises the admin check at the issuance
   point (the second K8 check location).
 
-- [ ] **4. Create `backend/modules/auth/google.ts`**
+- [x] **4. Create `backend/modules/auth/google.ts`**
 
   **`startGoogle` handler:**
   1. Instantiate `arctic.Google(config.GOOGLE_CLIENT_ID, config.GOOGLE_CLIENT_SECRET, redirectUri)`.
@@ -152,19 +152,19 @@ embedded, per K8). The frontend Google button wiring is A03.
   `?error=` and display the corresponding `errors.<CODE>` message. This is A03's job;
   A02 only sets the redirect URL.
 
-- [ ] **5. Mount Google routes in `backend/modules/auth/router.ts`**
+- [x] **5. Mount Google routes in `backend/modules/auth/router.ts`**
   ```ts
   import { startGoogle, googleCallback } from './google';
   router.get('/google', startGoogle);
   router.get('/google/callback', googleCallback);
   ```
 
-- [ ] **6. Ensure env keys are present**
+- [x] **6. Ensure env keys are present**
   - If `config.GOOGLE_CLIENT_ID` and `config.GOOGLE_CLIENT_SECRET` are not in F03's
     `env.ts` Zod schema, add them as `z.string().optional()` (optional so
     `AI_ENABLED=false`-style dev runs without Google credentials still boot).
 
-- [ ] **7. Tests — Cucumber step definitions for AC-4 and AC-5**
+- [x] **7. Tests — Cucumber step definitions for AC-4 and AC-5**
   The Cucumber scenarios use `When Google sign-in completes for "<email>" with
   email_verified <bool>`. This step must bypass the real Google OAuth redirect and directly
   exercise the linking/restriction logic. Implement it by having the test world call an
@@ -178,9 +178,9 @@ embedded, per K8). The frontend Google button wiring is A03.
   `if (config.NODE_ENV !== 'test') throw new Error('test route in production')` at mount
   time, not just at call time — so a misconfigured deploy fails loudly at startup.
 
-- [ ] **8. Run Verification command and confirm AC-4 and AC-5 green.**
+- [x] **8. Run Verification command and confirm AC-4 and AC-5 green.**
 
-- [ ] **9. Re-run AC-1/2/3 to confirm A01 is not regressed by the `issueSessionForUser` refactor.**
+- [x] **9. Re-run AC-1/2/3 to confirm A01 is not regressed by the `issueSessionForUser` refactor.**
   ```bash
   npm run test:acceptance -- --tags "@AC-1 or @AC-2 or @AC-3"
   ```
@@ -215,9 +215,113 @@ Both commands must exit 0.
 
 ## Notes
 
-(Empty until the task is done. Fill with: what actually happened, whether the test seam
-was needed and how it was implemented, the exact arctic API used (it may differ between
-versions — record the version pinned), whether `email_verified` arrived as a boolean or
-string from the mock and how it was normalised, the Cucumber output verbatim, what was
-deliberately NOT done, and a "For A03" hand-off noting the `?error=<CODE>` query param
-convention for the frontend forms.)
+Done 2026-07-31. `2 scenarios (2 passed) / 17 steps (17 passed)` for AC-4+AC-5;
+`3 scenarios (3 passed) / 26 steps (26 passed)` for the AC-1/2/3 regression;
+`5 scenarios (5 passed) / 43 steps (43 passed)` for the whole default suite.
+
+**What exists now**
+- `backend/src/lib/session.ts` — added `issueSessionForUser(user, res, source)` and the
+  `SessionSource = 'password' | 'google'` type. It is now the **only** place a `sessions`
+  row is created; `register.ts` and `login.ts` call it with `'password'` and no longer
+  build the row inline. This is K8's second admin check.
+- `backend/modules/auth/google.ts` — `startGoogle`, `googleCallback`, and the exported
+  `resolveGoogleIdentity(identity, traceId)` which holds the whole trust boundary.
+  Resolution order: `findUnique({ google_sub })` → else `findUnique({ email_lower })` →
+  admin check on whichever matched → already-linked short-circuit → strict
+  `email_verified === true` gate → link or create.
+- `backend/modules/auth/test-seam.ts` — `POST /test/auth/simulate-google-callback`,
+  mounted from `app.ts` only when `config.NODE_ENV === 'test'`.
+- `backend/modules/auth/router.ts` — `GET /google`, `GET /google/callback` under `/auth`.
+- `backend/cucumber.js` — `admin_auth.feature` added to `paths`; AC-5 lost its `@wip` tag
+  in `.agents/features/auth.feature`.
+- `arctic@3.7.0` added to `backend` dependencies.
+
+**arctic 3.7.0 API (differs from the task file's sketch)**
+- `new Google(clientId, clientSecret, redirectURI)` — as written.
+- `createAuthorizationURL(state, codeVerifier, scopes: string[])` is **synchronous** and
+  takes a bare `string[]`, not `{ scopes }`. The task file's `await …, { scopes: [...] }`
+  does not compile against v3.
+- `generateState()` / `generateCodeVerifier()` are top-level exports of `arctic`.
+- `validateAuthorizationCode(code, verifier)` returns an `OAuth2Tokens` whose access token
+  is read via the method `tokens.accessToken()`, not a property.
+- arctic 3.x is ESM-only (`"type": "module"`). It imports fine from the CJS-transpiled
+  acceptance run because `tsx/cjs` on Node 20.20 supports `require(esm)`. Worth knowing if
+  the runtime ever moves below Node 20.19.
+
+**Deviations from the plan (all deliberate)**
+- **PKCE storage.** Redis holds only the verifier (`oauth:verifier:<state>`, 600 s TTL) and
+  the `oauth_state` cookie holds the state, as the task's step 4 describes. Consumption is
+  a single `GETDEL`, so a replayed callback finds nothing — a `GET` + later `DEL` would
+  leave a window.
+- **`OAUTH_STATE_MISMATCH` is a 400 JSON body, not a redirect.** The Definition of Done
+  says "returned", and step 1–3 of the callback say `return 400`; only the admin and
+  link-refusal paths redirect to `/sign-in?error=<CODE>`. The task file's step 8/9 prose
+  and its DoD disagree on nothing else.
+- **Missing Google credentials → `NOT_READY` (503).** The task file did not specify a code
+  and no new registry entry was needed; `NOT_READY` already exists and is honest ("the
+  provider isn't configured"). No new error code was added to F01's registry.
+- **Resolution starts from `google_sub`, not from the email.** The task file looks up by
+  email only, which would send an already-linked Google-only account through the
+  `email_verified` gate on every subsequent sign-in and 403 it if Google ever omitted the
+  claim. Looking up by `sub` first makes re-sign-in idempotent without weakening anything:
+  a row only *gets* a `google_sub` by passing the strict gate once.
+- **`email_verified` is typed `unknown` end to end.** The Zod userinfo schema uses
+  `z.unknown()` and `resolveGoogleIdentity` does `=== true`, so a truthy `"true"` string,
+  a `1`, or an absent claim all read as unverified. Normalising to a boolean anywhere
+  earlier would have destroyed exactly the distinction the rule needs. The Cucumber step
+  sends a real JSON boolean.
+
+**Test seam**
+Needed — a Cucumber scenario cannot survive a redirect to `accounts.google.com`. The seam
+calls the same `resolveGoogleIdentity` + `issueSessionForUser` the real callback calls;
+only the redirect and the token exchange are skipped, so a bug in the rules fails the
+suite. `mountTestSeam()` throws `test route in production` at **mount** time, verified:
+under `NODE_ENV=production` the call throws and `POST /test/auth/simulate-google-callback`
+is a 404 on the real app.
+
+**Verification not covered by the feature files** (no scenario exists for it; run against a
+booted app on an ephemeral port, script kept out of the repo):
+```
+start status      : 302
+start host        : accounts.google.com
+redirect_uri      : https://interviewly.example/auth/google/callback
+code_challenge_m  : S256
+scope             : openid email profile
+oauth_state cookie: matches state; Max-Age=600; Path=/; HttpOnly; SameSite=Lax
+no cookie          : 400 {"error":{"code":"OAUTH_STATE_MISMATCH"}}
+cookie mismatch    : 400 {"error":{"code":"OAUTH_STATE_MISMATCH"}}
+missing code       : 400 {"error":{"code":"OAUTH_STATE_MISMATCH"}}
+bad code (exchange): 400 {"error":{"code":"OAUTH_STATE_MISMATCH"}}
+replayed           : 400 {"error":{"code":"OAUTH_STATE_MISMATCH"}}
+```
+
+**Deliberately NOT done**
+- No vitest unit test, so `--passWithNoTests` stays in `backend/package.json` → `test:unit`
+  and the `unit` CI job is still a false green. It is not a free change: `google.ts`
+  transitively imports `rate-limit.ts`, which opens an `ioredis` client at module load with
+  `maxRetriesPerRequest: null`, and the `unit` CI job has no Redis service — the test would
+  hang. Recorded in this ledger's Backlog as a lazy-client change.
+- No frontend work: the Google button, the `?error=<CODE>` rendering and the `/dashboard`
+  landing are A03's.
+- `publicUser` was left as `{ id, email, role, locale }` — still no `google_sub`, by design.
+
+**Env**
+`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` were already `z.string().optional()` in F03's
+`env.ts` and already present (blank) in `.env.example`. Nothing to add. A boot with neither
+set logs `AUTH_GOOGLE_NOT_CONFIGURED` once, unless `NODE_ENV=test`.
+
+**Local infra gotcha (unchanged from A01)**: a Homebrew Postgres owns `127.0.0.1:5432`, and
+`5433` is taken by another Docker project on this machine. Ran db/cache on host `5434/6380`
+via an uncommitted override file, with `DATABASE_URL=…@localhost:5434` and
+`REDIS_URL=redis://localhost:6380`. CI is unaffected.
+
+**For A03**
+- The Google button is a plain link to `GET /auth/google` — no `fetch`, it must be a real
+  navigation so the 302 chain and the `oauth_state` cookie work.
+- Success lands on `${PUBLIC_ORIGIN}/dashboard`. That route does not exist yet; A03 (or A06
+  first-run routing) has to provide it or the happy path dead-ends.
+- Failure lands on `${PUBLIC_ORIGIN}/sign-in?error=<CODE>` where `<CODE>` is
+  `ADMIN_MUST_USE_PASSWORD` or `ACCOUNT_LINK_REQUIRES_PASSWORD`. Read the query param and
+  render `errors.<CODE>`; never render the raw code.
+- `OAUTH_STATE_MISMATCH` never reaches `/sign-in` — it is a 400 JSON body on the callback
+  URL itself, which only happens on a tampered or stale callback.
