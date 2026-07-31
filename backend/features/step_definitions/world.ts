@@ -3,10 +3,21 @@ import { join } from 'node:path';
 import { setWorldConstructor, World } from '@cucumber/cucumber';
 import { parse } from 'yaml';
 import {
+  ModelPrices,
+  ProviderCallError,
   PromptBuilder,
   StubAiClient,
   createPromptBuilder,
+  loadModelPrices,
+  resolveAiClient,
+  type AiClient,
   type BuiltPrompt,
+  type ChainDeps,
+  type KeyValidation,
+  type LlmCallRecord,
+  type ProviderKeys,
+  type ProviderResponse,
+  type ProviderTransport,
   type Question,
 } from '@interviewly/ai';
 
@@ -19,18 +30,39 @@ export interface CapturedEvent {
   fields: Record<string, unknown>;
 }
 
+/** What the fake tier-1 provider does on its next call — the `ai_provider.feature` axis. */
+export type Tier1Outcome =
+  | 'succeed'
+  | 'return an HTTP error'
+  | 'time out'
+  | 'be rate limited'
+  | 'return invalid schema';
+
+const HR_COUNT = 3;
+
 /**
- * The §5.5 seam under test is `PromptBuilder` itself — no fake in front of it. A stub in
- * this position would return valid questions whatever the listing said and would prove
- * nothing about neutralisation (ai spec, Testing note §7.1).
+ * One World, because cucumber has one world constructor for the whole run.
+ *
+ * It carries two seams, at two different depths (§5.5):
+ *
+ *  - `security.feature` asserts against `PromptBuilder` DIRECTLY, with no fake in front of
+ *    it. A stub in that position returns valid questions whatever the listing said and
+ *    proves nothing about neutralisation (ai spec, Testing note §7.1).
+ *  - `ai_provider.feature` fakes only the network — `ProviderTransport` — so the chain, the
+ *    per-attempt `llm_calls` row and the cost computation under test are the real ones.
+ *    Faking `AiClient` there would test the fake.
+ *
+ * `llm_calls` rows are collected in memory rather than written to Postgres: this ledger's
+ * assertions are about which rows the chain produces, and the F02 insert that stores them is
+ * one `writeLlmCall` mapping away in `backend/modules/ai`.
  */
-export class SecurityWorld extends World {
+export class AiWorld extends World {
   events: CapturedEvent[] = [];
 
   /** Variables handed to the builder. Steps overwrite individual entries. */
   vars: Record<string, unknown> = {
     roundType: 'hr',
-    count: 3,
+    count: HR_COUNT,
     language: 'en',
     jobListing: 'We are hiring a backend engineer with Postgres experience.',
     candidateProfile: null,
@@ -44,6 +76,17 @@ export class SecurityWorld extends World {
 
   built?: BuiltPrompt;
   batch?: Question[];
+
+  // -------------------------------------------------------------- ai_provider fixtures
+
+  aiEnabled = true;
+  tier1Outcome: Tier1Outcome = 'succeed';
+  keys: ProviderKeys = { openai: 'test-openai-key', google: 'test-google-key' };
+  prices: ModelPrices = loadModelPrices();
+  llmCalls: LlmCallRecord[] = [];
+  boot?: KeyValidation;
+  bootError?: unknown;
+  generateError?: unknown;
 
   readonly logger = {
     info: (fields: Record<string, unknown>, event: string) =>
@@ -71,6 +114,90 @@ export class SecurityWorld extends World {
   eventsNamed(name: string): CapturedEvent[] {
     return this.events.filter((e) => e.event === name);
   }
+
+  // -------------------------------------------------------------- the provider seam
+
+  /**
+   * Tier-1 is `openai` because the prompt file says so (K9); tier-2 is `google` because the
+   * chain says so (B6). Tier-2 always succeeds — the scenarios are about what tier-1 does.
+   */
+  transports(): Record<string, ProviderTransport> {
+    return {
+      openai: async () => {
+        switch (this.tier1Outcome) {
+          case 'return an HTTP error':
+            throw new ProviderCallError('http', 'openai responded 500');
+          case 'time out':
+            throw new ProviderCallError('timeout', 'openai did not answer in time');
+          case 'be rate limited':
+            throw new ProviderCallError('rate_limit', 'openai rate limited the request');
+          case 'return invalid schema':
+            // Tokens on purpose: a schema-invalid answer still costs money, and the point of
+            // the per-attempt row is that this cost is not swallowed by the retry.
+            return { text: '{"questions":[{"nope":true}]}', inputTokens: 900, outputTokens: 120 };
+          default:
+            return questionBatchBody();
+        }
+      },
+      google: async () => questionBatchBody(),
+    };
+  }
+
+  chainDeps(): ChainDeps {
+    return {
+      recordLlmCall: async (record) => {
+        this.llmCalls.push(record);
+      },
+      keys: this.keys,
+      logger: this.logger,
+      transports: this.transports(),
+      prices: this.prices,
+      // The backoff is asserted nowhere and costs half a second per rate-limit scenario.
+      sleep: async () => undefined,
+    };
+  }
+
+  client(): AiClient {
+    return resolveAiClient({ AI_ENABLED: this.aiEnabled }, this.chainDeps(), {
+      builder: this.builder(),
+    });
+  }
+
+  /**
+   * The one generation action both feature files drive. `security.feature` cares that it
+   * crosses the trust boundary; `ai_provider.feature` cares what the chain recorded.
+   */
+  async generateHrRound(): Promise<void> {
+    // Compiled separately so the security assertions can read the exact same prompt the call
+    // compiled internally, without bolting a test-only accessor onto AiClient.
+    this.built = this.builder().build({
+      promptName: 'interview.question.generate',
+      vars: this.vars,
+      ctx: this.ctx,
+    });
+
+    this.resetEvents();
+    this.llmCalls = [];
+    this.generateError = undefined;
+
+    try {
+      const batch = await this.client().generateRoundQuestions({
+        roundType: 'hr',
+        count: HR_COUNT,
+        jobListing: this.vars.jobListing as string,
+        candidateProfile: null,
+        candidateCv: null,
+        language: 'en',
+        ctx: this.ctx,
+      });
+      this.batch = batch.questions;
+    } catch (err) {
+      this.generateError = err;
+      this.batch = undefined;
+    }
+  }
+
+  // -------------------------------------------------------------- helpers
 
   /** The system message exactly as it sits on disk — the byte-identity reference. */
   templateSystemMessage(promptName: string): string {
@@ -103,9 +230,31 @@ export class SecurityWorld extends World {
   }
 
   requireBatch(): Question[] {
-    if (!this.batch) throw new Error('no question batch has been generated in this scenario');
+    if (!this.batch) {
+      throw new Error(
+        this.generateError
+          ? `generation failed: ${String(this.generateError)}`
+          : 'no question batch has been generated in this scenario',
+      );
+    }
     return this.batch;
   }
 }
 
-setWorldConstructor(SecurityWorld);
+function questionBatchBody(): ProviderResponse {
+  return {
+    text: JSON.stringify({
+      questions: Array.from({ length: HR_COUNT }, (_, i) => ({
+        text: `Fake HR question ${i + 1}?`,
+        kind: 'behavioral',
+        difficulty: 'medium',
+        topic: `topic-${i + 1}`,
+        orderIndex: i + 1,
+      })),
+    }),
+    inputTokens: 1200,
+    outputTokens: 300,
+  };
+}
+
+setWorldConstructor(AiWorld);

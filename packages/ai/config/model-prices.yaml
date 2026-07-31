@@ -7,19 +7,24 @@
 #
 # Rates as published 2026-07-29. ai spec Q4 flags a pre-demo re-check; a stale row
 # mis-states cost and nothing else.
+#
+# `unit_kind` values are the db `UnitKind` enum verbatim (`token | second | character`, F02
+# schema.prisma) — this value is copied straight onto `llm_calls.unit_kind`, so a friendlier
+# spelling here would need a mapping table that can only ever drift out of date.
 models:
   openai/gpt-4.1-mini:
-    unit_kind: tokens
+    unit_kind: token
     input_per_1m_usd: 0.40
     output_per_1m_usd: 1.60
   google/gemini-2.5-flash:
-    unit_kind: tokens
+    unit_kind: token
     input_per_1m_usd: 0.30
     output_per_1m_usd: 2.50
-  # Voice is metered in minutes, not tokens. The `voice`/`worker` ledgers reconcile the
-  # real usage against this row (§3.5); it is listed here because §9.2 is repo-wide.
+  # Voice is metered per minute but recorded in seconds — `per_minute_usd / 60` is the
+  # per-unit rate. The `voice`/`worker` ledgers reconcile real usage against this row
+  # (§3.5); it is listed here because §9.2 is repo-wide.
   elevenlabs/conversational:
-    unit_kind: minutes
+    unit_kind: second
     input_per_1m_usd: 0
     output_per_1m_usd: 0
     per_minute_usd: 0.10

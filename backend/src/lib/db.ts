@@ -45,13 +45,18 @@ export async function activeInterview(id: string) {
  * Returns the committed post-charge totals. `exhausted` means the next call must not
  * happen — the caller surfaces `BUDGET_EXCEEDED` and moves the interview to
  * `evaluating` with `ended_reason = budget_exhausted` (§7.3).
+ *
+ * Pass `tx` to join a transaction the caller already opened. I08 reads `spent_usd` inside
+ * the same transaction that writes this row; opening a second one there would put the read
+ * and the write back on opposite sides of a commit, which is exactly the race above.
  */
 export async function recordLlmCall(
-  data: Omit<Prisma.LlmCallUncheckedCreateInput, 'id' | 'created_at'>
+  data: Omit<Prisma.LlmCallUncheckedCreateInput, 'id' | 'created_at'>,
+  tx?: Prisma.TransactionClient
 ) {
-  return prisma.$transaction(async (tx) => {
-    const call = await tx.llmCall.create({ data });
-    const interview = await tx.interview.update({
+  const charge = async (client: Prisma.TransactionClient) => {
+    const call = await client.llmCall.create({ data });
+    const interview = await client.interview.update({
       where: { id: data.interview_id },
       data: { spent_usd: { increment: data.cost_usd } },
       select: { spent_usd: true, budget_usd: true },
@@ -62,7 +67,9 @@ export async function recordLlmCall(
       budget_usd: interview.budget_usd,
       exhausted: interview.spent_usd.gte(interview.budget_usd),
     };
-  });
+  };
+
+  return tx ? charge(tx) : prisma.$transaction(charge);
 }
 
 // ---------------------------------------------------------------------------

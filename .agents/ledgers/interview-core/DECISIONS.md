@@ -418,3 +418,101 @@ lineage sharing it is the entire point of the identifier.
 has unit coverage but no production exercise yet — noted in STATE.md Backlog. A prompt
 revision is a new file with the same `uuid` and `name` and an incremented `version`; the old
 file is never edited (I01 §Non-negotiables, EXECUTE.md § 8).
+
+---
+
+## ADR-I18 — 2026-07-31 — Both providers are called with `fetch`, not with their SDKs
+
+**Context:** The I02 task file says "the openai + gemini clients (SDKs kept internal to this
+file)". The non-negotiable it is protecting is "no provider SDK is imported outside
+`packages/ai/`" — a boundary rule, not a dependency requirement.
+
+**Decision:** `providers.ts` calls both providers with the platform `fetch`. No provider SDK
+is added to `package.json`.
+
+**Why:** each provider is one JSON POST and one response shape. Two SDKs would add two
+dependency trees to a repo whose `audit` job already carries an unfixable high advisory, and
+they would buy nothing this file does not do in twenty lines — the timeout is ours (a race,
+not the SDK's), the retry is the chain (ADR-I04), and the cost is computed from our own
+price file. The boundary rule is satisfied more strongly by importing no SDK at all.
+
+**Consequences:** provider response shapes are typed by hand (`OpenAiBody`, `GeminiBody`) and
+read defensively; a breaking provider API change surfaces as a schema failure, which is
+already a fallback trigger. Structured output is requested with `response_format:
+json_object` / `responseMimeType: application/json` rather than a Zod-to-JSON-Schema
+conversion — the Zod schema still gates the response, so a non-conforming body falls through
+the chain exactly as an HTTP error does.
+
+---
+
+## ADR-I19 — 2026-07-31 — A missing tier-2 key degrades the chain; it does not fail the boot
+
+**Context:** B7 says every provider *named by a loaded prompt file* must have a key at
+startup. Tier-2 (`google/gemini-2.5-flash`) is named by the **chain** (B6), not by any prompt
+file. I01's hand-off suggested validating the chain's providers too, but
+`ai_provider.feature` @AC-10 boots successfully with only the openai key set.
+
+**Decision:** `validateProviderKeys` throws `PROVIDER_KEY_MISSING` for prompt-declared
+providers only. A missing tier-2 key logs `PROVIDER_KEY_MISSING` with `fatal: false` at boot,
+and `buildChain` drops the step so it is never attempted.
+
+**Why:** the feature file is the acceptance contract and it is unambiguous. Beyond that, the
+two are genuinely different failures: no tier-1 key means no interview can ever run, while no
+tier-2 key means the retry is gone — a degraded service, not a dead one. Refusing to boot
+over a degraded retry path takes the whole API down to protect a fallback.
+
+**Consequences:** with only tier-1 configured, a tier-1 failure surfaces immediately as
+`AI_PROVIDER_UNAVAILABLE` (or `AI_OUTPUT_INVALID`) with one `llm_calls` row instead of two.
+The boot warning is the only notice, so it must not be filtered out of the log pipeline.
+
+---
+
+## ADR-I20 — 2026-07-31 — `cost_usd = null` is the package contract; the F02 column is not nullable yet
+
+**Context:** ai spec §9.2 and AC-8 require a call whose model has no price row to record
+`cost_usd = null` and log `PRICE_MISSING` — null meaning "price unknown", distinct from 0
+meaning "free". F02's `schema.prisma` declares `llm_calls.cost_usd Decimal @db.Decimal(12,6)`,
+NOT NULL. Widening it is a structural change, which is F02's scope (migration protocol), not
+this ledger's.
+
+**Decision:** the package's `LlmCallRecord.costUsd` is `number | null` and the acceptance
+suite asserts that contract. `backend/modules/ai`'s `writeLlmCall` stores `costUsd ?? 0` until
+F02 widens the column, and the mismatch is filed as an open blocker.
+
+**Why:** the invariant worth protecting is that the *chain* never invents a price, and that is
+what is now tested. Storing 0 for an unknown price is a real loss of fidelity, but it is
+bounded — `PRICE_MISSING` is logged at the same moment with the provider, model and prompt
+version, so no unpriced call is silent. Blocking all of I02 on a one-column widening owned by
+another person was the worse trade.
+
+**Consequences:** until the column is widened, the admin cost dashboard cannot distinguish a
+free call from an unpriced one from the table alone; it must read the `PRICE_MISSING` log.
+Every model the repo ships today has a price row, so the path is currently unreachable in
+practice. Superseded the moment F02 lands `cost_usd Decimal?`.
+
+---
+
+## ADR-I21 — 2026-07-31 — The stub's audit row is written by `resolveAiClient`, and cucumber keeps one World
+
+**Context:** I01 left the `cost_usd = 0` stub row to "I02's `backend/modules/ai/index.ts`",
+because `StubAiClient` cannot reach Prisma. Separately, `ai_provider.feature` and
+`security.feature` both use the step `the HR round is generated`, and cucumber has a single
+global step registry and a single world constructor.
+
+**Decision:** the stub row is written by a `StubRecordingClient` wrapper inside
+`resolve-client.ts`, using the same injected `recordLlmCall` the live client uses.
+`backend/modules/ai/index.ts` stays a thin binding of Prisma + env + logger. On the test side
+there is one World (`AiWorld`) and one definition of `the HR round is generated`, which
+delegates to `world.generateHrRound()`.
+
+**Why:** the writer is already injected, so the wrapper is db-agnostic and the switch stays a
+single function — putting it in `backend` would mean `worker` re-implementing stub-mode
+auditing to get the same rows. For the World: a second `setWorldConstructor` silently replaces
+the first and a second definition of a shared step makes *both* feature files ambiguous, so
+"one World per feature file" is not available whatever its merits.
+
+**Consequences:** `AiWorld` carries two seams at two depths — `PromptBuilder` directly for
+`security.feature`, `ProviderTransport` for `ai_provider.feature` — and the shared generation
+step now runs through `resolveAiClient` rather than `StubAiClient`. `security.feature` is
+unaffected because generation still compiles through the real builder either way, which is
+exactly what ADR-I16 requires.

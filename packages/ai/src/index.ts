@@ -46,6 +46,39 @@ export type { InjectionPattern, ModelPrice } from './config';
 
 export { StubAiClient } from './stub';
 
+export { PROMPT_NAMES } from './prompt-vars';
+export type { AiMethod } from './prompt-vars';
+
+export { costFor, DEFAULT_UNIT_KIND } from './cost';
+export type { CallCost, TokenUsage } from './cost';
+
+export {
+  BACKOFF_BASE_MS,
+  DEFAULT_TRANSPORTS,
+  FALLBACK_STEP,
+  ProviderCallError,
+  buildChain,
+  geminiTransport,
+  openaiTransport,
+  runChain,
+} from './providers';
+export type {
+  ChainDeps,
+  ChainStep,
+  FailureKind,
+  LlmCallRecord,
+  ProviderKeys,
+  ProviderRequest,
+  ProviderResponse,
+  ProviderTransport,
+  RecordLlmCall,
+} from './providers';
+
+export { LiveAiClient, parseOutput } from './live-client';
+
+export { resolveAiClient, validateProviderKeys } from './resolve-client';
+export type { AiRuntimeConfig, KeyValidation, ResolveOpts } from './resolve-client';
+
 export { detectLanguage, SCRIPT_MARGIN, STOPWORD_MARGIN } from './detect-language';
 export type { LanguageDetection } from './detect-language';
 

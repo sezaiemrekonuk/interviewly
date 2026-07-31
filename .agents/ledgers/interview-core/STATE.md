@@ -1,13 +1,13 @@
 # Interview-core — State
 
 Last updated: 2026-07-31
-Last session ended: **I01 done.** `@interviewly/ai` shipped: `AiClient` seam, the five Zod
-schemas, four versioned prompt files, the prompt registry, both config loaders,
-`PromptBuilder` (the §7.1 trust boundary), `detectLanguage` and `StubAiClient`. The Cucumber
-acceptance runner is wired for the first time — root `cucumber.js`, an allow-list over
-`.agents/features/`, step defs in `backend/features/step_definitions/` — and
-`security.feature` runs 9 green scenarios. Both CI false greens (`unit`, `acceptance`) are
-closed. Not committed; the working tree is the hand-off.
+Last session ended: **I02 done.** Real provider execution behind the `AiClient` seam: the
+openai→gemini chain (both called with plain `fetch`, no SDK added), one `llm_calls` row per
+attempt including failed ones, cost frozen at return time from `model-prices.yaml`, the
+`AI_ENABLED` kill switch resolving to an audited `StubAiClient`, and the boot-time
+provider-key check wired into `backend/src/index.ts`. `ai_provider.feature` runs 11 green
+scenarios (20 across the suite). One blocker handed to F02: `llm_calls.cost_usd` is NOT NULL
+but AC-8 needs null — see Open blockers. Not committed; the working tree is the hand-off.
 
 ## Execution protocol (follow exactly)
 
@@ -24,14 +24,13 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**I02 — Provider execution** is the next `todo` task on the critical path; its only
-dependency, I01, is `done`. **I03** is also eligible and independent of the spine — it needs
-`A01` (auth), which is Ahmet's and still `todo`, so I02 is the one that can actually start.
+**I03 — Interview setup, room-state read, ownership resolver, CSRF middleware** is the next
+eligible task: `A01` is now `done`, so its whole `Depends on` (F01, F02, F03, A01) is green.
+I04 is the one after it and needs both I02 (done) and I03.
 
-Before starting I02, read I01's `## Notes`: the `AiClient` interface, the
-`PromptBuilder.build()` return shape and the "`StubAiClient` writes no `llm_calls` row"
-hand-off are all there, and so is the allow-list rule for adding a feature file to
-`cucumber.js`.
+Before starting I03, read I02's `## Notes` for the `aiClient()` singleton and the three
+`AiError` codes to map, and I01's for the `cucumber.js` allow-list rule — I03/I04 add
+`question_generation.feature` and `profiling.feature` to it.
 
 ## Spec revision of 2026-07-30 — what changed for this ledger
 
@@ -78,7 +77,25 @@ Verification command.
 
 ## Open blockers / decisions for the user
 
-None at ledger-write time.
+**`llm_calls.cost_usd` must become nullable — F02 scope, owner Fatih.** ai spec §9.2 and
+`ai_provider.feature` @AC-8 require a call whose model is absent from `model-prices.yaml` to
+record `cost_usd = null` (price unknown), which is a different fact from `0` (free). F02's
+`schema.prisma` declares `cost_usd Decimal @db.Decimal(12,6)`, NOT NULL. Widening it to
+`Decimal?` is a column-type change, which the migration protocol puts in F02's scope, not a
+feature ledger's.
+
+- **Needed:** `cost_usd Decimal? @db.Decimal(12,6)` plus its migration, and
+  `recordLlmCall`'s `spent_usd: { increment: … }` guarded against null.
+- **Interim (shipped in I02, ADR-I20):** the package contract is `number | null` and the
+  acceptance suite asserts it; `backend/modules/ai/index.ts` → `writeLlmCall` stores
+  `costUsd ?? 0`. `PRICE_MISSING` is logged at the same moment, so no unpriced call is
+  silent, and every model the repo ships today has a price row — the path is currently
+  unreachable in practice.
+- **Unblocks:** nothing today. It is a fidelity fix for the admin cost dashboard (N01/N02)
+  and the report cost lines, not a gate on any interview-core task.
+
+I02 is `done` on this basis rather than `blocked`: none of its five deliverables depend on
+the widening, and the chain is verified to never invent a price.
 
 ## Task ledger (I01–I15)
 
@@ -88,7 +105,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | ID | Title | Repo | Status | Depends on |
 |----|-------|------|--------|------------|
 | I01 | `@interviewly/ai` scaffold: `AiClient` seam, schemas, prompt registry, `PromptBuilder`, `StubAiClient` | | done | F01, F02, F03 |
-| I02 | Provider execution: fallback chain, per-attempt `llm_calls`, cost, stub mode, key validation | | todo | I01 |
+| I02 | Provider execution: fallback chain, per-attempt `llm_calls`, cost, stub mode, key validation | | done | I01 |
 | I03 | Interview setup, room-state read, ownership resolver, CSRF middleware | | todo | F01, F02, F03, A01 |
 | I04 | Profiling + round question generation (HR batch, tech batch during HR) | | todo | I02, I03 |
 | I05 | CSRF/origin enforcement on state-changing routes | | todo | I04 |
@@ -166,3 +183,14 @@ entry not wired — means I01 has nowhere to publish the `@interviewly/ai` packa
 - **Same-tier retry before fall-through** — the MVP treats the two-tier chain as the whole
   retry (ADR-I04). Promote a same-tier retry only if provider flakiness data shows tier-2
   fall-through is over-triggering.
+
+- **`elevenlabs/conversational` is priced per minute but its `unit_kind` is `second`** —
+  I02 aligned `model-prices.yaml`'s `unit_kind` values with the db `UnitKind` enum
+  (`token | second | character`), and the enum has no minute. The row keeps `per_minute_usd`;
+  whoever meters voice divides by 60 when it records `units` in seconds. **Voice ledger**,
+  flag to Fatih — no LLM path reads that row today.
+
+- **No provider response shape is verified against a live API.** Both transports are
+  hand-typed (ADR-I18) and every test fakes at `ProviderTransport`. A real one-off call
+  against each provider before the demo would catch a field rename that the acceptance suite
+  structurally cannot. Promote when a real `OPENAI_API_KEY` is in the team `.env`.
