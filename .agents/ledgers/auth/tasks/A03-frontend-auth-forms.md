@@ -78,30 +78,30 @@ the running app.
   in the `test.beforeAll` fixture.
 
 ## Steps
-- [ ] **1. Confirm A01 and A02 artefacts exist**
+- [x] **1. Confirm A01 and A02 artefacts exist**
   - `POST /auth/register`, `POST /auth/login` return the expected shapes.
   - `GET /auth/google` redirects (302).
   If any endpoint is missing (A01/A02 not done), set this task to `blocked` and stop.
 
-- [ ] **2. Install frontend dependencies (if not already present from F01)**
+- [x] **2. Install frontend dependencies (if not already present from F01)**
   ```bash
   cd frontend && npm install react-hook-form @hookform/resolvers zod
   ```
   (next-intl was installed by F01.)
 
-- [ ] **3. Add `auth` namespace keys to locale files**
+- [x] **3. Add `auth` namespace keys to locale files**
   - Add the `auth` namespace object to `frontend/messages/en.json` (keys listed in
     Context).
   - Add Turkish translations to `frontend/messages/tr.json`.
   Do not remove or rename any existing key — F01 seeded the `errors` namespace and it
   must stay intact.
 
-- [ ] **4. Create `frontend/app/(auth)/layout.tsx`**
+- [x] **4. Create `frontend/app/(auth)/layout.tsx`**
   - Minimal shell: renders `{children}` inside a centred card using design tokens.
   - No nav, no locale switcher, no dark-mode toggle.
   - Import `../styles/tokens.css` if not already globally imported in the root layout.
 
-- [ ] **5. Create `frontend/app/(auth)/register/page.tsx`**
+- [x] **5. Create `frontend/app/(auth)/register/page.tsx`**
   - Form fields: `email` (type=email), `password` (type=password).
   - Client-side Zod schema: `{ email: z.string().email(), password: z.string().min(10) }`.
     Show inline field error for `password < 10` before submission (UX only — the API also
@@ -117,7 +117,7 @@ the running app.
   - Link to `/sign-in` for existing accounts.
   - Loading state: disable submit button while the fetch is in flight.
 
-- [ ] **6. Create `frontend/app/(auth)/sign-in/page.tsx`**
+- [x] **6. Create `frontend/app/(auth)/sign-in/page.tsx`**
   - Same structure as register but: `POST /auth/login`, success → `router.push(returnPath ?? '/dashboard')`.
   - Read `returnPath` from `?returnPath=` query param (set by the UNAUTHENTICATED redirect
     middleware). Validate it is a relative path (starts with `/`) before using; default
@@ -128,14 +128,14 @@ the running app.
   - Google button links to `/auth/google`.
   - Link to `/register` for new accounts.
 
-- [ ] **7. Add UNAUTHENTICATED redirect to Next.js middleware (or a route guard hook)**
+- [x] **7. Add UNAUTHENTICATED redirect to Next.js middleware (or a route guard hook)**
   - When any page protected by auth receives `401 UNAUTHENTICATED` (e.g. from a server
     component prefetch or a client query), redirect to `/sign-in?returnPath=<currentPath>`.
   - Implement as a Next.js middleware matcher or a shared `useRequireAuth` hook that calls
     `router.push('/sign-in?returnPath=' + encodeURIComponent(pathname))` on `UNAUTHENTICATED`.
     The frontend spec (error-code table) mandates this behaviour.
 
-- [ ] **8. Write component tests (React Testing Library)**
+- [x] **8. Write component tests (React Testing Library)**
   Create `frontend/src/app/(auth)/register/page.test.tsx` and `sign-in/page.test.tsx`:
   - Mock `fetch` (or use `msw` if already set up by foundations).
   - Test: submitting short password shows inline `PASSWORD_TOO_SHORT` message without a
@@ -146,7 +146,7 @@ the running app.
   These tests are the component-ring verification for a task that has no acceptance-ring
   Cucumber scenarios.
 
-- [ ] **9. Create `tests/smoke/auth.spec.ts`**
+- [x] **9. Create `tests/smoke/auth.spec.ts`**
   - `test.beforeAll`: create a known user via `request.post('/auth/register')` for the
     login smoke.
   - Smoke 1 (register): visit `/register`, fill fields (unique email, 10-char password),
@@ -192,9 +192,104 @@ round-trip is wired, not that the business rules are correct (those are AC-1 thr
 
 ## Notes
 
-(Empty until the task is done. Fill with: what actually happened, whether `react-hook-form`
-was used or native form handling, the `returnPath` sanitisation approach, whether
-`playwright.config.ts` was extended or created from scratch, the component test mock
-strategy (msw or manual fetch mock), the Playwright smoke output verbatim, what was
-deliberately NOT done, and a "For frontend ledger" hand-off noting what remains: locale
-switcher, full nav shell, dashboard screen.)
+**Status 2026-07-31: `blocked`, not `done`.** The component ring is complete and green;
+the Playwright smoke cannot run *from `docker compose up`* because that stack does not
+come up. Three F03 defects, all reproduced — see STATE.md → `## Open blockers`.
+
+**Session 2 ran the smoke green against a hand-assembled runtime** (host API + `next dev` +
+a Caddy container carrying the committed Caddyfile with the one proposed `handle_path`
+change). `2 passed`. That is evidence A03's code is correct and that the proposed fix for
+BLOCKER-1 (3) is the right one — it is *not* the Definition of done, which requires the
+smoke to pass against `docker compose up`. The row stays `blocked` until F03 lands.
+
+Three defects were found by actually running it, and fixed here:
+- **`playwright.config.ts` was self-429ing.** Workers are separate processes and each ran
+  the file's `beforeAll`, so two workers spent two of the three hourly registrations on the
+  fixture alone. Now `workers: 1`, `fullyParallel: false`, and the fixture's assertion says
+  what a 429 means so it does not read as a regression.
+- **F01: every route was a 404** — `src/middleware.ts` redirected `/sign-in` → `/en/sign-in`
+  and the app has no `[locale]` segment. Removed; see STATE.md defect 4.
+- **F01: body copy rendered in fallback serif** — `--font-body` was defined but never
+  applied. See STATE.md defect 5.
+
+```
+npm run -w frontend test -- --testPathPattern="(sign-in|register)"
+  Test Files  2 passed (2)
+       Tests  12 passed (12)
+
+npx playwright test tests/smoke/auth.spec.ts --list
+  [chromium] › auth.spec.ts:34:7 › auth smoke › register lands on the dashboard
+  [chromium] › auth.spec.ts:44:7 › auth smoke › sign-in lands on the dashboard
+  Total: 2 tests in 1 file
+
+curl --max-time 5 http://localhost/sign-in   →  000, curl exit 7 (connection refused)
+docker compose ps -a
+  api    exited   Exited (1)      Cannot find module '/app/backend/dist/index.js'
+  worker exited   Exited (1)      (same)
+  edge   created  Created         never starts: depends on web+api healthy
+  web    running  Up (unhealthy)  healthcheck runs `curl`, absent from the image
+```
+
+**Paths differ from this file's Context block.** The frontend is a `src/`-dir Next app, so
+everything landed under `frontend/src/app/(auth)/…`, not `frontend/app/(auth)/…`. Same for
+the middleware: it is `frontend/src/middleware.ts`, and it needed no change — `next build`
+lists the routes as `/sign-in` and `/register` with no locale prefix, so the route map holds.
+
+**What exists now**
+- `frontend/src/app/(auth)/layout.tsx` + `layout.module.css` — `--gradient-entry` ground,
+  centred card, no nav/toggle/switcher.
+- `frontend/src/app/(auth)/{sign-in,register}/page.tsx` — thin page shells; both delegate to
+  `components/auth/credentials-form.tsx`.
+- `frontend/src/components/auth/` — `credentials-form.tsx` (the shared form),
+  `google-button.tsx`, `auth.module.css` (tokens only, no literal hex/radius/duration).
+- `frontend/src/lib/api.ts` — `apiGet`/`apiPost`, `API_BASE = '/api'`, `{ error: { code } }`
+  extraction. **The only place the edge prefix is written down.**
+- `frontend/src/lib/auth-redirect.ts` — `safeReturnPath`, `signInPathFor`,
+  `DEFAULT_LANDING_PATH`.
+- `frontend/src/lib/use-error-message.ts` — code → `t('errors.<CODE>')`, `UNKNOWN` fallback.
+- `frontend/src/lib/use-require-auth.ts` — the `UNAUTHENTICATED` guard.
+- `frontend/messages/{en,tr}.json` — `auth` namespace added; `errors` untouched.
+- `vitest.config.mts` (root, two projects) + `frontend/vitest.config.mts` + `src/test/`.
+- `playwright.config.ts` — **created**, no skeleton existed. `tests/smoke/auth.spec.ts`.
+
+**Decisions worth knowing**
+- **`react-hook-form` + `zodResolver`**, as the task specified. Zod messages are error
+  *codes* (`'PASSWORD_TOO_SHORT'`), not sentences, so a locally-caught failure renders
+  through the same `errors.<CODE>` lookup the server's version of it would.
+- **Login does not repeat `min(10)`.** Register enforces it client-side; sign-in only
+  requires non-empty. An account whose password predates the rule must still be able to
+  sign in, and a client-side length check there would lock it out of its own form.
+- **`returnPath` sanitisation**: reject anything not starting with `/`, then reject `//`
+  and `/\` as well. `startsWith('/')` alone is not a defence — the browser reads
+  `//evil.example/x` as protocol-relative. Six hostile forms are covered in
+  `auth-redirect.test.ts`.
+- **Mock strategy: manual `fetch` stub** via `vi.stubGlobal`, not msw — foundations never
+  set msw up, and one stubbed global is less machinery than a request-interception layer
+  for four status codes.
+- **Tests never spell out English copy.** They import `messages/en.json` and assert on
+  `messages.errors.EMAIL_TAKEN`, so the key is verified without the wording being frozen.
+  Each also asserts the raw code is absent from the DOM.
+- **`--testPathPattern` is Jest dialect**; this repo runs Vitest, which rejects it
+  (`CACError: Unknown option --testPathPattern`). EXECUTE.md § 6.5 fixes the command, so
+  `frontend/scripts/vitest-cli.mjs` translates the flag into Vitest file filters.
+- **Landing is `/dashboard` unconditionally**, per this file's Steps and Definition of done.
+  The Goal prose asks for the K8.7 first-run rule, but `publicUser` still returns
+  `{ id, email, role, locale }` — no `onboardingCompletedAt`, no `interviewCount` — and
+  neither `/onboarding/*` nor `/interviews/new` exists. `DEFAULT_LANDING_PATH` is the single
+  call site A06 replaces with `lib/first-run.ts`.
+
+**Deliberately NOT done**
+- No `/dashboard` page. A02's note flagged the dead-end; it is the frontend ledger's shell,
+  not an auth screen. The smoke asserts on URL, which is satisfied either way.
+- No locale switcher (frontend ledger owns the component; this ledger's Backlog tracks it).
+- No Caddyfile, Dockerfile, healthcheck or `tsconfig.json` edits — all F03, another seat.
+- `npx playwright install chromium` was not run; the smoke was validated with `--list`.
+
+**For A04 / A06**
+- Add screens under `frontend/src/app/(auth)/…`; the layout and `auth.module.css` are shared.
+- Widen `publicUser` and swap `DEFAULT_LANDING_PATH` for the K8.7 rule in one place.
+- `useRequireAuth` is the guard for every protected page; it returns `{ user, loading }`.
+
+**For the frontend ledger**
+Still missing: `/dashboard`, the global nav shell, the dark-mode toggle, the locale
+switcher, and the `wave` mascot asset (the layout has the gradient ground, no mascot).

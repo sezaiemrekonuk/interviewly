@@ -19,8 +19,9 @@
   "devDependencies": {
     "@commitlint/cli": "^19",
     "@commitlint/config-conventional": "^19",
-    "@typescript-eslint/eslint-plugin": "^8",
     "@cucumber/cucumber": "^12.9.0",
+    "@playwright/test": "^1.62.1",
+    "@typescript-eslint/eslint-plugin": "^8",
     "eslint": "^9",
     "husky": "^9.1.7",
     "lint-staged": "^17.2.0",

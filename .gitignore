@@ -6,3 +6,8 @@ compose.override.yaml
 node_modules/
 .next/
 dist/
+# Playwright (A03 browser smoke)
+test-results/
+playwright-report/
+blob-report/
+.playwright/
