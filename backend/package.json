@@ -9,9 +9,7 @@
     "dev": "tsx watch src/index.ts",
     "lint": "cd .. && eslint --config eslint.config.js backend/src",
     "seed": "tsx prisma/seed.ts",
-    "db:check": "tsx src/lib/db.ts",
-    "test:unit": "vitest run --passWithNoTests",
-    "test:acceptance": "cucumber-js"
+    "db:check": "tsx src/lib/db.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

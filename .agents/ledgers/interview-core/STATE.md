@@ -1,7 +1,13 @@
 # Interview-core — State
 
-Last updated: 2026-07-30
-Last session ended: **—** Ledger written; no task has started yet.
+Last updated: 2026-07-31
+Last session ended: **I01 done.** `@interviewly/ai` shipped: `AiClient` seam, the five Zod
+schemas, four versioned prompt files, the prompt registry, both config loaders,
+`PromptBuilder` (the §7.1 trust boundary), `detectLanguage` and `StubAiClient`. The Cucumber
+acceptance runner is wired for the first time — root `cucumber.js`, an allow-list over
+`.agents/features/`, step defs in `backend/features/step_definitions/` — and
+`security.feature` runs 9 green scenarios. Both CI false greens (`unit`, `acceptance`) are
+closed. Not committed; the working tree is the hand-off.
 
 ## Execution protocol (follow exactly)
 
@@ -18,10 +24,14 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**I01 — `@interviewly/ai` scaffold** is the first `todo` task. It depends on foundations
-F01, F02, F03 being `done` (see Cross-ledger section). Do not start I01 until all three
-foundations tasks are green. Once they are, read I01's file, confirm the `packages/ai/`
-entry F03 wired is empty (no prior partial work), and begin.
+**I02 — Provider execution** is the next `todo` task on the critical path; its only
+dependency, I01, is `done`. **I03** is also eligible and independent of the spine — it needs
+`A01` (auth), which is Ahmet's and still `todo`, so I02 is the one that can actually start.
+
+Before starting I02, read I01's `## Notes`: the `AiClient` interface, the
+`PromptBuilder.build()` return shape and the "`StubAiClient` writes no `llm_calls` row"
+hand-off are all there, and so is the allow-list rule for adding a feature file to
+`cucumber.js`.
 
 ## Spec revision of 2026-07-30 — what changed for this ledger
 
@@ -77,7 +87,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 
 | ID | Title | Repo | Status | Depends on |
 |----|-------|------|--------|------------|
-| I01 | `@interviewly/ai` scaffold: `AiClient` seam, schemas, prompt registry, `PromptBuilder`, `StubAiClient` | | todo | F01, F02, F03 |
+| I01 | `@interviewly/ai` scaffold: `AiClient` seam, schemas, prompt registry, `PromptBuilder`, `StubAiClient` | | done | F01, F02, F03 |
 | I02 | Provider execution: fallback chain, per-attempt `llm_calls`, cost, stub mode, key validation | | todo | I01 |
 | I03 | Interview setup, room-state read, ownership resolver, CSRF middleware | | todo | F01, F02, F03, A01 |
 | I04 | Profiling + round question generation (HR batch, tech batch during HR) | | todo | I02, I03 |
@@ -126,6 +136,20 @@ entry not wired — means I01 has nowhere to publish the `@interviewly/ai` packa
 | I12 | `storage.ts` signed-URL wrapper | report (signs the rendered PDF key), infra (configures the real bucket) |
 
 ## Backlog (deferred, unnumbered — promote to a task when its trigger fires)
+
+- **`backend/tsconfig.json` does not exist** — `backend/package.json` has
+  `"build": "tsc -p tsconfig.json"` and there is no such file, so `npm run -w backend build`
+  fails and root `npm run build` fails with it. Nothing in CI runs either today (`build` is
+  `docker compose build`), which is why it has stayed hidden. Found during I01, out of I01's
+  scope; it belongs to whichever task first needs a compiled backend. **Foundations, not
+  interview-core** — flag it to Ahmet/Fatih rather than fixing it in a feature PR.
+- **Entity-split on truncation** — `PromptBuilder` cuts at exactly 12 000 characters after
+  neutralisation, which can leave a trailing `&lt;` chopped to `&l`. No bracket is
+  reconstructed and no security property is lost, so this is cosmetic; marked with a
+  `ponytail:` comment in `prompt-builder.ts`. Promote only if a model visibly trips on it.
+- **Same-uuid prompt versions are untested against a real second version** — the registry
+  rule (one uuid, one lineage; latest version wins) has unit coverage but every shipped
+  prompt is `version: 1`. First real prompt revision should confirm the resolve path.
 
 - **K4 adaptive selection (B5 difficulty/topic table)** — I01 exposes
   `AiClient.scoreAnswer`/`generateCandidates` + I09-style scoring hook; the selection logic

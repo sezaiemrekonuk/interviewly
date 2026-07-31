@@ -39,7 +39,16 @@ cd backend && npx prisma migrate deploy && npm run seed
 npm run -w @interviewly/ai build
 npm run -w @interviewly/ai test
 
-# The Cucumber acceptance runner runs from the repo root (wired by F03/CI).
+# The Cucumber acceptance runner runs from the repo root (wired by I01, not F03).
+#
+# Layout (ADR-I15): root `cucumber.js` is the config. Its `paths` is an explicit ALLOW-LIST
+# over `.agents/features/` — the feature files are read where Stage 2 authored them, with no
+# second copy under backend/. Step definitions live in `backend/features/step_definitions/`
+# and load through `tsx/cjs`. `strict: true`, so an undefined or ambiguous step fails.
+#
+# >>> Your task MUST append its feature file to `cucumber.js` `paths` when it wires the
+# >>> steps. Forget, and your scenarios silently do not run.
+#
 # Verification commands in this ledger use area tags; scope compound files with `and`.
 npm run test:acceptance -- --tags "@security"
 npm run test:acceptance -- --tags "@ai-provider"
@@ -100,10 +109,22 @@ Zod-validated value:
 | `generateCandidates({ slot, ctx })` | `Candidate[]` | `interview.question.candidates` | 15 s | interface I01; adaptive ledger |
 | `detectLanguage(text, current)` | `{ language, ambiguous }` (**no** LLM, no `llm_calls`) | — | — | I10 |
 
-`StubAiClient` (I01) returns canned schema-valid content for every method, records a
-`cost_usd = 0` `llm_calls` row, and is the §5.5 fake for every scenario not asserting the
-provider chain. `PromptBuilder` (I01) is the prompt-injection boundary asserted **directly**
-by `security.feature` (a stub would mask listing content).
+`StubAiClient` (I01) returns canned schema-valid content for every method and is the §5.5
+fake for every scenario not asserting the provider chain. It compiles its prompts through the
+real `PromptBuilder` — `security.feature` @AC-5 only passes because generation crosses the
+trust boundary, so a stub-mode shortcut past the builder would break it. It **does not** write
+the `cost_usd = 0` `llm_calls` row: that needs Prisma, and `@interviewly/ai` is shared by
+`api` and `worker` and depends on neither, so the row and the `AI_DISABLED_STUB_MODE` log
+belong to **I02**'s `backend/modules/ai/index.ts`.
+
+`PromptBuilder` (I01) is the prompt-injection boundary asserted **directly** by
+`security.feature` (a stub would mask listing content).
+
+Argument shapes follow the ai spec, not the older per-task sketches:
+`generateRoundQuestions({ roundType, count, jobListing, candidateProfile, candidateCv,
+language, priorTopics?, ctx })`. Payload schemas (`ReportPayload`, `Scores`) are **snake_case**
+— they are stored verbatim in `reports.payload`/`answers.scores` and asserted key-by-key by
+`schema_validation.feature`.
 
 ## Key code anchors
 

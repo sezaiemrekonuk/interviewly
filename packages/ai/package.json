@@ -3,7 +3,18 @@
   "version": "0.0.1",
   "private": true,
   "main": "src/index.ts",
+  "types": "src/index.ts",
   "scripts": {
-    "lint": "cd ../.. && eslint --config eslint.config.js packages/ai/src"
+    "build": "tsc -p tsconfig.json",
+    "lint": "cd ../.. && eslint --config eslint.config.js packages/ai/src",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "yaml": "^2.9.0",
+    "zod": "^3"
+  },
+  "devDependencies": {
+    "typescript": "^5",
+    "vitest": "^4.1.10"
   }
 }
