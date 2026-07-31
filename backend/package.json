@@ -19,6 +19,7 @@
     "@node-rs/argon2": "^2.0.2",
     "@prisma/client": "^6.19.3",
     "arctic": "^3.7.0",
+    "bullmq": "^6.0.2",
     "cookie-parser": "^1.4.7",
     "express": "^5.2.1",
     "ioredis": "^5.11.1",

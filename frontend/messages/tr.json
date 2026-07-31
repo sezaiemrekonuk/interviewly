@@ -16,7 +16,20 @@
     "alreadyHaveAccount": "Zaten hesabınız var mı?",
     "noAccount": "Hesabınız yok mu?",
     "forgotPassword": "Şifrenizi mi unuttunuz?",
-    "submitting": "Lütfen bekleyin…"
+    "submitting": "Lütfen bekleyin…",
+    "verifyPendingTitle": "E-postanızı doğrulayın",
+    "verifyPendingSubtitle": "Gelen kutunuza bir bağlantı gönderdik.",
+    "verifyPendingWhatNext": "Bu adresi doğrulamak için bağlantıyı açın. Bağlantı tek kullanımlıktır ve süresi dolar.",
+    "resend": "Bağlantıyı yeniden gönder",
+    "resendIn": "{seconds} sn sonra yeniden gönder",
+    "resendSent": "Gönderildi. Gelen kutunuzu kontrol edin.",
+    "continueWithoutVerifying": "Doğrulamadan devam et",
+    "verifyConfirming": "E-postanız doğrulanıyor…",
+    "verifyConfirmedTitle": "E-posta doğrulandı",
+    "verifyConfirmedBody": "Adresiniz doğrulandı. İstediğiniz zaman mülakata başlayabilirsiniz.",
+    "verifyFailedTitle": "Bu bağlantı çalışmadı",
+    "goToDashboard": "Panelinize gidin",
+    "backToSignIn": "Girişe dönün"
   },
   "errors": {
     "PASSWORD_TOO_SHORT": "Şifre en az 10 karakter olmalıdır.",

@@ -16,7 +16,20 @@
     "alreadyHaveAccount": "Already have an account?",
     "noAccount": "Don't have an account?",
     "forgotPassword": "Forgot password?",
-    "submitting": "Please wait…"
+    "submitting": "Please wait…",
+    "verifyPendingTitle": "Confirm your email",
+    "verifyPendingSubtitle": "We sent a link to your inbox.",
+    "verifyPendingWhatNext": "Open it to confirm this address. The link works once and expires.",
+    "resend": "Resend the link",
+    "resendIn": "Resend in {seconds}s",
+    "resendSent": "Sent. Check your inbox.",
+    "continueWithoutVerifying": "Continue without verifying",
+    "verifyConfirming": "Confirming your email…",
+    "verifyConfirmedTitle": "Email confirmed",
+    "verifyConfirmedBody": "Your address is verified. You can start an interview whenever you like.",
+    "verifyFailedTitle": "That link did not work",
+    "goToDashboard": "Go to your dashboard",
+    "backToSignIn": "Back to sign in"
   },
   "errors": {
     "PASSWORD_TOO_SHORT": "Password must be at least 10 characters.",

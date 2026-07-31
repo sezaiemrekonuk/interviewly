@@ -240,3 +240,58 @@ the linking or admin logic fails the acceptance suite.
 `register.ts` and `login.ts` were refactored onto it, which is what makes the second K8 check
 unbypassable. `OAUTH_STATE_MISMATCH` answers 400 JSON on the callback URL while the admin and
 link refusals redirect to `/sign-in?error=<CODE>`, so A03 handles two shapes, not one.
+
+---
+
+## ADR-A09 — 2026-07-31 — Two cucumber profiles, because two rings cannot share one World
+
+**Context:** A01 built the auth acceptance ring on `backend/cucumber.js` with an `AuthWorld`
+that boots Express on an ephemeral port and talks to Postgres and Redis. I01 (`1097dc8`) then
+introduced a *root* `cucumber.js` for the interview-core rings, whose `AiWorld` is purely
+in-memory, and removed backend's `test:acceptance` script. Nothing carried the auth wiring
+across, so `auth.feature` and `admin_auth.feature` had not run on master since that commit and
+`backend/tests/` was orphaned. A04 needed the ring back before it could add to it.
+
+**Decision:** One root `cucumber.js` with two profiles — `default` (interview-core) and `auth`.
+Each names its own `paths` and its own `require` tree. `backend/cucumber.js` was deleted.
+
+**Why not one merged profile:** cucumber allows exactly one `setWorldConstructor` per process,
+and both rings define `the response status is {int}` — over different worlds, meaning different
+things (interview-core's asserts "generation did not throw"; auth's asserts an HTTP status).
+Loading both trees is an ambiguous-step failure before any assertion runs. Merging the worlds
+instead would put an HTTP server and a database connection behind every prompt-builder scenario.
+
+**Why not leave the auth ring in `backend/`:** two config files is how it broke the first time.
+The next ledger to add a ring appends a profile to one file and cannot silently orphan another.
+
+**Consequences:** `npm run test:acceptance` still runs the `default` profile. The auth ring is
+`npx cucumber-js -p auth`, and REFERENCE.md's command list says so. Ordering inside the `auth`
+profile matters and is commented at the line: `tests/support/**` must load before
+`tests/step-definitions/**`, because `support/setup.ts` fills the env defaults that `env.ts`
+validates at import time — with the reverse order `NODE_ENV` defaults to `development` and the
+acceptance-only Google seam silently does not mount.
+
+---
+
+## ADR-A10 — 2026-07-31 — The mail queue is injected, not branched on `NODE_ENV`
+
+**Context:** `email_verification.feature` @AC-21 asserts that registration enqueues *exactly one*
+`email.send` job. The producer is BullMQ over Redis; the assertion needs to see what was
+enqueued.
+
+**Decision:** `modules/auth/mail-queue.ts` exposes an `EmailQueue` interface with a lazily
+constructed BullMQ implementation and a `setEmailQueue()` seam. The acceptance harness installs
+a recorder in `BeforeAll`; production never calls the setter and gets BullMQ on first use.
+
+**Why not a `NODE_ENV === 'test'` branch:** the environment decides configuration, never
+behaviour (§11.3), and a branch would mean the path the scenarios exercise is not the path that
+runs in production. The seam keeps one code path and swaps only what it writes to.
+
+**Why not drain a real queue in the scenarios:** it would assert on BullMQ rather than on this
+ledger's producer, and add a Redis round-trip to every registration scenario. The consumer side
+is covered where it belongs — the booted-stack half of A04's Verification, where a real mail
+lands in Mailpit.
+
+**Consequences:** `enqueueEmail` swallows and logs a queue outage (`EMAIL_ENQUEUE_FAILED`), which
+is what makes "registration never blocks on the mail" true rather than aspirational. A05 reuses
+both the seam and the job.
