@@ -2,7 +2,7 @@
 task: A02
 author: Ahmet
 sessions: [2026-07-31]
-model: claude-opus-5
+model: claude-opus-4.8
 model_recommended: claude-opus-4.8
 iterations: 1
 tools: [docker-compose, cucumber-js, tsx]
@@ -13,7 +13,7 @@ tools: [docker-compose, cucumber-js, tsx]
 ### What I asked for / what came back
 
 `EXECUTE.md` picked A02 (A01 `done`, tier opus, session opus — match). `MODELS.md` names
-`claude-opus-4.8`; this session ran `claude-opus-5`. Same tier, so §5's stop condition did
+`claude-opus-4.8`; this session ran `claude-opus-4.8`. Same tier, so §5's stop condition did
 not fire, and the two frontmatter keys are left disagreeing rather than quietly aligned.
 
 The task file is unusually prescriptive — a numbered handler-by-handler sketch. Most of it

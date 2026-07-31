@@ -2,7 +2,7 @@
 task: I02
 author: Sezai
 sessions: [2026-07-31]
-model: claude-opus-5
+model: claude-opus-4.8
 model_recommended: claude-opus-4.8
 iterations: 2
 tools: [cucumber-js, vitest, tsc, eslint]

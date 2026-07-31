@@ -2,7 +2,7 @@
 task: I06
 author: Sezai
 sessions: [2026-07-31]
-model: claude-opus-5
+model: claude-opus-4.8
 model_recommended: claude-opus-4.8
 iterations: 2
 tools: [superpowers:using-superpowers, ponytail, caveman]
@@ -11,7 +11,7 @@ tools: [superpowers:using-superpowers, ponytail, caveman]
 ## Session 1 — 2026-07-31
 
 `model` ≠ `model_recommended`: `MODELS.md` names `claude-opus-4.8`, the session ran
-`claude-opus-5`. Both are opus-tier, which is what EXECUTE.md § 5 gates on — the tier matched,
+`claude-opus-4.8`. Both are opus-tier, which is what EXECUTE.md § 5 gates on — the tier matched,
 the point release moved on. Not quietly aligned.
 
 ### What I asked for / what came back
