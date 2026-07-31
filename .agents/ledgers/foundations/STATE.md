@@ -148,12 +148,26 @@ whenever Sezai picks it up, in parallel with F02.
   image optimisation at runtime, and an eslint major is its own task. Promote when `next`
   ships a fixed stable — do the eslint bump and the overrides then, and drop
   `continue-on-error` in the same PR.
-- **Cold `npm ci` costs ~6 min in CI.** Measured 2026-07-30: `npm cache is not found`, 557
-  packages, native builds (`sharp`, `next-swc`, `@node-rs/argon2`, prisma engines,
-  `@aws-sdk/client-s3`). `--prefer-offline --no-audit --fund=false` is now on every job, but
-  the real win is a warm `~/.npm`, and `actions/setup-node`'s cache is only written by a run
-  on the base branch — so it stays cold until a green run lands on `master`. Promote if it is
-  still slow after that: cache `node_modules` by `package-lock.json` hash instead.
+- **Every CI job installed cold, on every PR.** The workflow was `on: [pull_request]` only, so
+  CI had *never once run on `master`* — the three caches that existed were all scoped to
+  `refs/pull/N/merge`, and a cache written on a PR ref is readable only by that same PR. No
+  `refs/heads/master` cache could ever exist, so all 8 jobs paid a full cold install and then
+  raced to save a cache nobody would read (`Failed to save: … another job` in the logs).
+  Fixed 2026-07-30 by adding `push: { branches: [master] }`, whose run seeds the base-branch
+  cache all PRs restore from; `commitlint` is now `if: github.event_name == 'pull_request'`
+  because `base.sha` is empty on a push event. Promote if PRs are still slow once a master
+  run has landed: cache `node_modules` itself keyed on the `package-lock.json` hash, or
+  collapse the five npm jobs into one install job that publishes `node_modules` as an
+  artifact.
+- **One job's `npm ci` stalls for minutes, unexplained.** Twice in a row (runs 30548167039 and
+  30549456567) the `typecheck` job's `npm ci` took 6m / 8m+ while the four sibling jobs ran
+  the identical command on the identical cold cache in 24–28s. In both cases npm printed its
+  normal output up to the `git-raw-commits` deprecation warning (~13s in) and then went
+  silent, i.e. it stalls during reify, after resolution — most likely a lifecycle script
+  fetching a binary (`prisma` engines, `esbuild`, `sharp`). Not diagnosed. `timeout-minutes:
+  15` is now on every job so a stall fails fast instead of burning a runner. Promote if it
+  survives the base-branch cache fix; the next step is `npm ci --foreground-scripts
+  --loglevel=verbose` in that job to name the hanging script.
 - **Prisma Client must be generated explicitly in every CI job that typechecks or imports
   it.** `@prisma/client` hoists to the workspace root, its postinstall finds no
   `./prisma/schema.prisma` there (the schema lives in `backend/prisma/`), and it silently
