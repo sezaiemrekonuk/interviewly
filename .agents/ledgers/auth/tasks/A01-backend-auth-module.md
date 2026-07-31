@@ -1,5 +1,5 @@
 # A01 — Creating the backend auth module: register, login, logout, session cookie, and `/me`
-REPO: (this repo) · Depends: — · Status: todo
+REPO: (this repo) · Depends: F01, F02, F03 · Status: done
 Read first: STATE.md, REFERENCE.md, then this.
 **Model: claude-opus-4.8** — credential verification, argon2id hashing, session-token issuance — auth is a security invariant; a cheaper model has produced subtly wrong argon2 parameter choices and off-by-one session expiry checks on similar tasks.
 
@@ -65,14 +65,14 @@ requireAuth } from '../auth/middleware'` to guard its routes.
   across both limiters (and export it so A02 can reuse it for PKCE state storage).
 
 ## Steps
-- [ ] **1. Install backend dependencies**
+- [x] **1. Install backend dependencies**
   ```bash
   cd backend
   npm install express cookie-parser ioredis zod @node-rs/argon2
   npm install --save-dev @types/express @types/cookie-parser tsx ts-node
   ```
 
-- [ ] **2. Confirm F01 / F02 / F03 artefacts exist**
+- [x] **2. Confirm F01 / F02 / F03 artefacts exist**
   - `backend/src/lib/error-codes.ts` — must export `ERROR_CODES` with the six auth codes.
   - `backend/src/lib/db.ts` — must export `prisma`.
   - `backend/src/lib/logger.ts` — must export a logger factory.
@@ -80,18 +80,18 @@ requireAuth } from '../auth/middleware'` to guard its routes.
     `PUBLIC_ORIGIN`, `PORT`, `NODE_ENV`.
   If any is missing, set this task to `blocked` in STATE.md and stop.
 
-- [ ] **3. Create `backend/src/lib/session.ts`**
+- [x] **3. Create `backend/src/lib/session.ts`**
   - `generateToken()`, `issueCookie()`, `revokeCookie()` per REFERENCE.md.
   - Cookie `secure` flag follows `config.NODE_ENV === 'production'`.
 
-- [ ] **4. Create `backend/modules/auth/rate-limit.ts`**
+- [x] **4. Create `backend/modules/auth/rate-limit.ts`**
   - One `ioredis` client from `config.REDIS_URL`.
   - `registerLimiter`: sliding window 3/hr keyed `ratelimit:register:<ip>`.
   - `loginLimiter`: sliding window 5/min keyed `ratelimit:login:<ip>`.
   - Both export as Express `RequestHandler`.
   - Log `RATE_LIMIT_HIT` on trip; never log the IP beyond this log line.
 
-- [ ] **5. Create `backend/modules/auth/middleware.ts`**
+- [x] **5. Create `backend/modules/auth/middleware.ts`**
   - `requireAuth(req, res, next)`:
     1. Read `req.cookies.session`. If absent: `401 UNAUTHENTICATED`.
     2. `prisma.session.findUnique({ where: { id: token } })`. If null: `401`.
@@ -101,7 +101,7 @@ requireAuth } from '../auth/middleware'` to guard its routes.
     6. Attach `req.user = user`, call `next()`.
   - Export type augmentation: `declare global { namespace Express { interface Request { user?: User } } }`.
 
-- [ ] **6. Create `backend/modules/auth/register.ts`**
+- [x] **6. Create `backend/modules/auth/register.ts`**
   - Zod schema: `{ email: z.string().email(), password: z.string() }`.
     - If Zod fails: `422 VALIDATION_ERROR`.
     - If `password.length < 10`: `422 PASSWORD_TOO_SHORT`.
@@ -116,7 +116,7 @@ requireAuth } from '../auth/middleware'` to guard its routes.
 
   **Rate limiting**: apply `registerLimiter` before this handler in the router.
 
-- [ ] **7. Create `backend/modules/auth/login.ts`**
+- [x] **7. Create `backend/modules/auth/login.ts`**
   - Zod schema: `{ email: z.string().email(), password: z.string() }`.
     - If Zod fails: `422 VALIDATION_ERROR`.
   - `email_lower = email.trim().toLowerCase()`.
@@ -133,18 +133,18 @@ requireAuth } from '../auth/middleware'` to guard its routes.
 
   **Rate limiting**: apply `loginLimiter` before this handler in the router.
 
-- [ ] **8. Create `backend/modules/auth/logout.ts`**
+- [x] **8. Create `backend/modules/auth/logout.ts`**
   - `requireAuth` must be applied before this handler.
   - `prisma.session.update({ where: { id: req.cookies.session }, data: { revoked_at: new Date() } })`.
   - `revokeCookie(res)`.
   - `logger.info({ userId: req.user!.id, traceId }, 'AUTH_LOGOUT')`.
   - Return `204`.
 
-- [ ] **9. Create `backend/modules/auth/me.ts`**
+- [x] **9. Create `backend/modules/auth/me.ts`**
   - `requireAuth` applied before this handler.
   - Return `200 { user: { id, email: req.user!.email_lower, role: req.user!.role, locale: req.user!.locale } }`.
 
-- [ ] **10. Create `backend/modules/auth/router.ts`**
+- [x] **10. Create `backend/modules/auth/router.ts`**
   ```ts
   import { Router } from 'express';
   import { registerLimiter, loginLimiter } from './rate-limit';
@@ -165,29 +165,29 @@ requireAuth } from '../auth/middleware'` to guard its routes.
   meRouter.get('/me', requireAuth, me);
   ```
 
-- [ ] **11. Create `backend/src/app.ts`**
+- [x] **11. Create `backend/src/app.ts`**
   - `express()`, `express.json()`, `cookieParser()`.
   - Mount `authRouter` at `/auth`, `meRouter` at `/`.
   - Global error handler: reads `err.code` from error-codes registry → looks up `http`
     status → `res.status(http).json({ error: { code } })`. Unknown errors → `500`.
   - Export `app`.
 
-- [ ] **12. Create `backend/src/index.ts`**
+- [x] **12. Create `backend/src/index.ts`**
   - `app.listen(config.PORT, () => logger.info({ port: config.PORT }, 'SERVER_STARTED'))`.
   - Add `scripts.start` and `scripts.dev` to `backend/package.json` pointing at this file.
 
-- [ ] **13. Wire `traceId` on requests**
+- [x] **13. Wire `traceId` on requests**
   - Add per-request `traceId` middleware in `app.ts`: `req.traceId = randomUUID()`.
   - Extend the Express `Request` type accordingly.
 
-- [ ] **14. Tests — negative and positive cases**
+- [x] **14. Tests — negative and positive cases**
   - Confirm the Cucumber step definitions for `@auth` scenarios are wired (the acceptance
     runner should already have a world and HTTP client from foundations/F03 CI setup).
   - If step definitions are missing, create them in `tests/step-definitions/auth.ts`
     covering the three scenarios. The step definitions use `fetch` (or `axios`) against
     `http://localhost:${PORT}`.
 
-- [ ] **15. Run Verification command and confirm all three scenarios green.**
+- [x] **15. Run Verification command and confirm all three scenarios green.**
 
 ## Definition of done
 - `POST /auth/register` with 9-char password returns `422 PASSWORD_TOO_SHORT`; with 10+
@@ -219,8 +219,60 @@ docker compose logs api | grep -E "password_hash|google_sub|session.*id"
 
 ## Notes
 
-(Empty until the task is done. Fill with: what actually happened, every deviation from the
-plan, the Cucumber output verbatim, what was deliberately NOT done and why, whether any
-Cucumber step definitions needed to be created and where they live, the Redis connection
-approach used, and a "For A02" hand-off paragraph noting the router extension point and
-the session-issuance helper location.)
+Done 2026-07-30. All three scenarios green: `3 scenarios (3 passed), 26 steps (26 passed)`.
+
+**What exists now**
+- `backend/src/lib/session.ts` — `generateToken()` (32 random bytes → 64-hex), `sessionExpiry()`,
+  `issueCookie()`, `revokeCookie()`, `SESSION_COOKIE = 'session'`. Cookie `secure` follows
+  `config.NODE_ENV === 'production'`; `maxAge` is in **ms** (Express), 7 days.
+- `backend/src/lib/api-error.ts` — `ApiError(code)` + `httpStatusFor(code)`. The app error
+  handler maps `.code` → registry `http` → `{ error: { code } }`. Unknown → 500 `INTERNAL_ERROR`.
+- `backend/modules/auth/` — `rate-limit.ts` (one shared `ioredis` client, exported `redis`;
+  sliding-window sorted-set limiters `registerLimiter` 3/hr, `loginLimiter` 5/min),
+  `middleware.ts` (`requireAuth`, checks BOTH `revoked_at IS NULL` and `expires_at > now()`,
+  slides expiry, attaches `req.user`), `register.ts`, `login.ts`, `logout.ts`, `me.ts`,
+  `user-view.ts` (`publicUser` → `{ id, email, role, locale }`), `router.ts`.
+- `backend/src/app.ts` — express.json, cookie-parser, per-request `req.traceId`, `/healthz`,
+  mounts auth at `/auth` and me at `/`, error handler last.
+- `backend/src/index.ts` — `app.listen(config.API_PORT)` → `SERVER_STARTED`.
+
+**Deviations from the plan (all justified by reality; REFERENCE said "trust the code")**
+- Task said `config.PORT`; env exposes **`API_PORT`**. Used `config.API_PORT`.
+- Task said `createLogger('auth')`; `logger.ts` exports a **singleton `logger`**, not a factory.
+  Imported the singleton directly.
+- `Session.id` has `@default(cuid())` in schema; we pass an explicit `id: token` on create so
+  the opaque cookie token *is* the row id. REFERENCE's "session token = cookie" holds.
+- Added `/healthz` (not in the step list) because `compose.yaml`'s `api` healthcheck curls it —
+  without it the container never goes healthy.
+- `me` returns `{ id, email, role, locale }` per this task. REFERENCE lists a richer user shape
+  (`emailVerifiedAt`, `onboardingCompletedAt`, `interviewCount`); **A03/A06 extend `/me`** when
+  first-run routing needs those. Left minimal to stay in scope.
+
+**Test harness (first ATDD wiring for the whole repo — EXECUTE §7)**
+- `backend/cucumber.js` — loads `.ts` via `tsx/cjs`; `paths: ['../.agents/features/auth.feature']`;
+  default `tags: 'not @wip'`. **`@AC-N` tags are NOT globally unique** (auth, question_generation,
+  voice_session all carry `@AC-1`), so paths are scoped per-ledger, not tag-only.
+- `backend/tests/support/` — `setup.ts` (fills required env keys via `??=` so `config` validates;
+  real env wins), `harness.ts` (boots `app` on an ephemeral port, `migrate deploy` in BeforeAll,
+  truncates `sessions,email_tokens,users` + drops `ratelimit:*` between scenarios), `world.ts`
+  (fetch client + manual session-cookie jar), `hooks.ts`.
+- `backend/tests/step-definitions/auth.ts` — steps for AC-1/2/3 only.
+- Ran red first (removed the `PASSWORD_TOO_SHORT` guard → AC-1 failed on the 422 assertion),
+  then green.
+- **CI**: added Postgres + Redis services, `DATABASE_URL/SHADOW/REDIS_URL` env, and a
+  `prisma migrate deploy` step to the `acceptance` job in `.github/workflows/ci.yml` (it
+  previously passed on 0 scenarios). `test:unit` still has `--passWithNoTests` — untouched, no
+  vitest test was added this task.
+
+**Env/infra gotcha (local only)**: a Homebrew Postgres owns `127.0.0.1:5432` and shadows the
+Docker container. For local runs I remapped the Docker db/cache to host `5433/6380` via an
+uncommitted `$TMPDIR/compose.localports.yaml` and ran with
+`DATABASE_URL=…@localhost:5433 REDIS_URL=redis://localhost:6380`. CI is unaffected (clean
+services on 5432/6379). The committed `compose.dev.yaml` still publishes 5432/6379.
+
+**For A02**: extend `modules/auth/router.ts` at the marked comment line for the Google routes.
+Reuse the exported `redis` client from `rate-limit.ts` for PKCE state (do **not** open a second
+connection) and the session helpers in `src/lib/session.ts` (`generateToken`/`issueCookie`).
+The admin-restriction second check belongs in the session-issuance path per REFERENCE. When you
+implement AC-5, **remove the `@wip` tag** from that scenario in `.agents/features/auth.feature`
+and add its Google step definitions so it joins the green suite.

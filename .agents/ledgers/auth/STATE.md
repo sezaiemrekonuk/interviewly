@@ -1,7 +1,9 @@
 # Auth — State
 
 Last updated: 2026-07-30
-Last session ended: **—** Ledger written; no task has started yet.
+Last session ended: **A01 done** — backend auth module (register/login/logout/`/me`, session
+cookie, `requireAuth`, rate limits) green on AC-1/2/3; first ATDD harness + CI acceptance
+services wired.
 
 ## Execution protocol (follow exactly)
 
@@ -18,10 +20,11 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**A01 — Creating the backend auth module** is the first `todo` task. It depends on
-foundations tasks F01, F02, and F03 being `done` (see Cross-ledger section below).
-Do not start A01 until all three foundations tasks are green. Once they are, read A01's
-file, confirm the session infrastructure is clear (no prior partial work), and begin.
+**A02 — Adding Google OAuth (arctic PKCE), account linking, and admin password restriction**
+is next. It depends only on A01, which is now `done`. A02 is opus-tier (`MODELS.md`). Extend
+`modules/auth/router.ts` at the marked comment; reuse the exported `redis` client and the
+`src/lib/session.ts` helpers; implement AC-4/AC-5 and remove the `@wip` tag from the AC-5
+scenario in `.agents/features/auth.feature`.
 
 ## Environment
 
@@ -62,7 +65,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 
 | ID | Title | Repo | Status | Depends on |
 |----|-------|------|--------|------------|
-| A01 | Creating the backend auth module: register, login, logout, session cookie, and `/me` | | todo | F01, F02, F03 |
+| A01 | Creating the backend auth module: register, login, logout, session cookie, and `/me` | | done | F01, F02, F03 |
 | A02 | Adding Google OAuth (arctic PKCE), account linking, and admin password restriction | | todo | A01 |
 | A03 | Building the frontend login and register forms | | todo | A02 |
 | A04 | Building email verification: tokens, the mail job, the gate, and the two screens | | todo | A03 |

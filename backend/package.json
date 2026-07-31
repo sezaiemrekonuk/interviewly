@@ -5,6 +5,8 @@
   "main": "src/index.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "start": "tsx src/index.ts",
+    "dev": "tsx watch src/index.ts",
     "lint": "cd .. && eslint --config eslint.config.js backend/src",
     "seed": "tsx prisma/seed.ts",
     "db:check": "tsx src/lib/db.ts",
@@ -18,11 +20,16 @@
     "@aws-sdk/client-s3": "^3.1098.0",
     "@node-rs/argon2": "^2.0.2",
     "@prisma/client": "^6.19.3",
+    "cookie-parser": "^1.4.7",
+    "express": "^5.2.1",
+    "ioredis": "^5.11.1",
     "pino": "^9",
     "zod": "^3"
   },
   "devDependencies": {
     "@cucumber/cucumber": "^12.9.0",
+    "@types/cookie-parser": "^1.4.10",
+    "@types/express": "^5.0.6",
     "prisma": "^6.19.3",
     "tsx": "^4.23.1",
     "vitest": "^4.1.10"
