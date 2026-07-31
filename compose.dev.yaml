@@ -3,7 +3,7 @@ services:
   db:
     ports: ["5432:5432"]
   cache:
-    ports: ["6379:6379"]
+    ports: ["6380:6379"]
   bucket:
     ports: ["9000:9000"]
   mail:

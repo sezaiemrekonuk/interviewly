@@ -11,3 +11,6 @@ test-results/
 playwright-report/
 blob-report/
 .playwright/
+
+# any kind of .DS_Store file
+**/.DS_Store
