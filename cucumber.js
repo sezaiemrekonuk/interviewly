@@ -9,8 +9,18 @@
 // The feature files are read where they were authored — there is no second copy under
 // backend/. One file, one source of truth, so the spec and the runnable test cannot drift.
 //
-// Each task appends its own feature file here as it wires the steps. Next up: I05 adds
-// security-adjacent CSRF coverage on the state-changing routes.
+// Each task appends its own feature file here as it wires the steps. Next up: I06 wires
+// interview_flow.feature @AC-8/@AC-9/@AC-10/@AC-16 and I08 wires @AC-11.
+//
+// I05 hit the case the file-level allow-list cannot express: interview_flow.feature is owned
+// by four tasks, and only @AC-15 is I05's. Keeping the file out of `paths` would make I05's
+// own Verification match zero scenarios and pass vacuously — the false green EXECUTE.md §7
+// warns about. Putting it in unfiltered would leave the BLOCKING `acceptance` job undefined
+// on five scenarios until I08 lands, on everyone's PRs, which is how a red job starts being
+// ignored. So the allow-list gained a second axis: `not @unwired` below skips scenarios
+// whose steps do not exist yet, and the owning task deletes its own tag when it writes them.
+// `strict` still fails anything unwired that forgot the tag. A CLI `--tags` replaces this
+// expression, which is what every scoped Verification command in the ledgers relies on.
 //
 // I04 is the first task whose scenarios drive generation through the app's own AiClient
 // (POST /interviews/:id/profile), so the suite must never reach a real provider: the local
@@ -41,7 +51,9 @@ module.exports = {
       '.agents/features/ai_provider.feature',
       '.agents/features/question_generation.feature',
       '.agents/features/profiling.feature',
+      '.agents/features/interview_flow.feature',
     ],
+    tags: 'not @unwired',
     require: ['backend/features/step_definitions/**/*.ts'],
     requireModule: ['tsx/cjs'],
     // Undefined, pending or ambiguous steps fail the run. Without this a scenario whose

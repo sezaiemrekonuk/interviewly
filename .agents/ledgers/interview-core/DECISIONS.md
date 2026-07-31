@@ -580,3 +580,35 @@ these two scenarios keep passing while production diverges. `I completed an 8-qu
 interview` sets the end state as a database fixture because the answer walk is I06/I07 — it is
 a precondition, not the thing under test, and it becomes a real flow once I06 lands.
 ADR-I16 is the precedent: a scenario may be asserted at the ring that owns its criterion.
+
+## ADR-I24 — 2026-07-31 — CSRF is mounted once with `router.use`, above `router.param`
+
+**Context:** I03 wired `requirePublicOrigin` per route. Two defects. (1) A new state-changing
+route ships unguarded by omission — the "no route-by-route drift" non-negotiable. (2) Express
+runs `router.param` callbacks **before** route middleware, so a cross-site POST reached
+`ownership.ts` → `activeInterview()`'s DB read before the 403.
+
+**Decision:** one `router.use(requirePublicOrigin)` above `router.param('id', …)`. The
+middleware exempts `GET`/`HEAD`/`OPTIONS` itself (`SAFE_METHODS`), which is what makes
+router-wide mounting safe for the SSE stream (I07) and `/report/download` (I12).
+
+**Consequences:** **I06/I07/I12 mount routes plainly — never pass `requirePublicOrigin`
+again.** Coverage is by method, not by opt-in. `csrf.test.ts` pins both properties.
+
+## ADR-I25 — 2026-07-31 — `@unwired` skips scenarios in a feature file owned by several tasks
+
+**Context:** `cucumber.js` `paths` is a file-level allow-list (ADR-I15), but
+`interview_flow.feature` is owned by four tasks. I05 owns only @AC-15. Leaving the file out
+makes I05's Verification match zero scenarios and pass vacuously; putting it in unfiltered
+leaves the blocking `acceptance` job undefined on five scenarios until I08, on every
+person's PRs — which is how a red job starts being ignored.
+
+**Decision:** second axis on the allow-list. Default profile carries `tags: 'not @unwired'`;
+unwired scenarios are tagged `@unwired`; the owning task deletes its own tag in the PR that
+wires its steps. `strict: true` still fails an untagged scenario with missing steps, and a
+CLI `--tags` replaces the expression, so scoped Verification commands are unaffected.
+
+**Consequences:** supersedes I03's "document the gap, leave it undefined" precedent for
+multi-owner files only — a file one task owns end to end still goes in whole. **A forgotten
+`@unwired` deletion is a silent skip**, the same trap `paths` already has; both are called
+out in REFERENCE.md.

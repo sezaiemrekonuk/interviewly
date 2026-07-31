@@ -49,6 +49,11 @@ npm run -w @interviewly/ai test
 # >>> Your task MUST append its feature file to `cucumber.js` `paths` when it wires the
 # >>> steps. Forget, and your scenarios silently do not run.
 #
+# I05 (ADR-I25): a file owned by several tasks goes into `paths` whole, and the scenarios
+# whose steps do not exist yet carry `@unwired` — the default profile runs `not @unwired`.
+# >>> If your task's scenario is tagged @unwired, DELETE that tag when you wire its steps.
+# >>> Same trap as `paths`: leave it and the scenario silently does not run.
+#
 # I04: `cucumber.js` forces AI_ENABLED=false for every run. The suite generates through the
 # app's own AiClient now, and the local .env carries live provider keys — an unguarded run
 # would bill them and make assertions non-deterministic. ai_provider.feature is unaffected
@@ -246,9 +251,10 @@ a second connection.
 **Ownership:** every `:id` route goes through `ownership.ts` → `userInterviews`/
 `activeInterview` (soft-delete baked in). A non-owned or deleted id is `INTERVIEW_NOT_FOUND`.
 
-**CSRF:** `csrf.ts` compares `Origin` (fallback `Referer`) to `config.PUBLIC_ORIGIN` on
-every state-changing interview route; a mismatch is `CSRF_ORIGIN_MISMATCH` before the
-handler runs.
+**CSRF:** `csrf.ts` compares `Origin` (fallback `Referer`) to `config.PUBLIC_ORIGIN`; a
+mismatch is `CSRF_ORIGIN_MISMATCH` before the handler runs. **Mounted once as
+`router.use(requirePublicOrigin)` above `router.param` (I05, ADR-I24) — never add it to a
+route.** It exempts `GET`/`HEAD`/`OPTIONS` itself, so SSE and `/report/download` are safe.
 
 **AI calls:** always through `AiClient`; never import a provider SDK in a module directly.
 Every attempt records an `llm_calls` row (stub mode too, `cost_usd = 0`). `cost_usd` is
