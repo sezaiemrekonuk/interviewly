@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { ApiError } from '../../src/lib/api-error';
 import { prisma } from '../../src/lib/db';
 import { logger } from '../../src/lib/logger';
-import { generateToken, issueCookie, sessionExpiry } from '../../src/lib/session';
+import { issueSessionForUser } from '../../src/lib/session';
 
 import { publicUser } from './user-view';
 
@@ -28,11 +28,7 @@ export const login: RequestHandler = async (req, res) => {
     throw new ApiError('INVALID_CREDENTIALS');
   }
 
-  const token = generateToken();
-  await prisma.session.create({
-    data: { id: token, user_id: user.id, expires_at: sessionExpiry() },
-  });
-  issueCookie(res, token);
+  await issueSessionForUser(user, res, 'password');
 
   logger.info({ userId: user.id, traceId: req.traceId }, 'AUTH_LOGIN_OK');
   res.status(200).json({ user: publicUser(user) });

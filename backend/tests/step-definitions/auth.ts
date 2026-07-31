@@ -24,6 +24,26 @@ Given(
   },
 );
 
+Given(
+  'an account with the admin role exists for {string} with password {string}',
+  async function (this: AuthWorld, email: string, password: string) {
+    await prisma.user.create({
+      data: { email_lower: lower(email), password_hash: await hash(password), role: 'admin' },
+    });
+  },
+);
+
+// Drives the NODE_ENV=test seam, which runs the same linking/restriction code as the real
+// callback minus Google's redirect and token exchange.
+When(
+  'Google sign-in completes for {string} with email_verified {word}',
+  async function (this: AuthWorld, email: string, verified: string) {
+    await this.request('POST', '/test/auth/simulate-google-callback', {
+      body: { email, email_verified: verified === 'true' },
+    });
+  },
+);
+
 When(
   'I register with email {string} and password {string}',
   async function (this: AuthWorld, email: string, password: string) {
@@ -61,6 +81,31 @@ Then('a session cookie is set', function (this: AuthWorld) {
 Then('no session cookie is set', function (this: AuthWorld) {
   assert.ok(!this.sessionCookieWasSet(), 'expected no session cookie');
 });
+
+// Stronger than "a cookie came back": the cookie is spent on /me and must name the user.
+Then(
+  'the response creates a signed-in session for {string}',
+  async function (this: AuthWorld, email: string) {
+    assert.equal(this.lastStatus, 200);
+    assert.ok(this.sessionCookieWasSet(), 'expected a non-empty session cookie');
+    await this.request('GET', '/me', { useSession: true });
+    assert.equal(this.lastStatus, 200);
+    assert.equal(this.body<{ user: { email: string } }>().user.email, lower(email));
+  },
+);
+
+Then('the account for {string} is linked to Google', async function (this: AuthWorld, email: string) {
+  const user = await prisma.user.findUnique({ where: { email_lower: lower(email) } });
+  assert.ok(user?.google_sub, 'expected google_sub to be set');
+});
+
+Then(
+  'the account for {string} is not linked to Google',
+  async function (this: AuthWorld, email: string) {
+    const user = await prisma.user.findUnique({ where: { email_lower: lower(email) } });
+    assert.equal(user?.google_sub, null);
+  },
+);
 
 Then('no user exists for {string}', async function (this: AuthWorld, email: string) {
   assert.equal(await prisma.user.count({ where: { email_lower: lower(email) } }), 0);

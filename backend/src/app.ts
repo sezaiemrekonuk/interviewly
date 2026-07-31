@@ -4,9 +4,11 @@ import cookieParser from 'cookie-parser';
 import express, { type ErrorRequestHandler } from 'express';
 
 import { ApiError, httpStatusFor } from './lib/api-error';
+import { config } from './lib/env';
 import { logger } from './lib/logger';
 
 import authRouter, { meRouter } from '../modules/auth/router';
+import { mountTestSeam } from '../modules/auth/test-seam';
 
 export const app = express();
 
@@ -23,6 +25,10 @@ app.get('/healthz', (_req, res) => {
 
 app.use('/auth', authRouter);
 app.use('/', meRouter);
+
+// TEST SEAM — acceptance-only Google callback simulator. mountTestSeam() throws if it is
+// ever reached outside NODE_ENV=test, so a bad deploy fails at startup, not silently.
+if (config.NODE_ENV === 'test') mountTestSeam(app);
 
 // The API never returns display strings — a known error code maps to its registry
 // status; anything else is an unexpected 500 with no body detail.
