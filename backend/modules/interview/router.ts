@@ -2,6 +2,7 @@ import { Router } from 'express';
 
 import { requireAuth } from '../auth/middleware';
 
+import { submitAnswer } from './answers';
 import { requirePublicOrigin } from './csrf';
 import { resolveInterview } from './ownership';
 import { submitProfile } from './profile';
@@ -22,8 +23,8 @@ router.post('/', setupInterview);
 router.get('/:id/state', getInterviewState);
 
 router.post('/:id/profile', submitProfile);
+router.post('/:id/answers', submitAnswer);
 
-// I06 mounts here: router.post('/:id/answers', ...)
 // I07 mounts here: router.post('/:id/resume', ...)
 // I12 mounts here: router.get('/:id/report/download', ...)
 

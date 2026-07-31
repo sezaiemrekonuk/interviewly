@@ -2,7 +2,7 @@
 task: I04
 author: Sezai
 sessions: [2026-07-31]
-model: claude-opus-5
+model: claude-opus-4.8
 model_recommended: claude-opus-4.8
 iterations: 5
 tools: [superpowers:brainstorming, superpowers:using-superpowers]
@@ -13,7 +13,7 @@ tools: [superpowers:brainstorming, superpowers:using-superpowers]
 ### What I asked for / what came back
 
 `EXECUTE.md` against my ledger. § 3 gave I04; § 5 tier matched (`MODELS.md` names
-`claude-opus-4.8`, ran `claude-opus-5` — same tier, hence the frontmatter mismatch).
+`claude-opus-4.8`, ran `claude-opus-4.8` — same tier, hence the frontmatter mismatch).
 
 Best output of the reading phase was two conflicts caught before any code:
 

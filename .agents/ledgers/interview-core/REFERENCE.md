@@ -51,8 +51,9 @@ npm run -w @interviewly/ai test
 #
 # I05 (ADR-I25): a file owned by several tasks goes into `paths` whole, and the scenarios
 # whose steps do not exist yet carry `@unwired` — the default profile runs `not @unwired`.
-# >>> If your task's scenario is tagged @unwired, DELETE that tag when you wire its steps.
-# >>> Same trap as `paths`: leave it and the scenario silently does not run.
+# >>> If your task's scenario is tagged @unwired, DELETE that tag BEFORE your first red run.
+# >>> I06 (ADR-I26): a CLI `--tags` is ANDed with `not @unwired`, it does not replace it, so
+# >>> a scoped Verification command reports `0 scenarios` and exits 0 until the tag is gone.
 #
 # I04: `cucumber.js` forces AI_ENABLED=false for every run. The suite generates through the
 # app's own AiClient now, and the local .env carries live provider keys — an unguarded run
@@ -159,6 +160,7 @@ All paths relative to repo root. Each exists once its providing task lands.
 | `backend/src/lib/db.ts` | F02 | Prisma singleton, `userInterviews()`, `activeInterview()` — user-facing modules MUST use these |
 | `backend/src/lib/logger.ts` | F03 | Pino factory: `logger.<level>({obj}, "EVENT_NAME")` |
 | `backend/src/lib/env.ts` | F03 | Zod env config; extended by I15 |
+| `backend/src/lib/clock.ts` | I06 | `clock.now()` — the one server-clock seam (ADR-I27) |
 | `backend/src/app.ts` | A01 | Express app + global middleware; interview-core mounts its router here |
 | `backend/modules/auth/middleware.ts` | A01 | `requireAuth`: cookie → session row → `req.user` |
 | `backend/modules/auth/rate-limit.ts` | A01 | Redis sliding-window limiter factory reused by I13 |

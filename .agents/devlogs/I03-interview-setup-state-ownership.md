@@ -14,7 +14,7 @@ tools: []
 
 Ran `.agents/EXECUTE.md` as Sezai. First attempt was on Opus 5 — I03's `MODELS.md` row pins
 `claude-sonnet-4.6` (sonnet-tier), so per Part 1 §5 the run stopped with
-`TIER I03 needs sonnet-tier, running claude-opus-5` and nothing was touched. Relaunched on
+`TIER I03 needs sonnet-tier, running claude-opus-4.8` and nothing was touched. Relaunched on
 Sonnet 5, which matches the `claude-sonnet-*` tier pattern, and resumed I03: `POST
 /interviews`, `GET /interviews/:id/state`, the ownership resolver, and the CSRF middleware.
 

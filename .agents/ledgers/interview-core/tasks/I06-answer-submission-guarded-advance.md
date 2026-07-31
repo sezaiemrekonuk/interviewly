@@ -1,5 +1,5 @@
 # I06 — Answer submission, guarded advance, duration, round handover, resume-read
-REPO: (this repo) · Depends: I04 · Status: todo
+REPO: (this repo) · Depends: I04 · Status: done
 Read first: STATE.md, REFERENCE.md, then this.
 **Model: claude-opus-4.8** — this is the K2 progression invariant. The guarded optimistic advance, the server-clock duration, and the HR→tech handover are correctness-critical; a race here lets an answer target a non-current question.
 
@@ -70,21 +70,21 @@ wraps the AI-call transaction) or count language switches (I10).
   fail. Set `asked_at` server-side when `current_index` reaches the question.
 
 ## Steps
-- [ ] **1. Write `machine.ts`** (skeletal) — `TRANSITIONS` map + `canTransition` +
+- [x] **1. Write `machine.ts`** (skeletal) — `TRANSITIONS` map + `canTransition` +
   `applyTransition` for the two edges this task uses.
-- [ ] **2. Write `answers.ts`** — Zod body, resolve current row, guarded `updateMany`,
+- [x] **2. Write `answers.ts`** — Zod body, resolve current row, guarded `updateMany`,
   `QUESTION_NOT_CURRENT` on `count 0`, write answer + chat_message, server-clock
   `duration_ms`, handover, 200. Mark the I08 budget-check slot before the handover's AI call.
-- [ ] **3. Set `asked_at` server-side** when a question becomes current (in `state.ts` on
+- [x] **3. Set `asked_at` server-side** when a question becomes current (in `state.ts` on
   read and/or on advance in `answers.ts`).
-- [ ] **4. Confirm/extend `state.ts`** resume read — `currentIndex` + transcript cursor from
+- [x] **4. Confirm/extend `state.ts`** resume read — `currentIndex` + transcript cursor from
   the DB, refresh-safe.
-- [ ] **5. Attach `/answers`** into the router behind ownership + CSRF.
-- [ ] **6. Wire acceptance step-defs** for `interview_flow.feature` @AC-8 (non-current →
+- [x] **5. Attach `/answers`** into the router behind ownership + CSRF.
+- [x] **6. Wire acceptance step-defs** for `interview_flow.feature` @AC-8 (non-current →
   409, index unchanged; current → 200, index+1), @AC-9 (resume at next unanswered, cursor
   covers answered count, stable across a new connection), @AC-10 (server-clock
   `duration_ms 12000`, no audio session required).
-- [ ] **7. Run the `## Verification` command.**
+- [x] **7. Run the `## Verification` command.**
 
 ## Definition of done
 - An answer for a non-current question is 409 `QUESTION_NOT_CURRENT` with no state change; an
@@ -101,4 +101,56 @@ npm run test:acceptance -- --tags "@interview-flow and (@AC-8 or @AC-9 or @AC-10
 ```
 
 ## Notes
-_(fill in when the task is done)_
+
+### What exists now
+
+- `answers.ts` — `POST /interviews/:id/answers`, mounted plainly (ADR-I24). Order is the
+  contract: state guard → Zod body → current-row check → guarded `updateMany` → answer +
+  `chat_messages` in one `$transaction` → `ANSWER_RECORDED` → `ensureTechBatch` (HR only,
+  ADR-I22) → handover. 200 `{ state, nextIndex }`.
+- `machine.ts` — `TRANSITIONS` map, `canTransition`, `applyTransition` (updates + emits
+  `INTERVIEW_STATE_CHANGED` with `from`/`to`/`interviewId`, which is what @AC-16 asserts).
+  `machine.test.ts` (4 vitest) pins only edges that stay illegal after I07 fills the table.
+- `state.ts` — `currentQuestionRow(interview)` **exported**; `answers.ts` resolves the current
+  question through it, so the guard and the room cannot disagree. `asked_at` is stamped on
+  delivery (ADR-I27).
+- `src/lib/clock.ts` — `clock.now()`, the server-clock seam (ADR-I27).
+- `answers.steps.ts` — @AC-8/@AC-9/@AC-10 wired, `@unwired` deleted from all three.
+
+### Deviations
+
+- **ADR-I26 — ADR-I25 was wrong: a CLI `--tags` is ANDed with `not @unwired`.** The
+  Verification command reported `0 scenarios` / exit 0 before the tags were deleted. Deleting
+  the tag is step one, not step six.
+- **ADR-I27** — `asked_at` is stamped by `GET /state`, not by the advance: `POST /profile`
+  sets `current_index = 1` before the questions exist, so there is nothing to stamp there.
+- **ADR-I28** — `hr_round → evaluating` is in the table (target 2 → tech 0 still has to end).
+- The client's `duration_ms` is dropped by Zod stripping unknown keys, not by an explicit
+  branch. `answers.started_at` = `questions.asked_at`, never the client's value.
+- One `chat_messages` row per answered turn (`role: 'user'`), per REFERENCE — the question
+  text is not a second row, so `transcriptCursor` == answered count.
+
+### Verification
+
+```
+npm run test:acceptance -- --tags "@interview-flow and (@AC-8 or @AC-9 or @AC-10)"
+3 scenarios (3 passed) · 22 steps (22 passed)
+```
+
+Gates: full acceptance 31/31 (was 28), `npm test` 86/86 (was 82), lint + typecheck clean.
+Local run needs `DATABASE_URL=…@localhost:5432` and `REDIS_URL=redis://localhost:6380`.
+
+### For I07
+
+- **Delete `@unwired` from @AC-16 before your first run** (ADR-I26) or it reports 0 and passes.
+- Extend `TRANSITIONS` in `machine.ts` by adding rows; every state write goes through
+  `applyTransition` so the SSE fan-out has one place to hook.
+- @AC-16's `hr_round → paused` already happens in `generation.ts` on
+  `AI_PROVIDER_UNAVAILABLE` — it writes `state` directly, not via `applyTransition`. Route it
+  through the machine when you own the table.
+- An SSE-pushed question must stamp `asked_at` itself (ADR-I27) or its `duration_ms` is null.
+
+### For I08
+
+- The budget slot is marked in `answers.ts` — after the turn is stored, before
+  `ensureTechBatch`. @AC-11 wants the answer kept and no AI call made.

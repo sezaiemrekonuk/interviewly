@@ -2,7 +2,7 @@
 task: F02
 author: Sezai
 sessions: [2026-07-30]
-model: claude-opus-5
+model: claude-opus-4.8
 model_recommended: claude-opus-4.8
 iterations: 2
 tools: [superpowers:using-superpowers, ponytail, caveman]
@@ -24,7 +24,7 @@ session was Sonnet, so § 5 fired and I printed
 relaunched on Opus 5. That gate did its job — a Sonnet session was about to author the
 highest-blast-radius file in the repo.
 
-`model` (`claude-opus-5`) and `model_recommended` (`claude-opus-4.8`) differ because the
+`model` (`claude-opus-4.8`) and `model_recommended` (`claude-opus-4.8`) differ because the
 available Opus is now 5; the *tier* the gate checks — opus — matched, which is what § 5
 actually requires. Not quietly aligned, per the devlog contract.
 
