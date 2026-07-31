@@ -1,9 +1,16 @@
 name: CI
-on: [pull_request]
+on:
+  pull_request:
+  # Not for the checks — master needs its own run so `actions/setup-node`'s npm cache gets
+  # written at refs/heads/master. A cache saved on a PR ref is readable only by that PR, so
+  # without this every PR job installs cold, forever.
+  push:
+    branches: [master]
 
 jobs:
   lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       # commitlint walks base..HEAD, so the shallow default clone is not enough.
       - uses: actions/checkout@v4
@@ -12,10 +19,13 @@ jobs:
         with: { node-version: '22', cache: 'npm' }
       - run: npm ci --prefer-offline --no-audit --fund=false
       - run: npm run lint
-      - run: npx commitlint --from ${{ github.event.pull_request.base.sha }}
+      # PR-only: on a push event there is no base.sha, and the range would be empty.
+      - if: github.event_name == 'pull_request'
+        run: npx commitlint --from ${{ github.event.pull_request.base.sha }}
 
   typecheck:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -29,6 +39,7 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - run: cp .env.example .env
@@ -36,6 +47,7 @@ jobs:
 
   compose-check:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       # compose.yaml declares `env_file: [.env]`, which is gitignored.
@@ -44,6 +56,7 @@ jobs:
 
   migrate-check:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:16-alpine
@@ -71,6 +84,7 @@ jobs:
 
   unit:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -95,6 +109,7 @@ jobs:
       DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
       SHADOW_DATABASE_URL: postgresql://ci:ci@localhost:5432/ci_shadow
       REDIS_URL: redis://localhost:6379
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -106,6 +121,7 @@ jobs:
 
   audit:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       # Non-blocking: `next` itself carries a high advisory whose fixed version has not been
