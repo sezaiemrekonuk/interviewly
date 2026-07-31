@@ -9,11 +9,29 @@
 // The feature files are read where they were authored — there is no second copy under
 // backend/. One file, one source of truth, so the spec and the runnable test cannot drift.
 //
-// Each task appends its own feature file here as it wires the steps. Next up: I03/I04 add
-// question_generation.feature and profiling.feature.
+// Each task appends its own feature file here as it wires the steps. Next up: I04 adds
+// profiling.feature.
+//
+// I03 is the first task whose steps import backend/src/app.ts, which loads env.ts's Zod
+// schema at require time — every key must resolve or the process exits before a single
+// scenario runs. Loaded here (once, before requireModule) rather than via a CLI flag so
+// this file behaves the same whether it is invoked directly or through the npm script.
+// Vars already in process.env (CI sets DATABASE_URL/SHADOW_DATABASE_URL/REDIS_URL itself)
+// take precedence over the file (Node's loadEnvFile semantics) — this only fills the rest.
+try {
+  process.loadEnvFile(require('node:path').join(__dirname, '.env'));
+} catch {
+  // No .env at repo root: env.ts reports ENV_VALIDATION_FAILED with the missing keys,
+  // which is a clearer failure than a silent skip.
+}
+
 module.exports = {
   default: {
-    paths: ['.agents/features/security.feature', '.agents/features/ai_provider.feature'],
+    paths: [
+      '.agents/features/security.feature',
+      '.agents/features/ai_provider.feature',
+      '.agents/features/question_generation.feature',
+    ],
     require: ['backend/features/step_definitions/**/*.ts'],
     requireModule: ['tsx/cjs'],
     // Undefined, pending or ambiguous steps fail the run. Without this a scenario whose

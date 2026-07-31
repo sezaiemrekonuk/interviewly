@@ -21,6 +21,10 @@ import {
   type Question,
 } from '@interviewly/ai';
 
+import { config } from '../../src/lib/env';
+
+import { serverState } from './server';
+
 export const PROMPTS_DIR = join(__dirname, '../../../packages/ai/prompts');
 
 /** One captured `logger.<level>({ fields }, "EVENT_NAME")` call. */
@@ -76,6 +80,46 @@ export class AiWorld extends World {
 
   built?: BuiltPrompt;
   batch?: Question[];
+
+  // -------------------------------------------------------------- interview HTTP fixtures
+  // I03: question_generation.feature drives the real Express app over HTTP (server.ts),
+  // not a package-level seam. One cookie jar per scenario — good enough for the single
+  // signed-in candidate every scenario in this file needs so far.
+
+  cookie = '';
+  candidateId = '';
+  interviewId = '';
+  lastStatus = 0;
+  lastBody: Record<string, unknown> | undefined;
+
+  private captureCookie(res: Response): void {
+    const setCookie = res.headers.getSetCookie?.() ?? [];
+    if (setCookie[0]) this.cookie = setCookie[0].split(';')[0];
+  }
+
+  async httpPost(path: string, body: unknown): Promise<void> {
+    const res = await fetch(`${serverState.baseUrl}${path}`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        origin: config.PUBLIC_ORIGIN,
+        ...(this.cookie ? { cookie: this.cookie } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+    this.captureCookie(res);
+    this.lastStatus = res.status;
+    this.lastBody = await res.json().catch(() => undefined);
+  }
+
+  async httpGet(path: string): Promise<void> {
+    const res = await fetch(`${serverState.baseUrl}${path}`, {
+      headers: this.cookie ? { cookie: this.cookie } : {},
+    });
+    this.captureCookie(res);
+    this.lastStatus = res.status;
+    this.lastBody = await res.json().catch(() => undefined);
+  }
 
   // -------------------------------------------------------------- ai_provider fixtures
 

@@ -1,5 +1,15 @@
 import { z } from 'zod';
 
+// z.coerce.boolean() runs JS's Boolean(string), which is true for ANY non-empty string —
+// including the literal text "false". Every boolean env key in this schema needs this,
+// not the coercer, or `EMAIL_VERIFICATION_REQUIRED=false` / `AI_ENABLED=false` in .env
+// silently turn the flag on. Found via I03's acceptance run (question_generation.feature).
+const zBoolean = (defaultValue: boolean) =>
+  z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined ? defaultValue : v === 'true'));
+
 const schema = z.object({
   NODE_ENV:                    z.enum(['development', 'production', 'test']).default('development'),
   PUBLIC_ORIGIN:               z.string().url(),
@@ -10,11 +20,11 @@ const schema = z.object({
   REDIS_URL:                   z.string(),
   SESSION_SECRET:              z.string().min(32),
   SESSION_TTL_DAYS:            z.coerce.number().default(7),
-  SESSION_COOKIE_SECURE:       z.coerce.boolean().default(true),
+  SESSION_COOKIE_SECURE:       zBoolean(true),
   GOOGLE_CLIENT_ID:            z.string().optional(),
   GOOGLE_CLIENT_SECRET:        z.string().optional(),
   // K8.6 — config, not behaviour: one gate reads this flag (§11.3)
-  EMAIL_VERIFICATION_REQUIRED: z.coerce.boolean().default(false),
+  EMAIL_VERIFICATION_REQUIRED: zBoolean(false),
   EMAIL_VERIFY_TTL_HOURS:      z.coerce.number().default(24),
   PASSWORD_RESET_TTL_MINUTES:  z.coerce.number().default(60),
   SMTP_HOST:                   z.string(),
@@ -38,7 +48,7 @@ const schema = z.object({
   S3_ACCESS_KEY:               z.string(),
   S3_SECRET_KEY:               z.string(),
   SIGNED_URL_TTL:              z.coerce.number().default(300),
-  AI_ENABLED:                  z.coerce.boolean().default(true),
+  AI_ENABLED:                  zBoolean(true),
   BUDGET_USD_TEXT:             z.coerce.number().default(0.50),
   MAX_INTERVIEWS_PER_USER_PER_DAY: z.coerce.number().default(5),
   LOG_LEVEL:                   z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),

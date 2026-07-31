@@ -147,11 +147,17 @@ Then(
 );
 
 /**
- * I02 owns no HTTP route — `POST /interviews/:id/profile` is I04's. "200" here is the
- * observable this task can actually offer: the generation returned a value instead of
- * throwing. The HTTP status of the route that wraps it is asserted in `profiling.feature`.
+ * Shared across every feature file that asserts an HTTP-shaped outcome (one global step
+ * registry — ADR-I21). Two sources of "response":
+ *  - `this.lastStatus` — a real HTTP call went through `httpPost`/`httpGet` (I03+).
+ *  - no HTTP call this scenario — I02 owns no route yet, so "200" here is the closest
+ *    observable it can offer: the generation returned a value instead of throwing.
  */
 Then('the response status is {int}', function (this: AiWorld, status: number) {
+  if (this.lastStatus !== 0) {
+    assert.equal(this.lastStatus, status, `body: ${JSON.stringify(this.lastBody)}`);
+    return;
+  }
   assert.equal(status, 200, 'this step only models the success case');
   assert.equal(this.generateError, undefined, `generation threw: ${String(this.generateError)}`);
 });
