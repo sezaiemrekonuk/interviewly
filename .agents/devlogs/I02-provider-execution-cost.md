@@ -5,7 +5,7 @@ sessions: [2026-07-31]
 model: claude-opus-5
 model_recommended: claude-opus-4.8
 iterations: 2
-tools: [claude-code, cucumber-js, vitest, tsc, eslint]
+tools: [cucumber-js, vitest, tsc, eslint]
 ---
 
 ## Session 1 — 2026-07-31
