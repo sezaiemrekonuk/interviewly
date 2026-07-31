@@ -1,0 +1,25 @@
+# §9.2 price table, keyed `provider/model`. `cost_usd` is frozen at call time from this
+# file, so editing a price later never rewrites history.
+#
+# A model that is absent is NOT an error: the call proceeds, `cost_usd` is recorded null and
+# `PRICE_MISSING` is logged (§9.2, ai AC-8). That is deliberate — a missing price must never
+# be the reason an interview stops.
+#
+# Rates as published 2026-07-29. ai spec Q4 flags a pre-demo re-check; a stale row
+# mis-states cost and nothing else.
+models:
+  openai/gpt-4.1-mini:
+    unit_kind: tokens
+    input_per_1m_usd: 0.40
+    output_per_1m_usd: 1.60
+  google/gemini-2.5-flash:
+    unit_kind: tokens
+    input_per_1m_usd: 0.30
+    output_per_1m_usd: 2.50
+  # Voice is metered in minutes, not tokens. The `voice`/`worker` ledgers reconcile the
+  # real usage against this row (§3.5); it is listed here because §9.2 is repo-wide.
+  elevenlabs/conversational:
+    unit_kind: minutes
+    input_per_1m_usd: 0
+    output_per_1m_usd: 0
+    per_minute_usd: 0.10

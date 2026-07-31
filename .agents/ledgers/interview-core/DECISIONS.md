@@ -329,3 +329,92 @@ token; (C) rely on `SameSite` alone.
 `POST /interviews/:id/profile` returns 403 and leaves the state unchanged; a matching origin
 proceeds. The middleware is built alongside the interview router (I03) and first asserted
 through `/profile` in I05.
+
+---
+
+## ADR-I15 — 2026-07-31 — The runnable Cucumber set is an allow-list over `.agents/features/`, not a copy under `backend/`
+
+**Context:** I01 was the first ATDD session, so it had to wire the acceptance runner that
+`.agents/EXECUTE.md` § 7 flags as a false green (`cucumber-js` with no config, no features,
+`0 scenarios`, exit 0). Stage 2 authored 25 `.feature` files in `.agents/features/`, but only
+the four builder-level `security.feature` scenarios have an implementation to run against
+today. Options: (A) a root `cucumber.js` whose `paths` is an explicit allow-list pointing
+straight at `.agents/features/<file>.feature`, grown one file per task; (B) each task copies
+the feature files it wires into `backend/features/`, per REFERENCE.md as written; (C) glob
+all of `.agents/features/` immediately.
+
+**Decision:** (A). Root `cucumber.js`, `paths: ['.agents/features/security.feature']`,
+`require: ['backend/features/step_definitions/**/*.ts']` loaded through `tsx/cjs`,
+`strict: true`. Each task appends its own feature file when it wires the steps. Root
+`npm run test:acceptance` runs `cucumber-js` directly; `backend`'s `test:acceptance` script
+is deleted.
+
+**Why not a copy under `backend/`:** two copies of every feature file is two things to keep
+in sync, and the authored spec silently drifting from the runnable test is precisely the
+failure the acceptance ring exists to prevent. One file, one source of truth.
+
+**Why not a glob:** every unwired feature would be an undefined-step failure forever, so the
+suite could never be green, and a permanently-red suite gets ignored — a slower road to the
+same false green. The allow-list makes the acceptance suite grow exactly as fast as the
+implementation.
+
+**Consequences:** REFERENCE.md's `backend/features/` line is patched to match. Every later
+task in every ledger **must append its feature file to `cucumber.js` `paths`** as part of
+wiring its steps; a task that forgets will see its scenarios silently not run. `strict: true`
+means an undefined, pending or ambiguous step fails the run, so the omission surfaces the
+moment a step definition is added without its feature file.
+
+---
+
+## ADR-I16 — 2026-07-31 — `security.feature` @AC-5's two HTTP steps are restated at the package seam
+
+**Context:** `security.feature` @AC-5 ended with `And the response status is 200` and
+`And exactly 3 questions exist for the HR round`. Both are HTTP-ring assertions needing
+`POST /interviews` and HR generation — I03/I04, which are not `done`. The **spec's** AC-5
+(`.agents/specs/2026-07-29-ai.md`, criterion 5) is package-level: "emits
+`SECURITY_PROMPT_INJECTION_SUSPECTED` **and** the call still proceeds (questions returned)".
+The Gherkin overshot its own acceptance criterion. I01's own Definition of Done requires
+@AC-5 to pass against the builder. Options: (A) rewrite the two steps to their package-seam
+equivalents; (B) defer the whole scenario to I04; (C) implement the steps as written by
+mapping "response status is 200" onto "the call did not throw".
+
+**Decision:** (A). The two lines are replaced by
+`And the generated HR batch contains exactly 3 valid questions`, asserted against
+`StubAiClient.generateRoundQuestions` routed through the real `PromptBuilder`. Everything
+else in the scenario is untouched.
+
+**Why not (C):** a step named "the response status is 200" that never makes a request is the
+same false-green pattern EXECUTE.md § 7 warns about, one line lower down.
+
+**Why not (B):** the injection-is-logged-not-blocking property is I01's to prove, and it is
+provable now. Deferring it would leave the trust boundary's headline behaviour unasserted for
+two more tasks.
+
+**Consequences:** `.agents/features/security.feature` diverges from its Stage-2 text by two
+lines; COVERAGE.md's ai AC-5 mapping still holds, because the scenario still asserts exactly
+what spec criterion 5 states. **`StubAiClient` must keep compiling its prompts through the
+real `PromptBuilder`** — the scenario only passes because generation crosses the trust
+boundary, and an I02 client that skips the builder in stub mode would break it.
+
+---
+
+## ADR-I17 — 2026-07-31 — A prompt `uuid` is unique per lineage, not per file
+
+**Context:** The I01 task file says the registry throws on a duplicate `uuid` across files.
+The ai spec's prompt-file format says the opposite in effect: `uuid` is "permanent identity;
+never reused" and `version` "increments; uuid is stable across versions". Under a
+strict per-file rule, publishing v2 of a prompt is impossible.
+
+**Decision:** the registry enforces two rules — a duplicate `(name, version)` throws, and a
+`uuid` claimed by two different `name` lineages throws. Two files sharing a uuid *and* a name
+are the legal versions-of-one-lineage case and load fine. `resolve(name)` without a version
+returns the highest version.
+
+**Why:** cost and quality analytics hang off `prompt_uuid`; two lineages sharing one would
+silently merge their histories, which is the failure worth throwing on. Versions of one
+lineage sharing it is the entire point of the identifier.
+
+**Consequences:** Every prompt shipped in I01 is `version: 1`, so the versioned resolve path
+has unit coverage but no production exercise yet — noted in STATE.md Backlog. A prompt
+revision is a new file with the same `uuid` and `name` and an incremented `version`; the old
+file is never edited (I01 §Non-negotiables, EXECUTE.md § 8).

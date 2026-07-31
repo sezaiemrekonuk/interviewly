@@ -26,6 +26,9 @@ module.exports = [
     files: [
       "backend/src/**/*.ts",
       "backend/prisma/**/*.ts",
+      // Cucumber step definitions (I01). Feature files themselves live in .agents/features
+      // and are ignored above; the TypeScript that runs them is real source.
+      "backend/features/**/*.ts",
       "packages/*/src/**/*.ts",
       "worker/src/**/*.ts",
     ],

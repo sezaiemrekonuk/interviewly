@@ -1,0 +1,24 @@
+# §7.1.5 prompt-injection detection. A match LOGS and does not block: the Zod output schema
+# is the real barrier, and blocking on a regex would kill legitimate interviews for
+# candidates whose CV happens to quote one of these phrases.
+#
+# Every pattern is matched case-insensitively against the BOUND user content only — never
+# against the system message, which no user value can reach.
+#
+# `id` is what lands in the SECURITY_PROMPT_INJECTION_SUSPECTED log line. The pattern text
+# itself is never logged, so an id must stay stable once admins start recognising it.
+patterns:
+  - id: ignore-previous-instructions
+    pattern: 'ignore\s+(all\s+)?(previous|prior|above)\s+instructions'
+  - id: disregard-instructions
+    pattern: 'disregard\s+(all\s+)?(previous|prior|above)\s+(instructions|rules)'
+  - id: system-prompt-probe
+    pattern: 'system\s+prompt'
+  - id: role-reassignment
+    pattern: 'you\s+are\s+now\s+'
+  - id: role-marker-injection
+    pattern: '^\s*(system|assistant)\s*:'
+  - id: instruction-override
+    pattern: 'new\s+instructions\s*:'
+  - id: reveal-prompt
+    pattern: '(reveal|print|repeat|show)\s+(your|the)\s+(prompt|instructions|system\s+message)'

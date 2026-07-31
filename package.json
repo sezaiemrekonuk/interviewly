@@ -8,10 +8,11 @@
     "worker"
   ],
   "scripts": {
-    "build": "npm run -w @interviewly/types build && npm run -w frontend build && npm run -w backend build",
+    "build": "npm run -w @interviewly/types build && npm run -w @interviewly/ai build && npm run -w frontend build && npm run -w backend build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint . --ext .ts,.tsx",
-    "test:acceptance": "npm run -w backend test:acceptance",
+    "test": "vitest run",
+    "test:acceptance": "cucumber-js",
     "seed": "npm run -w backend seed",
     "prepare": "husky"
   },
@@ -19,10 +20,13 @@
     "@commitlint/cli": "^19",
     "@commitlint/config-conventional": "^19",
     "@typescript-eslint/eslint-plugin": "^8",
+    "@cucumber/cucumber": "^12.9.0",
     "eslint": "^9",
     "husky": "^9.1.7",
     "lint-staged": "^17.2.0",
-    "typescript": "^5"
+    "tsx": "^4.23.1",
+    "typescript": "^5",
+    "vitest": "^4.1.10"
   },
   "lint-staged": {
     "frontend/**/*.{ts,tsx}": "eslint --config frontend/eslint.config.mjs --fix --max-warnings=0",

@@ -56,10 +56,8 @@ Feature: Listing text is never treated as instructions
     And the compiled system message is byte-identical to the prompt template
     And the job listing appears only inside the job_listing block
     And the injected closing delimiter is neutralised in the compiled user message
-    And the response status is 200
-    And exactly 3 questions exist for the HR round
+    And the generated HR batch contains exactly 3 valid questions
     When a job listing matching no injection pattern is used
     And the HR round is generated
     Then no "SECURITY_PROMPT_INJECTION_SUSPECTED" event is emitted
-    And the response status is 200
-    And exactly 3 questions exist for the HR round
+    And the generated HR batch contains exactly 3 valid questions

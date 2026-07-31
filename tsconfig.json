@@ -13,9 +13,17 @@
     "isolatedModules": true,
     "baseUrl": ".",
     "paths": {
-      "@interviewly/types": ["packages/types/src/index.ts"]
+      "@interviewly/types": ["packages/types/src/index.ts"],
+      "@interviewly/ai": ["packages/ai/src/index.ts"]
     }
   },
-  "include": ["backend/src", "backend/prisma", "frontend/src", "packages/*/src", "worker/src"],
+  "include": [
+    "backend/src",
+    "backend/prisma",
+    "backend/features",
+    "frontend/src",
+    "packages/*/src",
+    "worker/src"
+  ],
   "exclude": ["node_modules", "**/dist", "**/.next"]
 }

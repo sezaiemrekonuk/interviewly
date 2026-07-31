@@ -91,7 +91,9 @@ jobs:
         with: { node-version: '22', cache: 'npm' }
       - run: npm ci --prefer-offline --no-audit --fund=false
       - run: npx prisma generate --schema backend/prisma/schema.prisma
-      - run: npm run -w backend test:unit
+      # One vitest run over the whole tree. `--passWithNoTests` is deliberately gone (I01):
+      # it made this job green on an empty repo, which is worse than no job at all.
+      - run: npm test
 
   acceptance:
     runs-on: ubuntu-latest
