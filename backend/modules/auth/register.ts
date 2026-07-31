@@ -17,13 +17,14 @@ export const register: RequestHandler = async (req, res) => {
   if (parsed.data.password.length < 10) throw new ApiError('PASSWORD_TOO_SHORT');
 
   const email_lower = parsed.data.email.trim().toLowerCase();
-  if (await prisma.user.findUnique({ where: { email_lower } })) {
-    throw new ApiError('EMAIL_TAKEN');
-  }
 
   const password_hash = await hash(parsed.data.password);
-  const user = await prisma.user.create({ data: { email_lower, password_hash } });
-
+  const user = await prisma.user
+    .create({ data: { email_lower, password_hash } })
+    .catch((err) => {
+      if ((err as { code?: string } | null)?.code === 'P2002') throw new ApiError('EMAIL_TAKEN');
+      throw err;
+    });
   const token = generateToken();
   await prisma.session.create({
     data: { id: token, user_id: user.id, expires_at: sessionExpiry() },
