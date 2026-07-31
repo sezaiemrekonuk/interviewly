@@ -49,6 +49,19 @@ npm run -w @interviewly/ai test
 # >>> Your task MUST append its feature file to `cucumber.js` `paths` when it wires the
 # >>> steps. Forget, and your scenarios silently do not run.
 #
+# I04: `cucumber.js` forces AI_ENABLED=false for every run. The suite generates through the
+# app's own AiClient now, and the local .env carries live provider keys — an unguarded run
+# would bill them and make assertions non-deterministic. ai_provider.feature is unaffected
+# (it fakes ProviderTransport inside the World). A shared Before hook in server.ts clears
+# `ratelimit:*` and upserts the two personas, since register is 3/hour per IP and CI runs
+# `migrate deploy` without `npm run seed`.
+#
+# Running it LOCALLY needs host-reachable URLs — .env points at the compose hostnames, which
+# do not resolve from the host:
+#
+#   export DATABASE_URL=postgresql://interviewly:interviewly@localhost:5432/interviewly
+#   export REDIS_URL=redis://localhost:6380
+#
 # Verification commands in this ledger use area tags; scope compound files with `and`.
 npm run test:acceptance -- --tags "@security"
 npm run test:acceptance -- --tags "@ai-provider"
