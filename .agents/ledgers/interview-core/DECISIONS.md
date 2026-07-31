@@ -612,3 +612,45 @@ CLI `--tags` replaces the expression, so scoped Verification commands are unaffe
 multi-owner files only — a file one task owns end to end still goes in whole. **A forgotten
 `@unwired` deletion is a silent skip**, the same trap `paths` already has; both are called
 out in REFERENCE.md.
+
+## ADR-I26 — 2026-07-31 — A CLI `--tags` is ANDed with the profile expression, not a replacement
+
+**Context:** ADR-I25's last clause is wrong. I06's Verification command
+(`--tags "@interview-flow and (@AC-8 or @AC-9 or @AC-10)"`) reported `0 scenarios` and exited
+`0` while all three scenarios still carried `@unwired`: cucumber-js combines the profile's
+`tags: 'not @unwired'` with the CLI expression. Exactly the false green EXECUTE.md §7 warns
+about, produced by the mechanism meant to prevent one.
+
+**Decision:** keep `@unwired`; correct the claim. A task's scoped Verification **cannot run
+until that task deletes its own `@unwired` tag** — deletion comes first, then the red run.
+
+**Consequences:** supersedes the final sentence of ADR-I25 only; the tag convention stands.
+**I07 (@AC-16) and I08 (@AC-11) must delete their tag before trusting a scoped run** — a
+`0 scenarios` result is a skip, never a pass. Corrected in `cucumber.js` and REFERENCE.md.
+
+## ADR-I27 — 2026-07-31 — `asked_at` is stamped when `GET /state` delivers the question
+
+**Context:** `duration_ms` is `answered_at − asked_at` on the server clock (@AC-10 sends a
+client `duration_ms` of 999 and expects 12000 stored). Something has to record delivery, and
+`POST /profile` cannot: it sets `current_index = 1` before the questions exist.
+
+**Decision:** `state.ts` stamps `asked_at` when it first resolves a question as current —
+delivery is the moment a client is handed the text. `answers.ts` reads it and never a client
+timestamp. `src/lib/clock.ts` (`clock.now()`) is the one server-clock seam so the suite can
+fix `now` without faking global `Date` under Prisma.
+
+**Consequences:** `GET /state` writes on a read, by design. A turn delivered by some future
+path that bypasses `/state` (I07 SSE push) must stamp `asked_at` too or its `duration_ms` is
+null — nullable is honest, a client-supplied number would not be.
+
+## ADR-I28 — 2026-07-31 — `hr_round → evaluating` is in the table from the start
+
+**Context:** I03's split is `hrCount = max(2, round(target * 0.4))`, so `target = 2` yields
+zero technical questions. Handing that interview to `tech_round` parks it on an empty round;
+refusing the edge 409s a legal interview at its last answer.
+
+**Decision:** `TRANSITIONS.hr_round = ['tech_round', 'evaluating']`. `answers.ts` picks
+`evaluating` whenever `nextIndex > target_question_count`, from either round.
+
+**Consequences:** I07 inherits the edge — do not "tidy" it away. Not the same thing as
+`cut_short` (I10), which ends an interview that still has questions left.

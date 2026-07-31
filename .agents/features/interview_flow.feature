@@ -3,7 +3,7 @@
 # The owning task DELETES its own @unwired tag in the PR that wires its step definitions.
 Feature: Sequential interview flow
 
-  @interview-flow @backend @AC-8 @unwired
+  @interview-flow @backend @AC-8
   Scenario: An answer cannot target a non-current question
     Given I am on question 2 of an 8-question interview
     When I submit an answer for question 3
@@ -14,7 +14,7 @@ Feature: Sequential interview flow
     Then the response status is 200
     And the interview currentIndex is 3
 
-  @interview-flow @backend @AC-9 @unwired
+  @interview-flow @backend @AC-9
   Scenario: State fetch resumes at the next unanswered question
     Given I answered 3 questions in an 8-question interview
     When I fetch GET "/interviews/:id/state"
@@ -25,7 +25,7 @@ Feature: Sequential interview flow
     Then currentIndex is 4
     And the transcript cursor covers 3 answers
 
-  @interview-flow @backend @AC-10 @unwired
+  @interview-flow @backend @AC-10
   Scenario: Answer duration is computed on the server clock
     Given the fixed clock is "2026-07-29T10:00:00Z"
     And question 2 was delivered at "2026-07-29T09:59:48Z"
