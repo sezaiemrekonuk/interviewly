@@ -3,6 +3,7 @@ import './setup';
 import { execSync } from 'node:child_process';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { join } from 'node:path';
 
 import { app } from '../../src/app';
 import { prisma } from '../../src/lib/db';
@@ -13,9 +14,14 @@ let baseUrl = '';
 
 export const getBaseUrl = (): string => baseUrl;
 
+// Anchored to this file, not to `process.cwd()`: the runner moved to the repo root when
+// the auth ring was rewired into the root `cucumber.js`, and a cwd-relative schema path
+// silently stops resolving the moment the run is invoked from anywhere else.
+const SCHEMA = join(__dirname, '../../prisma/schema.prisma');
+
 export async function bootApp(): Promise<void> {
   // Idempotent: applies the F02 migration if the acceptance database is empty.
-  execSync('npx prisma migrate deploy', { cwd: process.cwd(), stdio: 'ignore' });
+  execSync(`npx prisma migrate deploy --schema "${SCHEMA}"`, { stdio: 'ignore' });
   await new Promise<void>((resolve) => {
     server = app.listen(0, () => {
       const { port } = server!.address() as AddressInfo;

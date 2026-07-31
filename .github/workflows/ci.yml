@@ -119,7 +119,11 @@ jobs:
       - run: npm ci --prefer-offline --no-audit --fund=false
       - run: npx prisma generate --schema backend/prisma/schema.prisma
       - run: cd backend && npx prisma migrate deploy
+      # Both profiles, explicitly. `test:acceptance` is the `default` profile only, so for two
+      # commits after I01 the auth ring was not executed by anything and this job stayed green
+      # regardless (auth STATE.md, BLOCKER-2). A new ring must be added here or it is not run.
       - run: npm run test:acceptance
+      - run: npx cucumber-js -p auth
 
   audit:
     runs-on: ubuntu-latest
