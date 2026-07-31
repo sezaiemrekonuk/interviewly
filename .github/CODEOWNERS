@@ -1,0 +1,105 @@
+# Code owners — derived from the ownership table in .agents/EXECUTE.md §1.
+#
+#   Sezai  @sezaiemrekonuk    foundations F03, interview-core I01–I15
+#   Ahmet  @AhmetSukruKilic   foundations F01, auth A01–A06, report R01–R03
+#   Fatih  @fatih-top         foundations F02, admin N01–N02, voice V01–V05, adaptive D01–D03
+#
+# Last matching rule wins, so the file is ordered general -> specific.
+# GitHub never requests a review from the PR author, so a PR that only touches
+# your own paths falls back to the catch-all rule below.
+#
+# When EXECUTE.md §1 changes, this file changes with it.
+
+# ---------------------------------------------------------------- catch-all
+*                                       @sezaiemrekonuk @AhmetSukruKilic @fatih-top
+
+# ------------------------------------------------- foundations F03 (Sezai) --
+# workspace, compose, edge, CI, env/logger plumbing
+/package.json                           @sezaiemrekonuk
+/package-lock.json                      @sezaiemrekonuk
+/tsconfig.json                          @sezaiemrekonuk
+/eslint.config.js                       @sezaiemrekonuk
+/commitlint.config.js                   @sezaiemrekonuk
+/cucumber.js                            @sezaiemrekonuk
+/compose.yaml                           @sezaiemrekonuk
+/compose.dev.yaml                       @sezaiemrekonuk
+/compose.observability.yaml             @sezaiemrekonuk
+/Caddyfile                              @sezaiemrekonuk
+/.env.example                           @sezaiemrekonuk
+/.dockerignore                          @sezaiemrekonuk
+/.husky/                                @sezaiemrekonuk
+/.github/                               @sezaiemrekonuk
+/ci/                                    @sezaiemrekonuk
+/db/                                    @sezaiemrekonuk
+/edge/                                  @sezaiemrekonuk
+/elasticsearch/                         @sezaiemrekonuk
+/kibana/                                @sezaiemrekonuk
+**/Dockerfile                           @sezaiemrekonuk
+backend/src/lib/env.ts                  @sezaiemrekonuk
+backend/src/lib/logger.ts               @sezaiemrekonuk
+# worker/src/lib/{env,logger}.ts are also F03 — they sit below the /worker/ rule
+# in the report block, because the last matching rule wins.
+
+# ------------------------------------------------- foundations F01 (Ahmet) --
+# design tokens, shared types, i18n, error-code registry
+/packages/types/                        @AhmetSukruKilic
+frontend/styles/                        @AhmetSukruKilic
+frontend/messages/                      @AhmetSukruKilic
+frontend/src/i18n.ts                    @AhmetSukruKilic
+frontend/src/i18n/                      @AhmetSukruKilic
+frontend/src/middleware.ts              @AhmetSukruKilic
+frontend/src/app/globals.css            @AhmetSukruKilic
+backend/src/lib/error-codes.*           @AhmetSukruKilic
+
+# ------------------------------------------------- foundations F02 (Fatih) --
+# Prisma schema, migrations, seed
+/backend/prisma/                        @fatih-top
+backend/src/lib/db.ts                   @fatih-top
+
+# ----------------------------------------------- interview-core (Sezai) I* --
+/packages/ai/                           @sezaiemrekonuk
+backend/**/modules/interview/           @sezaiemrekonuk
+backend/**/modules/ai/                  @sezaiemrekonuk
+backend/src/lib/storage.ts              @sezaiemrekonuk
+backend/src/lib/probes.ts               @sezaiemrekonuk
+
+# -------------------------------------------------------- auth (Ahmet) A* --
+backend/**/modules/auth/                @AhmetSukruKilic
+backend/src/lib/session.ts              @AhmetSukruKilic
+frontend/src/app/**/(auth)/             @AhmetSukruKilic
+worker/src/jobs/email-send.ts           @AhmetSukruKilic
+
+# ------------------------------------------------------ report (Ahmet) R* --
+/worker/                                @AhmetSukruKilic
+backend/src/lib/queue.ts                @AhmetSukruKilic
+worker/src/lib/env.ts                   @sezaiemrekonuk
+worker/src/lib/logger.ts                @sezaiemrekonuk
+
+# ------------------------------------------------------- admin (Fatih) N* --
+backend/**/modules/admin/               @fatih-top
+backend/**/modules/interview/delete.ts  @fatih-top
+backend/**/modules/interview/my-interviews.ts   @fatih-top
+
+# ------------------------------------------------------- voice (Fatih) V* --
+backend/**/modules/voice/               @fatih-top
+worker/src/jobs/voice-reconcile.ts      @fatih-top
+
+# ---------------------------------------------------- adaptive (Fatih) D* --
+backend/**/modules/interview/adaptive-select.ts @fatih-top
+backend/**/modules/interview/candidate-prep.ts  @fatih-top
+
+# ----------------------------------------------------------- ledgers/docs --
+# A ledger's plan, state and tasks belong to the person who executes it.
+/.agents/ledgers/interview-core/         @sezaiemrekonuk
+/.agents/ledgers/auth/                   @AhmetSukruKilic
+/.agents/ledgers/report/                 @AhmetSukruKilic
+/.agents/ledgers/admin/                  @fatih-top
+/.agents/ledgers/voice/                  @fatih-top
+/.agents/ledgers/adaptive/               @fatih-top
+/.agents/ledgers/foundations/tasks/F01-design-tokens-types-i18n-errors.md  @AhmetSukruKilic
+/.agents/ledgers/foundations/tasks/F02-prisma-schema-migrate-seed.md       @fatih-top
+/.agents/ledgers/foundations/tasks/F03-workspace-compose-logger-env-ci.md  @sezaiemrekonuk
+/.agents/ledgers/foundations/tasks/F04-precommit-hooks.md                  @sezaiemrekonuk
+
+# .agents/EXECUTE.md and the shared ledger docs stay on the catch-all rule —
+# a change to who owns what needs all three to see it.
