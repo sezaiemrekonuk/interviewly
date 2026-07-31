@@ -15,7 +15,7 @@ COPY . .
 # Prisma Client is generated code — without this the api/worker/migrate images have an
 # empty @prisma/client (F02).
 RUN npx prisma generate --schema backend/prisma/schema.prisma
-RUN npm run -w @interviewly/backend build || true
+RUN npm run -w @interviewly/backend build
 
 FROM node:22-alpine AS runner
 WORKDIR /app
@@ -23,4 +23,4 @@ ENV NODE_ENV=production
 COPY --from=build /app .
 USER node
 EXPOSE 4000
-CMD ["node", "backend/dist/index.js"]
+CMD ["node", "backend/dist/src/index.js"]
