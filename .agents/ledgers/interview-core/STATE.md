@@ -175,6 +175,17 @@ entry not wired — means I01 has nowhere to publish the `@interviewly/ai` packa
   `docker compose build`), which is why it has stayed hidden. Found during I01, out of I01's
   scope; it belongs to whichever task first needs a compiled backend. **Foundations, not
   interview-core** — flag it to Ahmet/Fatih rather than fixing it in a feature PR.
+- **`worker`'s Docker build cannot resolve `zod`** — `docker compose build worker` fails with
+  `src/lib/env.ts(3,19): error TS2307: Cannot find module 'zod'` (plus the `noImplicitAny` error
+  that follows from it). The image does `COPY --from=deps /app/node_modules ./node_modules`, and
+  the workspace hoist does not put `zod` where `tsc -p worker/tsconfig.json` looks. **Pre-existing
+  and unrelated to interview-core** — CI's `build` job has been red on master since before I03;
+  commit `ebb0ba1` is titled "fix(ci): skip worker" but only made `acceptance` non-blocking, so
+  the worker build was never actually skipped. I04 split the job into
+  `docker compose build migrate api web` (blocking) plus `docker compose build worker || true`,
+  so a real regression in the three services that gate a working stack can no longer hide behind
+  it. **Foundations, not interview-core** — flag to Ahmet/Fatih.
+
 - **Entity-split on truncation** — `PromptBuilder` cuts at exactly 12 000 characters after
   neutralisation, which can leave a trailing `&lt;` chopped to `&l`. No bracket is
   reconstructed and no security property is lost, so this is cosmetic; marked with a

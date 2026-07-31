@@ -4,7 +4,7 @@ author: Sezai
 sessions: [2026-07-31]
 model: claude-opus-5
 model_recommended: claude-opus-4.8
-iterations: 4
+iterations: 5
 tools: [superpowers:brainstorming, superpowers:using-superpowers]
 ---
 
@@ -110,3 +110,55 @@ which closes the two-undefined-scenario gap I03 left behind, so I removed
   says `dateOfBirth`, the db spec says `date_of_birth` — and A06 (which writes `users.profile`)
   has not landed to settle it. Both casings are stripped, for the CV key too, and the unit test
   asserts both. Cheap insurance against a task I do not own choosing the other one.
+
+## Session 2 — 2026-07-31 — PR #12 CI
+
+### What I asked for / what came back
+
+PR #12 came back with `unit` and `build` red while `acceptance`, `lint`, `typecheck`,
+`compose-check`, `migrate-check` and `audit` were all green. Two unrelated causes.
+
+**`unit` — mine.** `profile.test.ts` is a pure-function test, but importing it pulls
+`profile.ts → generation.ts → modules/ai → src/lib/env.ts`, which `process.exit(1)`s at import
+time when a key is missing (F03's fail-fast, working as designed). It passed locally because
+Vite loads a root `.env` into `process.env`, and `.env` is gitignored, so CI had none. I
+reproduced it by moving `.env` aside — `Test Files 1 failed / no tests`, the same shape CI
+showed — then confirmed the fix by running the whole suite against `.env.example`: 75 passed.
+The fix is the `cp .env.example .env` line `build`, `compose-check` and `acceptance` already
+carry; `unit` is simply the first job to need it, because I04 added the first backend unit test.
+
+**`build` — not mine.** `docker compose build` fails in the `worker` image on
+`src/lib/env.ts(3,19): error TS2307: Cannot find module 'zod'`. The image copies the hoisted
+`node_modules` from its deps stage and `zod` is not where `tsc -p worker/tsconfig.json` looks.
+Every `build` run on master has been red since before I03. Commit `ebb0ba1` is titled
+"fix(ci): skip worker" but its diff only added `continue-on-error` to `acceptance` — the worker
+build was never skipped, so the title has been quietly misleading for three merges.
+
+### Methodology trace
+
+```
+PR #12 unit red → hide .env locally → same failure reproduced → cp .env.example .env → 75 passed
+PR #12 build red → git log ebb0ba1 → diff touches `acceptance` only, not worker
+                 → gh run list --branch master → 3/3 previous master builds also failed
+                 → pre-existing, isolate rather than absorb
+```
+
+### Friction
+
+The mislabelled commit cost the most time. `fix(ci): skip worker` reads as "worker is already
+handled", so my first instinct was that I had broken something a teammate had already fenced
+off. Checking master's own run history was what settled it — three consecutive red builds
+predating my branch.
+
+### What I rejected and rewrote by hand
+
+- **`docker compose build || true`**, which is what I was asked for and what I first wrote. It
+  makes the *entire* `build` job unfailable, so a broken `api` or `web` image would report green
+  — the same "a job that cannot fail is worse than a missing job" trap EXECUTE.md § 7 names, and
+  the trap this PR is otherwise closing by making `acceptance` blocking again. Rewrote as two
+  steps: `docker compose build migrate api web` blocking, then `docker compose build worker
+  || true`. My human confirmed `|| true` on the worker step, which is what shipped — the split
+  is what keeps it from covering the three services that gate a working stack.
+- **Splitting `mergeProfile` into an env-free module** to dodge the import chain. It would have
+  fixed this one test and left the next backend unit test to rediscover the same wall; the env
+  file is the thing that was missing, not the module boundary.
