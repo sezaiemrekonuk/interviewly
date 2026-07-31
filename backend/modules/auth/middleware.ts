@@ -3,7 +3,7 @@ import type { RequestHandler } from 'express';
 
 import { ApiError } from '../../src/lib/api-error';
 import { prisma } from '../../src/lib/db';
-import { SESSION_COOKIE, sessionExpiry } from '../../src/lib/session';
+import { SESSION_COOKIE, issueCookie, sessionExpiry } from '../../src/lib/session';
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -17,7 +17,7 @@ declare global {
 
 // Guards every protected route. Reads the opaque session cookie, resolves the row,
 // enforces BOTH revoked_at IS NULL AND expires_at > now(), then slides the window.
-export const requireAuth: RequestHandler = async (req, _res, next) => {
+export const requireAuth: RequestHandler = async (req, res, next) => {
   try {
     const token = req.cookies?.[SESSION_COOKIE] as string | undefined;
     if (!token) throw new ApiError('UNAUTHENTICATED');
@@ -35,6 +35,7 @@ export const requireAuth: RequestHandler = async (req, _res, next) => {
       where: { id: token },
       data: { expires_at: sessionExpiry() },
     });
+    issueCookie(res, token);
 
     req.user = user;
     next();
