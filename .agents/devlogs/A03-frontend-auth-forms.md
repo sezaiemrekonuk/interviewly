@@ -4,7 +4,7 @@ author: Ahmet
 sessions: [2026-07-31]
 model: claude-opus-5[1m]
 model_recommended: claude-sonnet-4.6
-iterations: 2
+iterations: 3
 tools: [superpowers:brainstorming, superpowers:test-driven-development]
 ---
 
@@ -110,3 +110,75 @@ Context block was off by one directory.
   in the DOM — the non-negotiable that the frontend never renders a code.
 - **`vitest.config.ts`** was renamed to `.mts` after Vite warned it was parsing ESM as CJS
   on every run. Cosmetic, but a warning printed twice per `npm test` is noise CI inherits.
+
+## Session 2 — 2026-07-31
+
+### What I asked for / what came back
+
+"Can you run it to see whether it works." Session 1 had marked A03 blocked on three F03
+stack defects without ever having run the screens in a browser — the component ring was
+green, but green unit tests are not a working page. So: stand the stack up by hand and
+drive it.
+
+The API, Postgres and Redis came up fine. `next dev` came up fine. Then every route 404'd.
+
+### Methodology trace
+
+Built the runtime bottom-up, checking each layer before adding the next, so a failure would
+name its own cause:
+
+```
+db + cache (compose, host ports)     → prisma migrate deploy: "No pending migrations"
+API on host (tsx)                    → SERVER_STARTED :4000, /healthz 200
+next dev                             → :3000 up
+GET :3000/sign-in                    → 307 → /en/sign-in → 404      ← defect found here
+remove src/middleware.ts             → /, /sign-in, /register all 200
+Caddy container, committed config
+  + the one handle_path change       → /api/healthz 200 through the edge
+full auth contract via curl          → 201 / 409 / 401 / 200 / 401, all correct codes
+playwright smoke                     → 1 failed (429), then 2 passed after the config fix
+screenshots + request counting       → short password: 0 API calls, inline message
+```
+
+The `/en/sign-in` 404 is the one that mattered. `next build` in session 1 listed the routes
+as `/sign-in` and `/register`, which I read as confirmation the route map held — but build
+output lists filesystem routes and says nothing about what middleware does to a request at
+runtime. Every route in the app, `/` included, was a 404 in a browser, and had been since
+F01. A build that lists a route is not a route that answers.
+
+### Friction
+
+The smoke's first run failed on `expected 201, received 429` inside `beforeAll`. My instinct
+was to blame the rate limiter as environmental; it wasn't. Playwright workers are separate
+processes and each runs the file's `beforeAll`, so two workers spent two of the three hourly
+registrations on the fixture before a single test body ran. That is my bug, in a config I
+wrote, and only running it could have surfaced it — the component ring cannot see a limiter
+and `--list` cannot see a fixture.
+
+The register limiter is 3/hr/IP, so the smoke is inherently once-per-hour-per-IP. I flushed
+`ratelimit:*` between runs, which is exactly what A01's acceptance harness does between
+scenarios. Whoever wires this into CI needs the same hook or an ephemeral Redis.
+
+Screenshots were worth the detour: the fonts were visibly wrong in a way no assertion I had
+written would ever have caught. Headings rendered in Outfit, everything else in the browser's
+default serif, because `--font-body` was defined on `<html>` and then never applied to
+anything. A CSS variable names a font; it does not use it.
+
+### What I rejected and rewrote by hand
+
+- **`fullyParallel: true` in `playwright.config.ts`.** Copied from the Playwright default
+  scaffold without thinking about a fixture that spends a rate-limited resource. Rewrote to
+  `workers: 1`, and gave the fixture's assertion a message that explains a 429 rather than
+  letting it read as an app regression.
+- **Leaving `src/middleware.ts` in place with `localePrefix: 'never'`.** My first idea, and
+  wrong: next-intl's routing middleware rewrites to a `[locale]` segment in every prefix
+  mode, and this app has none. The app is in *without i18n routing* mode, which takes no
+  middleware at all. Removed the file instead of configuring it into a shape it cannot have.
+- **Treating the 404 as A03's problem to route around.** It was tempting to special-case the
+  auth routes in the matcher and move on, since only `/sign-in` and `/register` were in
+  scope. But `/` was broken too, the cause was F01, and F01 is this ledger owner's — so the
+  fix belonged upstream of A03, not inside it.
+- **Calling the task done because the smoke went green.** It went green against a runtime I
+  assembled by hand, not against `docker compose up`, which is what the Definition of done
+  names. The row stays `blocked`; the run is recorded as evidence for the proposed F03 fix
+  rather than as the verification it is not.

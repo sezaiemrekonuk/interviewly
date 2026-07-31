@@ -16,7 +16,15 @@ async function registerViaApi(request: APIRequestContext, email: string): Promis
   const response = await request.post('/api/auth/register', {
     data: { email, password: PASSWORD },
   });
-  expect(response.status()).toBe(201);
+  // A 429 here is the register limiter (3/hr/IP), not a broken app: this run spends two
+  // registrations and a previous run inside the same hour already spent its own. Say so,
+  // because `expected 201, received 429` on its own reads like a regression.
+  expect(
+    response.status(),
+    'register returned ' +
+      response.status() +
+      ' — if 429, the 3/hr/IP register limiter is still counting an earlier run from this IP',
+  ).toBe(201);
 }
 
 test.describe('auth smoke', () => {

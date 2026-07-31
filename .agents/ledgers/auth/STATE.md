@@ -91,6 +91,42 @@ Note that CI is green on all three: the `build` job's `docker compose build` pas
 of the `|| true`, and `compose-check` only validates YAML. Neither job ever starts a
 container. Worth a foundations backlog entry on its own.
 
+**The proposed fix for (3) is verified, not guessed (2026-07-31).** The stack was
+reassembled by hand — Postgres and Redis from `compose.yaml`, the API on the host via
+`tsx backend/src/index.ts`, `next dev`, and a Caddy container whose config is the committed
+Caddyfile with the single `handle` → `handle_path` change — and the whole surface came up
+green through the edge on `:8080`:
+
+```
+GET  /api/healthz                        200
+POST /api/auth/register                  201 + Set-Cookie: session=…; HttpOnly; SameSite=Lax
+POST /api/auth/register  (duplicate)     409 {"error":{"code":"EMAIL_TAKEN"}}
+POST /api/auth/login     (wrong pw)      401 {"error":{"code":"INVALID_CREDENTIALS"}}
+POST /api/auth/login     (correct)       200
+GET  /api/me             (with cookie)   200 {"user":{…}}
+GET  /api/me             (no cookie)     401 {"error":{"code":"UNAUTHENTICATED"}}
+npx playwright test tests/smoke/auth.spec.ts   2 passed
+```
+
+So `handle_path` is the whole of defect (3): no backend mount path moves, no acceptance-test
+URL moves. Defects (1) and (2) still need F03 for `docker compose up` to reproduce this.
+
+**Two further defects were found and fixed in this branch — both F01, this ledger's owner.**
+
+4. **Every route in the app was a 404.** `frontend/src/middleware.ts` used
+   `createMiddleware` from `next-intl/middleware`, whose default `localePrefix: 'always'`
+   redirects `/sign-in` → `/en/sign-in`. The app has no `[locale]` segment — it is
+   next-intl's *without i18n routing* mode (`requestLocale` in `src/i18n.ts`) — so every
+   redirect landed on a 404, `/` included. That mode takes no middleware at all, so the file
+   was removed. `/`, `/sign-in` and `/register` now answer 200. Turkish is not selectable
+   until the locale switcher lands, which is the state this ledger's Backlog already
+   records.
+5. **Body copy rendered in the browser's fallback serif.** The root layout defines
+   `--font-body`/`--font-heading` on `<html>`, but `globals.css` never applied
+   `--font-body` to `body` — so headings that name `--font-heading` looked right while
+   every other string did not. One declaration in `globals.css`, plus `font: inherit` on
+   `button`/`input`.
+
 ## Task ledger (A01–A05)
 
 Statuses: todo → in_progress → done → (blocked if waiting on user).

@@ -193,8 +193,24 @@ round-trip is wired, not that the business rules are correct (those are AC-1 thr
 ## Notes
 
 **Status 2026-07-31: `blocked`, not `done`.** The component ring is complete and green;
-the Playwright smoke cannot run because `docker compose up` does not produce a working
-stack. Three F03 defects, all reproduced — see STATE.md → `## Open blockers`.
+the Playwright smoke cannot run *from `docker compose up`* because that stack does not
+come up. Three F03 defects, all reproduced — see STATE.md → `## Open blockers`.
+
+**Session 2 ran the smoke green against a hand-assembled runtime** (host API + `next dev` +
+a Caddy container carrying the committed Caddyfile with the one proposed `handle_path`
+change). `2 passed`. That is evidence A03's code is correct and that the proposed fix for
+BLOCKER-1 (3) is the right one — it is *not* the Definition of done, which requires the
+smoke to pass against `docker compose up`. The row stays `blocked` until F03 lands.
+
+Three defects were found by actually running it, and fixed here:
+- **`playwright.config.ts` was self-429ing.** Workers are separate processes and each ran
+  the file's `beforeAll`, so two workers spent two of the three hourly registrations on the
+  fixture alone. Now `workers: 1`, `fullyParallel: false`, and the fixture's assertion says
+  what a 429 means so it does not read as a regression.
+- **F01: every route was a 404** — `src/middleware.ts` redirected `/sign-in` → `/en/sign-in`
+  and the app has no `[locale]` segment. Removed; see STATE.md defect 4.
+- **F01: body copy rendered in fallback serif** — `--font-body` was defined but never
+  applied. See STATE.md defect 5.
 
 ```
 npm run -w frontend test -- --testPathPattern="(sign-in|register)"

@@ -14,10 +14,20 @@ body {
 
 body {
   min-height: 100%;
+  /* The root layout defines --font-body/--font-heading as CSS variables on <html>, but a
+     variable only names a font — something still has to apply it. Without this, every
+     body string falls back to the browser default serif while headings that set
+     --font-heading explicitly render correctly, which looks like a half-broken page. */
+  font-family: var(--font-body), system-ui, sans-serif;
   color: var(--text);
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+button,
+input {
+  font: inherit;
 }
 
 a {
