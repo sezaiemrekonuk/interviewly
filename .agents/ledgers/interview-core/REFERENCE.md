@@ -90,10 +90,15 @@ SCREAMING_SNAKE_CASE code — never a display string. All `:id` routes are owner
 | `GET /healthz` | — | 200 `{ ok: true }` | — | I14 |
 | `GET /readyz` | — | 200 `{ ready: true }` / 503 `NOT_READY` | `NOT_READY` | I14 |
 
-Room-state shape (`GET /state`, backend spec §6): `{ interviewId, state, mode, language,
-currentIndex, targetQuestionCount, hrQuestionCount, question: { id, text, kind, difficulty,
-topic } | null, endedReason | null, spentUsd, budgetUsd }`. Resumable after a refresh —
-`currentIndex` and `state` reconstruct the room with no client memory (§3.8).
+Room-state shape (`GET /state`, backend spec §6, implemented I03): `{ interviewId, state,
+mode, currentIndex, targetQuestionCount, endedReason, language, persona: { role, name,
+avatarState } | null, currentQuestion: { id, text, kind, widget, deliveredAt } | null,
+transcriptCursor }`. This supersedes an earlier draft of this shape that used `question` +
+`hrQuestionCount`/`spentUsd`/`budgetUsd` instead — the spec.md §6 jsonc is the one actually
+built. Resumable after a refresh — `currentIndex` and `state` reconstruct the room with no
+client memory (§3.8). `persona`/`currentQuestion` are null until a round exists (I04);
+`avatarState` is a fixed `'idle'` placeholder until I07 wires it to live SSE state; `widget`
+is always null until I04/I06 build widget-kind questions.
 
 ## `@interviewly/ai` — the one seam
 

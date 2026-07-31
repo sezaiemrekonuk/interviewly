@@ -119,6 +119,10 @@ jobs:
       - run: npm ci --prefer-offline --no-audit --fund=false
       - run: npx prisma generate --schema backend/prisma/schema.prisma
       - run: cd backend && npx prisma migrate deploy
+      # I03: acceptance now imports backend/src/app.ts, which needs the full env schema.
+      # Same one-liner build/compose-check already use; job-level env above still wins for
+      # DATABASE_URL/SHADOW_DATABASE_URL/REDIS_URL (cucumber.js's loadEnvFile fills the rest).
+      - run: cp .env.example .env
       - run: npm run test:acceptance
 
   audit:

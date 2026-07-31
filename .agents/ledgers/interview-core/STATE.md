@@ -1,13 +1,20 @@
 # Interview-core — State
 
 Last updated: 2026-07-31
-Last session ended: **I02 done.** Real provider execution behind the `AiClient` seam: the
-openai→gemini chain (both called with plain `fetch`, no SDK added), one `llm_calls` row per
-attempt including failed ones, cost frozen at return time from `model-prices.yaml`, the
-`AI_ENABLED` kill switch resolving to an audited `StubAiClient`, and the boot-time
-provider-key check wired into `backend/src/index.ts`. `ai_provider.feature` runs 11 green
-scenarios (20 across the suite). One blocker handed to F02: `llm_calls.cost_usd` is NOT NULL
-but AC-8 needs null — see Open blockers. Not committed; the working tree is the hand-off.
+Last session ended: **I03 done.** `POST /interviews` (Zod body, `LISTING_REQUIRED`,
+deterministic hr/tech split, occupation-cluster keyword heuristic, K8.6
+`EMAIL_NOT_VERIFIED` gate), `GET /interviews/:id/state` (room-state shape per backend spec
+§6), the ownership resolver (`INTERVIEW_NOT_FOUND` 404, never 403 — ADR-I11) and the CSRF
+origin/referer middleware, all mounted on a new `/interviews` router in `app.ts`.
+`question_generation.feature` @AC-6 is green. Found and fixed a pre-existing `env.ts` bug
+along the way (`z.coerce.boolean()` coerces the *string* `"false"` to `true` — silently
+flipped `EMAIL_VERIFICATION_REQUIRED`/`AI_ENABLED`/`SESSION_COOKIE_SECURE`); also wired
+`cucumber.js` to load `.env`, added the same to CI's `acceptance` job, and fixed a real
+process-hang (open Redis/Prisma handles never closed after the run). **Known interim gap:**
+`question_generation.feature`'s other two scenarios (`@AC-7`, `@AC-1`) are I04's scope and
+stay undefined until I04 lands — full `npm run test:acceptance` (and CI's `acceptance` job)
+will show 2 undefined scenarios until then; task's own scoped Verification is fully green.
+See I03's `## Notes` for the full account. Not committed; the working tree is the hand-off.
 
 ## Execution protocol (follow exactly)
 
@@ -24,13 +31,12 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**I03 — Interview setup, room-state read, ownership resolver, CSRF middleware** is the next
-eligible task: `A01` is now `done`, so its whole `Depends on` (F01, F02, F03, A01) is green.
-I04 is the one after it and needs both I02 (done) and I03.
-
-Before starting I03, read I02's `## Notes` for the `aiClient()` singleton and the three
-`AiError` codes to map, and I01's for the `cucumber.js` allow-list rule — I03/I04 add
-`question_generation.feature` and `profiling.feature` to it.
+**I04 — Profiling + round question generation** is the next eligible task: I02 and I03 are
+both `done`. Read I03's `## Notes` before starting — in particular the "Known gap" section:
+`question_generation.feature` is already in `cucumber.js` `paths`, and I04 is the one that
+wires its remaining `@AC-7`/`@AC-1` steps and clears the 2-undefined-scenario gap in the full
+acceptance run. `profile.ts`/`generation.ts` are new files per I04's own task file; reuse
+`AiWorld`'s `httpPost`/`httpGet` (world.ts) rather than adding a second HTTP seam.
 
 ## Spec revision of 2026-07-30 — what changed for this ledger
 
@@ -106,7 +112,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 |----|-------|------|--------|------------|
 | I01 | `@interviewly/ai` scaffold: `AiClient` seam, schemas, prompt registry, `PromptBuilder`, `StubAiClient` | | done | F01, F02, F03 |
 | I02 | Provider execution: fallback chain, per-attempt `llm_calls`, cost, stub mode, key validation | | done | I01 |
-| I03 | Interview setup, room-state read, ownership resolver, CSRF middleware | | todo | F01, F02, F03, A01 |
+| I03 | Interview setup, room-state read, ownership resolver, CSRF middleware | | done | F01, F02, F03, A01 |
 | I04 | Profiling + round question generation (HR batch, tech batch during HR) | | todo | I02, I03 |
 | I05 | CSRF/origin enforcement on state-changing routes | | todo | I04 |
 | I06 | Answer submission, guarded advance, duration, round handover, resume | | todo | I04 |
