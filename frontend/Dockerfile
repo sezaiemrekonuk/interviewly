@@ -16,7 +16,9 @@ RUN npm ci --workspace=frontend --include-workspace-root
 
 FROM node:22-alpine AS build
 WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
+# Whole tree, not just /app/node_modules: workspaces pinning different versions of a
+# dependency get it nested under <workspace>/node_modules instead of hoisted.
+COPY --from=deps /app ./
 COPY . .
 RUN npm run -w frontend build
 

@@ -43,16 +43,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: cp .env.example .env
-      # `migrate`, `api` and `web` are the build targets that gate a working stack; `edge` and
-      # the datastores are pulled images. Split out from `worker` so its failure cannot hide a
-      # real regression in the three that matter.
-      - run: docker compose build migrate api web
-      # Non-blocking: `worker`'s image cannot resolve `zod` from the hoisted node_modules it
-      # copies, so `tsc -p tsconfig.json` fails on its own `src/lib/env.ts`. Pre-existing and
-      # unrelated to any interview-core task — `build` has been red on master since before I03.
-      # Findings stay visible in the log. Foundations owns the Dockerfile; flip back to
-      # blocking once it resolves its dependencies.
-      - run: docker compose build worker || true
+      - run: docker compose build
 
   compose-check:
     runs-on: ubuntu-latest
@@ -100,10 +91,8 @@ jobs:
         with: { node-version: '22', cache: 'npm' }
       - run: npm ci --prefer-offline --no-audit --fund=false
       - run: npx prisma generate --schema backend/prisma/schema.prisma
-      # I04 added the first backend unit test, and backend modules reach `src/lib/env.ts`,
-      # which `process.exit(1)`s at import time on a missing key (F03 fail-fast). Vite loads
-      # a root `.env` into process.env, and `.env` is gitignored — so without this the job
-      # dies on ENV_VALIDATION_FAILED. Same one-liner build/compose-check/acceptance use.
+      # env.ts process.exit(1)s at import on a missing key (F03). `npm test` loads .env via
+      # node --env-file-if-exists; vitest's own dotenv handling worked locally but not here.
       - run: cp .env.example .env
       # One vitest run over the whole tree. `--passWithNoTests` is deliberately gone (I01):
       # it made this job green on an empty repo, which is worse than no job at all.
