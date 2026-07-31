@@ -13,7 +13,7 @@
 // question_generation.feature and profiling.feature.
 module.exports = {
   default: {
-    paths: ['.agents/features/security.feature'],
+    paths: ['.agents/features/security.feature', '.agents/features/ai_provider.feature'],
     require: ['backend/features/step_definitions/**/*.ts'],
     requireModule: ['tsx/cjs'],
     // Undefined, pending or ambiguous steps fail the run. Without this a scenario whose

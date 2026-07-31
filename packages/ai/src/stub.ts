@@ -20,6 +20,13 @@ import type {
 import { createPromptBuilder, type PromptBuilder } from './prompt-builder';
 import { detectLanguage, type LanguageDetection } from './detect-language';
 import {
+  PROMPT_NAMES,
+  candidateVars,
+  questionVars,
+  reportVars,
+  scoreVars,
+} from './prompt-vars';
+import {
   CandidateSchema,
   QuestionBatchSchema,
   ReportPayloadSchema,
@@ -46,16 +53,8 @@ export class StubAiClient implements AiClient {
 
   async generateRoundQuestions(args: GenerateRoundQuestionsArgs): Promise<QuestionBatch> {
     this.builder.build({
-      promptName: 'interview.question.generate',
-      vars: {
-        roundType: args.roundType,
-        count: args.count,
-        language: args.language,
-        jobListing: args.jobListing,
-        candidateProfile: args.candidateProfile,
-        candidateCv: args.candidateCv,
-        priorTopics: args.priorTopics?.join(', ') || 'none',
-      },
+      promptName: PROMPT_NAMES.generateRoundQuestions,
+      vars: questionVars(args),
       ctx: args.ctx,
     });
 
@@ -77,14 +76,8 @@ export class StubAiClient implements AiClient {
 
   async generateReport(args: GenerateReportArgs): Promise<ReportPayload> {
     this.builder.build({
-      promptName: 'interview.report.generate',
-      vars: {
-        language: args.language,
-        perAnswerScores: args.perAnswerScores ? JSON.stringify(args.perAnswerScores) : 'none',
-        transcript: args.transcript,
-        candidateProfile: args.candidateProfile,
-        candidateCv: args.candidateCv,
-      },
+      promptName: PROMPT_NAMES.generateReport,
+      vars: reportVars(args),
       ctx: args.ctx,
     });
 
@@ -110,13 +103,8 @@ export class StubAiClient implements AiClient {
 
   async scoreAnswer(args: ScoreAnswerArgs): Promise<Scores> {
     this.builder.build({
-      promptName: 'interview.answer.score',
-      vars: {
-        language: args.language,
-        question: args.question,
-        transcript: args.transcript,
-        candidateProfile: args.candidateProfile,
-      },
+      promptName: PROMPT_NAMES.scoreAnswer,
+      vars: scoreVars(args),
       ctx: args.ctx,
     });
 
@@ -136,13 +124,8 @@ export class StubAiClient implements AiClient {
 
   async generateCandidates(args: GenerateCandidatesArgs): Promise<Candidate[]> {
     this.builder.build({
-      promptName: 'interview.question.candidates',
-      vars: {
-        language: args.language,
-        priorScore: args.priorScore,
-        priorQuestion: args.priorQuestion,
-        topicsUsed: args.topicsUsed.join(', ') || 'none',
-      },
+      promptName: PROMPT_NAMES.generateCandidates,
+      vars: candidateVars(args),
       ctx: args.ctx,
     });
 

@@ -186,10 +186,12 @@ writes these columns; see `MODELS.md` for the full column-level contract.
   `duration_ms`, `scores` (Json).
 - `reports` — `interview_id`, `status`, `payload` (Json), `pdf_key`, `prompt_uuid`,
   `prompt_version`.
-- `llm_calls` — one row **per attempt**: `provider`, `model`, `prompt_uuid`,
-  `prompt_version`, `attempt_no`, `fell_back_from`, `units`, `unit_kind`,
-  `input_tokens`/`output_tokens`, `cost_usd` (Decimal 12,6 or null), `latency_ms`,
-  `trace_id`.
+- `llm_calls` — one row **per attempt, failed attempts included**: `provider`, `model`,
+  `prompt_uuid`, `prompt_version`, `attempt_no`, `fell_back_from`, `units`, `unit_kind`
+  (the db `UnitKind` enum verbatim — `token`, not `tokens`), `input_tokens`/`output_tokens`,
+  `cost_usd` (Decimal 12,6, **NOT NULL today** — the spec wants null for a missing price row;
+  see STATE.md → Open blockers and ADR-I20), `latency_ms`, `trace_id`. Written through
+  `backend/modules/ai` → `writeLlmCall(record, tx?)`, never assembled at a call site.
 - `uploads` — `storage_key`, `mime`, `size_bytes`, `sha256` (`@unique` → dedup).
 - `chat_messages` — `role`, `content`, `trace_id` (one per answered turn).
 - `occupation_clusters` — `key` (`@unique`), `label` (seeded reference table).

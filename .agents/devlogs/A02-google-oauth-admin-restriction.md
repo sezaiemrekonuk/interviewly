@@ -5,7 +5,7 @@ sessions: [2026-07-31]
 model: claude-opus-5
 model_recommended: claude-opus-4.8
 iterations: 1
-tools: [claude-code, docker-compose, cucumber-js, tsx]
+tools: [docker-compose, cucumber-js, tsx]
 ---
 
 ## Session 1 — 2026-07-31
