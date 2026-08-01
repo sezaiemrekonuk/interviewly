@@ -1,9 +1,10 @@
 # Adaptive — State
 
 Last updated: 2026-08-01
-Last session ended: **D01 done (Fatih, 2026-08-01).** Pure `selectNextQuestion` + malformed-score
-guard landed at `backend/modules/interview/adaptive-select.ts` with its self-check; verification
-exits 0. Next eligible adaptive task is D02 (sonnet-tier — needs a Sonnet session).
+Last session ended: **D02 done (Fatih, 2026-08-01).** `prepareNextCandidates` at
+`backend/modules/interview/candidate-prep.ts`; selftest exits 0 printing `candidate-prep selftest
+OK`. N+1 row resolved via `currentQuestionRow` (state.ts), `priorScore=3` midpoint, topics from
+asked questions. typecheck + eslint clean. Next: D03 (opus-tier, both D01 and D02 done).
 
 ## Execution protocol (follow exactly)
 
@@ -20,10 +21,9 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**D01 is done (2026-08-01).** Per EXECUTE.md § 4 the next adaptive task is **D02 — Next-question
-candidate pre-generation** (cross-ledger deps F01/F02/F03/I01/I02/I04 are all `done`). Note D02 is
-**sonnet-tier** (`claude-sonnet-4.6` per MODELS.md), so it must be run in a Sonnet session or the
-run stops on the tier check. D03 remains blocked until both D01 (now done) and D02 land.
+**D02 is done (2026-08-01).** Per EXECUTE.md § 4 the next adaptive task is **D03 — Score-driven
+promotion and malformed-score fallback** (D01 and D02 both `done`). D03 is **opus-tier**
+(`claude-opus-4.8` per MODELS.md) — must be run in an Opus session or the tier check stops it.
 
 D01 (delivered): pure `selectNextQuestion(rawScore, current)` at
 `backend/modules/interview/adaptive-select.ts` validates the raw score against `ScoresSchema`
@@ -75,7 +75,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | ID | Title | Repo | Status | Depends on |
 |----|-------|------|--------|------------|
 | D01 | Adaptive score→question selector and malformed-score guard (pure module) | | done | F01, F02, F03, I01 |
-| D02 | Next-question candidate pre-generation during a turn | | todo | F01, F02, F03, I01, I02, I04 |
+| D02 | Next-question candidate pre-generation during a turn | | done | F01, F02, F03, I01, I02, I04 |
 | D03 | Score-driven promotion and malformed-score fallback (greens `@adaptive-questions`) | | todo | D01, D02, I02, I06 |
 
 D01 and D02 are **genuinely independent** of each other — either order is safe. D03 depends on

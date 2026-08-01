@@ -57,7 +57,7 @@ difficulty.
   you write candidates onto the wrong row.
 
 ## Steps
-- [ ] **1. Create `backend/modules/interview/candidate-prep.ts`**
+- [x] **1. Create `backend/modules/interview/candidate-prep.ts`**
   - `prepareNextCandidates({ interview, currentQuestion, ctx })`:
     - Build the `slot` payload (next `order_index` within the current round, prior question,
       topics already used) reusing I04's `ctx` assembly.
@@ -68,7 +68,7 @@ difficulty.
       candidates.length, difficulties: candidates.map(c => c.difficulty) },
       'QUESTION_CANDIDATES_GENERATED')`.
     - Return the persisted `candidates` (so D03 need not re-read if it already has them).
-- [ ] **2. Create `backend/modules/interview/candidate-prep.selftest.ts`**
+- [x] **2. Create `backend/modules/interview/candidate-prep.selftest.ts`**
   - Plain Node asserts, `StubAiClient` directly (no DB, no HTTP — the DB persistence is
     exercised end-to-end by D03's acceptance run; here we prove the assembly + shape).
   - Assert `StubAiClient.generateCandidates` returns exactly three candidates whose
@@ -77,7 +77,7 @@ difficulty.
     as the current question.
   - Assert each candidate parses against the `Candidate` schema (I01).
   - `console.log('candidate-prep selftest OK')`; exit 0 on success, non-zero on any assert.
-- [ ] **3. Run the Verification command; confirm it exits 0.**
+- [x] **3. Run the Verification command; confirm it exits 0.**
 
 ## Definition of done
 - `prepareNextCandidates` calls `generateCandidates` through the `AiClient` seam only and
@@ -101,7 +101,16 @@ non-zero — fix the code, never the assert. End-to-end DB persistence is confir
 
 ## Notes
 
-(Empty until the task is done. Fill with: what actually happened, the exact `slot`/`ctx`
-shape reused from I04, which helper resolved the N+1 per-round row, the `StubAiClient`
-candidate shape observed, the selftest output verbatim, and a "For D03" hand-off line noting
-where the candidates live and how D03 should match one by difficulty.)
+- `prepareNextCandidates({ interview, currentQuestion, ctx, client? })` — `client` is
+  injectable for tests; defaults to `aiClient()` from `modules/ai/index.ts`.
+- N+1 row resolved via `currentQuestionRow({ ...interview, current_index: interview.current_index + 1 })`
+  — reuses state.ts helper; avoids re-deriving per-round order math.
+- `priorScore: 3` (midpoint default) — D02 does not score; D01/D03 select by difficulty, not score.
+- `topicsUsed` queried from asked questions (`asked_at: { not: null }`) across all rounds of the interview.
+- Selftest calls `StubAiClient.generateCandidates` directly (no DB); stub returns `['easy','medium','hard']`
+  with topics `['stub-topic-1','stub-topic-1','stub-new-topic']` — covers easier/same/harder + same/new topic.
+- Selftest wrapped in async IIFE (backend tsconfig is CommonJS, top-level await forbidden).
+- Output: `candidate-prep selftest OK`, exit 0. typecheck + eslint clean.
+- **For D03:** candidates are at `questions.candidates` on the N+1 row after `prepareNextCandidates`.
+  D03 reads that row's `candidates` JSON, uses D01's `selectNextQuestion` result's `difficulty` to
+  pick the matching candidate, and rewrites `text/difficulty/topic/chosen_reason` on that row.
