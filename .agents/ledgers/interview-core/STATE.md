@@ -1,13 +1,15 @@
 # Interview-core — State
 
 Last updated: 2026-07-31
-Last session ended: **I02 done.** Real provider execution behind the `AiClient` seam: the
-openai→gemini chain (both called with plain `fetch`, no SDK added), one `llm_calls` row per
-attempt including failed ones, cost frozen at return time from `model-prices.yaml`, the
-`AI_ENABLED` kill switch resolving to an audited `StubAiClient`, and the boot-time
-provider-key check wired into `backend/src/index.ts`. `ai_provider.feature` runs 11 green
-scenarios (20 across the suite). One blocker handed to F02: `llm_calls.cost_usd` is NOT NULL
-but AC-8 needs null — see Open blockers. Not committed; the working tree is the hand-off.
+Last session ended: **I06 done.** `POST /:id/answers` live: guarded `updateMany` advance,
+answer + `chat_messages` write, `ensureTechBatch` on every HR answer (ADR-I22), handover
+through the new `machine.ts`. **ADR-I26 corrects ADR-I25: a CLI `--tags` is ANDed with
+`not @unwired`, it does not replace it** — the Verification command reported `0 scenarios`
+and exit 0 until the tags were deleted, so **I07 (@AC-16) and I08 (@AC-11) delete their tag
+BEFORE the first red run.** **ADR-I27:** `asked_at` is stamped by `GET /state` on delivery
+and `clock.now()` (`src/lib/clock.ts`) is the one server-clock seam. **ADR-I28:**
+`hr_round → evaluating` is in the table. @AC-8/9/10 green; suite 31/31, 86 unit. Details in
+I06 `## Notes`. Not committed.
 
 ## Execution protocol (follow exactly)
 
@@ -24,13 +26,22 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**I03 — Interview setup, room-state read, ownership resolver, CSRF middleware** is the next
-eligible task: `A01` is now `done`, so its whole `Depends on` (F01, F02, F03, A01) is green.
-I04 is the one after it and needs both I02 (done) and I03.
+**I07 (state machine, pause/resume, SSE).** I06 is done; I07 and I10 are both eligible
+(`I07 <- I06, I02`; `I10 <- I06`), and I07 comes first by ID order.
 
-Before starting I03, read I02's `## Notes` for the `aiClient()` singleton and the three
-`AiError` codes to map, and I01's for the `cucumber.js` allow-list rule — I03/I04 add
-`question_generation.feature` and `profiling.feature` to it.
+Three live hand-offs, all in I06 `## Notes` → "For I07":
+
+- **Delete `@unwired` from @AC-16 before your first run** (ADR-I26) or the scoped command
+  reports `0 scenarios` and exits 0 — a skip that looks like a pass.
+- **Extend `machine.ts` by adding rows to `TRANSITIONS`.** Every state write goes through
+  `applyTransition`, which is where the SSE fan-out hooks. One exception to route through it:
+  `generation.ts` still writes `state: 'paused'` directly on `AI_PROVIDER_UNAVAILABLE`, and
+  @AC-16 exercises that edge.
+- An SSE-pushed question must stamp `questions.asked_at` itself (ADR-I27), or its
+  `duration_ms` is null.
+
+Running the acceptance suite locally needs `DATABASE_URL`/`REDIS_URL` pointed at the published
+host ports rather than `.env`'s compose hostnames — see I04's `## Notes` → Verification output.
 
 ## Spec revision of 2026-07-30 — what changed for this ledger
 
@@ -106,10 +117,10 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 |----|-------|------|--------|------------|
 | I01 | `@interviewly/ai` scaffold: `AiClient` seam, schemas, prompt registry, `PromptBuilder`, `StubAiClient` | | done | F01, F02, F03 |
 | I02 | Provider execution: fallback chain, per-attempt `llm_calls`, cost, stub mode, key validation | | done | I01 |
-| I03 | Interview setup, room-state read, ownership resolver, CSRF middleware | | todo | F01, F02, F03, A01 |
-| I04 | Profiling + round question generation (HR batch, tech batch during HR) | | todo | I02, I03 |
-| I05 | CSRF/origin enforcement on state-changing routes | | todo | I04 |
-| I06 | Answer submission, guarded advance, duration, round handover, resume | | todo | I04 |
+| I03 | Interview setup, room-state read, ownership resolver, CSRF middleware | | done | F01, F02, F03, A01 |
+| I04 | Profiling + round question generation (HR batch, tech batch during HR) | | done | I02, I03 |
+| I05 | CSRF/origin enforcement on state-changing routes | | done | I04 |
+| I06 | Answer submission, guarded advance, duration, round handover, resume | | done | I04 |
 | I07 | State machine transition table + pause/resume + SSE state events | | todo | I06, I02 |
 | I08 | Budget enforcement (in-transaction ceiling, exhaustion path) | | todo | I06, I02 |
 | I09 | Report generation + `ReportPayload` schema gate + completion | | todo | I07, I02 |
@@ -160,6 +171,15 @@ entry not wired — means I01 has nowhere to publish the `@interviewly/ai` packa
   `docker compose build`), which is why it has stayed hidden. Found during I01, out of I01's
   scope; it belongs to whichever task first needs a compiled backend. **Foundations, not
   interview-core** — flag it to Ahmet/Fatih rather than fixing it in a feature PR.
+- **~~Docker images fail `tsc` on `Cannot find module 'zod'`~~ — fixed in I04, foundations scope.**
+  Workspaces pin different zod versions, so npm nested it at `backend/node_modules/zod` instead of
+  hoisting, and the build stage copied only `/app/node_modules`. Fixed in `backend/`, `worker/`
+  and `frontend/Dockerfile`: deps stage copies every workspace manifest, build stage does
+  `COPY --from=deps /app ./`. `docker compose build` is green and CI `build` is blocking again.
+  Pre-existing (red on master since before I03; `ebb0ba1` "fix(ci): skip worker" only touched
+  `acceptance`). **Landed in an interview-core PR at the owner's direction — F03 territory, so
+  tell Ahmet/Fatih it moved.**
+
 - **Entity-split on truncation** — `PromptBuilder` cuts at exactly 12 000 characters after
   neutralisation, which can leave a trailing `&lt;` chopped to `&l`. No bracket is
   reconstructed and no security property is lost, so this is cosmetic; marked with a

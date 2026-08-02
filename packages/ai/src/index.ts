@@ -46,7 +46,11 @@ export type { InjectionPattern, ModelPrice } from './config';
 
 export { StubAiClient } from './stub';
 
-export { PROMPT_NAMES } from './prompt-vars';
+// The var mappings are exported because callers outside this package legitimately need to
+// compile the same prompt a client compiled internally — I04's acceptance steps assert on
+// the message an HTTP request produced. Re-deriving the mapping at the call site is exactly
+// the drift this module exists to prevent.
+export { PROMPT_NAMES, candidateVars, questionVars, reportVars, scoreVars } from './prompt-vars';
 export type { AiMethod } from './prompt-vars';
 
 export { costFor, DEFAULT_UNIT_KIND } from './cost';

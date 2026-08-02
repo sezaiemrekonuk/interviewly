@@ -91,6 +91,9 @@ jobs:
         with: { node-version: '22', cache: 'npm' }
       - run: npm ci --prefer-offline --no-audit --fund=false
       - run: npx prisma generate --schema backend/prisma/schema.prisma
+      # env.ts process.exit(1)s at import on a missing key (F03). `npm test` loads .env via
+      # node --env-file-if-exists; vitest's own dotenv handling worked locally but not here.
+      - run: cp .env.example .env
       # One vitest run over the whole tree. `--passWithNoTests` is deliberately gone (I01):
       # it made this job green on an empty repo, which is worse than no job at all.
       - run: npm test
@@ -119,6 +122,13 @@ jobs:
       - run: npm ci --prefer-offline --no-audit --fund=false
       - run: npx prisma generate --schema backend/prisma/schema.prisma
       - run: cd backend && npx prisma migrate deploy
+      # I03: acceptance now imports backend/src/app.ts, which needs the full env schema.
+      # Same one-liner build/compose-check already use; job-level env above still wins for
+      # DATABASE_URL/SHADOW_DATABASE_URL/REDIS_URL (cucumber.js's loadEnvFile fills the rest).
+      - run: cp .env.example .env
+      # Blocking again as of I04: question_generation @AC-7/@AC-1 are wired and the whole
+      # suite is defined, so an undefined or failing step is a real regression now.
+      #
       # Both profiles, explicitly. `test:acceptance` is the `default` profile only, so for two
       # commits after I01 the auth ring was not executed by anything and this job stayed green
       # regardless (auth STATE.md, BLOCKER-2). A new ring must be added here or it is not run.

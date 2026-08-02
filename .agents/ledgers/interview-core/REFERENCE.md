@@ -49,6 +49,25 @@ npm run -w @interviewly/ai test
 # >>> Your task MUST append its feature file to `cucumber.js` `paths` when it wires the
 # >>> steps. Forget, and your scenarios silently do not run.
 #
+# I05 (ADR-I25): a file owned by several tasks goes into `paths` whole, and the scenarios
+# whose steps do not exist yet carry `@unwired` — the default profile runs `not @unwired`.
+# >>> If your task's scenario is tagged @unwired, DELETE that tag BEFORE your first red run.
+# >>> I06 (ADR-I26): a CLI `--tags` is ANDed with `not @unwired`, it does not replace it, so
+# >>> a scoped Verification command reports `0 scenarios` and exits 0 until the tag is gone.
+#
+# I04: `cucumber.js` forces AI_ENABLED=false for every run. The suite generates through the
+# app's own AiClient now, and the local .env carries live provider keys — an unguarded run
+# would bill them and make assertions non-deterministic. ai_provider.feature is unaffected
+# (it fakes ProviderTransport inside the World). A shared Before hook in server.ts clears
+# `ratelimit:*` and upserts the two personas, since register is 3/hour per IP and CI runs
+# `migrate deploy` without `npm run seed`.
+#
+# Running it LOCALLY needs host-reachable URLs — .env points at the compose hostnames, which
+# do not resolve from the host:
+#
+#   export DATABASE_URL=postgresql://interviewly:interviewly@localhost:5432/interviewly
+#   export REDIS_URL=redis://localhost:6380
+#
 # Verification commands in this ledger use area tags; scope compound files with `and`.
 npm run test:acceptance -- --tags "@security"
 npm run test:acceptance -- --tags "@ai-provider"
@@ -90,10 +109,15 @@ SCREAMING_SNAKE_CASE code — never a display string. All `:id` routes are owner
 | `GET /healthz` | — | 200 `{ ok: true }` | — | I14 |
 | `GET /readyz` | — | 200 `{ ready: true }` / 503 `NOT_READY` | `NOT_READY` | I14 |
 
-Room-state shape (`GET /state`, backend spec §6): `{ interviewId, state, mode, language,
-currentIndex, targetQuestionCount, hrQuestionCount, question: { id, text, kind, difficulty,
-topic } | null, endedReason | null, spentUsd, budgetUsd }`. Resumable after a refresh —
-`currentIndex` and `state` reconstruct the room with no client memory (§3.8).
+Room-state shape (`GET /state`, backend spec §6, implemented I03): `{ interviewId, state,
+mode, currentIndex, targetQuestionCount, endedReason, language, persona: { role, name,
+avatarState } | null, currentQuestion: { id, text, kind, widget, deliveredAt } | null,
+transcriptCursor }`. This supersedes an earlier draft of this shape that used `question` +
+`hrQuestionCount`/`spentUsd`/`budgetUsd` instead — the spec.md §6 jsonc is the one actually
+built. Resumable after a refresh — `currentIndex` and `state` reconstruct the room with no
+client memory (§3.8). `persona`/`currentQuestion` are null until a round exists (I04);
+`avatarState` is a fixed `'idle'` placeholder until I07 wires it to live SSE state; `widget`
+is always null until I04/I06 build widget-kind questions.
 
 ## `@interviewly/ai` — the one seam
 
@@ -136,6 +160,7 @@ All paths relative to repo root. Each exists once its providing task lands.
 | `backend/src/lib/db.ts` | F02 | Prisma singleton, `userInterviews()`, `activeInterview()` — user-facing modules MUST use these |
 | `backend/src/lib/logger.ts` | F03 | Pino factory: `logger.<level>({obj}, "EVENT_NAME")` |
 | `backend/src/lib/env.ts` | F03 | Zod env config; extended by I15 |
+| `backend/src/lib/clock.ts` | I06 | `clock.now()` — the one server-clock seam (ADR-I27) |
 | `backend/src/app.ts` | A01 | Express app + global middleware; interview-core mounts its router here |
 | `backend/modules/auth/middleware.ts` | A01 | `requireAuth`: cookie → session row → `req.user` |
 | `backend/modules/auth/rate-limit.ts` | A01 | Redis sliding-window limiter factory reused by I13 |
@@ -228,9 +253,10 @@ a second connection.
 **Ownership:** every `:id` route goes through `ownership.ts` → `userInterviews`/
 `activeInterview` (soft-delete baked in). A non-owned or deleted id is `INTERVIEW_NOT_FOUND`.
 
-**CSRF:** `csrf.ts` compares `Origin` (fallback `Referer`) to `config.PUBLIC_ORIGIN` on
-every state-changing interview route; a mismatch is `CSRF_ORIGIN_MISMATCH` before the
-handler runs.
+**CSRF:** `csrf.ts` compares `Origin` (fallback `Referer`) to `config.PUBLIC_ORIGIN`; a
+mismatch is `CSRF_ORIGIN_MISMATCH` before the handler runs. **Mounted once as
+`router.use(requirePublicOrigin)` above `router.param` (I05, ADR-I24) — never add it to a
+route.** It exempts `GET`/`HEAD`/`OPTIONS` itself, so SSE and `/report/download` are safe.
 
 **AI calls:** always through `AiClient`; never import a provider SDK in a module directly.
 Every attempt records an `llm_calls` row (stub mode too, `cost_usd = 0`). `cost_usd` is

@@ -2,7 +2,7 @@
 task: A03
 author: Ahmet
 sessions: [2026-07-31]
-model: claude-opus-5[1m]
+model: claude-opus-4.8[1m]
 model_recommended: claude-sonnet-4.6
 iterations: 3
 tools: [superpowers:brainstorming, superpowers:test-driven-development]
@@ -17,7 +17,7 @@ tools: [superpowers:brainstorming, superpowers:test-driven-development]
 this session is Opus 5, so the first output was
 
 ```
-TIER A03 needs sonnet-tier, running claude-opus-5[1m]
+TIER A03 needs sonnet-tier, running claude-opus-4.8[1m]
 ```
 
 The human overrode it and told me to run anyway. That is why `model` and

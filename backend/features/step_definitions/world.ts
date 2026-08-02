@@ -4,11 +4,13 @@ import { setWorldConstructor, World } from '@cucumber/cucumber';
 import { parse } from 'yaml';
 import {
   ModelPrices,
+  PROMPT_NAMES,
   ProviderCallError,
   PromptBuilder,
   StubAiClient,
   createPromptBuilder,
   loadModelPrices,
+  questionVars,
   resolveAiClient,
   type AiClient,
   type BuiltPrompt,
@@ -20,6 +22,12 @@ import {
   type ProviderTransport,
   type Question,
 } from '@interviewly/ai';
+
+import { roundQuestionArgs } from '../../modules/interview/generation';
+import { prisma } from '../../src/lib/db';
+import { config } from '../../src/lib/env';
+
+import { serverState } from './server';
 
 export const PROMPTS_DIR = join(__dirname, '../../../packages/ai/prompts');
 
@@ -76,6 +84,85 @@ export class AiWorld extends World {
 
   built?: BuiltPrompt;
   batch?: Question[];
+
+  // -------------------------------------------------------------- interview HTTP fixtures
+  // I03: question_generation.feature drives the real Express app over HTTP (server.ts),
+  // not a package-level seam. One cookie jar per scenario — good enough for the single
+  // signed-in candidate every scenario in this file needs so far.
+
+  cookie = '';
+  candidateId = '';
+  interviewId = '';
+  lastStatus = 0;
+  lastBody: Record<string, unknown> | undefined;
+
+  // I04: the body `POST /interviews/:id/profile` will be sent with — `{ skip: true }` until a
+  // scenario answers the pre-questions. The two profiling.feature paths differ only here.
+  profileBody: Record<string, unknown> = { skip: true };
+  /** Seeded `users.profile` values a scenario later asserts must not (or must) reach a prompt. */
+  accountDob = '';
+  accountFullName = '';
+  accountCvText = '';
+
+  /**
+   * Injected into `generateRound` when a scenario needs a client that misbehaves in a way
+   * `StubAiClient` cannot be asked for. `undefined` means the module's own client.
+   */
+  roundClient: AiClient | undefined;
+
+  /**
+   * The HTTP-ring twin of `generateHrRound()`. `POST /interviews/:id/profile` is what
+   * generates the HR batch, and the prompt it compiled lives and dies inside the request —
+   * so the same prompt is compiled alongside it, from the production var mapping and the
+   * snapshot the handler stored. Any drift between the two is a drift in `roundQuestionArgs`,
+   * which is the thing under test.
+   */
+  async generateHrRoundOverHttp(): Promise<void> {
+    this.resetEvents();
+    await this.httpPost(`/interviews/${this.interviewId}/profile`, this.profileBody);
+
+    const interview = await prisma.interview.findUniqueOrThrow({
+      where: { id: this.interviewId },
+    });
+    this.ctx = { interviewId: this.interviewId, traceId: `trace-${this.interviewId}` };
+    this.built = this.builder().build({
+      promptName: PROMPT_NAMES.generateRoundQuestions,
+      vars: questionVars(roundQuestionArgs(interview, 'hr', this.ctx)),
+      ctx: this.ctx,
+    });
+  }
+
+  private captureCookie(res: Response): void {
+    const setCookie = res.headers.getSetCookie?.() ?? [];
+    if (setCookie[0]) this.cookie = setCookie[0].split(';')[0];
+  }
+
+  // I05: `extra` overrides the default same-site origin — the CSRF scenarios are the only
+  // callers that send anything else, so every other step keeps sending a valid request.
+  async httpPost(path: string, body: unknown, extra: Record<string, string> = {}): Promise<void> {
+    const res = await fetch(`${serverState.baseUrl}${path}`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        origin: config.PUBLIC_ORIGIN,
+        ...(this.cookie ? { cookie: this.cookie } : {}),
+        ...extra,
+      },
+      body: JSON.stringify(body),
+    });
+    this.captureCookie(res);
+    this.lastStatus = res.status;
+    this.lastBody = await res.json().catch(() => undefined);
+  }
+
+  async httpGet(path: string): Promise<void> {
+    const res = await fetch(`${serverState.baseUrl}${path}`, {
+      headers: this.cookie ? { cookie: this.cookie } : {},
+    });
+    this.captureCookie(res);
+    this.lastStatus = res.status;
+    this.lastBody = await res.json().catch(() => undefined);
+  }
 
   // -------------------------------------------------------------- ai_provider fixtures
 

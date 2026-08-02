@@ -187,8 +187,29 @@ unfixed high advisory (vulnerable range `9.3.4-canary.0 - 16.3.0-preview.7`; lat
 16.2.12, i.e. there is no fixed release to move to). Findings still print in the job log —
 read them; do not add new high-severity dependencies on the strength of a green tick.
 
+## 7b. Write short
+
+Prose costs tokens and nobody reads it twice. Every word you write into a file is paid for on
+every future run that reads that file.
+
+- **Comments: default to none.** Write one only where the code cannot say it — a non-obvious
+  *why*, a spec clause, a trap. Never restate what the line does. One line, not a paragraph. No
+  banner headers, no section dividers, no doc-comment blocks on self-evident functions.
+- **Docs: caveman-terse.** Drop articles, filler, hedging. Fragments fine. Bullets over prose,
+  tables over bullets where they fit. Facts, not narration.
+- **Keep the search keys.** Terse must stay greppable: name the ID, file, symbol, error code and
+  event name exactly. `I06 must call ensureTechBatch (ADR-I22)` beats a well-turned paragraph
+  that never says the function's name.
+- **Budgets.** Task `## Notes` ≤ 40 lines. Devlog session block ≤ 40 lines. ADR ≤ 15 lines.
+  STATE.md "Last session ended" ≤ 8 lines. Over budget means cut, not continue.
+- **Never explain the same thing twice.** One home per fact, referenced from elsewhere by ID.
+  A rationale in an ADR is not repeated in the code, the Notes and the devlog.
+- Say what changed and why it is not obvious. Skip what the diff, the test output and
+  `git log` already say.
+
 ## 8. Never
 
+- Write prose where a fact fits (§ 7b). No essays in comments, Notes, devlogs or ADRs.
 - Commit. Push. Open a PR. The human does all three.
 - Work a task the § 1 map does not give you.
 - Touch `schema.prisma` outside F02 (Part 2 § Migration protocol).
@@ -290,6 +311,10 @@ spec §7.2 AC-2 → `auth.feature:41` → red (`INVALID_CREDENTIALS` undefined) 
 ### Friction
 ### What I rejected and rewrote by hand
 ```
+
+**Bullets, not essays — § 7b applies hardest here.** ≤ 40 lines per session block, each entry
+one or two lines. Transparency is *which* thing went wrong and what you did about it, not how
+well it is narrated. A grader skims; a padded devlog scores worse than a terse one.
 
 Frontmatter is structured so the `AI_DEVLOG.md` summary table can be generated from the
 heads alone, without parsing prose. Keep the five keys; add none.

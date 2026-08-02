@@ -1,3 +1,6 @@
+# @unwired (I05): this file is owned by four tasks. The default cucumber profile runs
+# `not @unwired`, so a scenario whose steps are not written yet is skipped, not undefined.
+# The owning task DELETES its own @unwired tag in the PR that wires its step definitions.
 Feature: Sequential interview flow
 
   @interview-flow @backend @AC-8
@@ -31,7 +34,7 @@ Feature: Sequential interview flow
     And the stored answer duration_ms is 12000
     And no audio session is required
 
-  @interview-flow @backend @AC-11
+  @interview-flow @backend @AC-11 @unwired
   Scenario: Budget exhaustion preserves the triggering answer without an AI call
     Given I am on the current question of an interview
     And the interview spent_usd equals its budget_usd inside the next AI transaction
@@ -54,7 +57,7 @@ Feature: Sequential interview flow
     Then the response status is 200
     And the interview state is "hr_round"
 
-  @interview-flow @backend @AC-16
+  @interview-flow @backend @AC-16 @unwired
   Scenario: The state machine accepts only listed HTTP transitions
     Given the backend state transition table is loaded
     When each listed HTTP transition is exercised through its endpoint

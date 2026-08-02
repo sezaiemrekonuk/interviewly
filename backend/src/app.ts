@@ -9,6 +9,7 @@ import { logger } from './lib/logger';
 
 import authRouter, { meRouter } from '../modules/auth/router';
 import { mountTestSeam } from '../modules/auth/test-seam';
+import interviewRouter from '../modules/interview/router';
 
 export const app = express();
 
@@ -25,6 +26,7 @@ app.get('/healthz', (_req, res) => {
 
 app.use('/auth', authRouter);
 app.use('/', meRouter);
+app.use('/interviews', interviewRouter);
 
 // TEST SEAM — acceptance-only Google callback simulator. mountTestSeam() throws if it is
 // ever reached outside NODE_ENV=test, so a bad deploy fails at startup, not silently.

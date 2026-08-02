@@ -119,4 +119,114 @@ npm run test:acceptance -- --tags "@question-generation and @AC-6"
 ```
 
 ## Notes
-_(fill in when the task is done)_
+
+### What exists now
+
+New: `backend/modules/interview/{ownership,csrf,setup,state,router}.ts`, mounted at
+`/interviews` in `backend/src/app.ts`. `router.ts` applies `requireAuth` module-wide,
+`resolveInterview` as the `:id` param middleware (404 `INTERVIEW_NOT_FOUND`, never 403 —
+ADR-I11), and `requirePublicOrigin` on the one non-`GET` route so far (`POST /interviews`).
+Comment slots mark where I04/I06/I07/I12 mount.
+
+`setup.ts`: Zod body, `LISTING_REQUIRED` guard, the deterministic split (`max(2, round(t*0.4))`
+/ remainder), a flat keyword→`occupation_clusters.key` table (`OCCUPATION_KEYWORDS`), the
+K8.6 `EMAIL_NOT_VERIFIED` gate reading `config.EMAIL_VERIFICATION_REQUIRED` +
+`req.user.email_verified_at`. `state.ts`: room-state shape per backend spec §6 (see
+deviation below), resolving `currentQuestion` from the global 1..N index across the hr/tech
+rounds and `persona` from the round matching `state`.
+
+### Deviations from this task file (all deliberate)
+
+1. **Room-state shape follows `.agents/specs/2026-07-29-backend.md` §6's jsonc exactly**,
+   not this file's own summary or REFERENCE.md's prior paraphrase of it — the two disagreed
+   (`question`/`hrQuestionCount`/`spentUsd`/`budgetUsd` vs `currentQuestion`/`persona`/
+   `transcriptCursor`). spec.md is the wire-contract source; REFERENCE.md's HTTP contracts
+   section is patched to match what's actually built. `persona`/`currentQuestion` are `null`
+   until a round exists (I04 creates rounds); `avatarState` is a fixed `'idle'` placeholder
+   (`ponytail:` comment in `state.ts`) until I07 drives it from SSE; `widget` is always
+   `null` until I04/I06 build widget-kind questions.
+2. **An `uploadId` with no `jobText` is `VALIDATION_ERROR`, not accepted.** `interviews.job_text`
+   is `NOT NULL` and `uploads` has no extracted-text column (I11's contract for handing
+   extracted text back to the client for re-submission doesn't exist yet). `LISTING_REQUIRED`
+   still fires correctly when *both* are absent (the only case AC-6 asserts); revisit this
+   validation when I11 lands and defines how extracted text reaches `POST /interviews`.
+3. **Occupation heuristic is a flat first-match keyword table** (`OCCUPATION_KEYWORDS` in
+   `setup.ts`) over the 9 non-`other` seeded clusters — `ponytail:` marked, promote to
+   scoring only if misclassification shows up in practice.
+
+### Infra fixes made along the way (all necessary for this task's own gate to run at all)
+
+I03 is the first task whose step definitions import `backend/src/app.ts`, which pulls in
+`backend/src/lib/env.ts`'s full Zod schema at require time. That surfaced three pre-existing
+gaps, all fixed here rather than worked around:
+
+1. **`z.coerce.boolean()` bug in `env.ts`** — `Boolean("false")` is `true` in JS, so
+   `EMAIL_VERIFICATION_REQUIRED=false`, `AI_ENABLED=false` and `SESSION_COOKIE_SECURE=...`
+   in `.env`/`.env.example` were silently coerced to `true`. This is exactly what broke
+   AC-6 first (`EMAIL_NOT_VERIFIED` on a fresh registration with the flag "off"). Replaced
+   with a `zBoolean(default)` helper (`z.string().optional().transform(v => v === 'true')`)
+   for all three keys. This is a latent bug independent of I03's scope — worth flagging
+   loudly since `AI_ENABLED=false` silently becoming `true` is a real-cost, real-security
+   footgun for anyone who fills in provider keys locally.
+2. **`cucumber.js` now loads `.env`** via `process.loadEnvFile()` (native, Node 20.6+) before
+   `requireModule` runs, guarded so a missing file degrades to the existing
+   `ENV_VALIDATION_FAILED` message rather than a Node `ENOENT`. Vars already in
+   `process.env` win (CI's job-level `DATABASE_URL`/`SHADOW_DATABASE_URL`/`REDIS_URL` are
+   never clobbered) — this only fills what CI doesn't set itself.
+3. **`.github/workflows/ci.yml` → `acceptance` job now runs `cp .env.example .env`** before
+   `npm run test:acceptance`, same one-liner `build`/`compose-check` already use. Without it
+   the job has no `PUBLIC_ORIGIN`/`SESSION_SECRET`/`SMTP_HOST`/`MAIL_FROM`/`S3_*` and
+   `env.ts` exits the process before a single scenario runs.
+4. **`backend/features/step_definitions/server.ts` (new)** starts the real Express app on an
+   ephemeral port for the whole cucumber run (`BeforeAll`/`AfterAll`) and — this one bit
+   twice locally — its `AfterAll` now also calls `prisma.$disconnect()` and `redis.quit()`.
+   Without that the scenario passes but the Node process never exits (ioredis eager-connects
+   on import and never closes), which reads as a hang and would eventually time out CI even
+   on green.
+
+`backend/features/step_definitions/world.ts`'s single global `AiWorld` (ADR-I21: one World
+for the whole run) gained `httpPost`/`httpGet` + a cookie jar. `ai-provider.steps.ts`'s
+`the response status is {int}` step now branches on `this.lastStatus` — reused, not
+duplicated, per the same "one step, shared" rule I02 established for `the HR round is
+generated`.
+
+### Known gap — not a regression, read before re-running the full suite
+
+`question_generation.feature` is in `cucumber.js` `paths` now (required for AC-6 to be
+discoverable at all, even tag-filtered), but only `@AC-6`'s steps are defined here. `@AC-7`
+(profile→hr generation) and `@AC-1` (typed-count generation) are I04's scope and their
+steps are genuinely undefined. Result: **`npm run test:acceptance` with no tag filter — and
+therefore CI's `acceptance` job — shows 2 undefined scenarios until I04 lands** (23
+scenarios, 21 passed, 2 undefined; this task's own scoped Verification, `--tags
+"@question-generation and @AC-6"`, is fully green). This is the same shape as the
+`cost_usd` nullable blocker I02 left for F02 — a known, documented, owned-by-the-next-task
+gap, not something to route around by leaving the feature file out of `paths` (that would
+just recreate the exact false-green CI pattern this project explicitly rejected).
+
+### For I04
+
+- `resolveCurrentQuestion`/`resolvePersona` in `state.ts` are private helpers scoped to that
+  file; if `POST /profile` or `POST /answers` need the same "question at global index"
+  logic, either export them or lift to a shared module rather than reimplementing the
+  hr-then-tech index math.
+- `httpPost`/`httpGet` on `AiWorld` (world.ts) are ready for `profile`/`answers` step defs —
+  send `origin: config.PUBLIC_ORIGIN` automatically; cookie jar persists per scenario.
+- `registerLimiter` (3/hour per IP) applies to the `Given I am signed in as a candidate`
+  step's `POST /auth/register` call. Fine for a handful of scenarios; if profiling.feature's
+  extra "signed in as <email>" scenarios push a single dev machine over 3 registrations/hour
+  repeatedly, that's a test-seam question (bypass the limiter for `NODE_ENV=test`, mirroring
+  `mountTestSeam`), not something to fix here pre-emptively.
+
+### Verification output
+
+```
+$ npm run test:acceptance -- --tags "@question-generation and @AC-6"
+1 scenario (1 passed)
+10 steps (10 passed)
+```
+
+Full suite (documents the known I04 gap above): 23 scenarios, 21 passed, 2 undefined
+(`@AC-7`, `@AC-1`).
+
+Gates: `npm run lint` clean, `npm run typecheck` clean, `npm test` 70 passed (9 files,
+unchanged by this task).
