@@ -44,3 +44,43 @@ function limiter(prefix: string, limit: number, windowMs: number): RequestHandle
 // K8 / REFERENCE: register 3/hour per IP, login 5/minute per IP.
 export const registerLimiter = limiter('register', 3, 60 * 60 * 1000);
 export const loginLimiter = limiter('login', 5, 60 * 1000);
+
+// --------------------------------------------------------------------- A04: mail resends
+//
+// Both of these are keyed by USER, not by IP — unlike register and login above. The
+// resend endpoint is authenticated, so the account is the thing worth protecting, and an
+// IP key would let one abusive account exhaust a shared office NAT's budget for everyone.
+
+export const RESEND_COOLDOWN_SECONDS = 60;
+const RESEND_LIMIT_PER_HOUR = 5;
+
+export interface CooldownResult {
+  ok: boolean;
+  /** Seconds still to wait. `0` when the cooldown was claimed. */
+  remainingSeconds: number;
+}
+
+/**
+ * Claims the 60-second cooldown for a user, atomically. `SET NX` is the claim: whoever
+ * sets the key owns the window, and everyone else reads its remaining TTL. A read-then-set
+ * pair would let two resends in the same tick both see an empty key and both send.
+ */
+export async function claimResendCooldown(userId: string): Promise<CooldownResult> {
+  const key = `emailresend:cooldown:${userId}`;
+  const claimed = await redis.set(key, '1', 'EX', RESEND_COOLDOWN_SECONDS, 'NX');
+  if (claimed) return { ok: true, remainingSeconds: RESEND_COOLDOWN_SECONDS };
+
+  const ttl = await redis.ttl(key);
+  // A key with no TTL (-1) or already gone (-2) is not something to make the caller wait
+  // on; treat it as one second so the client's countdown is never negative.
+  return { ok: false, remainingSeconds: ttl > 0 ? ttl : 1 };
+}
+
+/** Records one resend against the hourly budget. True while the user is still inside it. */
+export async function withinResendQuota(userId: string): Promise<boolean> {
+  const count = await slidingWindowHit(
+    `ratelimit:emailresend:${userId}`,
+    60 * 60 * 1000,
+  );
+  return count <= RESEND_LIMIT_PER_HOUR;
+}

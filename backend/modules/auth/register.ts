@@ -8,6 +8,7 @@ import { logger } from '../../src/lib/logger';
 import { issueSessionForUser } from '../../src/lib/session';
 
 import { publicUser } from './user-view';
+import { sendVerificationMail } from './verify-email';
 
 const schema = z.object({ email: z.string().email(), password: z.string() });
 
@@ -26,6 +27,11 @@ export const register: RequestHandler = async (req, res) => {
       throw err;
     });
   await issueSessionForUser(user, res, 'password');
+
+  // K8.6 — the mail is always sent, and never gates the response: `enqueueEmail` swallows
+  // a queue outage, so a registration still answers 201 with its session cookie when the
+  // mail system is down.
+  await sendVerificationMail(user, req.traceId);
 
   logger.info({ userId: user.id, traceId: req.traceId }, 'AUTH_REGISTERED');
   res.status(201).json({ user: publicUser(user) });

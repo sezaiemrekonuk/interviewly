@@ -12,6 +12,8 @@ export interface SessionUser {
   email: string;
   role: string;
   locale: string;
+  /** A04/K8.6 — null until the address is confirmed. ISO timestamp over the wire. */
+  emailVerifiedAt: string | null;
 }
 
 export interface RequireAuthState {

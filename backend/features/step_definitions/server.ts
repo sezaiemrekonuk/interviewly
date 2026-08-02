@@ -6,6 +6,7 @@ import type { Server } from 'node:http';
 
 import { AfterAll, Before, BeforeAll } from '@cucumber/cucumber';
 
+import { setEmailQueue } from '../../modules/auth/mail-queue';
 import { redis } from '../../modules/auth/rate-limit';
 import { app } from '../../src/app';
 import { prisma } from '../../src/lib/db';
@@ -15,6 +16,12 @@ export const serverState: { baseUrl: string } = { baseUrl: '' };
 let server: Server;
 
 BeforeAll(async function startServer() {
+  // A04's injection seam, same as the auth ring's mail recorder: scenarios here register
+  // users, and without this the first registration constructs the real BullMQ queue, whose
+  // Redis connection has no owner to close it — the run then hangs after its summary
+  // exactly like the eager clients the AfterAll below exists for. Mail is not this ring's
+  // subject, so the jobs are dropped rather than recorded.
+  setEmailQueue({ add: async () => {} });
   server = app.listen(0);
   await new Promise<void>((resolve) => server.once('listening', resolve));
   const address = server.address();

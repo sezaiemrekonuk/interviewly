@@ -2,8 +2,21 @@
 // DB/cache/storage access, mail send, LLM providers, ElevenLabs webhook verification.
 import { z } from 'zod';
 
+/** Same literal-string boolean parsing as `backend/src/lib/env.ts` — see the note there. */
+const boolFromEnv = (fallback: boolean) =>
+  z.preprocess(
+    (value) =>
+      value === undefined || value === ''
+        ? fallback
+        : ['true', '1', 'yes', 'on'].includes(String(value).toLowerCase()),
+    z.boolean(),
+  );
+
 const schema = z.object({
   NODE_ENV:                    z.enum(['development', 'production', 'test']).default('development'),
+  // A04 — the mail job builds the verification/reset link, so the worker needs the same
+  // browser-facing origin the API validates.
+  PUBLIC_ORIGIN:               z.string().url(),
   DATABASE_URL:                z.string(),
   REDIS_URL:                   z.string(),
   SMTP_HOST:                   z.string(),
@@ -21,7 +34,7 @@ const schema = z.object({
   S3_ACCESS_KEY:               z.string(),
   S3_SECRET_KEY:               z.string(),
   SIGNED_URL_TTL:              z.coerce.number().default(300),
-  AI_ENABLED:                  z.coerce.boolean().default(true),
+  AI_ENABLED:                  boolFromEnv(true),
   BUDGET_USD_TEXT:             z.coerce.number().default(0.50),
   LOG_LEVEL:                   z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
   LOG_TRANSPORT:               z.enum(['stdout', 'elastic']).default('stdout'),

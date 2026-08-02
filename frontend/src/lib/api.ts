@@ -14,6 +14,13 @@ export interface ApiResult<T> {
   data: T | null;
   /** The `{ error: { code } }` code, or null on success. Never a display string. */
   code: string | null;
+  /**
+   * The parsed body whatever the status was. `data` is deliberately null on a failure —
+   * a refused call has no payload of type `T` — but some refusals carry a field the
+   * screen needs anyway: `EMAIL_RESEND_COOLDOWN` says how many seconds are left, and the
+   * countdown has no other source for it.
+   */
+  payload: unknown;
 }
 
 /**
@@ -36,7 +43,7 @@ export async function apiGet<T>(path: string): Promise<ApiResult<T>> {
   try {
     response = await fetch(`${API_BASE}${path}`, { credentials: 'same-origin' });
   } catch {
-    return { status: 0, ok: false, data: null, code: TRANSPORT_FAILURE };
+    return { status: 0, ok: false, data: null, code: TRANSPORT_FAILURE, payload: null };
   }
 
   const payload: unknown = await response.json().catch(() => null);
@@ -47,10 +54,11 @@ export async function apiGet<T>(path: string): Promise<ApiResult<T>> {
       ok: false,
       data: null,
       code: readErrorCode(payload) ?? TRANSPORT_FAILURE,
+      payload,
     };
   }
 
-  return { status: response.status, ok: true, data: payload as T, code: null };
+  return { status: response.status, ok: true, data: payload as T, code: null, payload };
 }
 
 export async function apiPost<T>(path: string, body: unknown): Promise<ApiResult<T>> {
@@ -64,7 +72,7 @@ export async function apiPost<T>(path: string, body: unknown): Promise<ApiResult
       body: JSON.stringify(body),
     });
   } catch {
-    return { status: 0, ok: false, data: null, code: TRANSPORT_FAILURE };
+    return { status: 0, ok: false, data: null, code: TRANSPORT_FAILURE, payload: null };
   }
 
   const payload: unknown = await response.json().catch(() => null);
@@ -75,8 +83,9 @@ export async function apiPost<T>(path: string, body: unknown): Promise<ApiResult
       ok: false,
       data: null,
       code: readErrorCode(payload) ?? TRANSPORT_FAILURE,
+      payload,
     };
   }
 
-  return { status: response.status, ok: true, data: payload as T, code: null };
+  return { status: response.status, ok: true, data: payload as T, code: null, payload };
 }

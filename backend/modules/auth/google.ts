@@ -80,25 +80,58 @@ export async function resolveGoogleIdentity(
     throw new ApiError('ADMIN_MUST_USE_PASSWORD');
   }
 
+  // K8.6 — Google has already proven this address, so a separate mail round-trip would ask
+  // the person to prove something we were just told. Only ever sets a null column: an
+  // account verified earlier keeps its original timestamp.
+  const verifiedNow = identity.email_verified === true ? new Date() : undefined;
+
   // Already linked: this Google account owns that row, nothing left to decide.
-  if (bySub) return bySub;
+  if (bySub) {
+    if (!verifiedNow || bySub.email_verified_at) return bySub;
+    return markVerified(bySub.id, verifiedNow, traceId);
+  }
 
   if (account) {
     // K8.5 — strict boolean. A truthy `"true"` string is not a verified email.
-    if (identity.email_verified !== true) throw new ApiError('ACCOUNT_LINK_REQUIRES_PASSWORD');
+    if (!verifiedNow) throw new ApiError('ACCOUNT_LINK_REQUIRES_PASSWORD');
     const linked = await prisma.user.update({
       where: { id: account.id },
-      data: { google_sub: identity.sub },
+      data: {
+        google_sub: identity.sub,
+        ...(account.email_verified_at ? {} : { email_verified_at: verifiedNow }),
+      },
     });
     logger.info({ userId: linked.id, traceId }, 'AUTH_GOOGLE_LINKED');
+    if (!account.email_verified_at) {
+      logger.info({ userId: linked.id, traceId }, 'AUTH_EMAIL_VERIFIED');
+    }
     return linked;
   }
 
   const created = await prisma.user.create({
-    data: { email_lower, google_sub: identity.sub, password_hash: null },
+    data: {
+      email_lower,
+      google_sub: identity.sub,
+      password_hash: null,
+      email_verified_at: verifiedNow ?? null,
+    },
   });
   logger.info({ userId: created.id, traceId }, 'AUTH_REGISTERED');
+  if (verifiedNow) logger.info({ userId: created.id, traceId }, 'AUTH_EMAIL_VERIFIED');
   return created;
+}
+
+async function markVerified(
+  userId: string,
+  at: Date,
+  traceId: string | undefined,
+): Promise<User> {
+  const user = await prisma.user.update({
+    where: { id: userId },
+    data: { email_verified_at: at },
+  });
+  logger.info({ userId, traceId }, 'AUTH_EMAIL_VERIFIED');
+  return user;
 }
 
 export const startGoogle: RequestHandler = async (req, res) => {

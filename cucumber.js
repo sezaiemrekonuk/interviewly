@@ -9,8 +9,20 @@
 // The feature files are read where they were authored — there is no second copy under
 // backend/. One file, one source of truth, so the spec and the runnable test cannot drift.
 //
-// Each task appends its own feature file here as it wires the steps. Next up: I07 wires
-// interview_flow.feature @AC-16 and I08 wires @AC-11.
+// TWO PROFILES, because the two rings cannot share a cucumber World (ADR-A04-3):
+//
+//  - `default` — the interview-core rings. Their steps run against `AiWorld`, an in-memory
+//    world with no HTTP server and no database.
+//  - `auth` — the auth rings. Their steps run against `AuthWorld`, which boots the Express
+//    app on an ephemeral port and talks to Postgres and Redis.
+//
+// cucumber allows exactly one `setWorldConstructor` per process, and both rings define
+// `the response status is {int}` over their own world, so loading both `require` trees in
+// one run is an ambiguous-step failure before any assertion executes. Profiles keep each
+// ring's steps with the world they were written against.
+//
+// Each task appends its own feature file to its own profile as it wires the steps. Next up:
+// I07 wires interview_flow.feature @AC-16 and I08 wires @AC-11.
 //
 // I05 hit the case the file-level allow-list cannot express: interview_flow.feature is owned
 // by four tasks, and only @AC-15 is I05's. Keeping the file out of `paths` would make I05's
@@ -33,6 +45,12 @@
 // inside the World and never consults this flag.
 process.env.AI_ENABLED = 'false';
 //
+// Same forcing, for the same reason, on NODE_ENV (A04+I03 merge): the auth ring's Google
+// seam mounts only under NODE_ENV=test (app.ts), but loadEnvFile below would import
+// .env's `development` before `tests/support/setup.ts`'s `??= 'test'` default ever runs.
+// An acceptance run is a test run whatever the file says.
+process.env.NODE_ENV = 'test';
+//
 // I03 is the first task whose steps import backend/src/app.ts, which loads env.ts's Zod
 // schema at require time — every key must resolve or the process exits before a single
 // scenario runs. Loaded here (once, before requireModule) rather than via a CLI flag so
@@ -46,8 +64,17 @@ try {
   // which is a clearer failure than a silent skip.
 }
 
+const shared = {
+  requireModule: ['tsx/cjs'],
+  // Undefined, pending or ambiguous steps fail the run. Without this a scenario whose
+  // steps were never written reports green.
+  strict: true,
+  format: ['progress'],
+};
+
 module.exports = {
   default: {
+    ...shared,
     paths: [
       '.agents/features/security.feature',
       '.agents/features/ai_provider.feature',
@@ -57,10 +84,27 @@ module.exports = {
     ],
     tags: 'not @unwired',
     require: ['backend/features/step_definitions/**/*.ts'],
-    requireModule: ['tsx/cjs'],
-    // Undefined, pending or ambiguous steps fail the run. Without this a scenario whose
-    // steps were never written reports green.
-    strict: true,
-    format: ['progress'],
+  },
+  auth: {
+    ...shared,
+    paths: [
+      '.agents/features/auth.feature',
+      '.agents/features/admin_auth.feature',
+      '.agents/features/email_verification.feature',
+    ],
+    // `support` first, and it stays first: `support/setup.ts` fills the env defaults that
+    // `src/lib/env.ts` validates at import time, and a step-definition file loaded ahead of
+    // it drags `env.ts` in early — `NODE_ENV` then defaults to `development` and the
+    // acceptance-only Google seam never mounts.
+    require: ['backend/tests/support/**/*.ts', 'backend/tests/step-definitions/**/*.ts'],
+    // A01's filter, carried over: a scenario whose steps are not written yet stays out of
+    // the green suite instead of failing it.
+    //
+    // `not @AC-29` is still a DEFERRAL, but a narrower one since the A04+I03 merge:
+    // `requireVerifiedEmail` is now mounted on `POST /interviews` (interview/router.ts).
+    // What remains missing is the auth ring's interview steps ("I set up an interview…",
+    // "no interview exists for…") and `GET /me/interviews`, which no task has landed yet.
+    // Whichever task ships that endpoint: wire the steps and delete `and not @AC-29`.
+    tags: 'not @wip and not @AC-29',
   },
 };

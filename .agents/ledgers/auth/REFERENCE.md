@@ -35,12 +35,12 @@ cd backend && npx prisma migrate deploy
 # Seed demo data
 cd backend && npm run seed
 
-# Run auth acceptance tests
-npm run test:acceptance -- --tags "@AC-1 or @AC-2 or @AC-3"   # A01 scope
-npm run test:acceptance -- --tags "@AC-4 or @AC-5"             # A02 scope
-
-# Run all auth acceptance tests
-npm run test:acceptance -- --tags "@auth or @admin-auth"
+# Run auth acceptance tests. The auth ring has its own cucumber PROFILE (ADR-A09) — the
+# bare `cucumber-js` / `npm run test:acceptance` runs interview-core's rings, not these.
+npx cucumber-js -p auth                                  # the whole auth ring
+npx cucumber-js -p auth --tags "@AC-1 or @AC-2 or @AC-3" # A01 scope
+npx cucumber-js -p auth --tags "@AC-4 or @AC-5"          # A02 scope
+npx cucumber-js -p auth --tags "@AC-21 or @AC-22 or @AC-23 or @AC-24"  # A04 scope
 
 # Frontend component tests (set up by A03)
 npm run -w frontend test -- --testPathPattern="(sign-in|register)"
@@ -105,9 +105,12 @@ All paths are relative to repo root. They will exist once the named task lands.
 | `frontend/app/(auth)/register/page.tsx` | A03 | Register form + Google button |
 | `frontend/app/(auth)/layout.tsx` | A03 | Unauthenticated shell (no nav), gradient ground |
 | `tests/smoke/auth.spec.ts` | A03 | Playwright smoke: happy-path sign-in + register |
-| `backend/modules/auth/tokens.ts` | A04 | `mintEmailToken`/`consumeEmailToken` — sha256 storage, guarded consume. The **only** code touching `email_tokens` |
-| `backend/modules/auth/verify-email.ts` | A04 | Request + confirm handlers, resend cooldown |
+| `backend/modules/auth/tokens.ts` | A04 | `mintEmailToken`/`consumeEmailToken` — sha256 storage, guarded consume. The **only** code touching `email_tokens`. A05's `reset` kind already works |
+| `backend/modules/auth/verify-email.ts` | A04 | Request + confirm handlers, resend cooldown, and `requireVerifiedEmail` — the gate middleware **I03 mounts on `POST /interviews`** |
+| `backend/modules/auth/mail-queue.ts` | A04 | `EmailQueue` seam + lazy BullMQ producer; `enqueueEmail` never fails its caller (ADR-A10) |
+| `worker/src/index.ts` | A04 | The worker process. R01 adds the report queue beside the mail one |
 | `worker/src/jobs/email-send.ts` | A04 | BullMQ `email.send` consumer (nodemailer → SMTP); both templates |
+| `backend/tests/support/{harness,world,hooks,setup,log-sink,mail-recorder}.ts` | A01, A04 | The auth acceptance harness: booted app, `AuthWorld`, log capture, queue recorder |
 | `backend/modules/auth/password-reset.ts` | A05 | Request (enumeration-safe) + confirm (revoke-all-sessions) |
 | `backend/modules/auth/profile.ts` | A06 | `GET/PATCH /me/profile`, `POST /me/profile/complete`; per-step Zod |
 | `frontend/src/lib/first-run.ts` | A06 | The K8.7 routing rule, called by every sign-in success path |

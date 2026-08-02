@@ -128,7 +128,12 @@ jobs:
       - run: cp .env.example .env
       # Blocking again as of I04: question_generation @AC-7/@AC-1 are wired and the whole
       # suite is defined, so an undefined or failing step is a real regression now.
+      #
+      # Both profiles, explicitly. `test:acceptance` is the `default` profile only, so for two
+      # commits after I01 the auth ring was not executed by anything and this job stayed green
+      # regardless (auth STATE.md, BLOCKER-2). A new ring must be added here or it is not run.
       - run: npm run test:acceptance
+      - run: npx cucumber-js -p auth
 
   audit:
     runs-on: ubuntu-latest

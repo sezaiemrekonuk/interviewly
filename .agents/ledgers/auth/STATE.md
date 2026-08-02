@@ -1,7 +1,20 @@
 # Auth — State
 
 Last updated: 2026-07-31
-Last session ended: **A03 blocked** — both auth screens, the shared credentials form, the
+Last session ended: **A04 done; A03 still blocked.** Two things happened this session.
+
+First, the stack was re-checked at `fe33356`: BLOCKER-1's defects (2) `curl` healthcheck and
+(3) Caddy `handle_path` are fixed, defect (1) is not, and `api` now exits 1 with
+`Cannot find module '/app/backend/dist/src/index.js'`. Three packaging defects diagnosed
+inside the built image and recorded as **BLOCKER-1b**; all three are Sezai's.
+
+Second, **A04 shipped in full except the gate**, which is a missing endpoint rather than
+missing work — `requireVerifiedEmail` exists and I03 mounts it. The auth acceptance ring had
+to be resurrected first (it had not run since `1097dc8`; see **BLOCKER-2**, resolved), and a
+boolean-env defect had to be fixed for the K8.6 flag to mean anything (see the note to Sezai
+under BLOCKER-1b). `npx cucumber-js -p auth` → 11 scenarios, 11 passed. Previous summary follows.
+
+Previous: **A03 blocked** — both auth screens, the shared credentials form, the
 `errors.<CODE>` wiring, the Google button, the `returnPath` guard and the `useRequireAuth`
 hook all landed, and the component ring is green (12 tests, plus 10 more for the helpers).
 The Playwright smoke is written and collects, but cannot run: `docker compose up` produces
@@ -23,11 +36,19 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**A03 is `blocked` on BLOCKER-1 below** — not on anything in this ledger. Its own scope is
+**A06 — the onboarding profile** is the next task in this ledger. A04 is `done`; A05 depends on
+A04 and is bonus-band, A06 branches off A03 and is the mandatory K8.7 path, so A06 goes first.
+
+**A03 stays `blocked` on BLOCKER-1b below** — not on anything in this ledger. Its own scope is
 finished and its component-ring verification is green; only the second Verification command
-(the Playwright smoke, which needs a running stack) is outstanding. Once F03's three stack
-defects are fixed, re-run `npx playwright test tests/smoke/auth.spec.ts` and flip A03 to
-`done`. No auth task should be started ahead of it: A04 and A06 both depend on A03.
+(the Playwright smoke, which needs a running stack) is outstanding. BLOCKER-1's defects (2)
+and (3) have since been fixed, but `docker compose up -d --build` still fails to start `api`
+for three packaging reasons recorded as BLOCKER-1b. Once those are fixed, re-run
+`npx playwright test tests/smoke/auth.spec.ts` and flip A03 to `done`.
+
+A04 went ahead of it deliberately: A03's code is merged on master and A04 depends on that code,
+not on A03's outstanding browser smoke. A06 can proceed on the same basis. Neither A04 nor A06
+can close BLOCKER-1b, and neither is blocked by it — only A03's own last verification step is.
 
 ## Environment
 
@@ -61,6 +82,13 @@ npm run test:acceptance -- --tags "@AC-4 or @AC-5"             # A02 check
 
 **BLOCKER-1 (2026-07-31) — `docker compose up` does not produce a working stack.**
 Blocks: A03's Playwright smoke, and every later browser-facing task. Owner: **Sezai (F03)**.
+
+**Re-checked 2026-07-31 (second run, after `dab57c4 fix(docker)` / `eefee5e fix(edge)`):
+defects (2) and (3) are fixed — `web`'s healthcheck now uses `wget`, and `Caddyfile:2` is
+`handle_path /api/*`. Defect (1) is NOT fixed; both tsconfigs now exist and `tsc` runs
+clean, but the packaging is wrong in three new ways, so `docker compose up -d --build`
+still ends with `dependency failed to start: container interviewly-api-1 exited (1)`.
+See BLOCKER-1b. The original text of (1)–(3) is kept below as the historical record.**
 
 Three independent defects, each reproduced on a clean `docker compose up -d --build`:
 
@@ -127,6 +155,79 @@ URL moves. Defects (1) and (2) still need F03 for `docker compose up` to reprodu
    every other string did not. One declaration in `globals.css`, plus `font: inherit` on
    `button`/`input`.
 
+**BLOCKER-1b (2026-07-31) — the `api` image compiles but cannot be started by `node`.**
+Blocks: the same set as BLOCKER-1 (A03's Playwright smoke, then A04/A06).
+Owner: **Sezai (F03 packaging, plus `packages/ai` from I01/I02).**
+
+Reproduced on a clean `docker compose up -d --build` at `fe33356`. `docker compose logs api`:
+
+```
+Error: Cannot find module '/app/backend/dist/src/index.js'
+```
+
+Three packaging defects, each verified inside the built image, not inferred:
+
+6. **`tsc` emits one directory level deeper than the Dockerfile's `CMD` expects.**
+   `backend/tsconfig.json` extends the root config, which sets `paths` for
+   `@interviewly/types` and `@interviewly/ai` onto `packages/*/src/*.ts`. Those source files
+   join the program, so tsc's inferred common root becomes the repo root, not `backend/`.
+   The actual emit is `/app/backend/dist/backend/src/index.js` (alongside a
+   `/app/backend/dist/packages/ai/src/index.js`), while `backend/Dockerfile` ends with
+   `CMD ["node", "backend/dist/src/index.js"]`. Verified with `find /app/backend/dist -name
+   index.js` in the image. `worker/Dockerfile` has the same shape
+   (`CMD ["node", "worker/dist/index.js"]`) and needs the same check.
+7. **The workspace packages are not linked into the image at all.**
+   `ls /app/node_modules/@interviewly/` in the built image contains exactly one entry,
+   `backend -> ../../backend`. There is no `ai` and no `types`, because the `deps` stage runs
+   `npm ci --workspace=@interviewly/backend --include-workspace-root` after copying only the
+   root and `backend/package.json` — `packages/*/package.json` never enter that stage. So
+   even with (6) fixed, the first `require('@interviewly/ai')` in
+   `backend/src/index.ts:1` throws. The build does not catch this: tsc resolves those
+   imports through tsconfig `paths`, never through `node_modules`.
+8. **`@interviewly/ai` has no runtime entry point.** `packages/ai/package.json` declares
+   `"main": "src/index.ts"` — a TypeScript file `node` cannot load. Compiling the backend
+   does not fix it: tsc rewrites no import specifiers, so the built output still asks
+   `node` for the package by name. (`@interviewly/types` is fine: its `main` is
+   `dist/packages/types/src/index.js` and that file exists.)
+
+Also worth noting for foundations: **`backend/package.json` lists neither
+`@interviewly/ai` nor `@interviewly/types` under `dependencies`**, which is the underlying
+reason npm has no link to create in (7).
+
+None of this is auth-side, and none of it is reachable from this ledger: (6) and (7) live in
+`backend/Dockerfile` + `worker/Dockerfile`, (8) lives in `packages/ai/package.json`. A03's
+own scope stays finished and its component ring stays green; only the Playwright smoke is
+still waiting on a stack that boots.
+
+CI remains green through all of it for the reason BLOCKER-1 already gives: no job ever
+starts a container.
+
+**Also for Sezai, found while booting the stack by hand for A04 (2026-07-31) — fixed here, not
+left for you, because A04's own gate depended on it.** Every boolean key in
+`backend/src/lib/env.ts` and `worker/src/lib/env.ts` used `z.coerce.boolean()`, which is JS
+truthiness over a string: `"false"` parses as `true`. `.env.example` ships
+`EMAIL_VERIFICATION_REQUIRED=false` and `AI_ENABLED=false`, so a default clone got the K8.6 gate
+switched **on** — the opposite of the spec — and a boot that demanded provider keys nobody has:
+
+```
+no api key configured for provider(s): openai
+{"code":"PROVIDER_KEY_MISSING","msg":"BOOT_FAILED"}
+```
+
+Both files now parse the literal string (`boolFromEnv`). This is your file; the change is three
+lines plus a comment, and the interview-core ring is unaffected (`20 scenarios (20 passed)` after
+it). Worth an F03 backlog entry that no test anywhere reads an env value that is meant to be off.
+
+**BLOCKER-2 (2026-07-31) — RESOLVED in this session. The auth acceptance ring had not run since
+`1097dc8`.** Recorded because it was silent for two commits and the shape of the mistake will
+recur. I01 introduced a root `cucumber.js` for the interview-core rings and dropped backend's
+`test:acceptance` script, but nothing carried A01's auth wiring across, so `backend/cucumber.js`,
+`backend/tests/step-definitions/auth.ts` and the whole `backend/tests/support/` harness were
+orphaned — `auth.feature` and `admin_auth.feature` were simply never executed, and CI was green
+throughout. A04 restored them as a second cucumber profile (ADR-A09) and deleted the stale
+config. `harness.ts` also stopped resolving the Prisma schema through `process.cwd()`, which had
+only worked while the runner lived in `backend/`.
+
 ## Task ledger (A01–A05)
 
 Statuses: todo → in_progress → done → (blocked if waiting on user).
@@ -137,7 +238,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | A01 | Creating the backend auth module: register, login, logout, session cookie, and `/me` | | done | F01, F02, F03 |
 | A02 | Adding Google OAuth (arctic PKCE), account linking, and admin password restriction | | done | A01 |
 | A03 | Building the frontend login and register forms | | blocked | A02 |
-| A04 | Building email verification: tokens, the mail job, the gate, and the two screens | | todo | A03 |
+| A04 | Building email verification: tokens, the mail job, the gate, and the two screens | | done | A03 |
 | A05 | Building password reset: enumeration-safe request, session-revoking confirm, two screens | | todo | A04 |
 | A06 | Building the onboarding profile: three cards, CV upload, and first-run routing | | todo | A03 |
 
@@ -157,6 +258,7 @@ pending rather than inventing the endpoint.
 
 | Ledger task | Provides | Needed by |
 |---|---|---|
+| I03 | `POST /interviews`, the one endpoint A04's `requireVerifiedEmail` mounts on | A04's gate (@AC-29, deferred) |
 | F01 | `error-codes.ts` registry (PASSWORD_TOO_SHORT, EMAIL_TAKEN, INVALID_CREDENTIALS, UNAUTHENTICATED, ADMIN_MUST_USE_PASSWORD, ACCOUNT_LINK_REQUIRES_PASSWORD, OAUTH_STATE_MISMATCH, VALIDATION_ERROR, RATE_LIMITED), `@interviewly/types` | A01, A02 |
 | F02 | `schema.prisma` `User` + `Session` models; `db.ts` Prisma singleton | A01, A02 |
 | F03 | `logger.ts`, `env.ts`, `compose.yaml` (Postgres + Redis), `.env.example` | A01, A02 |

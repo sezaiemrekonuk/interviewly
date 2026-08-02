@@ -2,7 +2,6 @@ import type { RequestHandler } from 'express';
 import { z } from 'zod';
 
 import { ApiError } from '../../src/lib/api-error';
-import { config } from '../../src/lib/env';
 import { prisma } from '../../src/lib/db';
 
 const schema = z.object({
@@ -52,11 +51,6 @@ export const setupInterview: RequestHandler = async (req, res) => {
   // is I11's contract, not yet built. Until then an uploadId with no jobText has nothing to
   // store in the NOT NULL job_text column, so it is a malformed request today.
   if (!jobText) throw new ApiError('VALIDATION_ERROR');
-
-  // K8.6 — the only gated endpoint in the system; reads a config flag, not an env branch.
-  if (config.EMAIL_VERIFICATION_REQUIRED && !req.user!.email_verified_at) {
-    throw new ApiError('EMAIL_NOT_VERIFIED');
-  }
 
   const { occupation, clusterKey } = classify(jobText);
   const cluster = clusterKey
