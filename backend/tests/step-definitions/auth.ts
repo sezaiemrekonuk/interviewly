@@ -9,10 +9,13 @@ import type { AuthWorld } from '../support/world';
 
 const lower = (email: string) => email.trim().toLowerCase();
 
+const DEFAULT_FIXTURE_PASSWORD = 'Password123!';
+
 Given('a password account exists for {string}', async function (this: AuthWorld, email: string) {
   await prisma.user.create({
-    data: { email_lower: lower(email), password_hash: await hash('Password123!') },
+    data: { email_lower: lower(email), password_hash: await hash(DEFAULT_FIXTURE_PASSWORD) },
   });
+  this.passwords.set(lower(email), DEFAULT_FIXTURE_PASSWORD);
 });
 
 Given(
@@ -21,6 +24,7 @@ Given(
     await prisma.user.create({
       data: { email_lower: lower(email), password_hash: await hash(password) },
     });
+    this.passwords.set(lower(email), password);
   },
 );
 

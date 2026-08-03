@@ -29,6 +29,10 @@ export class AuthWorld extends World {
   /** The plaintext token the scenario is currently working with (A04). */
   currentToken?: string;
 
+  // What each fixture account's password was set to, so a step can sign in through the
+  // real endpoint instead of inserting a `sessions` row the login path never issued.
+  readonly passwords = new Map<string, string>();
+
   async request(method: Method, path: string, opts: RequestOpts = {}): Promise<void> {
     const headers: Record<string, string> = {};
     if (opts.body !== undefined) headers['content-type'] = 'application/json';

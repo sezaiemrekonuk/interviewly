@@ -1,18 +1,24 @@
 # Auth — State
 
-Last updated: 2026-07-31
-Last session ended: **A04 done; A03 still blocked.** Two things happened this session.
+Last updated: 2026-08-03
+Last session ended: **A05 done; A03 still blocked, A06 next.** Password reset shipped whole —
+both endpoints, the IP-keyed limit, the `sessions(user_id)` index migration and both screens.
+`npx cucumber-js -p auth` → 18 scenarios, 18 passed (was 11). The two traps held under test: the
+request writes `res.end()` before it looks the account up, so known, Google-only and unknown are
+identical in status, body, headers and latency; the confirm revokes every session in the same
+transaction as the password write, and mutating that revoke out makes @AC-26 fail.
 
-First, the stack was re-checked at `fe33356`: BLOCKER-1's defects (2) `curl` healthcheck and
-(3) Caddy `handle_path` are fixed, defect (1) is not, and `api` now exits 1 with
-`Cannot find module '/app/backend/dist/src/index.js'`. Three packaging defects diagnosed
-inside the built image and recorded as **BLOCKER-1b**; all three are Sezai's.
+`MODELS.md` had no rows for A04–A06 and now does. BLOCKER-1b is untouched and still Sezai's.
+Previous summary follows.
 
-Second, **A04 shipped in full except the gate**, which is a missing endpoint rather than
+Previous: **A04 done.** Shipped in full except the gate, which is a missing endpoint rather than
 missing work — `requireVerifiedEmail` exists and I03 mounts it. The auth acceptance ring had
 to be resurrected first (it had not run since `1097dc8`; see **BLOCKER-2**, resolved), and a
 boolean-env defect had to be fixed for the K8.6 flag to mean anything (see the note to Sezai
-under BLOCKER-1b). `npx cucumber-js -p auth` → 11 scenarios, 11 passed. Previous summary follows.
+under BLOCKER-1b). The stack was re-checked at `fe33356`: BLOCKER-1's defects (2) `curl`
+healthcheck and (3) Caddy `handle_path` are fixed, defect (1) is not, and `api` exits 1 with
+`Cannot find module '/app/backend/dist/src/index.js'` — three packaging defects recorded as
+**BLOCKER-1b**, all Sezai's.
 
 Previous: **A03 blocked** — both auth screens, the shared credentials form, the
 `errors.<CODE>` wiring, the Google button, the `returnPath` guard and the `useRequireAuth`
@@ -36,8 +42,14 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**A06 — the onboarding profile** is the next task in this ledger. A04 is `done`; A05 depends on
-A04 and is bonus-band, A06 branches off A03 and is the mandatory K8.7 path, so A06 goes first.
+**A06 — the onboarding profile** is the last task in this ledger. A05 is `done`; A06's only
+dependency is A03, whose *code* is merged on master — A03 is `blocked` on its own Playwright
+smoke, not on scope. A06 is **sonnet-tier** (`MODELS.md`), so an opus session must stop under
+EXECUTE.md § 5 and hand it back.
+
+A06's second Verification command curls `$PUBLIC_ORIGIN/assets/<cv-key>` expecting a non-`200`,
+which needs the stack BLOCKER-1b keeps down. Its coding is unaffected; only that last check is
+impeded, the same shape as A03.
 
 **A03 stays `blocked` on BLOCKER-1b below** — not on anything in this ledger. Its own scope is
 finished and its component-ring verification is green; only the second Verification command
@@ -46,9 +58,9 @@ and (3) have since been fixed, but `docker compose up -d --build` still fails to
 for three packaging reasons recorded as BLOCKER-1b. Once those are fixed, re-run
 `npx playwright test tests/smoke/auth.spec.ts` and flip A03 to `done`.
 
-A04 went ahead of it deliberately: A03's code is merged on master and A04 depends on that code,
-not on A03's outstanding browser smoke. A06 can proceed on the same basis. Neither A04 nor A06
-can close BLOCKER-1b, and neither is blocked by it — only A03's own last verification step is.
+A04 and A05 went ahead of it deliberately: A03's code is merged on master and both depend on
+that code, not on A03's outstanding browser smoke. Both verify off the auth cucumber ring, which
+BLOCKER-1b cannot reach. Neither they nor A06 can close BLOCKER-1b.
 
 ## Environment
 
@@ -239,7 +251,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | A02 | Adding Google OAuth (arctic PKCE), account linking, and admin password restriction | | done | A01 |
 | A03 | Building the frontend login and register forms | | blocked | A02 |
 | A04 | Building email verification: tokens, the mail job, the gate, and the two screens | | done | A03 |
-| A05 | Building password reset: enumeration-safe request, session-revoking confirm, two screens | | todo | A04 |
+| A05 | Building password reset: enumeration-safe request, session-revoking confirm, two screens | | done | A04 |
 | A06 | Building the onboarding profile: three cards, CV upload, and first-run routing | | todo | A03 |
 
 ## Critical path
@@ -269,9 +281,8 @@ because Redis (rate-limit counters) is not wired.
 
 ## Backlog (deferred, unnumbered — promote to a task when its trigger fires)
 
-- ~~**`sessions(user_id)` index for bulk revocation**~~ — **promoted into A05** (2026-07-30). The
-  trigger fired: K8.6's reset revokes every session of a user, which is exactly the `user_id`
-  lookup this was waiting for. A05 ships it as an index-only migration.
+- ~~**`sessions(user_id)` index for bulk revocation**~~ — **shipped in A05** (2026-08-03) as
+  `backend/prisma/migrations/*_sessions_user_id_idx/`, index-only.
 - **Rate-limit Cucumber coverage (`rate_limits.feature` @AC-13)** — auth implements the
   middleware; the feature file is owned by `interview-core` since it covers interview-start
   limits alongside auth limits. Promote if auth needs to own its own coverage separately.
