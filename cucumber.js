@@ -86,6 +86,7 @@ module.exports = {
       '.agents/features/admin_cost.feature',
       '.agents/features/schema_validation.feature',
       '.agents/features/upload.feature',
+      '.agents/features/object_storage.feature',
     ],
     tags: 'not @unwired',
     require: ['backend/features/step_definitions/**/*.ts'],

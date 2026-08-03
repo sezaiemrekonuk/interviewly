@@ -1,11 +1,21 @@
 // I12 owns this file and extends it with `get` and `signedUrl(key, ttl)`. I11 added the
 // minimal `put` it needed, so I12 grows the interface rather than reworking it.
-import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
+import { clock } from './clock';
 import { config } from './env';
+
+export const MAX_TTL_SECONDS = 300;
+
+// @AC-6: a hard ceiling, not a default — `signedUrl(key, 600)` still expires at 300 s.
+export const cappedTtl = (ttlSeconds: number): number =>
+  Math.max(1, Math.min(ttlSeconds, MAX_TTL_SECONDS));
 
 export interface Storage {
   put(key: string, bytes: Buffer, mime: string): Promise<void>;
+  get(key: string): Promise<Buffer>;
+  signedUrl(key: string, ttlSeconds: number): Promise<string>;
 }
 
 // forcePathStyle: MinIO serves path-style only. Same client shape as prisma/seed.ts.
@@ -23,6 +33,18 @@ export let storage: Storage = {
     await s3.send(
       new PutObjectCommand({ Bucket: config.S3_BUCKET, Key: key, Body: bytes, ContentType: mime }),
     );
+  },
+  async get(key) {
+    const obj = await s3.send(new GetObjectCommand({ Bucket: config.S3_BUCKET, Key: key }));
+    return Buffer.from(await obj.Body!.transformToByteArray());
+  },
+  // `signingDate` from the Clock seam, not wall time: the expiry the presigned URL carries is
+  // what @AC-6 measures against the fixed clock.
+  async signedUrl(key, ttlSeconds) {
+    return getSignedUrl(s3, new GetObjectCommand({ Bucket: config.S3_BUCKET, Key: key }), {
+      expiresIn: cappedTtl(ttlSeconds),
+      signingDate: clock.now(),
+    });
   },
 };
 

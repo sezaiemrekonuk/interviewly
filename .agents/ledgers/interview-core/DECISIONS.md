@@ -764,3 +764,18 @@ unconditional call would spend an LLM call per switch that D02 never made.
 
 **Consequences:** a second api replica counts its own streak (worst case: a switch needs a
 third turn). Move to `lang_streak:<id>` in Redis if the api is ever scaled out.
+
+## ADR-I36 — 2026-08-03 — the fake store signs SigV4-shaped URLs, and the cap lives in `cappedTtl`
+
+**Context:** @AC-6 asserts an expiry "no more than 300 seconds ahead of the fixed clock" and a
+403 after the TTL. The acceptance ring starts no bucket, so the assertion has to read an
+expiry off a URL some fake produced — and a fake URL shape makes the assertion prove nothing
+about the real presigner.
+
+**Decision:** `@aws-sdk/s3-request-presigner` with `signingDate: clock.now()`;
+`features/fixtures/fake-storage.ts` emits the same `X-Amz-Date`/`X-Amz-Expires` query pair, so
+`parseSignedExpiry` reads both stores identically. The 300 s ceiling is `cappedTtl` in
+`storage.ts`, applied inside `signedUrl` — callers cannot raise it.
+
+**Consequences:** one new runtime dependency. Changing the store means keeping the SigV4 query
+shape or rewriting `parseSignedExpiry`. `FakeStorage` is test-only and stays out of `src/lib`.

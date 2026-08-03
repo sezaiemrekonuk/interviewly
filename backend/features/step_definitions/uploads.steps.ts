@@ -12,6 +12,7 @@ import { Before, DataTable, Then, When } from '@cucumber/cucumber';
 
 import { prisma } from '../../src/lib/db';
 import { setStorage } from '../../src/lib/storage';
+import { makeFakeStorage } from '../fixtures/fake-storage';
 import { fixtureBytes } from '../fixtures/pdf';
 
 import { AiWorld } from './world';
@@ -43,7 +44,10 @@ Before({ tags: '@upload' }, function () {
   firstUploadId = '';
   lastUploadId = '';
   storedKeys.length = 0;
+  // I12 widened `Storage` with `get`/`signedUrl`; neither is on an upload path, so the fake
+  // supplies them and `put` stays the recording one these scenarios assert on.
   setStorage({
+    ...makeFakeStorage(),
     put: async (key: string) => {
       storedKeys.push(key);
     },
