@@ -52,14 +52,14 @@ Reuses A04's `tokens.ts` and `email.send` job unchanged.
   editing them.
 
 ## Steps
-- [ ] **1. `POST /auth/password-reset/request`** — Zod-validate the email, respond `202` with an
+- [x] **1. `POST /auth/password-reset/request`** — Zod-validate the email, respond `202` with an
   empty body, then (only if the account exists) mint and enqueue.
-- [ ] **2. `POST /auth/password-reset/confirm`** — validate password length → guarded consume →
+- [x] **2. `POST /auth/password-reset/confirm`** — validate password length → guarded consume →
   argon2id rehash + revoke-all-sessions + set `email_verified_at` if null, all in one transaction.
-- [ ] **3. The `sessions(user_id)` index migration.**
-- [ ] **4. The IP-keyed rate limit.**
-- [ ] **5. The two screens**, plus the `/sign-in` **Forgot password?** link if A03 left it unwired.
-- [ ] **6. Log events** — `AUTH_RESET_TOKEN_ISSUED`, `AUTH_RESET_COMPLETED` (with the count of
+- [x] **3. The `sessions(user_id)` index migration.**
+- [x] **4. The IP-keyed rate limit.**
+- [x] **5. The two screens.** The `/sign-in` **Forgot password?** link was already wired by A03.
+- [x] **6. Log events** — `AUTH_RESET_TOKEN_ISSUED`, `AUTH_RESET_COMPLETED` (with the count of
   sessions revoked; the count is the useful half of the line). No token, no hash, no email body.
 
 ## Definition of done
@@ -87,6 +87,52 @@ Expected: two `202`s and `IDENTICAL`.
 
 ## Notes
 
-(Empty until the task is done. Fill with: what actually happened, the cucumber output verbatim,
-the revoked-session counts observed, whether the timing of the two request paths is
-indistinguishable in practice, and anything deliberately left out.)
+**Done 2026-08-03.** Whole scope shipped; nothing deferred.
+
+### Verification, verbatim
+
+`## Verification`'s bare `npx cucumber-js <file>` still cannot run, for the reason A04 recorded
+as ADR-A04-3 — it selects the `default` profile, which has no auth harness. Command is
+`npx cucumber-js -p auth`; `password_reset.feature` is now in that profile's `paths`.
+
+```
+red (no handlers):   18 scenarios (7 failed, 11 passed)
+green:               18 scenarios (18 passed) / 155 steps (155 passed)
+```
+
+Mutation on the invariant: narrowing the revoke to `id: 'MUTANT'` keeps the password write and
+makes @AC-26 fail on `GET /me` → 401 (`1 failed, 2 passed`). Restored.
+
+Identical-response half ran against the API booted by hand — BLOCKER-1b still leaves
+`$PUBLIC_ORIGIN/api/...` with no `api` behind it — five samples per address:
+
+```
+known@example.com       202 x5   0.0025 0.0017 0.0015 0.0016 0.0012 s
+googleonly@example.com  202 x5   0.0018 0.0014 0.0014 0.0011 0.0012 s
+unknown@example.com     202 x5   0.0016 0.0012 0.0014 0.0011 0.0012 s
+bodies 0 bytes, byte-identical; headers identical except Date
+```
+
+Bands overlap completely: the lookup happens after `res.end()`. Real BullMQ held `reset` jobs for
+known x5 and googleonly x5, unknown absent. Log grep: 0 hits for 64-hex, base64url-43 or either
+address. `AUTH_RESET_COMPLETED` counts 1 signed-in, 0 where no login happened. Gates green
+(`npm test` 105 tests; interview-core ring 33/33).
+
+### Decisions worth carrying
+
+- **`res.end()` before the account lookup**, not after — a `findUnique` first puts the difference
+  back into the latency, which an identical body does not close.
+- **`resetMailSettled()`** is the exported join point for that fire-and-forget work; without it
+  every "no job for the unknown address" assertion is a race. Promise tracker, no env branch.
+- **Length checked before the consume**, so a typo cannot burn the link. **`revokeCookie(res)` on
+  confirm** — the caller's own row is one of the revoked ones.
+- **`PASSWORDS_MISMATCH` is client-only**, rendered from `auth.passwordsMismatch`: the API has
+  no code for it and no second field to compare.
+- **`AuthWorld.passwords`** (filled by `auth.ts`'s fixture Givens) lets `I am signed in as` use
+  `/auth/login` instead of inserting a `sessions` row login never issued.
+
+### For A06
+
+- `MODELS.md` had no A04–A06 rows; added from each task file's `**Model:**` line. A06 is
+  sonnet-tier — § 5 will stop an opus session on it.
+- Migration is index-only (`*_sessions_user_id_idx`) plus one `@@index([user_id])` on `Session`.

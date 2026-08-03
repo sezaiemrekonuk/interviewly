@@ -92,6 +92,7 @@ module.exports = {
       '.agents/features/auth.feature',
       '.agents/features/admin_auth.feature',
       '.agents/features/email_verification.feature',
+      '.agents/features/password_reset.feature',
     ],
     // `support` first, and it stays first: `support/setup.ts` fills the env defaults that
     // `src/lib/env.ts` validates at import time, and a step-definition file loaded ahead of

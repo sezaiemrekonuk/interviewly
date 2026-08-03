@@ -2,8 +2,16 @@
   "name": "@interviewly/ai",
   "version": "0.0.1",
   "private": true,
-  "main": "src/index.ts",
-  "types": "src/index.ts",
+  "//": "Entry points are the BUILT files. `main: src/index.ts` pointed plain `node` at a TypeScript file, so every production import of this package threw ERR_MODULE_NOT_FOUND — tsc rewrites no specifiers, the compiled api still asks node for the package by name. Test runners keep reading src via the alias in the root vitest.config.ts and the `paths` in the root tsconfig.json.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "prompts", "config"],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "lint": "cd ../.. && eslint --config eslint.config.js packages/ai/src",

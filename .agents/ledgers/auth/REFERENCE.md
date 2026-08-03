@@ -41,6 +41,7 @@ npx cucumber-js -p auth                                  # the whole auth ring
 npx cucumber-js -p auth --tags "@AC-1 or @AC-2 or @AC-3" # A01 scope
 npx cucumber-js -p auth --tags "@AC-4 or @AC-5"          # A02 scope
 npx cucumber-js -p auth --tags "@AC-21 or @AC-22 or @AC-23 or @AC-24"  # A04 scope
+npx cucumber-js -p auth --tags "@AC-25 or @AC-26 or @AC-27 or @AC-28"  # A05 scope
 
 # Frontend component tests (set up by A03)
 npm run -w frontend test -- --testPathPattern="(sign-in|register)"
@@ -111,7 +112,7 @@ All paths are relative to repo root. They will exist once the named task lands.
 | `worker/src/index.ts` | A04 | The worker process. R01 adds the report queue beside the mail one |
 | `worker/src/jobs/email-send.ts` | A04 | BullMQ `email.send` consumer (nodemailer → SMTP); both templates |
 | `backend/tests/support/{harness,world,hooks,setup,log-sink,mail-recorder}.ts` | A01, A04 | The auth acceptance harness: booted app, `AuthWorld`, log capture, queue recorder |
-| `backend/modules/auth/password-reset.ts` | A05 | Request (enumeration-safe) + confirm (revoke-all-sessions) |
+| `backend/modules/auth/password-reset.ts` | A05 | Request (enumeration-safe) + confirm (revoke-all-sessions). `resetMailSettled()` is the join point for the mint+enqueue the request leaves running after it answers |
 | `backend/modules/auth/profile.ts` | A06 | `GET/PATCH /me/profile`, `POST /me/profile/complete`; per-step Zod |
 | `frontend/src/lib/first-run.ts` | A06 | The K8.7 routing rule, called by every sign-in success path |
 | `frontend/app/(auth)/verify-email/…` | A04 | Pending state + resend countdown; confirm-on-mount |
@@ -174,7 +175,10 @@ first, event name second. No display strings. Auth events to emit: `AUTH_REGISTE
 `AUTH_LOGIN_OK`, `AUTH_LOGIN_FAILED`, `AUTH_GOOGLE_LINKED`, `AUTH_ADMIN_GOOGLE_BLOCKED`,
 `AUTH_LOGOUT`. A02 added `AUTH_GOOGLE_STARTED`, `AUTH_GOOGLE_EXCHANGE_FAILED` and the boot
 warning `AUTH_GOOGLE_NOT_CONFIGURED`. Never log `password_hash`, tokens, `google_sub`, the
-OAuth authorization code, the PKCE verifier, or the token-endpoint response.
+OAuth authorization code, the PKCE verifier, or the token-endpoint response. A04 added
+`AUTH_VERIFY_TOKEN_ISSUED`, `AUTH_EMAIL_VERIFIED`, `AUTH_VERIFY_TOKEN_REJECTED`,
+`AUTH_VERIFICATION_REQUIRED_BLOCK`; A05 added `AUTH_RESET_TOKEN_ISSUED` and
+`AUTH_RESET_COMPLETED` (carries `sessionsRevoked`).
 
 **Validation**: Zod at every trust boundary (`POST /auth/register` body, `/auth/login`
 body, Google callback `?code&state` query params). Return `VALIDATION_ERROR` (422) for

@@ -14,7 +14,8 @@
     "test": "node --env-file-if-exists=.env node_modules/.bin/vitest run",
     "test:acceptance": "cucumber-js",
     "seed": "npm run -w backend seed",
-    "prepare": "husky"
+    "//prepare": "`|| true` is required for the production image builds: husky is a root dev dependency, so `npm ci --omit=dev` runs this script with husky already uninstalled and the install dies on `sh: husky: not found` (exit 127). HUSKY=0 does not help — npm still invokes the missing binary. There are no git hooks to install in a Docker build stage anyway.",
+    "prepare": "husky || true"
   },
   "devDependencies": {
     "@commitlint/cli": "^19",

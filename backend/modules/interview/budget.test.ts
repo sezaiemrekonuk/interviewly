@@ -5,6 +5,8 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 
+import { BudgetExceeded, withBudget } from './budget';
+
 const sql: string[] = [];
 const exhausted = { value: false };
 
@@ -22,8 +24,6 @@ const tx = {
 vi.mock('../../src/lib/db', () => ({
   prisma: { $transaction: (run: (client: unknown) => Promise<unknown>) => run(tx) },
 }));
-
-const { BudgetExceeded, withBudget } = await import('./budget');
 
 function reset(spent: boolean): void {
   sql.length = 0;

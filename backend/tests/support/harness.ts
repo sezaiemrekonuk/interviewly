@@ -19,7 +19,30 @@ export const getBaseUrl = (): string => baseUrl;
 // silently stops resolving the moment the run is invoked from anywhere else.
 const SCHEMA = join(__dirname, '../../prisma/schema.prisma');
 
+// `resetState` below TRUNCATEs unconditionally, so an acceptance run inherits whatever
+// DATABASE_URL happens to be exported and empties it. That is not hypothetical: a run against
+// the compose `interviewly` database took the seeded demo admin with it and left the table
+// holding nothing but the suite's own fixtures. Checked once, at boot, so the run dies before
+// it destroys anything rather than after the first scenario.
+//
+// The rule is by database NAME, because that is the part a human reads before pasting a URL.
+// CI's database is literally `ci`; local acceptance uses `interviewly_test` (db/init.sql
+// creates it). Anything else must opt in out loud.
+function assertDisposableDatabase(): void {
+  if (process.env.ACCEPTANCE_ALLOW_DESTRUCTIVE_DB === '1') return;
+  const url = process.env.DATABASE_URL ?? '';
+  const name = url.split('?')[0].split('/').pop() ?? '';
+  if (/(^|[_-])(test|ci)$/.test(name)) return;
+  throw new Error(
+    `Refusing to run acceptance against database "${name}": this suite TRUNCATEs users, ` +
+      `sessions and email_tokens between scenarios. Point DATABASE_URL at a database whose ` +
+      `name ends in _test or ci (db/init.sql creates interviewly_test), or set ` +
+      `ACCEPTANCE_ALLOW_DESTRUCTIVE_DB=1 if you meant it.`,
+  );
+}
+
 export async function bootApp(): Promise<void> {
+  assertDisposableDatabase();
   // Idempotent: applies the F02 migration if the acceptance database is empty.
   execSync(`npx prisma migrate deploy --schema "${SCHEMA}"`, { stdio: 'ignore' });
   await new Promise<void>((resolve) => {

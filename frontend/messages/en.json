@@ -29,7 +29,21 @@
     "verifyConfirmedBody": "Your address is verified. You can start an interview whenever you like.",
     "verifyFailedTitle": "That link did not work",
     "goToDashboard": "Go to your dashboard",
-    "backToSignIn": "Back to sign in"
+    "backToSignIn": "Back to sign in",
+    "forgotTitle": "Reset your password",
+    "forgotSubtitle": "Enter your email address and we will send a reset link.",
+    "sendResetLink": "Send reset link",
+    "forgotSentTitle": "Check your inbox",
+    "forgotSentBody": "If an account exists for that address, a reset link is on its way. It works once and expires in an hour.",
+    "resetTitle": "Choose a new password",
+    "resetSubtitle": "Setting a new password signs you out on every device.",
+    "newPasswordLabel": "New password",
+    "confirmPasswordLabel": "Confirm new password",
+    "passwordHint": "At least 10 characters.",
+    "resetSubmit": "Set new password",
+    "passwordsMismatch": "The two passwords do not match.",
+    "resetDoneTitle": "Password updated",
+    "resetDoneBody": "You have been signed out everywhere. Sign in again with your new password."
   },
   "errors": {
     "PASSWORD_TOO_SHORT": "Password must be at least 10 characters.",

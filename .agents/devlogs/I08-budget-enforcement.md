@@ -49,3 +49,30 @@ gate site was the right one) → `withBudget` + `answers.ts` → green.
   deadlock: a throw after a paid attempt rolls back `llm_calls` and the `spent_usd` increment
   for a call that really was billed. A retry loop would bill without limit while `spent_usd`
   stayed 0 — the failure the ceiling exists to prevent.
+
+## Session 2 — 2026-08-03 — CI red + PR review
+
+### What I asked for / what came back
+- Docker `build` job failed: `budget.test.ts` TS1378, top-level `await import('./budget')`.
+  `backend/tsconfig.json` is `module: commonjs`; the root one is `esnext`, so `npm run
+  typecheck` (and the CI `lint` job) never saw it. Filed the job-disagreement in the
+  foundations Backlog.
+- Fix: static `import` — vitest hoists `vi.mock` above imports, so the `await import` dance
+  bought nothing in the first place.
+
+### Methodology trace
+`npm run -w @interviewly/backend build` locally → same TS1378 → static import → build clean →
+rings 33/33 + 11/11, 97 unit.
+
+### Friction
+- Two rounds: the first fix added the static import and left the `await import` line, so the
+  build then had TS2440 *and* TS1378. Read the file, not the diff.
+- A `prisma generate` was stale mid-session and produced a wall of unrelated `@prisma/client`
+  type errors that looked like my regression. Regenerating cleared all of them.
+
+### What I rejected and rewrote by hand
+- **Copilot, medium, `machine.ts`:** `applyTransition` writes `ended_reason` to the row but
+  only syncs `interview.state` in memory. Checked before applying — no in-request reader today
+  (`answers.ts` throws immediately after; `state.ts` re-reads the row on a later GET), so it
+  is latent, not a live bug. Applied anyway: it is one line and the same reason
+  `interview.state = to` exists two lines above.

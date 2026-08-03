@@ -121,6 +121,10 @@ call (ADR-I22). A `tech_round` answer makes no call, so it is not gated; the int
 scenario, 9 steps, passed. Full rings 33/33 and 11/11, 97 unit, lint + typecheck clean.
 `@AC-11`'s `@unwired` tag is deleted (ADR-I26).
 
+**Run `npm run -w @interviewly/backend build` before you push.** The root `typecheck` is
+`module: esnext` and the backend's own tsconfig is `commonjs`; a top-level `await` in this
+task's unit test passed `lint` and failed the docker `build` job. Backlogged in foundations.
+
 **For I09.** The exhaustion path lands in `evaluating` with `ended_reason` already set and
 `REPORT_JOB_ENQUEUED` already emitted, so the report runs from whatever answers exist. Do not
 re-set `ended_reason` on that path — a completed report must not overwrite `budget_exhausted`.
