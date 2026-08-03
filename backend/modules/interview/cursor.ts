@@ -1,6 +1,6 @@
-// `nextCursor` is opaque so a client cannot hand-build one and page by raw row id.
-// The payload is just the last row's id — F02's helpers cursor on it, and `created_at`
-// ordering is stable enough for the MVP page (REFERENCE, Cursor pagination).
+// `nextCursor` treated opaque by convention: client sends token back unchanged.
+// Implementation is base64url(id) (reversible), so do not treat as security boundary.
+// Callers still must handle unknown cursors without 500ing.
 export const encodeCursor = (id: string): string => Buffer.from(id).toString('base64url');
 
 // A hand-made `?cursor=` decodes to arbitrary bytes, and handing those to Prisma's `cursor`
