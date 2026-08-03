@@ -166,6 +166,31 @@ export class AiWorld extends World {
     this.lastBody = await res.json().catch(() => undefined);
   }
 
+  /**
+   * I11: `POST /uploads` is the one multipart endpoint. `kind` is appended only when the
+   * scenario asks for it — "with no kind" is a real request shape the endpoint must reject,
+   * not an oversight. undici derives the boundary and the Content-Length itself.
+   */
+  async httpUpload(path: string, filename: string, bytes: Buffer, kind?: string): Promise<void> {
+    const form = new FormData();
+    if (kind !== undefined) form.append('kind', kind);
+    // Uint8Array.from, not the Buffer itself: Buffer is typed over ArrayBufferLike, which is
+    // not a BlobPart under `strict` because it could be a SharedArrayBuffer.
+    form.append('file', new Blob([Uint8Array.from(bytes)], { type: 'application/pdf' }), filename);
+
+    const res = await fetch(`${serverState.baseUrl}${path}`, {
+      method: 'POST',
+      headers: {
+        origin: config.PUBLIC_ORIGIN,
+        ...(this.cookie ? { cookie: this.cookie } : {}),
+      },
+      body: form,
+    });
+    this.captureCookie(res);
+    this.lastStatus = res.status;
+    this.lastBody = await res.json().catch(() => undefined);
+  }
+
   async httpGet(path: string): Promise<void> {
     const res = await fetch(`${serverState.baseUrl}${path}`, {
       headers: this.cookie ? { cookie: this.cookie } : {},
