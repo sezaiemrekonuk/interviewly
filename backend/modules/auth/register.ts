@@ -34,7 +34,7 @@ export const register: RequestHandler = async (req, res) => {
   await sendVerificationMail(user, req.traceId);
 
   logger.info({ userId: user.id, traceId: req.traceId }, 'AUTH_REGISTERED');
-  res.status(201).json({ user: publicUser(user) });
+  res.status(201).json({ user: await publicUser(user) });
 };
 
 export default register;

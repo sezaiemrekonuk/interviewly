@@ -39,7 +39,7 @@ export function mountTestSeam(app: Express): void {
     };
     const user = await resolveGoogleIdentity(identity, req.traceId);
     await issueSessionForUser(user, res, 'google');
-    res.status(200).json({ user: publicUser(user) });
+    res.status(200).json({ user: await publicUser(user) });
   });
 
   app.use('/test', router);

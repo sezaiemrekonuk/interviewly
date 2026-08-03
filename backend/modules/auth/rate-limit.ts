@@ -88,3 +88,19 @@ export async function withinResendQuota(userId: string): Promise<boolean> {
   );
   return count <= RESEND_LIMIT_PER_HOUR;
 }
+
+// A06: 60/hour per user. Keyed by user (like the resend pair above), not IP — this
+// endpoint is authenticated, so the account is what is worth protecting.
+export const profilePatchLimiter: RequestHandler = (req, res, next) => {
+  const userId = req.user!.id;
+  void slidingWindowHit(`ratelimit:profile:${userId}`, 60 * 60 * 1000)
+    .then((count) => {
+      if (count > 60) {
+        logger.warn({ userId, traceId: req.traceId }, 'RATE_LIMIT_HIT');
+        res.status(429).json({ error: { code: 'RATE_LIMITED' } });
+        return;
+      }
+      next();
+    })
+    .catch(next);
+};

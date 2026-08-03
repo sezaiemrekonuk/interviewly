@@ -94,6 +94,7 @@ module.exports = {
       '.agents/features/admin_auth.feature',
       '.agents/features/email_verification.feature',
       '.agents/features/password_reset.feature',
+      '.agents/features/onboarding_profile.feature',
     ],
     // `support` first, and it stays first: `support/setup.ts` fills the env defaults that
     // `src/lib/env.ts` validates at import time, and a step-definition file loaded ahead of
@@ -108,6 +109,14 @@ module.exports = {
     // What remains missing is the auth ring's interview steps ("I set up an interview…",
     // "no interview exists for…") and `GET /me/interviews`, which no task has landed yet.
     // Whichever task ships that endpoint: wire the steps and delete `and not @AC-29`.
-    tags: 'not @wip and not @AC-29',
+    //
+    // A06: `not @AC-32` defers the CV-upload scenarios — `POST /uploads` is I11's endpoint
+    // and has not landed; inventing it here would duplicate I11's validation (ADR pending).
+    // `not @AC-33 and not @AC-34` defer the interview-snapshot scenarios — both use
+    // interview-core steps ("I set up an interview…") that live in AiWorld, and AuthWorld
+    // cannot share a cucumber World with it (ADR-A04-3). `interview/profile.ts`'s
+    // `mergeProfile` already implements the merge these two scenarios describe; only the
+    // cross-ring step wiring is missing, not the behaviour.
+    tags: 'not @wip and not @AC-29 and not @AC-32 and not @AC-33 and not @AC-34',
   },
 };

@@ -45,6 +45,27 @@
     "resetDoneTitle": "Password updated",
     "resetDoneBody": "You have been signed out everywhere. Sign in again with your new password."
   },
+  "onboarding": {
+    "progress": "Step {step} of {total}",
+    "step1Title": "Tell us about you",
+    "step1Subtitle": "Your name and role help us tailor your interviews.",
+    "step2Title": "Your education",
+    "step2Subtitle": "Add up to five entries. You can skip this for now.",
+    "step3Title": "What interests you",
+    "step3Subtitle": "A few words help us pick better questions.",
+    "fullNameLabel": "Full name",
+    "jobTitleLabel": "Job title",
+    "schoolLabel": "School",
+    "degreeLabel": "Degree",
+    "fieldLabel": "Field of study",
+    "graduationYearLabel": "Graduation year",
+    "addEducationRow": "Add another entry",
+    "interestsLabel": "Interests",
+    "back": "Back",
+    "skipForNow": "Skip for now",
+    "continueButton": "Continue",
+    "finish": "Finish"
+  },
   "errors": {
     "PASSWORD_TOO_SHORT": "Password must be at least 10 characters.",
     "EMAIL_TAKEN": "An account with this email already exists.",

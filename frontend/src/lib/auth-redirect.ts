@@ -1,11 +1,6 @@
 /**
- * Where a successful sign-in or registration lands when nothing else is requested.
- *
- * A03 sends both flows here unconditionally. The K8.7 first-run rule (onboarding
- * incomplete → `/onboarding/<step>`, no interviews yet → `/interviews/new`, otherwise
- * `/dashboard`) needs `onboardingCompletedAt` and `interviewCount` on the `/me` payload,
- * and `publicUser` still returns `{ id, email, role, locale }` only. A06 owns both the
- * extra fields and `lib/first-run.ts`; this constant is the single call site it replaces.
+ * The terminal case of the K8.7 first-run rule (`lib/first-run.ts`): onboarding done and
+ * at least one interview exists. Also the fallback when a `?returnPath=` is unusable.
  */
 export const DEFAULT_LANDING_PATH = '/dashboard';
 

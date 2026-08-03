@@ -7,7 +7,7 @@ import { useTranslations } from 'next-intl';
 import styles from '../../../components/auth/auth.module.css';
 import { CredentialsForm, registerSchema } from '../../../components/auth/credentials-form';
 import { GoogleButton } from '../../../components/auth/google-button';
-import { DEFAULT_LANDING_PATH } from '../../../lib/auth-redirect';
+import { firstRunPath } from '../../../lib/first-run';
 
 // Codes the API can answer register with that name a specific input. Everything else
 // (`RATE_LIMITED`, `VALIDATION_ERROR`, anything unrecognised) becomes a form banner.
@@ -32,7 +32,7 @@ export default function RegisterPage() {
         fieldForCode={FIELD_FOR_CODE}
         // `replace`, not `push`: the back button from the landing page should not return
         // to a registration form for an account that now exists.
-        onSuccess={() => router.replace(DEFAULT_LANDING_PATH)}
+        onSuccess={(user) => router.replace(firstRunPath(user))}
       />
 
       <GoogleButton />

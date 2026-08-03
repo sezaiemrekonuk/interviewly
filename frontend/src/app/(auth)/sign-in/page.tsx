@@ -9,6 +9,7 @@ import styles from '../../../components/auth/auth.module.css';
 import { CredentialsForm, loginSchema } from '../../../components/auth/credentials-form';
 import { GoogleButton } from '../../../components/auth/google-button';
 import { safeReturnPath } from '../../../lib/auth-redirect';
+import { firstRunPath } from '../../../lib/first-run';
 
 function SignInCard() {
   const t = useTranslations('auth');
@@ -18,7 +19,8 @@ function SignInCard() {
   // A02 sends the two K8 refusals here as `/sign-in?error=<CODE>` mid-redirect, so the
   // banner has to come up without the visitor touching the form.
   const errorCode = searchParams.get('error');
-  const returnPath = safeReturnPath(searchParams.get('returnPath'));
+  const explicitReturnPath = searchParams.get('returnPath');
+  const returnPath = safeReturnPath(explicitReturnPath);
 
   return (
     <section className={styles.card}>
@@ -30,7 +32,9 @@ function SignInCard() {
         schema={loginSchema}
         submitLabel={t('signIn')}
         initialErrorCode={errorCode}
-        onSuccess={() => router.replace(returnPath)}
+        onSuccess={(user) =>
+          router.replace(explicitReturnPath ? returnPath : firstRunPath(user))
+        }
       />
 
       <GoogleButton />

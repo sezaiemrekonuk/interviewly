@@ -31,7 +31,7 @@ export const login: RequestHandler = async (req, res) => {
   await issueSessionForUser(user, res, 'password');
 
   logger.info({ userId: user.id, traceId: req.traceId }, 'AUTH_LOGIN_OK');
-  res.status(200).json({ user: publicUser(user) });
+  res.status(200).json({ user: await publicUser(user) });
 };
 
 export default login;

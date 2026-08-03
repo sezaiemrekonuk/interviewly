@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { apiGet } from './api';
 import { signInPathFor } from './auth-redirect';
 
-/** The `/me` payload as A01 ships it. A06 widens this when K8.7 needs more fields. */
+/** The `/me` payload. */
 export interface SessionUser {
   id: string;
   email: string;
@@ -14,6 +14,10 @@ export interface SessionUser {
   locale: string;
   /** A04/K8.6 — null until the address is confirmed. ISO timestamp over the wire. */
   emailVerifiedAt: string | null;
+  /** A06/K8.7 — null until onboarding's three cards are done. */
+  onboardingCompletedAt: string | null;
+  /** A06/K8.7 — drives the "no interviews yet" first-run branch. */
+  interviewCount: number;
 }
 
 export interface RequireAuthState {

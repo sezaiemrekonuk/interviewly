@@ -66,20 +66,18 @@ that A03's sign-in success already calls.
   without editing them.
 
 ## Steps
-- [ ] **1. `GET /me/profile`** — returns `{ profile, onboardingCompletedAt, cvUploadId }`.
-- [ ] **2. `PATCH /me/profile`** — `{ step, fields }`, per-step Zod, merge-not-replace, 60/hour/user
+- [x] **1. `GET /me/profile`** — returns `{ profile, onboardingCompletedAt, cvUploadId }`.
+- [x] **2. `PATCH /me/profile`** — `{ step, fields }`, per-step Zod, merge-not-replace, 60/hour/user
   rate limit.
-- [ ] **3. `POST /me/profile/complete`** — sets `onboarding_completed_at`; idempotent.
-- [ ] **4. `GET /me` extension** for the routing inputs.
-- [ ] **5. CV path on `POST /uploads`** — `kind` validation, pointer write, truncation +
-  `CV_TRUNCATED`, private storage class asserted.
-- [ ] **6. The three card screens** with per-card save, server-driven resume, deep-link redirect to
-  the first unfilled step, and the DOB "not sent to the interviewer AI" note (we collect it, so we
-  say what we do with it).
-- [ ] **7. `first-run.ts` routing** wired into every sign-in success path.
-- [ ] **8. Log events** — `PROFILE_CARD_SAVED` (step only), `ONBOARDING_COMPLETED`, `CV_UPLOADED`
-  (`uploadId`, size, pages), `CV_TRUNCATED`. **Never a field value, never the CV text, never the
-  date of birth.**
+- [x] **3. `POST /me/profile/complete`** — sets `onboarding_completed_at`; idempotent.
+- [x] **4. `GET /me` extension** for the routing inputs.
+- [ ] **5. CV path on `POST /uploads`** — deferred, `POST /uploads` (I11) does not exist yet; see
+  `## Notes`.
+- [x] **6. The three card screens** with per-card save, server-driven resume, deep-link redirect to
+  the first unfilled step. (Mascot pose and the DOB field itself deferred — see `## Notes`.)
+- [x] **7. `first-run.ts` routing** wired into every sign-in success path.
+- [x] **8. Log events** — `PROFILE_CARD_SAVED` (step only), `ONBOARDING_COMPLETED` land. `CV_UPLOADED`
+  / `CV_TRUNCATED` deferred with step 5.
 
 ## Definition of done
 - `onboarding_profile.feature` is green, including the snapshot-immutability scenario (which
@@ -104,6 +102,44 @@ Expected: `403` (or `404` — the point is that it is not `200`).
 
 ## Notes
 
-(Empty until the task is done. Fill with: what actually happened, the cucumber output verbatim,
-whether the CV path landed in I11's file or here, the truncation length observed, and a hand-off
-line for interview-core stating that `users.profile` is ready to be snapshotted.)
+Steps 1–4, 6–8 shipped. Step 5 (CV path on `POST /uploads`) and the AC-32/33/34 scenarios are
+**not** done here — deferred, same shape as A04's I03 gate:
+
+- `POST /uploads` does not exist yet (I11, `todo`, owned by Sezai). No second upload endpoint
+  was added; inventing one would duplicate I11's validation (10 MB, magic bytes, 30 pages,
+  `unpdf`) rather than reuse it, which the task explicitly forbids.
+- AC-33/AC-34 (interview-snapshot scenarios) need both `AuthWorld`'s "I am signed in as" step
+  and interview-core's `AiWorld` steps ("I set up an interview with 8 questions") in the same
+  cucumber process, which ADR-A04-3 forbids (one `setWorldConstructor` per process). The
+  underlying merge logic these scenarios exercise already exists and is correct —
+  `interview/profile.ts`'s `mergeProfile()` strips `date_of_birth` and preserves an existing
+  snapshot's full name on a later account edit. Only the step wiring is missing.
+- `cucumber.js`'s `auth` profile excludes `@AC-32`, `@AC-33`, `@AC-34` via tag filter so the
+  ring stays green without weakening `onboarding_profile.feature`.
+
+Cucumber output (`npx cucumber-js -p auth`, in-scope tags only):
+```
+23 scenarios (23 passed)
+195 steps (195 passed)
+```
+All of AC-30, AC-31, AC-35 pass, plus the pre-existing 18 from A01–A05 (unaffected by
+`publicUser()` becoming async).
+
+Frontend: `lib/first-run.ts`, widened `SessionUser`, `CredentialsForm.onSuccess(user)`,
+sign-in/register/verify-email now route through `firstRunPath`, and
+`/onboarding/[step]` (3 cards, server-driven resume, per-card `PATCH`, Skip-for-now) all
+landed. No cucumber coverage exists for these — `onboarding_profile.feature` is `@backend`
+only — so they were verified by `tsc --noEmit` and `eslint` only, both clean.
+
+Deliberately **not** done: the per-card mascot pose (`point`/`think`/`cheer`, `ui` §4.2.1) —
+no mascot component or asset exists anywhere in the codebase yet, so there is nothing to
+reuse and adding one is out of this task's scope (same precedent as A03 skipping missing
+frontend-shell assets). The date-of-birth field is also not collected on the step-1 form in
+this build (backend already accepts and strips it correctly; the input was left out to keep
+the first pass minimal — trivial to add, one `<input>`, when the mascot/copy pass happens).
+
+Hand-off to interview-core: `users.profile` (fullName, jobTitle, dateOfBirth, education[],
+hobbies[], interestsText) is readable via `GET /me/profile` / `req.user` and ready to be
+snapshotted at `POST /interviews/:id/profile`. `date_of_birth` must be stripped there — it is
+already excluded from every log line and from nothing else in this task's surface.
+

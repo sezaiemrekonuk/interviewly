@@ -1,5 +1,6 @@
 import { strict as assert } from 'node:assert';
 
+import { hash } from '@node-rs/argon2';
 import { Given, Then, When } from '@cucumber/cucumber';
 
 import { resetMailSettled } from '../../modules/auth/password-reset';
@@ -11,6 +12,7 @@ import { latestTokenFor, recordedJobs } from '../support/mail-recorder';
 import type { AuthWorld } from '../support/world';
 
 const lower = (email: string) => email.trim().toLowerCase();
+const DEFAULT_FIXTURE_PASSWORD = 'Password123!';
 
 const userFor = (email: string) =>
   prisma.user.findUniqueOrThrow({ where: { email_lower: lower(email) } });
@@ -41,9 +43,18 @@ Given('a Google-only account exists for {string}', async function (this: AuthWor
   });
 });
 
+// A06: onboarding scenarios use this step with no prior "a password account exists for…"
+// fixture, so a missing password entry provisions one instead of failing — every earlier
+// caller already populates `passwords` first, so this path is new, not a behaviour change.
 Given('I am signed in as {string}', async function (this: AuthWorld, email: string) {
-  const password = this.passwords.get(lower(email));
-  assert.ok(password, `no fixture password recorded for ${email}`);
+  const key = lower(email);
+  if (!this.passwords.has(key)) {
+    await prisma.user.create({
+      data: { email_lower: key, password_hash: await hash(DEFAULT_FIXTURE_PASSWORD) },
+    });
+    this.passwords.set(key, DEFAULT_FIXTURE_PASSWORD);
+  }
+  const password = this.passwords.get(key);
   await this.request('POST', '/auth/login', { body: { email, password } });
   assert.equal(this.lastStatus, 200, 'sign-in fixture did not succeed');
 });

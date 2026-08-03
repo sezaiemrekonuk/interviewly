@@ -1,7 +1,14 @@
 # Auth — State
 
 Last updated: 2026-08-03
-Last session ended: **A05 done; A03 still blocked, A06 next.** Password reset shipped whole —
+Last session ended: **A06 done; this ledger is otherwise clear except A03's own blocker.**
+Shipped `GET/PATCH /me/profile`, `POST /me/profile/complete`, `GET /me` widened with
+`onboardingCompletedAt`/`interviewCount`, `lib/first-run.ts`, and the three `/onboarding/[step]`
+card screens with server-driven resume. `npx cucumber-js -p auth` → 23 scenarios, 195 steps, all
+passed (was 18). Deferred: the CV path on `POST /uploads` (I11 doesn't exist yet) and the two
+scenarios that need cross-world steps (ADR-A04-3) — see A06's `## Notes` for the hand-off.
+
+Previous: **A05 done; A03 still blocked, A06 next.** Password reset shipped whole —
 both endpoints, the IP-keyed limit, the `sessions(user_id)` index migration and both screens.
 `npx cucumber-js -p auth` → 18 scenarios, 18 passed (was 11). The two traps held under test: the
 request writes `res.end()` before it looks the account up, so known, Google-only and unknown are
@@ -42,14 +49,12 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**A06 — the onboarding profile** is the last task in this ledger. A05 is `done`; A06's only
-dependency is A03, whose *code* is merged on master — A03 is `blocked` on its own Playwright
-smoke, not on scope. A06 is **sonnet-tier** (`MODELS.md`), so an opus session must stop under
-EXECUTE.md § 5 and hand it back.
-
-A06's second Verification command curls `$PUBLIC_ORIGIN/assets/<cv-key>` expecting a non-`200`,
-which needs the stack BLOCKER-1b keeps down. Its coding is unaffected; only that last check is
-impeded, the same shape as A03.
+All six auth tasks are now `done` or as-done-as-scope-allows. **A03** stays `blocked` on
+BLOCKER-1b (Sezai's, unrelated to this ledger's scope) — its own code and component-ring
+verification are green. **A06** is `done`; its CV-upload step and two cucumber scenarios are
+deferred pending I11 (`POST /uploads`) landing — see A06's task file `## Notes` for the
+hand-off to interview-core. Nothing further in this ledger needs a session until I11 lands
+or BLOCKER-1b is fixed.
 
 **A03 stays `blocked` on BLOCKER-1b below** — not on anything in this ledger. Its own scope is
 finished and its component-ring verification is green; only the second Verification command
@@ -252,7 +257,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | A03 | Building the frontend login and register forms | | blocked | A02 |
 | A04 | Building email verification: tokens, the mail job, the gate, and the two screens | | done | A03 |
 | A05 | Building password reset: enumeration-safe request, session-revoking confirm, two screens | | done | A04 |
-| A06 | Building the onboarding profile: three cards, CV upload, and first-run routing | | todo | A03 |
+| A06 | Building the onboarding profile: three cards, CV upload, and first-run routing | | done | A03 |
 
 ## Critical path
 
