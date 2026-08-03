@@ -20,13 +20,13 @@ import { clock } from '../../src/lib/clock';
 import { activeInterview, prisma } from '../../src/lib/db';
 import { config } from '../../src/lib/env';
 
-declare global {
-  // eslint-disable-next-line @typescript-eslint/no-namespace
-  namespace Express {
-    interface Request {
-      /** Set by the `/webhooks` raw-body parser in app.ts — the exact bytes the HMAC covers. */
-      rawBody?: Buffer;
-    }
+// Declared on IncomingMessage, not Express.Request: the `verify` callback body-parser hands the
+// raw bytes to is typed `http.IncomingMessage`, and Express's Request extends it — so one
+// declaration types both the writer (app.ts) and the reader (`runGates` below).
+declare module 'http' {
+  interface IncomingMessage {
+    /** Set by the `/webhooks` raw-body parser in app.ts — the exact bytes the HMAC covers. */
+    rawBody?: Buffer;
   }
 }
 
