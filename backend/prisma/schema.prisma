@@ -188,6 +188,8 @@ model Session {
 
   user User @relation(fields: [user_id], references: [id], onDelete: Restrict)
 
+  // A05: password reset revokes every session of one user in a single UPDATE.
+  @@index([user_id])
   @@map("sessions")
 }
 

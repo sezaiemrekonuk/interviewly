@@ -44,6 +44,10 @@ function limiter(prefix: string, limit: number, windowMs: number): RequestHandle
 // K8 / REFERENCE: register 3/hour per IP, login 5/minute per IP.
 export const registerLimiter = limiter('register', 3, 60 * 60 * 1000);
 export const loginLimiter = limiter('login', 5, 60 * 1000);
+// A05: 5/hour per IP. Keyed by IP like the two above and unlike the resend limits below —
+// a per-account key would answer 429 only for addresses that have an account, which is the
+// enumeration leak the endpoint's identical 202 exists to prevent.
+export const passwordResetLimiter = limiter('passwordreset', 5, 60 * 60 * 1000);
 
 // --------------------------------------------------------------------- A04: mail resends
 //

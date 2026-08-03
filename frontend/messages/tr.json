@@ -29,7 +29,21 @@
     "verifyConfirmedBody": "Adresiniz doğrulandı. İstediğiniz zaman mülakata başlayabilirsiniz.",
     "verifyFailedTitle": "Bu bağlantı çalışmadı",
     "goToDashboard": "Panelinize gidin",
-    "backToSignIn": "Girişe dönün"
+    "backToSignIn": "Girişe dönün",
+    "forgotTitle": "Şifrenizi sıfırlayın",
+    "forgotSubtitle": "E-posta adresinizi girin, size bir sıfırlama bağlantısı gönderelim.",
+    "sendResetLink": "Sıfırlama bağlantısı gönder",
+    "forgotSentTitle": "Gelen kutunuzu kontrol edin",
+    "forgotSentBody": "Bu adrese ait bir hesap varsa sıfırlama bağlantısı yola çıktı. Bağlantı tek kullanımlıktır ve bir saat içinde geçersiz olur.",
+    "resetTitle": "Yeni bir şifre belirleyin",
+    "resetSubtitle": "Yeni şifre belirlemek sizi tüm cihazlarda oturumdan çıkarır.",
+    "newPasswordLabel": "Yeni şifre",
+    "confirmPasswordLabel": "Yeni şifreyi doğrulayın",
+    "passwordHint": "En az 10 karakter.",
+    "resetSubmit": "Yeni şifreyi kaydet",
+    "passwordsMismatch": "İki şifre birbiriyle eşleşmiyor.",
+    "resetDoneTitle": "Şifre güncellendi",
+    "resetDoneBody": "Her yerde oturumunuz kapatıldı. Yeni şifrenizle tekrar giriş yapın."
   },
   "errors": {
     "PASSWORD_TOO_SHORT": "Şifre en az 10 karakter olmalıdır.",
