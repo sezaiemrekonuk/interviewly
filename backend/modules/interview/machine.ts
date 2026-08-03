@@ -11,6 +11,7 @@ import { ApiError } from '../../src/lib/api-error';
 import { prisma } from '../../src/lib/db';
 import { logger } from '../../src/lib/logger';
 
+import { clearLanguageStreak } from './language';
 import { enqueueReport, publishStateChanged } from './sse';
 
 const TRANSITIONS: Partial<Record<InterviewState, InterviewState[]>> = {
@@ -75,7 +76,12 @@ export async function applyTransition(
 
   // NOT wrapped: once R01 makes this a real BullMQ enqueue, a swallowed failure is an
   // interview that reaches `evaluating` and never gets a report. That has to be loud.
-  if (to === 'evaluating') enqueueReport(interview.id, ctx);
+  if (to === 'evaluating') {
+    enqueueReport(interview.id, ctx);
+    // I10: no more turns follow `evaluating` (K2), so no streak can ever complete — drop it
+    // rather than let a mid-streak interview's entry sit in the Map until process restart.
+    clearLanguageStreak(interview.id);
+  }
 
   return to;
 }

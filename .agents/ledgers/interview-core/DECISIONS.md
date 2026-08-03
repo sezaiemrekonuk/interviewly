@@ -747,3 +747,20 @@ and R01's BullMQ consumer binds to the same signature.
 **Consequences:** no interview-core path generates a report by itself — R01 owns the trigger.
 The DoD ("a plain callable function the worker can invoke") is met; the enqueue *binding* is
 the report ledger's, which is where the queue lives anyway.
+
+## ADR-I35 — 2026-08-03 — the language streak is process memory, and regeneration is conditional
+
+**Context:** I10's counter needs state between turns. The task file allows a derived count or
+an in-memory/Redis streak, and forbids a schema change. Answer rows carry no monotonic key
+(`answers` has no `created_at`; `answered_at` ties under the acceptance suite's fixed clock),
+so deriving "the last two classifications" is not reliably orderable.
+
+**Decision:** `language.ts` keeps `Map<interviewId, { language, count }>`, reset by an
+ambiguous, same-language or unsupported-language turn. `trackLanguage` returns the effective
+language and `answers.ts` reassigns `interview.language` from it, so a switch reaches the
+ADR-I22 tech batch generated later in the same request. The K4 regeneration hook fires only
+when the N+1 row already holds `candidates` — nothing pre-generated is nothing stale, and an
+unconditional call would spend an LLM call per switch that D02 never made.
+
+**Consequences:** a second api replica counts its own streak (worst case: a switch needs a
+third turn). Move to `lang_streak:<id>` in Redis if the api is ever scaled out.
