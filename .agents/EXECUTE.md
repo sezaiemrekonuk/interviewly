@@ -20,16 +20,17 @@ guess — guessing writes to another person's ledger, and two people implementin
 
 | Person | Ledgers |
 |---|---|
-| Sezai | foundations `F03`, interview-core (`I01`–`I15`) |
-| Ahmet | foundations `F01`, auth (`A01`–`A06`), report (`R01`–`R03`) |
+| Sezai | foundations `F03`, interview-core (`I01`–`I15`), frontend (`W01`–`W11`) |
+| Ahmet | foundations `F01`, auth (`A01`–`A06`), report (`R01`–`R04`) |
 | Fatih | foundations `F02`, admin (`N01`–`N02`), voice (`V01`–`V05`), adaptive (`D01`–`D03`) |
 
 Task-ID prefixes are unique per ledger — `F` foundations, `A` auth, `I` interview-core,
-`R` report, `N` admin, `V` voice, `D` adaptive — so an ID alone tells you whose it is.
-Foundations is the one per-task split; every other ledger belongs wholly to one person.
+`R` report, `N` admin, `V` voice, `D` adaptive, `W` frontend (web) — so an ID alone tells you
+whose it is. Foundations is the one per-task split; every other ledger belongs wholly to one
+person.
 
 **This table is the only authority on who owns what.** There is deliberately no `Owner`
-column in any `STATE.md`: 37 cells to maintain where three rows already say it is 37 chances
+column in any `STATE.md`: 50 cells to maintain where three rows already say it is 50 chances
 to drift. Never work a task this table does not give you.
 
 ## 2. Preflight
@@ -54,7 +55,7 @@ awk -F'|' 'NF>=6 {
 }' .agents/ledgers/*/STATE.md
 ```
 
-37 lines: every task in the project, its status, and its complete direct-dependency list.
+50 lines: every task in the project, its status, and its complete direct-dependency list.
 The `Depends on` column is machine truth — cross-ledger IDs included — so this one command
 is the whole graph, and you never read another ledger's prose to find out what blocks you.
 

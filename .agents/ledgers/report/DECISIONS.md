@@ -124,3 +124,43 @@ retried and dead-lettered. Admin reads `reports.status = failed` for both; the d
 (the last thrown error) is logged for the transient path, and `AI_OUTPUT_SCHEMA_INVALID` for the
 schema path. The worker imports `applyTransition` from `backend` so the dead-letter transition
 goes through the one guarded writer — the worker never writes `interviews.state` directly.
+
+---
+
+## ADR-R05 — 2026-08-03 — The 24 h `abandoned` sweeper lives in the `report` ledger (R04), not a new `worker` ledger
+
+**Context:** `EndedReason.abandoned` and the `abandoned` state exist in F02's schema, and admin's
+N02 stats count the unfinished/abandoned split, but **nothing writes `abandoned`** — no request path
+reaches it and no job produces it. K10 mandates a 24 h sweeper that ends interviews left stale in a
+mid-flight state. Two other ledgers punted it: `interview-core/STATE.md` and this ledger's own
+backlog both named a hypothetical `worker`/ops ledger as its home; `report/PLAN.md` fenced it out of
+the report scope. The fork on where it lands: (A) create a new `worker`/ops **ledger** to own it;
+(B) add it as a task (**R04**) to this `report` ledger; (C) leave it in the backlog unowned.
+
+**Decision:** (B). The sweeper is **one BullMQ repeatable job in the `worker/` process that already
+exists** (`worker/src/index.ts`, with the `email.send` consumer from A04 and the report consumer
+arriving in R01). A whole new ledger for a single repeatable job is ceremony with no payload — a
+PLAN, STATE, DECISIONS, REFERENCE, MODELS and EXECUTION_PROMPT to wrap one `sweepAbandoned` function.
+This ledger already owns the `worker/` queue wiring (R01), so R04 `Depends on R01` and lands the
+sweeper beside the report consumer it shares a process with. (Directed by PLAN_FRONTEND_LEDGER.md §6.2,
+which also created the `frontend` ledger and explicitly refused a `worker` ledger for the same reason.)
+
+**Why not a new `worker` ledger (A):** It would be one build-task ledger and a pile of scaffolding,
+and it would split the single `worker/src/index.ts` file's ownership across two ledgers (R01's report
+worker and the sweeper) — a merge-conflict seam for no benefit. The voice-reconciliation job (the
+backlog's other `worker/` item) stays owned by the `voice` ledger's reconciliation slice; co-locating
+jobs in one process does not mean co-locating them in one ledger.
+
+**Why not leave it unowned (C):** `abandoned` is a state the schema and the admin stats already
+reference; leaving it unwritten means `unfinished` interviews accrue forever and the admin split is
+permanently wrong. It needs a numbered, verifiable owner, not a backlog line.
+
+**Consequences:** R04 must **add the `→ abandoned` edges to `machine.ts`** — they do not exist today
+(`TRANSITIONS` has no path to `abandoned` from any state) — from exactly `profiling`, `hr_round` and
+`paused`, and drive the transition through `applyTransition` (I07's sole guarded `interviews.state`
+writer, the same discipline R03's dead-letter path follows) so the sweeper honours the state-machine
+invariant despite having no user in the loop. Because `interviews` has **no `updated_at` column**,
+staleness is derived from `MAX(chat_messages.created_at)` / `started_at` / `created_at`; adding a real
+`updated_at` column is a heavier, separate migration left as a noted follow-up. Idempotency comes free
+from `applyTransition`'s TOCTOU WHERE guard: a second sweep or a racing user resume makes the redundant
+transition a no-op skip, not a double-end.

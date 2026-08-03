@@ -69,7 +69,7 @@ npm run -w worker test                          # R01/R02/R03 worker-observable 
 
 None at ledger-write time.
 
-## Task ledger (R01–R03)
+## Task ledger (R01–R04)
 
 Statuses: todo → in_progress → done → (blocked if waiting on user).
 `Repo`: blank = this repo (the `worker/` workspace is in this repo).
@@ -79,12 +79,14 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | R01 | Worker service + BullMQ report consumer: real producer into I07's hook, dequeue → `runReport`, `reports.status` lifecycle | | todo | F01, F02, F03, I01, I02, I06, I07, I09 |
 | R02 | Render `ReportPayload` to PDF, write `reports.pdf_key` via I12 storage, denormalise `report_questions` | | todo | R01, I12 |
 | R03 | Retry, backoff, dead-letter `→ failed`; idempotent; transient vs schema-gate branch | | todo | R01 |
+| R04 | 24 h `abandoned` sweeper: repeatable job ends interviews stale in `profiling`/`hr_round`/`paused` past 24 h → `abandoned` via `applyTransition` (adds the `→ abandoned` edges), idempotent, no AI | | todo | R01 |
 
 ## Critical path
 
-Cross-ledger (foundations + interview-core spine through I07/I09) → **R01** → {R02, R03}.
-R02 and R03 depend only on R01 and are **independent of each other** — either order is safe
-once R01 is green.
+Cross-ledger (foundations + interview-core spine through I07/I09) → **R01** → {R02, R03, R04}.
+R02, R03 and R04 depend only on R01 and are **independent of each other** — any order is safe
+once R01 is green. R04 also modifies `machine.ts` (adds the `→ abandoned` edges) but shares no
+file with R02/R03.
 
 ## Cross-ledger dependencies (blocks this ledger)
 
@@ -113,8 +115,9 @@ call — R01 cannot complete.
 
 ## Backlog (deferred, unnumbered — promote to a task when its trigger fires)
 
-- **24 h `abandoned` sweeper** — a different `worker/` job type (K10); no report scenario
-  drives it. Promote when the sweeper is specced (its natural home is a `worker`/ops ledger).
+- **24 h `abandoned` sweeper** — **promoted to R04** (2026-08-03, PLAN_FRONTEND_LEDGER.md §6.2 +
+  ADR-R05): it is one repeatable job in the existing `worker/` process, not a new ledger's worth of
+  work, so it lives here beside the report consumer rather than in a separate `worker`/ops ledger.
 - **Voice-usage reconciliation job** — also `worker/`, owned by the `voice` ledger's
   reconciliation slice (`voice_reconciliation.feature`). Not a report concern.
 - **`report_questions(question_id)` index** — the admin weakest-question aggregation may want
