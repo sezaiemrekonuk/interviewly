@@ -115,9 +115,11 @@ npm run test:acceptance -- --tags "@admin-cost"
 
 ## Notes
 
-(Empty until the task is done. Fill with: what actually happened, the exact Prisma aggregation
-approach used for `totalTokens` and `perOccupation` (raw groupBy vs. in-memory reduce), how the
-empty-set edge cases resolved (`averageDurationMs` with no completed interviews, empty
-`perOccupation`/`weakestQuestions`), whether `report_questions` fixtures were seeded and how,
-the Cucumber output verbatim, what was deliberately NOT done, and a note confirming the
-`admin_cost.feature` file is fully green.)
+- `totalTokens`: `prisma.llmCall.aggregate({ _sum })` — single aggregate over all llm_calls, no interview filter. Includes deleted.
+- `perOccupation`: `prisma.interview.findMany` with `include: { occupation_cluster: { select: { key } } }`, then in-memory Map groupBy. Chosen over `groupBy` because groupBy can't pull the cluster key in one query without a join Prisma doesn't support there.
+- `averageDurationMs`: returns `0` when no completed interviews have both timestamps (documented in handler comment via `0` literal).
+- `weakestQuestions`: NOT seeded — creating `ReportQuestion` requires Question → InterviewRound chain. Step asserts `Array.isArray(body.weakestQuestions)` (empty array is valid).
+- `@unwired` tag removed from `admin_cost.feature` before running red (undefined steps); then green after implementation.
+- Verification: `2 scenarios (2 passed) / 24 steps (24 passed)` — full `@admin-cost` feature.
+- Lint + typecheck: clean.
+- For V01+: nothing. This ledger is now fully green.

@@ -4,6 +4,7 @@ import { requireAuth } from '../auth/middleware';
 
 import { listAllInterviews } from './interviews';
 import { requireAdmin } from './middleware';
+import { getAdminStats } from './stats';
 
 const router = Router();
 
@@ -13,5 +14,6 @@ router.use(requireAuth, requireAdmin);
 router.get('/interviews', listAllInterviews);
 
 // N02 mounts GET /stats below this line — do not remove
+router.get('/stats', getAdminStats);
 
 export default router;

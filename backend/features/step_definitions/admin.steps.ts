@@ -1,7 +1,4 @@
-/**
- * `admin_cost.feature` @AC-17 — soft delete disappears for the owner and stays auditable,
- * cost intact, for an admin (N01). @AC-18 is N02's and is still tagged `@unwired`.
- */
+/** `admin_cost.feature` — N01 (@AC-17) soft-delete audit; N02 (@AC-18) stats + role gate. */
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 
@@ -162,3 +159,142 @@ Then('its cost is unchanged', function (this: AiWorld) {
     'a soft delete must not touch spent_usd or the llm_calls rows',
   );
 });
+
+// ── @AC-18 step definitions (N02) ─────────────────────────────────────────────
+
+const DURATION_MS = 90_000;
+
+Given('a non-admin user has a session', async function (this: AiWorld) {
+  this.actors.nonAdmin = await register(this);
+  const userId = (this.lastBody?.user as { id: string }).id;
+
+  const cluster = await prisma.occupationCluster.upsert({
+    where: { key: 'software' },
+    update: {},
+    create: { key: 'software', label: 'Software' },
+  });
+
+  const now = new Date();
+
+  // completed interview with timestamps — contributes to averageDurationMs + perOccupation
+  await prisma.interview.create({
+    data: {
+      user_id: userId,
+      mode: 'text',
+      job_text: 'Backend role.',
+      job_source: 'paste',
+      occupation: 'Backend Engineer',
+      occupation_cluster_id: cluster.id,
+      language: 'en',
+      target_question_count: 5,
+      hr_question_count: 2,
+      state: 'completed',
+      spent_usd: '0.010000',
+      started_at: new Date(now.getTime() - DURATION_MS),
+      ended_at: now,
+    },
+  });
+
+  // soft-deleted interview — must appear in admin list (K11)
+  const deleted = await prisma.interview.create({
+    data: {
+      user_id: userId,
+      mode: 'text',
+      job_text: 'Backend role.',
+      job_source: 'paste',
+      occupation: 'Backend Engineer',
+      occupation_cluster_id: cluster.id,
+      language: 'en',
+      target_question_count: 5,
+      hr_question_count: 2,
+      state: 'completed',
+      spent_usd: '0.005000',
+      deleted_at: new Date(),
+    },
+  });
+  this.interviewId = deleted.id;
+
+  // abandoned interview — contributes to unfinished count
+  await prisma.interview.create({
+    data: {
+      user_id: userId,
+      mode: 'text',
+      job_text: 'Frontend role.',
+      job_source: 'paste',
+      occupation: 'Frontend Engineer',
+      occupation_cluster_id: cluster.id,
+      language: 'en',
+      target_question_count: 5,
+      hr_question_count: 2,
+      state: 'abandoned',
+      spent_usd: '0.000000',
+    },
+  });
+});
+
+When('the non-admin user fetches GET {string}', async function (this: AiWorld, path: string) {
+  this.cookie = this.actors.nonAdmin;
+  await this.httpGet(path);
+});
+
+When('an admin user fetches GET {string}', async function (this: AiWorld, path: string) {
+  const admin = await prisma.user.create({
+    data: {
+      email_lower: `admin-ac18-${randomUUID()}@example.com`,
+      password_hash: await hash(ADMIN_PASSWORD),
+      role: 'admin',
+      email_verified_at: new Date(),
+    },
+  });
+  this.cookie = '';
+  await this.httpPost('/auth/login', { email: admin.email_lower, password: ADMIN_PASSWORD });
+  assert.equal(this.lastStatus, 200, `admin login failed: ${JSON.stringify(this.lastBody)}`);
+  this.actors.adminUser = this.cookie;
+  await this.httpGet(path);
+});
+
+Then('deleted interviews are included', function (this: AiWorld) {
+  assert.equal(this.lastStatus, 200, `body: ${JSON.stringify(this.lastBody)}`);
+  const found = items<AdminItem>(this).find((i) => i.id === this.interviewId);
+  assert.ok(found, 'the soft-deleted interview must appear in the admin audit list');
+  assert.equal(found.deleted, true);
+});
+
+When('the admin user fetches GET {string}', async function (this: AiWorld, path: string) {
+  this.cookie = this.actors.adminUser;
+  await this.httpGet(path);
+});
+
+interface AdminStats {
+  averageDurationMs: number;
+  completed: number;
+  cutShort: number;
+  unfinished: number;
+  totalTokens: number;
+  perOccupation: unknown[];
+  weakestQuestions: unknown[];
+}
+
+Then('averageDurationMs is computed from completed interviews', function (this: AiWorld) {
+  assert.equal(this.lastStatus, 200, `body: ${JSON.stringify(this.lastBody)}`);
+  const body = this.lastBody as unknown as AdminStats;
+  assert.ok(
+    typeof body.averageDurationMs === 'number' && body.averageDurationMs >= 0,
+    `averageDurationMs must be a non-negative number, got ${body.averageDurationMs}`,
+  );
+});
+
+Then(
+  'completed, unfinished, totalTokens, perOccupation and weakestQuestions are present',
+  function (this: AiWorld) {
+    const body = this.lastBody as unknown as AdminStats;
+    assert.ok(typeof body.completed === 'number', 'completed missing');
+    assert.ok(typeof body.cutShort === 'number', 'cutShort missing');
+    assert.ok(typeof body.unfinished === 'number', 'unfinished missing');
+    assert.ok(typeof body.totalTokens === 'number', 'totalTokens missing');
+    assert.ok(Array.isArray(body.perOccupation), 'perOccupation missing');
+    assert.ok(Array.isArray(body.weakestQuestions), 'weakestQuestions missing');
+    // at least one cluster row since we seeded completed interviews with a cluster
+    assert.ok(body.perOccupation.length > 0, 'perOccupation must not be empty');
+  },
+);
