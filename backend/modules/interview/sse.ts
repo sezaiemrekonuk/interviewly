@@ -10,6 +10,7 @@ import type { RequestHandler } from 'express';
 
 import { redis } from '../auth/rate-limit';
 import { logger } from '../../src/lib/logger';
+import { REPORT_QUEUE, reportQueue } from '../../src/lib/queue';
 
 export const EVENT_CHANNEL_PREFIX = 'interview:events:';
 
@@ -29,10 +30,12 @@ export async function publishStateChanged(event: InterviewStateChanged): Promise
 }
 
 /**
- * The emission point for `→ evaluating`. The BullMQ job itself belongs to the report ledger
- * (R01); until that lands this is the line that says an interview is ready for one.
+ * The emission point for `→ evaluating` (R01). `jobId = interviewId` is the idempotency key:
+ * BullMQ refuses a second `add` for a job id it already knows, so re-entering `evaluating`
+ * for the same interview enqueues no second job (AC-20) without a bespoke dedupe table.
  */
-export function enqueueReport(interviewId: string, ctx: { traceId: string }): void {
+export async function enqueueReport(interviewId: string, ctx: { traceId: string }): Promise<void> {
+  await reportQueue.add(REPORT_QUEUE, { interviewId }, { jobId: interviewId });
   logger.info({ traceId: ctx.traceId, interviewId }, 'REPORT_JOB_ENQUEUED');
 }
 

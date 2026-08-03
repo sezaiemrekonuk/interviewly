@@ -7,8 +7,9 @@
     "outDir": "dist",
     // Pinned for the same reason as backend/tsconfig.json: the root config's `paths` would
     // pull packages/*/src into this program and push the emit down to dist/worker/src/,
-    // past the image's `CMD ["node", "worker/dist/index.js"]`. Today nothing here imports
-    // `@interviewly/*`, so the drift would only appear on the first import that does.
+    // past the image's `CMD ["node", "worker/dist/index.js"]`. R01's `@interviewly/backend`
+    // import therefore resolves through node_modules to backend's BUILT `dist` — which is
+    // why the Dockerfile builds backend before the worker.
     "baseUrl": ".",
     "paths": {},
     "rootDir": "src"

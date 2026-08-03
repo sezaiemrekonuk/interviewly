@@ -2,7 +2,8 @@
   "name": "@interviewly/backend",
   "version": "0.0.1",
   "private": true,
-  "main": "src/index.ts",
+  "main": "dist/src/worker-exports.js",
+  "types": "dist/src/worker-exports.d.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "start": "tsx src/index.ts",

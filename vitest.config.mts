@@ -22,11 +22,14 @@ export default defineConfig({
         test: {
           name: 'node',
           environment: 'node',
-          include: ['{packages/*,backend,worker}/**/*.test.ts'],
+          // `worker` is its own project (below): it needs a `@interviewly/backend` alias too,
+          // and duplicating that alias here would run the same files under two project names.
+          include: ['{packages/*,backend}/**/*.test.ts'],
           exclude: ['**/node_modules/**', '**/dist/**'],
         },
       },
       './frontend/vitest.config.mts',
+      './worker/vitest.config.mts',
     ],
   },
 });

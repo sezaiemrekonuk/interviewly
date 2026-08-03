@@ -1,5 +1,7 @@
+import { REPORT_QUEUE } from '@interviewly/backend';
 import { Worker } from 'bullmq';
 
+import { processReportJob, type ReportJobData } from './consumer';
 import { sendEmail, type EmailJob } from './jobs/email-send';
 import { config } from './lib/env';
 import { logger } from './lib/logger';
@@ -10,6 +12,9 @@ import { logger } from './lib/logger';
  */
 
 export const EMAIL_QUEUE_NAME = 'email.send';
+// K10: report generation is the one LLM-bound job in this process, low concurrency by design
+// (env.ts exposes no override yet — a fixed constant until a task needs to tune it).
+const REPORT_CONCURRENCY = 2;
 
 const emailWorker = new Worker<EmailJob>(
   EMAIL_QUEUE_NAME,
@@ -33,10 +38,27 @@ emailWorker.on('failed', (job, err) => {
   );
 });
 
-logger.info({ queue: EMAIL_QUEUE_NAME }, 'WORKER_STARTED');
+const reportWorker = new Worker<ReportJobData>(
+  REPORT_QUEUE,
+  processReportJob,
+  { connection: { url: config.REDIS_URL }, concurrency: REPORT_CONCURRENCY },
+);
+
+// R03 adds retry/dead-letter policy; here a failed job just needs to be loud, same as email's.
+reportWorker.on('failed', (job, err) => {
+  logger.warn(
+    { queue: REPORT_QUEUE, interviewId: job?.data?.interviewId, reason: err.message },
+    'REPORT_JOB_FAILED',
+  );
+});
+
+logger.info(
+  { queues: [EMAIL_QUEUE_NAME, REPORT_QUEUE], reportConcurrency: REPORT_CONCURRENCY },
+  'WORKER_STARTED',
+);
 
 async function shutdown(): Promise<void> {
-  await emailWorker.close();
+  await Promise.all([emailWorker.close(), reportWorker.close()]);
   process.exit(0);
 }
 

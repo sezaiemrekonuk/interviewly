@@ -85,6 +85,7 @@ module.exports = {
       '.agents/features/voice_session.feature',
       '.agents/features/admin_cost.feature',
       '.agents/features/schema_validation.feature',
+      '.agents/features/report.feature',
     ],
     tags: 'not @unwired',
     require: ['backend/features/step_definitions/**/*.ts'],
