@@ -17,6 +17,7 @@
   "//deps": "@interviewly/ai is declared, not merely imported: `npm ci --workspace=@interviewly/backend` links only the workspaces it is told about, so without it the built image has no node_modules/@interviewly/ai and src/index.ts:1 throws on first require. `prisma` (the CLI) is a runtime dependency on purpose — the compose `migrate` service runs `prisma migrate deploy` out of this same image, which now installs with --omit=dev.",
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1098.0",
+    "@aws-sdk/s3-request-presigner": "^3.1101.0",
     "@interviewly/ai": "*",
     "@node-rs/argon2": "^2.0.2",
     "@prisma/client": "^6.19.3",

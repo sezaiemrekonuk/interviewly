@@ -6,6 +6,7 @@ import { requireVerifiedEmail } from '../auth/verify-email';
 import { submitAnswer } from './answers';
 import { requirePublicOrigin } from './csrf';
 import { deleteInterview } from './delete';
+import { downloadReport } from './download';
 import { resolveInterview } from './ownership';
 import { submitProfile } from './profile';
 import { resumeInterview } from './resume';
@@ -34,6 +35,6 @@ router.post('/:id/answers', submitAnswer);
 router.post('/:id/resume', resumeInterview);
 router.get('/:id/events', streamInterviewEvents);
 
-// I12 mounts here: router.get('/:id/report/download', ...)
+router.get('/:id/report/download', downloadReport);
 
 export default router;

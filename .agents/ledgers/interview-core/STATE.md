@@ -1,14 +1,13 @@
 # Interview-core — State
 
 Last updated: 2026-08-03
-Last session ended: **I11 done, uncommitted** (I10 landed before it, also uncommitted).
-`POST /uploads` live in `app.ts` behind `requireAuth`. `uploads.ts`: kind → sha256 → dedup →
-magic+MIME → pages → unpdf extract → 200-char floor → `storage.put` → `upsert`. Size is
-enforced by a Content-Length pre-check *and* a mapped `MulterError` backstop. `storage.ts`
-created with `put` + `setStorage` only — **I12 owns that file and extends it**. Fixtures are
-generated (`features/fixtures/pdf.ts`), not committed. `upload.feature` added to `cucumber.js`.
-Rings 48/48 + 23/23 (auth needs `interviewly_test`), 122 unit, lint + typecheck clean.
-Details in I11 `## Notes`.
+Last session ended: **I12 done, uncommitted** (I10 and I11 landed before it, also uncommitted).
+`storage.ts` now `put`/`get`/`signedUrl` — `cappedTtl` hard-caps at `MAX_TTL_SECONDS` 300 and
+presigns with `signingDate: clock.now()`. `GET /interviews/:id/report/download` mounted behind
+`router.param('id')`. New dep `@aws-sdk/s3-request-presigner`. `object_storage.feature` added
+to `cucumber.js`; `features/fixtures/fake-storage.ts` signs SigV4-shaped URLs so the TTL
+assertions parse a real presigned URL identically. Rings 51/51, 144 unit, lint + typecheck
+clean. Details in I12 `## Notes`.
 
 ## Execution protocol (follow exactly)
 
@@ -25,14 +24,16 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**I12 (object-storage signed URL + report download).** I11 is done. `I12 <- I03`,
-`I13 <- I03, A01`, `I14 <- F02, F03` and `I15 <- F03` are all eligible — I12 comes first by
+**I13 (rate limits: daily interview cap + interview-start limiter).** I12 is done.
+`I13 <- I03, A01`, `I14 <- F02, F03` and `I15 <- F03` are all eligible — I13 comes first by
 ID order.
 
 Live hand-offs still open:
 
-- `src/lib/storage.ts` exists with `put` + `setStorage` only (I11). **I12 extends it** with
-  `get`/`signedUrl(key, ttl)`; do not rewrite the seam, the acceptance ring swaps it.
+- `storage.signedUrl(key, ttl)` is capped at 300 s and never logged; R03 signs `reports.pdf_key`
+  through it rather than building a URL.
+- `server.ts`'s `Before` clears `ratelimit:*` between scenarios — I13's own feature is the one
+  place that must not rely on it.
 - `cucumber.js`'s auth profile can drop `and not @AC-32` now that `POST /uploads` exists —
   A06's CV scenarios, so A06's session, not this ledger's.
 
@@ -127,7 +128,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | I09 | Report generation + `ReportPayload` schema gate + completion | | done | I07, I02 |
 | I10 | Language detection + two-consecutive-turn switch counting | | done | I06 |
 | I11 | Upload validation (MIME/magic/size/pages/text) + `sha256` dedup | | done | A01, F02 |
-| I12 | Object-storage signed-URL wrapper + report download endpoint | | todo | I03 |
+| I12 | Object-storage signed-URL wrapper + report download endpoint | | done | I03 |
 | I13 | Rate limits: daily interview cap + interview-start limiter | | todo | I03, A01 |
 | I14 | Reliability probes: `/healthz`, `/readyz` | | todo | F02, F03 |
 | I15 | Config: extend env schema with this ledger's keys, fail-fast | | todo | F03 |
