@@ -1,13 +1,23 @@
-// `nextCursor` is opaque so a client cannot hand-build one and page by raw row id.
-// The payload is just the last row's id — F02's helpers cursor on it, and `created_at`
-// ordering is stable enough for the MVP page (REFERENCE, Cursor pagination).
+// base64url over the row id. That is ENCODING, not a security boundary: it is trivially
+// reversible and a client can hand-build one. What keeps a caller off someone else's row is
+// the `where` on the query itself — `userInterviews` filters `user_id` before the cursor is
+// applied. Never lean on this function for access control.
 export const encodeCursor = (id: string): string => Buffer.from(id).toString('base64url');
 
-// A hand-made `?cursor=` decodes to arbitrary bytes, and handing those to Prisma's `cursor`
-// is a 500 off a query string. Anything not cuid-shaped is treated as no cursor — same
-// clamp-don't-reject posture as `pageLimit`.
 const CUID = /^[a-z0-9]{20,32}$/;
 
+/**
+ * Shape check only — it skips a pointless query on garbage, and says nothing about whether
+ * the row exists or who owns it.
+ *
+ * It does not need to. Measured against this schema: Prisma's `cursor` does NOT throw on an
+ * id that is absent from the filtered set — it returns an empty page (a user with 3 rows and
+ * a bogus cursor gets 0, no exception). So a hand-made cursor is an empty page, not a 500,
+ * and a foreign id is an empty page too because `userInterviews` filters by `user_id` before
+ * the cursor is applied. Resolving the id first would cost a query per paged request and turn
+ * a stale cursor into a re-serve of page one, which is worse for a paging client than the
+ * end-of-list it reads today.
+ */
 export const decodeCursor = (value: unknown): string | undefined => {
   if (typeof value !== 'string' || value === '') return undefined;
   const id = Buffer.from(value, 'base64url').toString('utf8');

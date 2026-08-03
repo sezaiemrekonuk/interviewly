@@ -4,7 +4,7 @@ author: Fatih
 sessions: [2026-08-03]
 model: claude-opus-5
 model_recommended: claude-opus-4.8
-iterations: 1
+iterations: 2
 tools: []
 ---
 
@@ -66,3 +66,38 @@ green, `1 scenario / 13 steps`. One red→green cycle.
 - **Did not** delete `and not @AC-29` from the `auth` profile, though N01 shipping
   `GET /me/interviews` is the trigger its comment names. Those scenarios and steps are the auth
   ledger's. Flagged for Ahmet in STATE.md instead of reaching into someone else's seat.
+
+## Session 2 — 2026-08-03 (PR #23 review round)
+
+### What I asked for / what came back
+PR was approved but unmergeable: `CONFLICTING` after I09 (PR #22) landed on the same
+`cucumber.js` `default.paths` list. Merged master, one-line conflict, both features kept.
+Also noticed `gh pr checks 23` reports **no checks at all** — the approval was not standing on
+a green CI. Flagged, not fixed: CI wiring is F03's.
+
+### Methodology trace
+Copilot review → 3 comments → verified each against the running DB before touching code →
+1 accepted, 2 rejected on evidence → gates re-run green (default 41, auth 18, unit 117).
+
+### Friction
+- Reviewer comments arrived as assertions with a stated impact ("can 500"). Two of three did
+  not survive a five-minute check. Cost: I had already written the fix before testing the
+  premise — wrong order, and the reason `iterations` is 2 rather than 1.
+
+### What I rejected and rewrote by hand
+- **Accepted Copilot's `cursor.ts` comment finding.** I had written that a client "cannot
+  hand-build" a cursor; base64url is reversible, so that asserted a security property the code
+  does not have. My error, and the worst kind — a comment that would have let a later reader
+  rely on it. Rewritten.
+- **Rejected the other two on measurement.** Claim: a cuid-shaped absent/foreign cursor hits
+  Prisma's `cursor` and 500s. It does not throw — a user with 3 rows plus a bogus cursor gets
+  `0 rows, no exception`, and over HTTP every malformed cursor returns
+  `200 {"items":[],"nextCursor":null}`. Foreign ids are empty pages too, since `userInterviews`
+  filters `user_id` first.
+- **Built the suggested fix, then deleted it.** `resolveCursor` re-read the cursor id under the
+  caller's filter. It buys nothing against a bug that does not exist, costs a query on every
+  paged request, and converts a stale cursor from "end of list" into "here is page one again"
+  — a re-serve, which is the worse failure for a paging client. Reverted; the measurement is
+  now a comment in `cursor.ts` so the next reviewer does not re-open it.
+- Kept the cuid shape check: it skips a pointless query on garbage, which is all it ever
+  claimed to do.

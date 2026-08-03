@@ -198,6 +198,29 @@ vitest `19 files / 117 tests`; lint + typecheck clean.
 exist — `db/init.sql` creates it but only on a fresh volume, so it had to be created and
 `prisma migrate deploy`d by hand.
 
+### PR #23 review round (2026-08-03)
+
+Merged `origin/master` in (I09 landed as PR #22 and touched the same `cucumber.js`
+`default.paths` list). Conflict was one line; both features stay.
+
+Copilot raised 3 comments. **One was right, two rest on a false premise:**
+
+- **Right, and my error** — `cursor.ts`'s comment claimed a cursor could not be hand-built.
+  base64url is trivially reversible, so that read as a security property the code does not
+  have. Rewritten to say it is encoding, not a boundary.
+- **Wrong** — "an absent/foreign cuid-shaped cursor reaches Prisma's `cursor` and can 500."
+  Measured against this schema: it does **not** throw. A user with 3 interviews and a bogus
+  cursor gets `0 rows, no exception`; over HTTP all of `absent-cuid`, `!!!garbage!!!` and a
+  too-short id return `200 {"items":[],"nextCursor":null}`. A foreign id is also just an empty
+  page, because `userInterviews` filters `user_id` before the cursor applies — no leak.
+
+I built the suggested `resolveCursor` (re-read the id under the caller's filter) and then
+**reverted it**: it costs a query per paged request to fix nothing, and it turns a stale
+cursor into a re-serve of page one, which is worse for a paging client than the end-of-list
+it reads today. The measurement is recorded in `cursor.ts` so this is not re-litigated.
+
+`decodeCursor`'s cuid shape check stays — it skips a pointless query on garbage.
+
 ### For N02
 
 `requireAdmin` is exported from `modules/admin/middleware.ts` but **you do not need to import

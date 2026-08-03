@@ -6,7 +6,12 @@ Last session ended: **N01 done.** @AC-17 green (`1 scenario / 13 steps`); defaul
 `GET /admin/interviews`, `DELETE /interviews/:id`, `GET /me/interviews` all landed.
 `admin_cost.feature` is wired into `cucumber.js` **`default`** paths (not `auth`); steps in
 `backend/features/step_definitions/admin.steps.ts`. **@AC-18 is tagged `@unwired` — N02
-deletes that tag, sees it red, then writes its steps.** Not committed.
+deletes that tag, sees it red, then writes its steps.**
+
+PR #23 review round: merged `origin/master` (I09 conflict in `cucumber.js`, one line, both
+features kept). 1 of 3 Copilot comments accepted; the other 2 rejected on measurement — see
+N01 `## Notes` → "PR #23 review round". Post-merge gates: default 41, auth 18, unit 117,
+lint + typecheck clean. **Merge commit not made — the human commits.**
 
 ## Execution protocol (follow exactly)
 
