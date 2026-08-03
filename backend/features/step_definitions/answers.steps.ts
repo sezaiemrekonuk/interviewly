@@ -60,7 +60,11 @@ async function submitAnswerFor(
  * The `GET /state` before each answer is not decoration: it is what delivers the question and
  * stamps `asked_at`, exactly as a room does, so `duration_ms` has a baseline.
  */
-async function arriveAtQuestion(world: AiWorld, index: number, total: number): Promise<void> {
+export async function arriveAtQuestion(
+  world: AiWorld,
+  index: number,
+  total: number,
+): Promise<void> {
   await setUpInterview.call(world, total);
   await world.httpPost(`/interviews/${world.interviewId}/profile`, { skip: true });
   assert.equal(world.lastStatus, 200, `profile failed: ${JSON.stringify(world.lastBody)}`);

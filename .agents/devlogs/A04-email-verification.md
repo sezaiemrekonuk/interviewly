@@ -2,7 +2,7 @@
 task: A04
 author: Ahmet
 sessions: [2026-07-31]
-model: claude-opus-5[1m]
+model: claude-opus-4.8[1m]
 model_recommended: claude-opus-4.6
 iterations: 4
 tools: [superpowers:systematic-debugging]

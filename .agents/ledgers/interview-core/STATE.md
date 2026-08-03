@@ -1,14 +1,14 @@
 # Interview-core — State
 
 Last updated: 2026-08-03
-Last session ended: **I07 done, uncommitted** (I06 is merged; the old "not committed" line was
-stale). `TRANSITIONS` complete, `applyTransition` is the **sole writer of `interviews.state`**
-(`setup.ts` `create` at `'created'` is the one remaining literal). New `resume.ts`, `sse.ts`.
-**ADR-I29:** SSE is `GET /interviews/:id/events`. **ADR-I30:** one `redis.duplicate()` per open
-stream. **ADR-I31:** `POST /interviews` inserts at `created` then transitions, so no state
-change is eventless. **ADR-I32 (PR review):** the write is `updateMany where { id, state: from
-}`, so a caller transitioning on a failure path must catch the 409 or it replaces its own error
-code. @AC-16 green; rings 32/32 + 11/11, 95 unit. Details in I07 `## Notes`.
+Last session ended: **I08 done, uncommitted** (I07 is merged; the previous line's "uncommitted"
+was stale).
+New `budget.ts` — `withBudget(id, fn)`, gate mounted around `ensureTechBatch` in `answers.ts`.
+`applyTransition` now writes `ctx.endedReason` with the state. **ADR-I33:** the gate is
+`pg_advisory_xact_lock`, **not** the row lock + shared transaction the task file specified —
+that shape deadlocks against `generateRound`'s FK inserts and rolls back the `llm_calls` rows
+of a paid-then-failed attempt. `@AC-11` green (its `@unwired` is gone); rings 33/33 + 11/11,
+97 unit, lint + typecheck clean. Details in I08 `## Notes`.
 
 ## Execution protocol (follow exactly)
 
@@ -25,19 +25,17 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**I08 (budget enforcement).** I07 is done; I08 and I10 are both eligible
-(`I08 <- I06, I02`; `I10 <- I06`), and I08 comes first by ID order.
+**I09 (report generation) or I10 (language switch).** I08 is done; `I09 <- I07, I02` and
+`I10 <- I06` are both eligible, and I09 comes first by ID order.
 
-Live hand-offs, from I07 `## Notes` → "For I08":
+Live hand-offs, from I08 `## Notes` → "For I09":
 
-- **Delete `@unwired` from @AC-11 before your first run** (ADR-I26) or the scoped command
-  reports `0 scenarios` and exits 0 — a skip that looks like a pass.
-- The ceiling mounts at the `>>> I08` marker in `answers.ts`: after the turn is stored, before
-  the handover's AI call. The exhaustion path is
-  `applyTransition(interview, 'evaluating', { traceId })` — both `hr_round` and `tech_round`
-  already list that target; do **not** write `interviews.state` yourself.
+- The budget-exhaustion path already lands in `evaluating` with `ended_reason =
+  'budget_exhausted'` set and `REPORT_JOB_ENQUEUED` emitted. Generate the report from the
+  answers that exist and do **not** overwrite `ended_reason` on that path.
 - An SSE-pushed question must stamp `questions.asked_at` itself (ADR-I27), or its
   `duration_ms` is null.
+- Advisory-lock namespace `8108` belongs to the budget gate (ADR-I33). Pick another.
 
 Running the acceptance suite locally needs `DATABASE_URL`/`REDIS_URL` pointed at the published
 host ports rather than `.env`'s compose hostnames — see I04's `## Notes` → Verification output.
@@ -121,7 +119,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | I05 | CSRF/origin enforcement on state-changing routes | | done | I04 |
 | I06 | Answer submission, guarded advance, duration, round handover, resume | | done | I04 |
 | I07 | State machine transition table + pause/resume + SSE state events | | done | I06, I02 |
-| I08 | Budget enforcement (in-transaction ceiling, exhaustion path) | | todo | I06, I02 |
+| I08 | Budget enforcement (in-transaction ceiling, exhaustion path) | | done | I06, I02 |
 | I09 | Report generation + `ReportPayload` schema gate + completion | | todo | I07, I02 |
 | I10 | Language detection + two-consecutive-turn switch counting | | todo | I06 |
 | I11 | Upload validation (MIME/magic/size/pages/text) + `sha256` dedup | | todo | A01, F02 |
