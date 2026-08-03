@@ -89,7 +89,7 @@ npm run test:acceptance -- --tags "@object-storage"
   (300) and `cappedTtl(ttl) = max(1, min(ttl, 300))`. Real impl presigns with
   `@aws-sdk/s3-request-presigner`'s `getSignedUrl` and `signingDate: clock.now()` — the Clock
   seam the fixed-clock scenario needs. `setStorage` seam unchanged (I11).
-- **New dependency:** `@aws-sdk/s3-request-presigner@^3.1098.0` in `backend/package.json`.
+- **New dependency:** `@aws-sdk/s3-request-presigner@^3.1101.0` in `backend/package.json`.
   `npm audit` findings are unchanged by it (pre-existing `tar` advisories only).
 - `modules/interview/download.ts` — `GET /interviews/:id/report/download`, mounted in
   `router.ts` under `router.param('id', resolveInterview)`, so a non-owner 404s before the
