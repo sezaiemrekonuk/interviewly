@@ -1,7 +1,7 @@
 # Voice — State
 
-Last updated: 2026-07-30
-Last session ended: **—** Ledger written; no task has started yet.
+Last updated: 2026-08-03
+Last session ended: **V01 done.** VoiceSession seam, FakeVoiceSession, ElevenLabsSession scaffold, and POST /interviews/:id/voice/session mint handler. 6/6 voice_session.feature scenarios pass, 38/38 full suite. No secret leaks. Next: V02 (webhook auth, 4 gates) or V03 (downgrade) — both unblock on V01 done.
 
 ## Execution protocol (follow exactly)
 
@@ -18,11 +18,7 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**V01 — `VoiceSession` seam, `FakeVoiceSession`, and the session-mint endpoint** is the first
-`todo` task. It depends on foundations F01/F02/F03, auth A01 (`requireAuth`), and interview-core
-I03 (ownership + room-state) and I07 (the K2 transition authority) being `done` (see the
-Cross-ledger section). Voice is authored last and **blocks nothing** — do not start V01 until its
-`Depends on` are green, but no other ledger is waiting on any voice task.
+**V02 or V03** are next (both `todo`, both unblock on V01 `done`). V02 (webhook auth) and V03 (downgrade) are independent. Per EXECUTE.md §4, pick first by ledger order: V02.
 
 ## Environment
 
@@ -87,7 +83,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 
 | ID | Title | Repo | Status | Depends on |
 |----|-------|------|--------|------------|
-| V01 | `VoiceSession` seam, `FakeVoiceSession`, and the session-mint endpoint | | todo | F01, F02, F03, A01, I03, I07 |
+| V01 | `VoiceSession` seam, `FakeVoiceSession`, and the session-mint endpoint | | done | F01, F02, F03, A01, I03, I07 |
 | V02 | ElevenLabs webhook authentication: the four gates + submit_answer/next_question/end_round + log redaction | | todo | V01, I06, I07 |
 | V03 | Voice → text downgrade on a fatal voice failure | | todo | V01, I06, I07 |
 | V04 | Post-call usage reconciliation worker job (idempotent `spent_usd` + `llm_calls` transaction) | | todo | V02, I08 |

@@ -10,6 +10,7 @@ import { logger } from './lib/logger';
 import authRouter, { meRouter } from '../modules/auth/router';
 import { mountTestSeam } from '../modules/auth/test-seam';
 import interviewRouter from '../modules/interview/router';
+import voiceRouter from '../modules/voice/session';
 
 export const app = express();
 
@@ -26,6 +27,7 @@ app.get('/healthz', (_req, res) => {
 
 app.use('/auth', authRouter);
 app.use('/', meRouter);
+app.use('/interviews', voiceRouter);
 app.use('/interviews', interviewRouter);
 
 // TEST SEAM — acceptance-only Google callback simulator. mountTestSeam() throws if it is

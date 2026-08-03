@@ -18,6 +18,7 @@ import {
   validateProviderKeys,
 } from '@interviewly/ai';
 import { prisma } from '../../src/lib/db';
+import { voiceSeam } from '../../modules/voice/session';
 
 import { AiWorld, type Tier1Outcome } from './world';
 
@@ -59,6 +60,7 @@ Given(
 
 Given('AI_ENABLED is {string}', function (this: AiWorld, value: string) {
   this.aiEnabled = value === 'true';
+  voiceSeam.aiEnabled = this.aiEnabled;
   this.boot = undefined;
   this.bootError = undefined;
 });
