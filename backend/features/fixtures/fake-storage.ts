@@ -23,10 +23,7 @@ export function parseSignedExpiry(url: string): { signedAt: Date; expiresIn: num
   const date = q.get('X-Amz-Date');
   const expires = q.get('X-Amz-Expires');
   if (!date || !expires) throw new Error(`not a presigned URL: ${url}`);
-  const iso = `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 11)}:${date.slice(
-    11,
-    13,
-  )}:${date.slice(13, 15)}Z`;
+  const iso = `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}T${date.slice(9, 11)}:${date.slice(11, 13)}:${date.slice(13, 15)}Z`;
   return { signedAt: new Date(iso), expiresIn: Number(expires) };
 }
 
