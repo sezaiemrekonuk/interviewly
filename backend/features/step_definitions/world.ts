@@ -104,6 +104,9 @@ export class AiWorld extends World {
   /** N01: the fixture cost the admin audit must read back unchanged after a soft delete. */
   recordedCost?: { costUsd: string; totalTokens: number };
 
+  /** N02 AC-18: llm_calls token sum before the scenario fixture inserts new rows. */
+  tokenBaseline = 0;
+
   // I04: the body `POST /interviews/:id/profile` will be sent with — `{ skip: true }` until a
   // scenario answers the pre-questions. The two profiling.feature paths differ only here.
   profileBody: Record<string, unknown> = { skip: true };
