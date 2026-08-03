@@ -81,6 +81,7 @@ module.exports = {
       '.agents/features/question_generation.feature',
       '.agents/features/profiling.feature',
       '.agents/features/interview_flow.feature',
+      '.agents/features/language_detection.feature',
       '.agents/features/voice_session.feature',
       '.agents/features/admin_cost.feature',
       '.agents/features/schema_validation.feature',

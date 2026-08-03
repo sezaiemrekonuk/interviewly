@@ -1,15 +1,14 @@
 # Interview-core — State
 
 Last updated: 2026-08-03
-Last session ended: **I09 done, uncommitted** (I08 landed before it).
-New `report-run.ts` — `runReport(id, { traceId, client? })`: transcript → `generateReport` →
-`ReportPayloadSchema` gate → `completed` + `reports`/`report_questions`, or `failed` + no row +
-`AI_OUTPUT_SCHEMA_INVALID`. **ADR-I34:** I07's `enqueueReport` is deliberately still a log
-line — auto-running the report inside `applyTransition` breaks `interview_flow` @AC-16 and
-puts a 90 s call in an answer request; R01 binds the queue. `schema_validation.feature` added
-to `cucumber.js` and green. Rings 40/40 + 18/18 (auth needs `interviewly_test`), 105 unit,
-lint + typecheck + `npm run -w @interviewly/backend build` clean — run that build too, `lint`
-uses a different tsconfig and misses backend-only errors. Details in I09 `## Notes`.
+Last session ended: **I10 done, uncommitted** (I09 landed before it).
+New `language.ts` — `trackLanguage(interview, transcript, { question, traceId })`, called from
+`answers.ts` after `ANSWER_RECORDED` and **before** `ensureTechBatch`, returning the language
+the interview runs in (the handler reassigns `interview.language` so a switch reaches the
+ADR-I22 batch). Streak is a process-local `Map`, reset by ambiguous / same-language /
+unsupported-language turns. `language_detection.feature` added to `cucumber.js` and green.
+Rings 45/45 + 23/23 (auth needs `interviewly_test`), 122 unit, lint + typecheck clean.
+Details in I10 `## Notes`.
 
 ## Execution protocol (follow exactly)
 
@@ -26,9 +25,9 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**I10 (language switch).** I09 is done; `I10 <- I06` is eligible. `I11 <- A01, F02`,
-`I12 <- I03`, `I13 <- I03, A01`, `I14 <- F02, F03` and `I15 <- F03` are eligible too — I10
-comes first by ID order.
+**I11 (upload validation + dedup).** I10 is done. `I11 <- A01, F02`, `I12 <- I03`,
+`I13 <- I03, A01`, `I14 <- F02, F03` and `I15 <- F03` are all eligible — I11 comes first by
+ID order. I11 also unblocks the `not @AC-32` deferral in `cucumber.js`'s auth profile.
 
 Live hand-offs still open:
 
@@ -121,7 +120,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | I07 | State machine transition table + pause/resume + SSE state events | | done | I06, I02 |
 | I08 | Budget enforcement (in-transaction ceiling, exhaustion path) | | done | I06, I02 |
 | I09 | Report generation + `ReportPayload` schema gate + completion | | done | I07, I02 |
-| I10 | Language detection + two-consecutive-turn switch counting | | todo | I06 |
+| I10 | Language detection + two-consecutive-turn switch counting | | done | I06 |
 | I11 | Upload validation (MIME/magic/size/pages/text) + `sha256` dedup | | todo | A01, F02 |
 | I12 | Object-storage signed-URL wrapper + report download endpoint | | todo | I03 |
 | I13 | Rate limits: daily interview cap + interview-start limiter | | todo | I03, A01 |

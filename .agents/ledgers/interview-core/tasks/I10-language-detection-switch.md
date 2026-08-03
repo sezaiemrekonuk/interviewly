@@ -51,17 +51,17 @@ and implements the two-consecutive-turn switch counter. It adds no new endpoint.
   target language *or* is ambiguous; only two back-to-back target-language turns flip it.
 
 ## Steps
-- [ ] **1. Write `language.ts`** — `trackLanguage` calling `detectLanguage`, the consecutive
+- [x] **1. Write `language.ts`** — `trackLanguage` calling `detectLanguage`, the consecutive
   counter, the flip + `LANGUAGE_SWITCHED` log, the streak reset rule, and the
   candidate-regeneration hook.
-- [ ] **2. Call `trackLanguage`** from `answers.ts` after the transcript write.
-- [ ] **3. Confirm no `llm_calls` row** is written for classification (the heuristic is
+- [x] **2. Call `trackLanguage`** from `answers.ts` after the transcript write.
+- [x] **3. Confirm no `llm_calls` row** is written for classification (the heuristic is
   pure).
-- [ ] **4. Wire acceptance step-defs** for `language_detection.feature` @AC-13 (clear tr/en
+- [x] **4. Wire acceptance step-defs** for `language_detection.feature` @AC-13 (clear tr/en
   classify with `ambiguous` false and count; below-margin classifies `en` ambiguous true and
   does not count; a below-margin turn between two Turkish turns keeps `en`; two consecutive
   clear Turkish turns flip to `tr`; no `llm_calls` row for any classification).
-- [ ] **5. Run the `## Verification` command.**
+- [x] **5. Run the `## Verification` command.**
 
 ## Definition of done
 - Each answered turn is classified via `detectLanguage` with no `llm_calls` row written for
@@ -75,4 +75,42 @@ npm run test:acceptance -- --tags "@language-detection"
 ```
 
 ## Notes
-_(fill in when the task is done)_
+
+**Shipped.** `backend/modules/interview/language.ts` —
+`trackLanguage(interview, transcript, { question, traceId }) → Promise<string>` (the language
+the interview runs in afterwards). Classifies through `aiClient().detectLanguage` (the seam,
+not the bare function): `StubRecordingClient.detectLanguage` delegates without `audited()`, so
+no `llm_calls` row exists by construction, in stub *and* live mode.
+
+Switch rule: `Map<interviewId, { language, count }>` at module scope, `SWITCH_AFTER = 2`.
+Reset on ambiguous **or** same-language **or** not-in `SUPPORTED = {en, tr}` — the third guard
+matters because `detectLanguage` returns `ru`/`ja`/… by script ratio, and two Cyrillic turns
+would otherwise write `language = 'ru'` (ADR-I35).
+
+`answers.ts`: called after `ANSWER_RECORDED`, **before** `ensureTechBatch`, and its return is
+assigned to `interview.language`. The request object is stale after the switch otherwise, and
+ADR-I22's tech batch generates in the old language.
+
+Regeneration hook: fire-and-forget `prepareNextCandidates` (D02), guarded on the N+1 row
+already having `candidates`; failures log `CANDIDATE_REGENERATION_FAILED` and never fail the
+turn. Nothing wires D02 into the answer flow yet, so the guard is false in practice today —
+it is what keeps @AC-13's "no llm_calls row" true when D03 does wire it.
+
+`cucumber.js` `default.paths` gained `.agents/features/language_detection.feature`;
+`backend/features/step_definitions/language.steps.ts` is new.
+
+### Verification output
+```
+npm run test:acceptance -- --tags "@language-detection"
+4 scenarios (4 passed) · 25 steps (25 passed)
+```
+Red first: the outline's three rows passed from the start (they assert the classifier and the
+absent row), `A below-margin turn does not advance a language switch` failed
+`'en' !== 'tr'` until `trackLanguage` existed. Full rings 45/45 + auth 23/23, 122 unit,
+lint + typecheck clean. Local runs need the host ports and, for the auth profile,
+`DATABASE_URL` ending `interviewly_test`.
+
+### For I11 / D03
+- D03 promotes candidates: read them **after** `trackLanguage` has run for the turn, or a
+  switch-turn promotion picks the old-language batch.
+- The streak Map is process-local (ADR-I35). Any horizontal scale of `api` needs it in Redis.

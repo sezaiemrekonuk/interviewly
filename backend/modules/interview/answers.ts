@@ -17,6 +17,7 @@ import { logger } from '../../src/lib/logger';
 
 import { BudgetExceeded, withBudget } from './budget';
 import { ensureTechBatch } from './generation';
+import { trackLanguage } from './language';
 import { applyTransition } from './machine';
 import { currentQuestionRow } from './state';
 
@@ -87,7 +88,15 @@ export const submitAnswer: RequestHandler = async (req, res) => {
     'ANSWER_RECORDED',
   );
 
+  // I10: a pure heuristic, no `llm_calls` row. It runs before the handover below because a
+  // switch has to reach the technical batch that ADR-I22 generates in `interview.language`.
   const nextIndex = expected + 1;
+  interview.language = await trackLanguage(interview, parsed.data.transcript, {
+    question,
+    nextIndex,
+    traceId,
+  });
+
   // ADR-I22: the technical batch is generated during the HR round, not by the transition into
   // it, so the handover is never a loading screen. Idempotent — every HR answer may call it.
   //
