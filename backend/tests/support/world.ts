@@ -4,7 +4,7 @@ import { setWorldConstructor, World } from '@cucumber/cucumber';
 
 import { getBaseUrl } from './harness';
 
-type Method = 'GET' | 'POST';
+type Method = 'GET' | 'POST' | 'PATCH';
 
 interface RequestOpts {
   body?: unknown;

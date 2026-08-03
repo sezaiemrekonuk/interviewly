@@ -98,7 +98,7 @@ export const confirmVerification: RequestHandler = async (req, res) => {
   const user = await prisma.user.findUniqueOrThrow({ where: { id: result.userId } });
 
   logger.info({ userId: user.id, traceId: req.traceId }, 'AUTH_EMAIL_VERIFIED');
-  res.status(200).json({ user: publicUser(user) });
+  res.status(200).json({ user: await publicUser(user) });
 };
 
 /**

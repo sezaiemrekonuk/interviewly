@@ -7,9 +7,14 @@ import { useEffect, useRef, useState } from 'react';
 
 import styles from '../../../../components/auth/auth.module.css';
 import { apiPost } from '../../../../lib/api';
+import { firstRunPath } from '../../../../lib/first-run';
 import { useErrorMessage } from '../../../../lib/use-error-message';
+import type { SessionUser } from '../../../../lib/use-require-auth';
 
-type Outcome = { state: 'pending' } | { state: 'ok' } | { state: 'failed'; code: string };
+type Outcome =
+  | { state: 'pending' }
+  | { state: 'ok'; user: SessionUser }
+  | { state: 'failed'; code: string };
 
 /**
  * Confirm-on-mount. The route is public on purpose: the link is opened wherever the mail
@@ -34,9 +39,13 @@ export default function ConfirmVerificationPage() {
     fired.current = true;
 
     let active = true;
-    apiPost('/auth/verify-email/confirm', { token }).then((result) => {
+    apiPost<{ user: SessionUser }>('/auth/verify-email/confirm', { token }).then((result) => {
       if (!active) return;
-      setOutcome(result.ok ? { state: 'ok' } : { state: 'failed', code: result.code ?? 'UNKNOWN' });
+      setOutcome(
+        result.ok && result.data
+          ? { state: 'ok', user: result.data.user }
+          : { state: 'failed', code: result.code ?? 'UNKNOWN' },
+      );
     });
 
     return () => {
@@ -58,7 +67,7 @@ export default function ConfirmVerificationPage() {
         <h1 className={styles.title}>{t('verifyConfirmedTitle')}</h1>
         <p className={styles.subtitle}>{t('verifyConfirmedBody')}</p>
         <p className={styles.footer}>
-          <Link className={styles.footerLink} href="/dashboard">
+          <Link className={styles.footerLink} href={firstRunPath(outcome.user)}>
             {t('goToDashboard')}
           </Link>
         </p>

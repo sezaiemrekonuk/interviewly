@@ -7,6 +7,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 import { apiPost } from '../../lib/api';
+import type { SessionUser } from '../../lib/use-require-auth';
 import { useErrorMessage } from '../../lib/use-error-message';
 
 import styles from './auth.module.css';
@@ -42,7 +43,7 @@ export interface CredentialsFormProps {
   fieldForCode?: Partial<Record<string, 'email' | 'password'>>;
   /** A code carried in the URL (A02's `/sign-in?error=<CODE>`), shown on mount. */
   initialErrorCode?: string | null;
-  onSuccess: () => void;
+  onSuccess: (user: SessionUser) => void;
 }
 
 export function CredentialsForm({
@@ -71,10 +72,10 @@ export function CredentialsForm({
 
   async function onSubmit(values: Credentials) {
     setSubmitCode(null);
-    const result = await apiPost(endpoint, values);
+    const result = await apiPost<{ user: SessionUser }>(endpoint, values);
 
-    if (result.ok) {
-      onSuccess();
+    if (result.ok && result.data) {
+      onSuccess(result.data.user);
       return;
     }
 

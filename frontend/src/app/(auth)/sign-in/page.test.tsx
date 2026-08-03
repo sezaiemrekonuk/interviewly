@@ -54,14 +54,35 @@ describe('sign-in page', () => {
     expect(nav.replace).not.toHaveBeenCalled();
   });
 
-  it('sends the credentials to the login endpoint and lands on the dashboard', async () => {
-    const fetchSpy = stubFetch(200, { user: { id: 'u1', email: 'someone@example.com' } });
+  // A06 (K8.7): with no explicit returnPath the landing place is the server's answer about
+  // this account, not a constant. A signed-in visitor who never finished onboarding is sent
+  // back to it however they arrived.
+  it('sends the credentials to the login endpoint and lands where first-run says', async () => {
+    const fetchSpy = stubFetch(200, {
+      user: { id: 'u1', email: 'someone@example.com', onboardingCompletedAt: null, interviewCount: 0 },
+    });
+    renderWithIntl(<SignInPage />);
+
+    await fillAndSubmit('someone@example.com', 'correct-horse');
+
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/onboarding/1'));
+    expect((fetchSpy.mock.calls[0] as unknown as [string])[0]).toBe('/api/auth/login');
+  });
+
+  it('lands a returning user on the dashboard', async () => {
+    stubFetch(200, {
+      user: {
+        id: 'u1',
+        email: 'someone@example.com',
+        onboardingCompletedAt: '2026-08-01T09:00:00Z',
+        interviewCount: 3,
+      },
+    });
     renderWithIntl(<SignInPage />);
 
     await fillAndSubmit('someone@example.com', 'correct-horse');
 
     await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/dashboard'));
-    expect((fetchSpy.mock.calls[0] as unknown as [string])[0]).toBe('/api/auth/login');
   });
 
   // A02 redirects the two K8 refusals to `/sign-in?error=<CODE>`; the browser arrives with

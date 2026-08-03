@@ -1,10 +1,11 @@
 import { Router } from 'express';
 
 import { requireAuth } from './middleware';
-import { loginLimiter, passwordResetLimiter, registerLimiter } from './rate-limit';
+import { loginLimiter, passwordResetLimiter, profilePatchLimiter, registerLimiter } from './rate-limit';
 import login from './login';
 import logout from './logout';
 import me from './me';
+import { completeOnboarding, getMyProfile, patchMyProfile } from './profile';
 import register from './register';
 // A02 will mount Google routes below this line — do not remove this comment.
 import { googleCallback, startGoogle } from './google';
@@ -32,3 +33,8 @@ export default router;
 
 export const meRouter = Router();
 meRouter.get('/me', requireAuth, me);
+// A06: the account profile (K8.7, §3.3 layer 1). PATCH is rate-limited per user, not per
+// IP — the endpoint is authenticated, so the account is the thing worth protecting.
+meRouter.get('/me/profile', requireAuth, getMyProfile);
+meRouter.patch('/me/profile', requireAuth, profilePatchLimiter, patchMyProfile);
+meRouter.post('/me/profile/complete', requireAuth, completeOnboarding);

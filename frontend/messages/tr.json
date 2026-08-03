@@ -45,6 +45,27 @@
     "resetDoneTitle": "Şifre güncellendi",
     "resetDoneBody": "Her yerde oturumunuz kapatıldı. Yeni şifrenizle tekrar giriş yapın."
   },
+  "onboarding": {
+    "progress": "Adım {step} / {total}",
+    "step1Title": "Kendinizden bahsedin",
+    "step1Subtitle": "Adınız ve unvanınız görüşmelerinizi kişiselleştirmemize yardımcı olur.",
+    "step2Title": "Eğitim bilgileriniz",
+    "step2Subtitle": "En fazla beş kayıt ekleyin. Şimdilik atlayabilirsiniz.",
+    "step3Title": "İlgi alanlarınız",
+    "step3Subtitle": "Birkaç kelime daha iyi sorular seçmemize yardımcı olur.",
+    "fullNameLabel": "Ad Soyad",
+    "jobTitleLabel": "Unvan",
+    "schoolLabel": "Okul",
+    "degreeLabel": "Derece",
+    "fieldLabel": "Bölüm",
+    "graduationYearLabel": "Mezuniyet yılı",
+    "addEducationRow": "Yeni kayıt ekle",
+    "interestsLabel": "İlgi alanları",
+    "back": "Geri",
+    "skipForNow": "Şimdilik atla",
+    "continueButton": "Devam et",
+    "finish": "Bitir"
+  },
   "errors": {
     "PASSWORD_TOO_SHORT": "Şifre en az 10 karakter olmalıdır.",
     "EMAIL_TAKEN": "Bu e-posta adresiyle bir hesap zaten mevcut.",

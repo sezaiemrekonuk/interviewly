@@ -1,0 +1,42 @@
+.progress {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.educationRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.addRow {
+  align-self: flex-start;
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--primary);
+  cursor: pointer;
+  background: none;
+  border: none;
+}
+
+.actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  margin-top: 1.5rem;
+}
+
+.backButton,
+.skipButton {
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  background: none;
+  border: none;
+}
+
+.skipButton {
+  margin-left: auto;
+}
