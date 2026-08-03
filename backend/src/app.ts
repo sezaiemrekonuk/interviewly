@@ -14,9 +14,18 @@ import { mountTestSeam } from '../modules/auth/test-seam';
 import { listMyInterviews } from '../modules/interview/my-interviews';
 import interviewRouter from '../modules/interview/router';
 import voiceRouter from '../modules/voice/session';
+import voiceWebhookRouter from '../modules/voice/webhook-router';
 
 export const app = express();
 
+app.use(
+  '/webhooks',
+  express.json({
+    verify(req, _res, buf) {
+      req.rawBody = Buffer.from(buf);
+    },
+  }),
+);
 app.use(express.json());
 app.use(cookieParser());
 app.use((req, _res, next) => {
@@ -33,6 +42,7 @@ app.use('/', meRouter);
 app.get('/me/interviews', requireAuth, listMyInterviews);
 app.use('/interviews', voiceRouter);
 app.use('/interviews', interviewRouter);
+app.use('/webhooks/elevenlabs', voiceWebhookRouter);
 app.use('/admin', adminRouter);
 
 // TEST SEAM — acceptance-only Google callback simulator. mountTestSeam() throws if it is
