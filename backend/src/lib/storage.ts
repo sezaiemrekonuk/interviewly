@@ -36,7 +36,8 @@ export let storage: Storage = {
   },
   async get(key) {
     const obj = await s3.send(new GetObjectCommand({ Bucket: config.S3_BUCKET, Key: key }));
-    return Buffer.from(await obj.Body!.transformToByteArray());
+    if (!obj.Body) throw new Error(`S3 object body missing for key ${key}`);
+    return Buffer.from(await obj.Body.transformToByteArray());
   },
   // `signingDate` from the Clock seam, not wall time: the expiry the presigned URL carries is
   // what @AC-6 measures against the fixed clock.
