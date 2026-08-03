@@ -94,10 +94,15 @@ Copilot review → 3 comments → verified each against the running DB before to
   `0 rows, no exception`, and over HTTP every malformed cursor returns
   `200 {"items":[],"nextCursor":null}`. Foreign ids are empty pages too, since `userInterviews`
   filters `user_id` first.
-- **Built the suggested fix, then deleted it.** `resolveCursor` re-read the cursor id under the
-  caller's filter. It buys nothing against a bug that does not exist, costs a query on every
-  paged request, and converts a stale cursor from "end of list" into "here is page one again"
-  — a re-serve, which is the worse failure for a paging client. Reverted; the measurement is
-  now a comment in `cursor.ts` so the next reviewer does not re-open it.
+- **Built the suggested fix, then deleted it — and then it shipped anyway.** `resolveCursor`
+  re-read the cursor id under the caller's filter; I reverted it as a cost with no benefit.
+  While I was doing that, Copilot Autofix pushed the equivalent change directly to the branch
+  and a teammate resolved the conflict and approved on top. I took theirs rather than revert an
+  approved PR over one indexed PK lookup. **Losing the argument is the right call here; losing
+  the record is not** — so `cursor.ts` now carries the measurement and says the resolve is for
+  deterministic paging, not for a 500 that never happened.
 - Kept the cuid shape check: it skips a pointless query on garbage, which is all it ever
   claimed to do.
+- **Nearly lost this devlog entry.** My session-2 commit sat unpushed while the branch moved on
+  GitHub; merging the PR would have dropped Session 2, the Notes review round and the STATE
+  update. Caught it by diffing local against origin before agreeing to merge.

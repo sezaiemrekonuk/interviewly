@@ -214,10 +214,14 @@ Copilot raised 3 comments. **One was right, two rest on a false premise:**
   too-short id return `200 {"items":[],"nextCursor":null}`. A foreign id is also just an empty
   page, because `userInterviews` filters `user_id` before the cursor applies — no leak.
 
-I built the suggested `resolveCursor` (re-read the id under the caller's filter) and then
-**reverted it**: it costs a query per paged request to fix nothing, and it turns a stale
-cursor into a re-serve of page one, which is worse for a paging client than the end-of-list
-it reads today. The measurement is recorded in `cursor.ts` so this is not re-litigated.
+**Outcome: the resolve step shipped anyway.** Copilot Autofix pushed its own fixes straight to
+the branch (`1fb6962`, `69893f0`, `c3b2803`) and a teammate resolved the `cucumber.js` conflict
+and approved on top of them. Not worth reverting an approved PR over one indexed PK lookup per
+paged request, so they stay. The measurement stays recorded in `cursor.ts` and the comment
+there now says what the resolve is actually for — deterministic paging, **not** avoiding a 500,
+because there was no 500.
+
+Net effect for a caller: an unknown or foreign cursor serves page one instead of an empty page.
 
 `decodeCursor`'s cuid shape check stays — it skips a pointless query on garbage.
 

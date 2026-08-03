@@ -7,7 +7,10 @@ import { decodeCursor, encodeCursor, pageLimit } from '../interview/cursor';
 export const listAllInterviews: RequestHandler = async (req, res, next) => {
   try {
     const limit = pageLimit(req.query.limit);
-    const cursor = decodeCursor(req.query.cursor);
+    const decoded = decodeCursor(req.query.cursor);
+    const cursor = decoded
+      ? (await prisma.interview.findUnique({ where: { id: decoded }, select: { id: true } }))?.id
+      : undefined;
 
     // ADMIN AUDIT — intentionally bypasses userInterviews (K11: deleted interviews counted).
     // The soft-delete filter is the whole point of the helper, so this is a direct read; it

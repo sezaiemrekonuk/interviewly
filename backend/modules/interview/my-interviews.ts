@@ -1,6 +1,6 @@
 import type { RequestHandler } from 'express';
 
-import { userInterviews } from '../../src/lib/db';
+import { prisma, userInterviews } from '../../src/lib/db';
 
 import { decodeCursor, encodeCursor, pageLimit } from './cursor';
 
@@ -10,9 +10,17 @@ import { decodeCursor, encodeCursor, pageLimit } from './cursor';
 export const listMyInterviews: RequestHandler = async (req, res, next) => {
   try {
     const limit = pageLimit(req.query.limit);
+    const decoded = decodeCursor(req.query.cursor);
+    const cursor = decoded
+      ? (await prisma.interview.findFirst({
+          where: { id: decoded, user_id: req.user!.id, deleted_at: null },
+          select: { id: true },
+        }))?.id
+      : undefined;
+
     const rows = await userInterviews(req.user!.id, {
       limit: limit + 1,
-      cursor: decodeCursor(req.query.cursor),
+      ...(cursor ? { cursor } : {}),
     });
 
     const page = rows.slice(0, limit);

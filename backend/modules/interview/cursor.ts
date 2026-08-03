@@ -1,22 +1,21 @@
-// base64url over the row id. That is ENCODING, not a security boundary: it is trivially
-// reversible and a client can hand-build one. What keeps a caller off someone else's row is
-// the `where` on the query itself — `userInterviews` filters `user_id` before the cursor is
-// applied. Never lean on this function for access control.
+// `nextCursor` is opaque BY CONVENTION only — the client hands the token back unchanged.
+// It is base64url(id), trivially reversible and hand-buildable, so it is not a security
+// boundary. What keeps a caller off someone else's row is the `where` on the query itself:
+// `userInterviews` filters `user_id` before the cursor is applied. Never lean on this
+// function for access control.
 export const encodeCursor = (id: string): string => Buffer.from(id).toString('base64url');
 
 const CUID = /^[a-z0-9]{20,32}$/;
 
 /**
  * Shape check only — it skips a pointless query on garbage, and says nothing about whether
- * the row exists or who owns it.
+ * the row exists or who owns it. Both call sites resolve the decoded id against their own
+ * `where` before paging on it, so an unknown or foreign cursor falls back to page one.
  *
- * It does not need to. Measured against this schema: Prisma's `cursor` does NOT throw on an
- * id that is absent from the filtered set — it returns an empty page (a user with 3 rows and
- * a bogus cursor gets 0, no exception). So a hand-made cursor is an empty page, not a 500,
- * and a foreign id is an empty page too because `userInterviews` filters by `user_id` before
- * the cursor is applied. Resolving the id first would cost a query per paged request and turn
- * a stale cursor into a re-serve of page one, which is worse for a paging client than the
- * end-of-list it reads today.
+ * For the record, since a review round turned on it: Prisma's `cursor` does NOT throw on an
+ * id absent from the filtered set — measured against this schema, a user with 3 rows and a
+ * bogus cursor gets 0 rows and no exception. The resolve step is therefore about deterministic
+ * paging, not about avoiding a 500.
  */
 export const decodeCursor = (value: unknown): string | undefined => {
   if (typeof value !== 'string' || value === '') return undefined;
