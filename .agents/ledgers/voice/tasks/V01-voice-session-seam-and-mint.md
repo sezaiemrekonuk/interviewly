@@ -81,27 +81,27 @@ four gates), implement the downgrade (V03), or reconcile usage (V04). After it, 
   ask the driver to mint (ADR-V01) — do not mint the token to a different TTL than the row.
 
 ## Steps
-- [ ] **1. Confirm F01/F02/F03/A01/I03/I07 artefacts exist** — `error-codes.ts`, `db.ts`,
+- [x] **1. Confirm F01/F02/F03/A01/I03/I07 artefacts exist** — `error-codes.ts`, `db.ts`,
   `env.ts` (voice keys), `requireAuth`, the I03 ownership resolver, the I07 `machine.ts`. If any is
   missing, set this task `blocked` in STATE.md and stop.
-- [ ] **2. Create `VoiceSession.ts`** — the seam interface.
-- [ ] **3. Create `elevenlabs-session.ts`** — the real driver: mint a signed token with
+- [x] **2. Create `VoiceSession.ts`** — the seam interface.
+- [x] **3. Create `elevenlabs-session.ts`** — the real driver: mint a signed token with
   timeout+retry+bounded wait; throw `VoiceUnavailable` on failure; never log the token/key.
-- [ ] **4. Create `fake-session.ts`** — `FakeVoiceSession` with `failNext()`; canned token, fixed
+- [x] **4. Create `fake-session.ts`** — `FakeVoiceSession` with `failNext()`; canned token, fixed
   `wssOrigin`, generated `nonce`, computed `expiresAt`.
-- [ ] **5. Add `VOICE_UNAVAILABLE`** to `error-codes.ts` if absent (registry step).
-- [ ] **6. Create `session.ts`** — the mint handler per the anchor: auth → ownership → kill-switch
+- [x] **5. Add `VOICE_UNAVAILABLE`** to `error-codes.ts` if absent (registry step).
+- [x] **6. Create `session.ts`** — the mint handler per the anchor: auth → ownership → kill-switch
   → state legality → ceiling `min` → nonce + mint + `voice_sessions` insert → `201`. `FORBIDDEN`
   for non-owner, `INVALID_STATE_TRANSITION` for wrong state, `VOICE_UNAVAILABLE` for kill-switch /
   provider failure. No API key in the payload.
-- [ ] **7. Mount the router** in `app.ts` behind `requireAuth`; bind `FakeVoiceSession` in the test
+- [x] **7. Mount the router** in `app.ts` behind `requireAuth`; bind `FakeVoiceSession` in the test
   wiring so the acceptance ring never hits the network.
-- [ ] **8. Wire acceptance step-defs** for `voice_session.feature` @AC-1 (the `min` ceiling
+- [x] **8. Wire acceptance step-defs** for `voice_session.feature` @AC-1 (the `min` ceiling
   arithmetic against the fixed clock; token + `wssOrigin` + `dynamicVars`; a `voice_sessions` row;
   **no** API key in the payload) and @AC-2 (non-owner → 403 `FORBIDDEN`; wrong state → 409
   `INVALID_STATE_TRANSITION`; kill switch off → 503 `VOICE_UNAVAILABLE`; the enabled owner mint →
   201 with a row). Use the `Clock` seam for the fixed clock.
-- [ ] **9. Run the `## Verification` command.**
+- [x] **9. Run the `## Verification` command.**
 
 ## Definition of done
 - An owner mint on a voice-capable interview with `AI_ENABLED=true` returns `201` with a token,
@@ -126,8 +126,16 @@ docker compose logs api | grep -E "nonce|ELEVENLABS_API_KEY|Bearer"
 
 ## Notes
 
-(Empty until done. Fill with: what actually happened, every deviation, the Cucumber output
-verbatim, whether `VOICE_UNAVAILABLE` needed adding to the registry, how the ceiling `min` and the
-token TTL were kept consistent (ADR-V01 / spec OQ4), how `FakeVoiceSession` is bound in the test
-wiring, and a "For V02" hand-off paragraph naming the `voice_sessions` row shape and where the
-`nonce` lives that V02's gate 3 authorises against.)
+**What happened:** All steps completed. `VOICE_UNAVAILABLE` was already in the F01 registry — no addition needed.
+
+**Interface deviation from REFERENCE.md:** The `VoiceSession.mint` signature was changed to `mint(interviewId, nonce, ttlSeconds)` returning `{ token, wssOrigin }` only. The handler owns nonce generation and expiresAt computation; the driver just mints the provider token. The REFERENCE.md interface (`mint(interviewId)` returning `dynamicVars` + `expiresAt`) was aspirational and would have created a dual-computation problem for the ceiling min (ADR-V01). This deviation is intentional.
+
+**Ceiling seam:** `voiceSeam.roundRemainingSeconds` and `voiceSeam.interviewRemainingSeconds` are mutable function properties. Both default to computing from `interview.started_at` with their respective ceilings. The acceptance ring overrides them per-scenario to inject independent `roundLeft`/`interviewLeft` values. See `ponytail:` comment in `session.ts` for the upgrade path (per-round timestamp tracking).
+
+**AI_ENABLED seam:** `voiceSeam.aiEnabled` starts from `config.AI_ENABLED` (false in cucumber runs). The `Before({ tags: '@voice' })` hook resets it to `true`; the existing `AI_ENABLED is {string}` step in `ai-provider.steps.ts` was updated to also set `voiceSeam.aiEnabled`.
+
+**Precondition 3 quoting:** The feature's `AI_ENABLED "false"` table value embeds double quotes, so the substituted step text breaks `{string}` matching. A dedicated literal step `'the precondition "...AI_ENABLED {string}" holds'` handles it. The other two preconditions use the generic `{string}` step.
+
+**Verification output:** `6 scenarios (6 passed)` for `@voice-session`; `38 scenarios (38 passed)` for the full default suite. No nonce, API key, or Bearer token in logs. csrf.test.ts vitest failure is pre-existing sandbox constraint (EPERM on listen), unrelated to V01.
+
+**For V02:** The `voice_sessions` row has `(id, interview_id, nonce, expires_at, consumed_at)`. Gate 3 authorises against `interview_id + nonce` where `expires_at > now AND consumed_at IS NULL`. The nonce is a 64-char hex string (`randomBytes(32).toString('hex')`). `setVoiceSession` / `voiceSeam` in `backend/modules/voice/session.ts` are the injection points for V02's fake.
