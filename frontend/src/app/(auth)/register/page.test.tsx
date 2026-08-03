@@ -54,13 +54,17 @@ describe('register page', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it('sends the credentials to the register endpoint and lands on the dashboard', async () => {
-    const fetchSpy = stubFetch(201, { user: { id: 'u1', email: 'someone@example.com' } });
+  // A06 (K8.7): a brand-new account has never completed onboarding, so registration always
+  // lands there — the dashboard is unreachable from here by construction.
+  it('sends the credentials to the register endpoint and lands on onboarding', async () => {
+    const fetchSpy = stubFetch(201, {
+      user: { id: 'u1', email: 'someone@example.com', onboardingCompletedAt: null, interviewCount: 0 },
+    });
     renderWithIntl(<RegisterPage />);
 
     await fillAndSubmit('someone@example.com', 'correct-horse');
 
-    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/dashboard'));
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/onboarding/1'));
 
     const [url, init] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe('/api/auth/register');

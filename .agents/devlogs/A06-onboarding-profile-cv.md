@@ -31,6 +31,10 @@ step definitions for the in-scope scenarios.
   DB name not ending `_test`/`ci`) and host ports (`localhost:55432`/`6380`, not the compose
   service names `db`/`cache`) since it runs outside Docker. Not documented anywhere; worked it
   out from `harness.ts`'s assertion message and `docker compose ps`.
+- **Caught at PR time, not during the task:** changing `onSuccess` to `firstRunPath(user)` left
+  A03's two "lands on the dashboard" component tests asserting the old constant, so the branch
+  was red on `npm test` after the rebase. Updated both to the K8.7 contract and added
+  `first-run.test.ts`, which the rule shipped without.
 
 ### What I rejected and rewrote by hand
 - Left the CV-upload path (task step 5) unimplemented rather than inventing a `POST /uploads`
