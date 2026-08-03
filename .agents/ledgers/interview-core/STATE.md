@@ -1,16 +1,15 @@
 # Interview-core — State
 
 Last updated: 2026-08-03
-Last session ended: **I08 done, uncommitted** (I07 is merged; the previous line's "uncommitted"
-was stale).
-New `budget.ts` — `withBudget(id, fn)`, gate mounted around `ensureTechBatch` in `answers.ts`.
-`applyTransition` now writes `ctx.endedReason` with the state. **ADR-I33:** the gate is
-`pg_advisory_xact_lock`, **not** the row lock + shared transaction the task file specified —
-that shape deadlocks against `generateRound`'s FK inserts and rolls back the `llm_calls` rows
-of a paid-then-failed attempt. `@AC-11` green (its `@unwired` is gone); rings 33/33 + 11/11,
-97 unit, lint + typecheck + `npm run -w @interviewly/backend build` clean — run that build
-too, `lint` uses a different tsconfig and misses backend-only errors. Details in I08
-`## Notes`.
+Last session ended: **I09 done, uncommitted** (I08 landed before it).
+New `report-run.ts` — `runReport(id, { traceId, client? })`: transcript → `generateReport` →
+`ReportPayloadSchema` gate → `completed` + `reports`/`report_questions`, or `failed` + no row +
+`AI_OUTPUT_SCHEMA_INVALID`. **ADR-I34:** I07's `enqueueReport` is deliberately still a log
+line — auto-running the report inside `applyTransition` breaks `interview_flow` @AC-16 and
+puts a 90 s call in an answer request; R01 binds the queue. `schema_validation.feature` added
+to `cucumber.js` and green. Rings 40/40 + 18/18 (auth needs `interviewly_test`), 105 unit,
+lint + typecheck + `npm run -w @interviewly/backend build` clean — run that build too, `lint`
+uses a different tsconfig and misses backend-only errors. Details in I09 `## Notes`.
 
 ## Execution protocol (follow exactly)
 
@@ -27,17 +26,16 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**I09 (report generation) or I10 (language switch).** I08 is done; `I09 <- I07, I02` and
-`I10 <- I06` are both eligible, and I09 comes first by ID order.
+**I10 (language switch).** I09 is done; `I10 <- I06` is eligible. `I11 <- A01, F02`,
+`I12 <- I03`, `I13 <- I03, A01`, `I14 <- F02, F03` and `I15 <- F03` are eligible too — I10
+comes first by ID order.
 
-Live hand-offs, from I08 `## Notes` → "For I09":
+Live hand-offs still open:
 
-- The budget-exhaustion path already lands in `evaluating` with `ended_reason =
-  'budget_exhausted'` set and `REPORT_JOB_ENQUEUED` emitted. Generate the report from the
-  answers that exist and do **not** overwrite `ended_reason` on that path.
 - An SSE-pushed question must stamp `questions.asked_at` itself (ADR-I27), or its
   `duration_ms` is null.
 - Advisory-lock namespace `8108` belongs to the budget gate (ADR-I33). Pick another.
+- `runReport` is callable but nothing calls it (ADR-I34) — R01 owns the trigger.
 
 Running the acceptance suite locally needs `DATABASE_URL`/`REDIS_URL` pointed at the published
 host ports rather than `.env`'s compose hostnames — see I04's `## Notes` → Verification output.
@@ -122,7 +120,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | I06 | Answer submission, guarded advance, duration, round handover, resume | | done | I04 |
 | I07 | State machine transition table + pause/resume + SSE state events | | done | I06, I02 |
 | I08 | Budget enforcement (in-transaction ceiling, exhaustion path) | | done | I06, I02 |
-| I09 | Report generation + `ReportPayload` schema gate + completion | | todo | I07, I02 |
+| I09 | Report generation + `ReportPayload` schema gate + completion | | done | I07, I02 |
 | I10 | Language detection + two-consecutive-turn switch counting | | todo | I06 |
 | I11 | Upload validation (MIME/magic/size/pages/text) + `sha256` dedup | | todo | A01, F02 |
 | I12 | Object-storage signed-URL wrapper + report download endpoint | | todo | I03 |
