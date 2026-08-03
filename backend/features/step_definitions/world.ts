@@ -96,6 +96,14 @@ export class AiWorld extends World {
   lastStatus = 0;
   lastBody: Record<string, unknown> | undefined;
 
+  // N01: admin_cost.feature is the first scenario with three actors (owner, another
+  // candidate, admin), so the single jar above cannot carry it. Steps park each session
+  // here and assign `cookie` to switch actor.
+  actors: Record<string, string> = {};
+
+  /** N01: the fixture cost the admin audit must read back unchanged after a soft delete. */
+  recordedCost?: { costUsd: string; totalTokens: number };
+
   // I04: the body `POST /interviews/:id/profile` will be sent with — `{ skip: true }` until a
   // scenario answers the pre-questions. The two profiling.feature paths differ only here.
   profileBody: Record<string, unknown> = { skip: true };
@@ -158,6 +166,20 @@ export class AiWorld extends World {
   async httpGet(path: string): Promise<void> {
     const res = await fetch(`${serverState.baseUrl}${path}`, {
       headers: this.cookie ? { cookie: this.cookie } : {},
+    });
+    this.captureCookie(res);
+    this.lastStatus = res.status;
+    this.lastBody = await res.json().catch(() => undefined);
+  }
+
+  // N01. State-changing, so it carries the same-site origin `requirePublicOrigin` demands.
+  async httpDelete(path: string): Promise<void> {
+    const res = await fetch(`${serverState.baseUrl}${path}`, {
+      method: 'DELETE',
+      headers: {
+        origin: config.PUBLIC_ORIGIN,
+        ...(this.cookie ? { cookie: this.cookie } : {}),
+      },
     });
     this.captureCookie(res);
     this.lastStatus = res.status;

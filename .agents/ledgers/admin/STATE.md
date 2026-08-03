@@ -1,7 +1,17 @@
 # Admin — State
 
-Last updated: 2026-07-30
-Last session ended: **—** Ledger written; no task has started yet.
+Last updated: 2026-08-03
+Last session ended: **N01 done.** @AC-17 green (`1 scenario / 13 steps`); default profile
+40 scenarios, `auth` 18, vitest 117, lint + typecheck clean. `requireAdmin`,
+`GET /admin/interviews`, `DELETE /interviews/:id`, `GET /me/interviews` all landed.
+`admin_cost.feature` is wired into `cucumber.js` **`default`** paths (not `auth`); steps in
+`backend/features/step_definitions/admin.steps.ts`. **@AC-18 is tagged `@unwired` — N02
+deletes that tag, sees it red, then writes its steps.**
+
+PR #23 review round: merged `origin/master` (I09 conflict in `cucumber.js`, one line, both
+features kept). 1 of 3 Copilot comments accepted; the other 2 rejected on measurement — see
+N01 `## Notes` → "PR #23 review round". Post-merge gates: default 41, auth 18, unit 117,
+lint + typecheck clean. **Merge commit not made — the human commits.**
 
 ## Execution protocol (follow exactly)
 
@@ -18,13 +28,13 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**N01 — Admin-role gate + soft-delete audit path** is the first `todo` task. It depends on
-foundations F01/F02/F03, auth A01/A02, and interview-core I03/I06/I08 being `done` (see
-Cross-ledger section below). Do not start N01 until every cited task is green. Once they
-are, read N01's file, confirm no prior partial admin work exists, and begin. The one trap:
-the admin audit list must **bypass** `userInterviews()` (deleted rows included) while
-`GET /me/interviews` must **use** it (deleted rows excluded) — the same request cycle
-exercises both directions in @AC-17.
+**N02 — Admin stats aggregation (`GET /admin/stats`)**, sonnet-tier (MODELS.md). N01 is
+`done`, so N02 is eligible. Mount it at the marked slot in `modules/admin/router.ts` — the
+`requireAuth` + `requireAdmin` gate is inherited from `router.use`, do not restate it per
+route (ADR-N01). First move: delete `@unwired` from `@AC-18` in
+`.agents/features/admin_cost.feature` and run it red. Its `totalTokens` counts **deleted**
+interviews (K11), so it bypasses `userInterviews` the same way N01's list does, with the same
+`ADMIN AUDIT` comment on the call site. See N01's `## Notes` → "For N02".
 
 ## Environment
 
@@ -72,7 +82,13 @@ npm run test:acceptance -- --tags "@admin-cost"              # whole feature (af
 
 ## Open blockers / decisions for the user
 
-None at ledger-write time.
+None blocking this ledger.
+
+**Handed to auth (Ahmet), unblocked by N01:** `cucumber.js`'s `auth` profile still carries
+`and not @AC-29`, whose exclusion comment says "whichever task ships `GET /me/interviews`:
+wire the steps and delete it". That endpoint now exists (N01), but the scenarios are
+`email_verification.feature` and the steps are the auth ring's — auth ledger, not this one.
+Left untouched deliberately; A06 should close it.
 
 ## Task ledger (N01–N02)
 
@@ -81,7 +97,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 
 | ID | Title | Repo | Status | Depends on |
 |----|-------|------|--------|------------|
-| N01 | Admin-role gate + soft-delete audit path: `requireAdmin`, `GET /admin/interviews`, `DELETE /interviews/:id`, `GET /me/interviews` | | todo | F01, F02, F03, A01, A02, I03, I06, I08 |
+| N01 | Admin-role gate + soft-delete audit path: `requireAdmin`, `GET /admin/interviews`, `DELETE /interviews/:id`, `GET /me/interviews` | | done | F01, F02, F03, A01, A02, I03, I06, I08 |
 | N02 | Admin stats aggregation: `GET /admin/stats` (K11 metrics) | | todo | N01 |
 
 ## Critical path

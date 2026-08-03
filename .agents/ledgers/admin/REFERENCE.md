@@ -38,6 +38,24 @@ npm run test:acceptance -- --tags "@admin-cost and @AC-18"   # N02 scope
 npm run test:acceptance -- --tags "@admin-cost"              # whole feature (after N02)
 ```
 
+**`admin_cost.feature` is in the `default` profile** (N01), not `auth`. `npm run
+test:acceptance` IS the default profile — the auth ring needs `npx cucumber-js -p auth` — so
+the commands above only work from there. Steps: `backend/features/step_definitions/admin.steps.ts`
+against `AiWorld`, which has booted the real app over HTTP against Postgres since I03.
+
+**Running acceptance from the host** (not inside compose): root `.env` uses the
+docker-internal hostnames `db`/`cache`, which do not resolve. Override:
+
+```bash
+export DATABASE_URL="postgresql://interviewly:interviewly@localhost:5432/interviewly_test"
+export REDIS_URL="redis://localhost:6380"      # compose.dev maps 6380 -> 6379
+docker compose -f compose.yaml -f compose.dev.yaml up -d db cache
+npx prisma migrate deploy --schema backend/prisma/schema.prisma
+```
+
+`db/init.sql` creates `interviewly_test` only on a **fresh** volume; on an older volume
+create it by hand (`CREATE DATABASE interviewly_test`) before the migrate.
+
 **Tag-collision note.** `@AC-<n>` tags are not globally unique across feature files, but
 `@AC-17` and `@AC-18` appear **only** in `admin_cost.feature` (verified 2026-07-30). Scoping
 with `@admin-cost and @AC-17` is unambiguous and is the form the task Verification commands
@@ -115,6 +133,7 @@ All paths relative to repo root. Each exists once its providing task lands.
 | `backend/modules/admin/interviews.ts` | N01 | `GET /admin/interviews`: deleted-inclusive audit list, `deleted` flag, token total + cost |
 | `backend/modules/interview/delete.ts` | N01 | `DELETE /interviews/:id`: `UPDATE deleted_at = now()`, `204` |
 | `backend/modules/interview/my-interviews.ts` | N01 | `GET /me/interviews`: `userInterviews(req.user.id)`, cursor-paginated |
+| `backend/modules/interview/cursor.ts` | N01 | `encodeCursor`/`decodeCursor`/`pageLimit`, shared by both lists |
 | `backend/modules/admin/stats.ts` | N02 | `GET /admin/stats`: the K11 aggregate metrics |
 
 ## Schema (tables this ledger reads/writes)

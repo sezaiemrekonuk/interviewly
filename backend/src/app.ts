@@ -7,8 +7,11 @@ import { ApiError, httpStatusFor } from './lib/api-error';
 import { config } from './lib/env';
 import { logger } from './lib/logger';
 
+import adminRouter from '../modules/admin/router';
+import { requireAuth } from '../modules/auth/middleware';
 import authRouter, { meRouter } from '../modules/auth/router';
 import { mountTestSeam } from '../modules/auth/test-seam';
+import { listMyInterviews } from '../modules/interview/my-interviews';
 import interviewRouter from '../modules/interview/router';
 import voiceRouter from '../modules/voice/session';
 
@@ -27,8 +30,10 @@ app.get('/healthz', (_req, res) => {
 
 app.use('/auth', authRouter);
 app.use('/', meRouter);
+app.get('/me/interviews', requireAuth, listMyInterviews);
 app.use('/interviews', voiceRouter);
 app.use('/interviews', interviewRouter);
+app.use('/admin', adminRouter);
 
 // TEST SEAM — acceptance-only Google callback simulator. mountTestSeam() throws if it is
 // ever reached outside NODE_ENV=test, so a bad deploy fails at startup, not silently.
