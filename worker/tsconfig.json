@@ -4,7 +4,15 @@
     "module": "commonjs",
     "moduleResolution": "node",
     "noEmit": false,
-    "outDir": "dist"
+    "outDir": "dist",
+    // Pinned for the same reason as backend/tsconfig.json: the root config's `paths` would
+    // pull packages/*/src into this program and push the emit down to dist/worker/src/,
+    // past the image's `CMD ["node", "worker/dist/index.js"]`. Today nothing here imports
+    // `@interviewly/*`, so the drift would only appear on the first import that does.
+    "baseUrl": ".",
+    "paths": {},
+    "rootDir": "src"
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts"],
+  "exclude": ["**/*.test.ts"]
 }

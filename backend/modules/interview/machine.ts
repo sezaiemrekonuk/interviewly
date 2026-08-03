@@ -53,6 +53,7 @@ export async function applyTransition(
   // The caller's copy is now stale, and a request that transitions twice (`POST /profile`
   // moves to `hr_round`, then a failed generation pauses it) would re-read the old `from`.
   interview.state = to;
+  if (ctx.endedReason) interview.ended_reason = ctx.endedReason;
 
   logger.info(
     { traceId: ctx.traceId, interviewId: interview.id, from, to },

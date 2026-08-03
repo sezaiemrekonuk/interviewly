@@ -4,7 +4,11 @@
 process.env.NODE_ENV ??= 'test';
 process.env.PUBLIC_ORIGIN ??= 'http://localhost';
 process.env.INTERNAL_API_URL ??= 'http://localhost:4000';
-process.env.DATABASE_URL ??= 'postgresql://interviewly:interviewly@localhost:5432/interviewly';
+// `interviewly_test`, NOT `interviewly`: this suite truncates the tables it touches, and the
+// old default pointed it straight at the database `docker compose up` seeds. See
+// assertDisposableDatabase() in harness.ts, which now refuses anything not named for a test.
+process.env.DATABASE_URL ??=
+  'postgresql://interviewly:interviewly@localhost:5432/interviewly_test';
 process.env.SHADOW_DATABASE_URL ??= 'postgresql://interviewly:interviewly@localhost:5432/interviewly_shadow';
 process.env.REDIS_URL ??= 'redis://localhost:6379';
 process.env.SESSION_SECRET ??= 'test-session-secret-at-least-32-characters';

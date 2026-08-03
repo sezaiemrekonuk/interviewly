@@ -1,7 +1,29 @@
 # Foundations — State
 
-Last updated: 2026-07-30
-Last session ended: **F02 done** (executed by Sezai, out of ownership order — F02 is Fatih's
+Last updated: 2026-08-03
+Last session ended: **F03 packaging repair** (Sezai, 2026-08-03 — no new task row; F03's own
+Dockerfiles, reopened because the api image never booted). The three defects
+`auth/STATE.md` recorded as (6)(7)(8) are fixed and **that BLOCKER can be closed by its
+owner** — a `docker compose up -d --wait` now brings every service healthy and the api runs
+`node backend/dist/src/index.js`, not `tsx`. What changed: `backend/tsconfig.json` and
+`worker/tsconfig.json` pin `paths: {}` + `rootDir` (the root config's `paths` pulled
+`packages/*/src` into the program, sliding tsc's inferred root to the repo root and the emit
+to `dist/backend/src/`); `@interviewly/ai` is a declared dependency of backend so `npm ci
+--workspace=` actually links it into the image; `packages/ai` entry points moved to `dist/`
+(`main: "src/index.ts"` was a TypeScript file plain `node` cannot load), with the root
+`vitest.config.mts` aliasing back to `src` so unit tests never read a stale build. All three
+Dockerfiles rebuilt on `base → deps → build / prod-deps → runner`: cache-mounted `npm ci`,
+`--omit=dev` runner, `--chown=node:node`, and a `test -f <CMD target>` assertion so a future
+rootDir drift fails the build instead of crash-looping a container. The Prisma CLI moved to
+backend `dependencies` — the `migrate` service runs out of that same now-dev-free image. Two
+finds nobody reported: `.dockerignore` patterns were anchored at the context root (so
+`node_modules`/`.next` never matched a workspace) and **`.env` was being baked into every
+image layer**; and the acceptance suite `TRUNCATE`d whatever `DATABASE_URL` named, which is
+how the seeded demo admin kept disappearing (guard + `interviewly_test` in `db/init.sql`).
+Verified: 4/4 images build, stack healthy, `/api/healthz` ok, login 200 + `/api/me` admin,
+rings 33/33 + 11/11, 97 unit, lint + typecheck clean from a tree with no `dist/` anywhere.
+
+Previously: **F02 done** (executed by Sezai, out of ownership order — F02 is Fatih's
 row, taken over on the owner's request as an explicit blocker-clearing exception, the same
 pattern as F01; full deviation record in `tasks/F02-prisma-schema-migrate-seed.md` → `## Notes`).
 **Foundations is now green and every feature ledger is unblocked.** `backend/prisma/schema.prisma`
@@ -128,6 +150,12 @@ whenever Sezai picks it up, in parallel with F02.
 
 ## Backlog (deferred, unnumbered — promote to a task when its trigger fires)
 
+- **`lint` typechecks with the wrong tsconfig.** The `lint` job runs `tsc --noEmit -p
+  tsconfig.json` (root: `module: esnext`), but `build` compiles `backend/tsconfig.json`
+  (`module: commonjs`). A backend file can be root-clean and build-red — I08 shipped a
+  top-level `await` that passed `lint` and failed the docker `build` on TS1378. Promote when
+  someone wants the two jobs to agree: `lint` should run each workspace's own `build`
+  typecheck, not the root one.
 - **`unit` CI job is a false green.** `backend/package.json` → `test:unit` is
   `vitest run --passWithNoTests`, because the repo has no vitest files and `vitest run`
   exits 1 on an empty suite. Promote — i.e. delete the flag — in the same PR as the first

@@ -14,8 +14,10 @@
   "prisma": {
     "seed": "tsx prisma/seed.ts"
   },
+  "//deps": "@interviewly/ai is declared, not merely imported: `npm ci --workspace=@interviewly/backend` links only the workspaces it is told about, so without it the built image has no node_modules/@interviewly/ai and src/index.ts:1 throws on first require. `prisma` (the CLI) is a runtime dependency on purpose — the compose `migrate` service runs `prisma migrate deploy` out of this same image, which now installs with --omit=dev.",
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1098.0",
+    "@interviewly/ai": "*",
     "@node-rs/argon2": "^2.0.2",
     "@prisma/client": "^6.19.3",
     "arctic": "^3.7.0",
@@ -24,13 +26,13 @@
     "express": "^5.2.1",
     "ioredis": "^5.11.1",
     "pino": "^9",
+    "prisma": "^6.19.3",
     "zod": "^3"
   },
   "devDependencies": {
     "@cucumber/cucumber": "^12.9.0",
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.6",
-    "prisma": "^6.19.3",
     "tsx": "^4.23.1",
     "vitest": "^4.1.10"
   }

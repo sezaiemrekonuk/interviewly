@@ -1,10 +1,10 @@
 ---
 task: F03
 author: Sezai
-sessions: [2026-07-30]
-model: claude-sonnet-5
+sessions: [2026-07-30, 2026-08-03]
+model: claude-opus-5
 model_recommended: claude-sonnet-4.6
-iterations: 1
+iterations: 3
 tools: []
 ---
 
@@ -51,3 +51,42 @@ Nothing generated was rejected — this was greenfield authoring directly from t
 file's prescriptive content, copied faithfully and extended only where the spec was
 genuinely silent (see `## Notes` "Deviations" in the task file: `compose.observability.yaml`
 contents, Dockerfile internals, `worker/env.ts`'s key subset). No code was thrown away.
+
+## Session 2 — 2026-08-03 — packaging repair (Dockerfiles)
+
+Tier note: ran on `claude-opus-5` against a `claude-sonnet-4.6` recommendation. Not the
+config authoring MODELS.md scored — this session was a three-defect diagnosis across tsc's
+rootDir inference, npm workspace linking and node's package resolution, with the evidence
+only visible inside a built image. Recorded rather than quietly aligned (EXECUTE.md § 5).
+
+### What I asked for / what came back
+- Reported symptom was "docker `build` job always red". It was not the Dockerfile:
+  `backend/tsconfig.json` had no `exclude`, so `tsc -p` compiled `budget.test.ts` and hit
+  TS1378 on a top-level `await`. Only `build` emits, so only `build` saw it.
+- A second, unrelated report (Fatih, from a live stack): the api image never boots in
+  production mode. Confirmed all three defects `auth/STATE.md` (6)(7)(8) had already
+  recorded, none of them fixed.
+
+### Methodology trace
+`gh run view --log-failed` → TS1378 → `exclude` → `find backend/dist -name index.js` shows
+`dist/backend/src/index.js` → root `paths` pulls `packages/*/src` into the program → pin
+`paths: {}` + `rootDir` → emit lands at `dist/src/` → `docker compose up --wait` → api
+healthy on `node backend/dist/src/index.js` → login 200, `/api/me` admin.
+
+### Friction
+- Two failed builds before green, both from `--omit=dev`: root `prepare` runs `husky`, which
+  that install has just removed (`sh: husky: not found`, exit 127). `HUSKY=0` does not help —
+  npm still invokes the missing binary. Fixed at the script (`husky || true`).
+- Found while reading the build context, not reported by anyone: `.dockerignore` patterns
+  were anchored at the context root, so `node_modules`/`.next` never matched a workspace,
+  and `.env` was being baked into every image layer. Real keys, `docker history`-visible.
+- The acceptance suite `TRUNCATE`s whatever `DATABASE_URL` names. Reproduced: the dev
+  database held 15 fixture users and no seed admin.
+
+### What I rejected and rewrote by hand
+- **Fatih's `CMD ["npx","tsx","backend/src/index.ts"]`.** It boots, and it was the right
+  call for an unowned file. Rejected as the fix: it ships tsx, vitest, cucumber and the
+  whole source tree into a production image to paper over a build that emits to the wrong
+  path. Fixed the emit instead; the runner now installs `--omit=dev` and carries no dev tool.
+- **Guarding the acceptance truncate at the call site.** Moved it to `bootApp`, by database
+  name: a per-scenario check still lets the first scenario destroy the data.

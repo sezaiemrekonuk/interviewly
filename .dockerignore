@@ -1,8 +1,33 @@
-node_modules
+# Patterns are anchored at the context root, so `**/` is required to reach a workspace.
+# `.next` alone never matched `frontend/.next`, and `node_modules` never matched
+# `frontend/node_modules` — both were being shipped into the build stage.
+**/node_modules
+**/dist
+**/.next
 .git
-.next
+.gitignore
+
+# Never bake secrets into an image layer. The CI `build` job does `cp .env.example .env`
+# before `docker compose build`, and every service reads its config from compose `env_file`
+# at RUN time — nothing in any image needs this file at BUILD time.
+.env
+.env.*
+!.env.example
+
+# Test and tooling output — never an input to a build.
+coverage
+test-results
+playwright-report
+blob-report
+.playwright
+.playwright-mcp
+**/*.tsbuildinfo
+
 internal_docs
 .agents
+.claude
+.vscode
 *.md
 !README.md
 compose.override.yaml
+**/.DS_Store

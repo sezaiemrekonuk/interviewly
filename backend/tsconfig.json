@@ -4,7 +4,22 @@
     "module": "commonjs",
     "moduleResolution": "node",
     "noEmit": false,
-    "outDir": "dist"
+    "outDir": "dist",
+    // All three pinned together, and they have to stay together. The root config maps
+    // `@interviewly/*` onto `packages/*/src/*.ts`; those sources then join THIS program, tsc's
+    // inferred common root slides up to the repo root, and the emit silently becomes
+    // `dist/backend/src/index.js` — one segment past where the image's CMD looks.
+    // Empty `paths` sends `@interviewly/*` through node_modules to each package's built
+    // `types` instead, which is the same file `node` resolves at runtime, so the build and the
+    // runtime agree. `rootDir` then makes any future re-introduction a hard error here rather
+    // than a moved output nobody notices until the container fails to start.
+    // Consequence: `npm run -w @interviewly/ai build` must run before this one.
+    "baseUrl": ".",
+    "paths": {},
+    "rootDir": "."
   },
-  "include": ["src/**/*.ts", "modules/**/*.ts"]
+  // Tests are not shipped, and this config emits CommonJS: a vitest-ism the runtime never sees
+  // (top-level await, `import.meta`) must not be able to break the production build.
+  "include": ["src/**/*.ts", "modules/**/*.ts"],
+  "exclude": ["**/*.test.ts"]
 }

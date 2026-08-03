@@ -58,9 +58,16 @@ After(async function closeSubscriber() {
   parked.clear();
 });
 
-/** Redis delivery is not ordered against the HTTP response that triggered it. */
-async function waitForEvents(count: number): Promise<void> {
-  for (let i = 0; i < 100 && observed.length < count; i++) {
+/**
+ * Redis delivery is not ordered against the HTTP response that triggered it.
+ *
+ * Waits on the events themselves rather than on a count: the walk drives six *listed* edges
+ * but publishes eight, because the second interview it sets up emits its own
+ * `created → profiling` and `profiling → hr_round`. A count of six is satisfied before the
+ * two edges the scenario is actually about have landed.
+ */
+async function waitFor(satisfied: () => boolean): Promise<void> {
+  for (let i = 0; i < 100 && !satisfied(); i++) {
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
 }
@@ -227,12 +234,12 @@ Then(
   'each transition emits {string} with from, to and interviewId',
   async function (this: AiWorld, event: string) {
     assert.equal(event, 'INTERVIEW_STATE_CHANGED');
-    await waitForEvents(applied.length);
+    const seen = (a: Applied): boolean =>
+      observed.some((e) => e.from === a.from && e.to === a.to && e.interviewId === a.interviewId);
+
+    await waitFor(() => applied.every(seen));
     for (const a of applied) {
-      const hit = observed.find(
-        (e) => e.from === a.from && e.to === a.to && e.interviewId === a.interviewId,
-      );
-      assert.ok(hit, `no ${event} carrying ${a.from} -> ${a.to} for ${a.interviewId}`);
+      assert.ok(seen(a), `no ${event} carrying ${a.from} -> ${a.to} for ${a.interviewId}`);
     }
   },
 );

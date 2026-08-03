@@ -8,7 +8,9 @@ New `budget.ts` — `withBudget(id, fn)`, gate mounted around `ensureTechBatch` 
 `pg_advisory_xact_lock`, **not** the row lock + shared transaction the task file specified —
 that shape deadlocks against `generateRound`'s FK inserts and rolls back the `llm_calls` rows
 of a paid-then-failed attempt. `@AC-11` green (its `@unwired` is gone); rings 33/33 + 11/11,
-97 unit, lint + typecheck clean. Details in I08 `## Notes`.
+97 unit, lint + typecheck + `npm run -w @interviewly/backend build` clean — run that build
+too, `lint` uses a different tsconfig and misses backend-only errors. Details in I08
+`## Notes`.
 
 ## Execution protocol (follow exactly)
 
