@@ -116,7 +116,7 @@ npm run test:acceptance -- --tags "@admin-cost"
 ## Notes
 
 - `totalTokens`: `prisma.llmCall.aggregate({ _sum })` — single aggregate over all llm_calls, no interview filter. Includes deleted.
-- `perOccupation`: `prisma.interview.findMany` with `include: { occupation_cluster: { select: { key } } }`, then in-memory Map groupBy. Chosen over `groupBy` because groupBy can't pull the cluster key in one query without a join Prisma doesn't support there.
+- `perOccupation`: `prisma.interview.findMany` with `select: { occupation: true, occupation_cluster: { select: { key: true } } }`, then in-memory Map groupBy. Chosen over `groupBy` because groupBy can't pull the cluster key in one query without a join Prisma doesn't support there.
 - `averageDurationMs`: returns `0` when no completed interviews have both timestamps (documented in handler comment via `0` literal).
 - `weakestQuestions`: NOT seeded — creating `ReportQuestion` requires Question → InterviewRound chain. Step asserts `Array.isArray(body.weakestQuestions)` (empty array is valid).
 - `@unwired` tag removed from `admin_cost.feature` before running red (undefined steps); then green after implementation.

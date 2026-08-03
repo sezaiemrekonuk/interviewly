@@ -26,7 +26,7 @@ export const getAdminStats: RequestHandler = async (req, res, next) => {
         }),
         // weakestQuestions: plain relational, no jsonb (db AC-12)
         prisma.reportQuestion.findMany({
-          orderBy: { score: 'asc' },
+          orderBy: [{ score: 'asc' }, { question_id: 'asc' }],
           take: 5,
           select: { question_id: true, score: true },
         }),
@@ -58,11 +58,13 @@ export const getAdminStats: RequestHandler = async (req, res, next) => {
       occMap.set(row.occupation, (occMap.get(row.occupation) ?? 0) + 1);
       clusterMap.set(key, occMap);
     }
-    const perOccupation = [...clusterMap.entries()].map(([cluster, occMap]) => {
-      const label = [...occMap.entries()].sort((a, b) => b[1] - a[1])[0][0];
-      const count = [...occMap.values()].reduce((a, b) => a + b, 0);
-      return { cluster, label, count };
-    });
+    const perOccupation = [...clusterMap.entries()]
+      .map(([cluster, occMap]) => {
+        const label = [...occMap.entries()].sort((a, b) => b[1] - a[1])[0][0];
+        const count = [...occMap.values()].reduce((a, b) => a + b, 0);
+        return { cluster, label, count };
+      })
+      .sort((a, b) => b.count - a.count || a.cluster.localeCompare(b.cluster));
 
     logger.info({ traceId: req.traceId }, 'ADMIN_STATS_READ');
 

@@ -19,6 +19,10 @@ const CALLS = [
 const TOTAL_TOKENS = CALLS.reduce((n, c) => n + c.input_tokens + c.output_tokens, 0);
 const SPENT_USD = '0.041200';
 
+/** AC-18: tokens for the soft-deleted interview — proves K11 for /admin/stats. */
+const DELETED_CALLS = [{ input_tokens: 400, output_tokens: 300, cost_usd: '0.007000' }];
+const DELETED_TOKENS = DELETED_CALLS.reduce((n, c) => n + c.input_tokens + c.output_tokens, 0);
+
 interface AdminItem {
   id: string;
   deleted: boolean;
@@ -165,6 +169,9 @@ Then('its cost is unchanged', function (this: AiWorld) {
 const DURATION_MS = 90_000;
 
 Given('a non-admin user has a session', async function (this: AiWorld) {
+  const agg = await prisma.llmCall.aggregate({ _sum: { input_tokens: true, output_tokens: true } });
+  this.tokenBaseline = (agg._sum.input_tokens ?? 0) + (agg._sum.output_tokens ?? 0);
+
   this.actors.nonAdmin = await register(this);
   const userId = (this.lastBody?.user as { id: string }).id;
 
@@ -213,6 +220,23 @@ Given('a non-admin user has a session', async function (this: AiWorld) {
     },
   });
   this.interviewId = deleted.id;
+
+  // llm_calls on the soft-deleted interview — proves K11: tokens counted even when deleted
+  await prisma.llmCall.createMany({
+    data: DELETED_CALLS.map((call) => ({
+      ...call,
+      interview_id: deleted.id,
+      provider: 'openai',
+      model: 'gpt-test',
+      prompt_uuid: randomUUID(),
+      prompt_version: 1,
+      attempt_no: 1,
+      units: String(DELETED_TOKENS),
+      unit_kind: 'token' as const,
+      latency_ms: 50,
+      trace_id: randomUUID(),
+    })),
+  });
 
   // abandoned interview — contributes to unfinished count
   await prisma.interview.create({
@@ -291,7 +315,10 @@ Then(
     assert.ok(typeof body.completed === 'number', 'completed missing');
     assert.ok(typeof body.cutShort === 'number', 'cutShort missing');
     assert.ok(typeof body.unfinished === 'number', 'unfinished missing');
-    assert.ok(typeof body.totalTokens === 'number', 'totalTokens missing');
+    assert.ok(
+      typeof body.totalTokens === 'number' && body.totalTokens >= this.tokenBaseline + DELETED_TOKENS,
+      `totalTokens must include deleted interview tokens: expected >= ${this.tokenBaseline + DELETED_TOKENS}, got ${body.totalTokens}`,
+    );
     assert.ok(Array.isArray(body.perOccupation), 'perOccupation missing');
     assert.ok(Array.isArray(body.weakestQuestions), 'weakestQuestions missing');
     // at least one cluster row since we seeded completed interviews with a cluster
