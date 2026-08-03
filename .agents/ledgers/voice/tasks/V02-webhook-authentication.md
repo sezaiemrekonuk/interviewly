@@ -1,5 +1,5 @@
 # V02 — ElevenLabs webhook authentication: the four gates + actions + log redaction
-REPO: (this repo) · Depends: V01, I06, I07 · Status: todo
+REPO: (this repo) · Depends: V01, I06, I07 · Status: done
 Read first: STATE.md, REFERENCE.md, then this.
 **Model: claude-opus-4.8** — this is the project's new trust boundary. HMAC signature, freshness/timestamp window, nonce replay defence and legality+expiry, plus secret redaction; a gate-ordering slip, a non-constant-time compare, or a state mutation on a failing gate is a forged-webhook hole invisible to a green happy-path test.
 
@@ -84,27 +84,27 @@ verifier).
   and then validate.
 
 ## Steps
-- [ ] **1. Create `webhook-auth.ts`** — `verifySignature` (constant-time), `checkFreshness`,
+- [x] **1. Create `webhook-auth.ts`** — `verifySignature` (constant-time), `checkFreshness`,
   `authorizeSession` (unexpired + unconsumed), and `runGates` returning context-or-rejection.
-- [ ] **2. Add a raw-body capture** scoped to `/webhooks/*` in `app.ts` so the HMAC verifies the
+- [x] **2. Add a raw-body capture** scoped to `/webhooks/*` in `app.ts` so the HMAC verifies the
   exact signed bytes.
-- [ ] **3. Create `webhook-router.ts`** — the three actions; run `runGates` first; on pass dispatch
+- [x] **3. Create `webhook-router.ts`** — the three actions; run `runGates` first; on pass dispatch
   through I06 (`submit_answer`, `next_question`) and I07 (`end_round`, `time_exhausted`); log
   `VOICE_WEBHOOK_RECEIVED`.
-- [ ] **4. Wire gate 4's `time_exhausted`** — on ceiling passed, `applyTransition(→ evaluating)` +
+- [x] **4. Wire gate 4's `time_exhausted`** — on ceiling passed, `applyTransition(→ evaluating)` +
   `ended_reason = 'time_exhausted'` + `VOICE_TIME_EXHAUSTED`; mark the session `consumed_at`.
-- [ ] **5. Enforce `end_round` legality** — accept only when the round's questions are exhausted or
+- [x] **5. Enforce `end_round` legality** — accept only when the round's questions are exhausted or
   a shortening decision exists; else `409 INVALID_STATE_TRANSITION`.
-- [ ] **6. Confirm secret redaction** — no `nonce`/token/API key/transcript reaches a log line;
+- [x] **6. Confirm secret redaction** — no `nonce`/token/API key/transcript reaches a log line;
   wire the `LogSink` seam so @AC-10 can assert captured fields.
-- [ ] **7. Add missing voice codes** to `error-codes.ts` if any are absent (registry step).
-- [ ] **8. Wire acceptance step-defs** for `voice_webhook.feature`: @AC-3 (bad signature / stale
+- [x] **7. Add missing voice codes** to `error-codes.ts` if any are absent (registry step).
+- [x] **8. Wire acceptance step-defs** for `voice_webhook.feature`: @AC-3 (bad signature / stale
   timestamp → 401, state unchanged, no answer row, event emitted; then a correct one → 200), @AC-4
   (nonce no-match → 403 `VOICE_SESSION_INVALID`; after-ceiling → 403 `VOICE_SESSION_EXPIRED`, state
   `evaluating`, endedReason `time_exhausted`), @AC-5 (valid `submit_answer` → answer row
   `input_mode='voice'`, index advances; premature `end_round` → 409
   `INVALID_STATE_TRANSITION`), @AC-10 (LogSink redaction).
-- [ ] **9. Run the `## Verification` command.**
+- [x] **9. Run the `## Verification` command.**
 
 ## Definition of done
 - A webhook failing gate 1 or 2 returns 401 (`WEBHOOK_SIGNATURE_INVALID` / `WEBHOOK_REPLAY_REJECTED`),
@@ -125,8 +125,62 @@ Expected: every `voice_webhook.feature` scenario passes, zero failures, zero pen
 
 ## Notes
 
-(Empty until done. Fill with: what actually happened, every deviation, the Cucumber output
-verbatim, how the raw body was captured for the HMAC, how constant-time compare was done, which
-exports `webhook-auth.ts` gives V04, whether `consumed_at` is set on `end_round`/`time_exhausted`,
-and a "For V04" hand-off paragraph naming the signature/freshness verifiers V04 reuses for the
-post-call webhook.)
+```
+6 scenarios (6 passed)
+60 steps (60 passed)
+```
+Full gates after: default 52/52, auth 23/23, vitest 144/144 (22 new), lint + typecheck +
+`npm run build` + `docker compose build` clean. Local runs need
+`DATABASE_URL=…@localhost:5432/interviewly REDIS_URL=redis://localhost:6380`
+(auth profile: `…/interviewly_test`) — `db`/`cache` resolve inside Docker only.
+
+**What exists now**
+- `modules/voice/webhook-auth.ts` — `verifySignature`, `checkFreshness`, `authorizeSession`,
+  `isPastCeiling`, `consumeSession`, `runGates(req)` (gates 1–3; gate 4 is per-action, so it
+  is the router's). `webhookSeam { secret, freshnessSeconds }` is the §5.5 override point.
+- `modules/voice/webhook-router.ts` — `POST /webhooks/elevenlabs/:action`, mounted in `app.ts`
+  at `/webhooks/elevenlabs`, no `requireAuth`, no `requirePublicOrigin`.
+- `modules/voice/webhook-auth.test.ts` — 22 vitest cases on gates 1–2 (tampered body, wrong
+  secret, signature valid for another payload, truncated digest, unset secret, skew both ways).
+
+**Raw body:** `app.use('/webhooks', express.json({ verify }))` mounted **before** the global
+`express.json()`; body-parser sets `req._body` so the global instance skips it and the buffer
+lands on `req.rawBody`. **Constant-time:** `timingSafeEqual` on the two digest buffers, with a
+length check first (`timingSafeEqual` throws on mismatched lengths; a digest length is public).
+An unset `ELEVENLABS_WEBHOOK_SECRET` **fails closed**.
+
+**Deviations**
+- **ADR-V02-2** — gate 3 no longer filters on `expires_at`. As specified, an expired session was
+  `VOICE_SESSION_INVALID` and @AC-4's `time_exhausted` end was unreachable. Expiry moved to gate 4;
+  REFERENCE.md gates table patched.
+- **I06 consumed via a new export**, not an HTTP self-call: `answers.ts` now exports
+  `advanceWithAnswer(interview, body, { traceId })` and `submitAnswer` is a 3-line wrapper over it.
+  Same guard, same `duration_ms`, one copy. `state.ts` exports `deliverCurrentQuestion` for
+  `next_question`.
+- **`VOICE_WEBHOOK_FRESHNESS_SECONDS`** added to `env.ts` + both `.env` files (default 300) — the
+  task named a freshness window F03 had not defined.
+- **No `LogSink` module.** Redaction is asserted by patching the `logger` singleton in the step
+  file, the pattern `report-run.steps.ts` already established. A second seam would be a second
+  thing to keep in sync.
+- **`end_round` shortening** has no schema representation (adaptive D03 owns it); only an
+  exhausted index is legal today. Marked `ponytail` in `webhook-router.ts`.
+
+`consumed_at` **is** set — on `end_round` and on the `time_exhausted` end, both via
+`consumeSession`, so a replayed nonce fails gate 3 afterwards.
+
+**For V04:** import `verifySignature(rawBody, header)` and `checkFreshness(header)` from
+`webhook-auth.ts` for `post_call` — they are exported individually precisely for this; do **not**
+call `runGates`, which additionally requires a live unconsumed session `post_call` will not have.
+`SIGNATURE_HEADER` / `TIMESTAMP_HEADER` are exported too. Mount the `post_call` route on the same
+`/webhooks/elevenlabs` router so it inherits the raw-body parser; a route mounted elsewhere gets
+no `req.rawBody` and every signature check fails. `webhookSeam.secret` is the acceptance override.
+
+**Webhook body validation:** `advanceWithAnswer` takes **parsed** input, so `webhook-router.ts`
+runs `answerInputSchema.safeParse` itself before calling it (`VALIDATION_ERROR` on failure).
+`req.body.transcript` is untrusted `any` off the wire — skipping the parse typechecks fine and
+silently drops the length/shape bounds the HTTP route enforces.
+
+**Do not split this task's diff across commits.** `webhook-router.ts` imports `advanceWithAnswer`
+(`answers.ts`), `deliverCurrentQuestion` (`state.ts`) and `config.VOICE_WEBHOOK_FRESHNESS_SECONDS`
+(`env.ts`); a commit carrying the voice module without those three edits fails
+`npm run -w @interviewly/backend build`, which is what `docker compose build` runs.

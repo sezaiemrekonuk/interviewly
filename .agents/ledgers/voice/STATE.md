@@ -1,7 +1,11 @@
 # Voice — State
 
 Last updated: 2026-08-03
-Last session ended: **V01 done.** VoiceSession seam, FakeVoiceSession, ElevenLabsSession scaffold, and POST /interviews/:id/voice/session mint handler. 6/6 voice_session.feature scenarios pass, 38/38 full suite. No secret leaks. Next: V02 (webhook auth, 4 gates) or V03 (downgrade) — both unblock on V01 done.
+Last session ended: **V02 done.** Four gates (`webhook-auth.ts`) + `POST /webhooks/elevenlabs/:action`
+(`webhook-router.ts`), raw-body parser scoped to `/webhooks` in `app.ts`. ADR-V02-2: gate 3 dropped its
+expiry filter — expiry is gate 4's, or @AC-4's `time_exhausted` end is unreachable. I06 consumed via a
+new `advanceWithAnswer` export, not a self-call. 6/6 voice_webhook, 52/52 default, 23/23 auth, 144/144
+vitest, `docker compose build` green. Next: V03 (downgrade); V04 also unblocked and reuses V02's verifiers.
 
 ## Execution protocol (follow exactly)
 
@@ -18,7 +22,7 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**V02 or V03** are next (both `todo`, both unblock on V01 `done`). V02 (webhook auth) and V03 (downgrade) are independent. Per EXECUTE.md §4, pick first by ledger order: V02.
+**V03** (voice → text downgrade) is next: `todo`, deps V01/I06/I07 all `done`. V04 is also unblocked now (V02 + I08 green) and reuses `webhook-auth.ts`'s `verifySignature`/`checkFreshness`; §4 ledger order gives V03 first.
 
 ## Environment
 
@@ -84,7 +88,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | ID | Title | Repo | Status | Depends on |
 |----|-------|------|--------|------------|
 | V01 | `VoiceSession` seam, `FakeVoiceSession`, and the session-mint endpoint | | done | F01, F02, F03, A01, I03, I07 |
-| V02 | ElevenLabs webhook authentication: the four gates + submit_answer/next_question/end_round + log redaction | | todo | V01, I06, I07 |
+| V02 | ElevenLabs webhook authentication: the four gates + submit_answer/next_question/end_round + log redaction | | done | V01, I06, I07 |
 | V03 | Voice → text downgrade on a fatal voice failure | | todo | V01, I06, I07 |
 | V04 | Post-call usage reconciliation worker job (idempotent `spent_usd` + `llm_calls` transaction) | | todo | V02, I08 |
 | V05 | Pre-join device check + active-speaker signal for the two persona tiles | | todo | V01, V03 |

@@ -86,12 +86,14 @@ Evaluated **in order**, short-circuiting on the first failure, mutating nothing 
    Mismatch → `WEBHOOK_SIGNATURE_INVALID` (401).
 2. **Freshness** — `X-ElevenLabs-Timestamp` within the window; outside → `WEBHOOK_REPLAY_REJECTED`
    (401).
-3. **Authorisation** — `(interviewId, nonce)` matches an **unexpired, unconsumed** `voice_sessions`
-   row; no match / consumed / `expires_at ≤ now` → `VOICE_SESSION_INVALID` (403).
-4. **Legality + expiry** — the requested K2 transition is legal from the current state (I07), and
-   the wall-clock ceiling has not passed. Illegal → `INVALID_STATE_TRANSITION` (409); ceiling
-   passed → `VOICE_SESSION_EXPIRED` (403) and the interview ends `time_exhausted` (via I07
-   `applyTransition(→ evaluating)`, `ended_reason = 'time_exhausted'`).
+3. **Authorisation** — `(interviewId, nonce)` matches an **unconsumed** `voice_sessions` row; no
+   match / consumed → `VOICE_SESSION_INVALID` (403). **Expiry is deliberately not checked here**
+   (ADR-V02-2): an expired session existed, and gate 4 must be able to tell the two apart.
+4. **Legality + expiry** — the wall-clock ceiling (`session.expires_at`) has not passed, and the
+   requested K2 transition is legal from the current state (I07). Ceiling passed →
+   `VOICE_SESSION_EXPIRED` (403) and the interview ends `time_exhausted` (via I07
+   `applyTransition(→ evaluating)`, `ended_reason = 'time_exhausted'`); illegal transition →
+   `INVALID_STATE_TRANSITION` (409).
 
 ## `VoiceSession` seam (V01)
 

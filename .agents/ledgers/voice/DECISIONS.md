@@ -114,3 +114,21 @@ gate 4, not here); the report is generated from whatever answers exist. Idempote
 check needs **no new column** — one voice reconciliation per interview. `VOICE_USAGE_RECONCILED`
 logs the seconds and the reconciled `spent_usd`, never a transcript. `worker` imports
 `@interviewly/ai` and `backend/src/lib/db.ts`'s transaction only through their published surface.
+
+---
+
+## ADR-V02-2 — 2026-08-03 — Gate 3 checks existence + unconsumed; expiry belongs to gate 4
+
+**Context:** ADR-V02 and REFERENCE.md both described gate 3 as matching an *unexpired, unconsumed*
+row, rejecting `expires_at ≤ now` as `VOICE_SESSION_INVALID`. `voice_webhook.feature` @AC-4 says
+otherwise: a nonce nobody minted is `VOICE_SESSION_INVALID` (403), a nonce whose ceiling passed is
+`VOICE_SESSION_EXPIRED` (403) **and ends the interview `time_exhausted`**. Folding expiry into the
+gate-3 lookup collapses both into the first and the interview never ends.
+
+**Decision:** `authorizeSession` filters on `(interview_id, nonce, consumed_at: null)` only. The
+ceiling is gate 4's, read from `session.expires_at` — which is already `min(round, interview)` from
+the mint (ADR-V01), so no second clock source exists.
+
+**Consequences:** the two rejections stay distinguishable, which is what makes @AC-4's
+`time_exhausted` assertion reachable. REFERENCE.md's gate-3 row patched to match. V04's `post_call`
+webhook is unaffected: it runs gates 1–2 only.
