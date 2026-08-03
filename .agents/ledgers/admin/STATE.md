@@ -1,17 +1,10 @@
 # Admin — State
 
 Last updated: 2026-08-03
-Last session ended: **N01 done.** @AC-17 green (`1 scenario / 13 steps`); default profile
-40 scenarios, `auth` 18, vitest 117, lint + typecheck clean. `requireAdmin`,
-`GET /admin/interviews`, `DELETE /interviews/:id`, `GET /me/interviews` all landed.
-`admin_cost.feature` is wired into `cucumber.js` **`default`** paths (not `auth`); steps in
-`backend/features/step_definitions/admin.steps.ts`. **@AC-18 is tagged `@unwired` — N02
-deletes that tag, sees it red, then writes its steps.**
-
-PR #23 review round: merged `origin/master` (I09 conflict in `cucumber.js`, one line, both
-features kept). 1 of 3 Copilot comments accepted; the other 2 rejected on measurement — see
-N01 `## Notes` → "PR #23 review round". Post-merge gates: default 41, auth 18, unit 117,
-lint + typecheck clean. **Merge commit not made — the human commits.**
+Last session ended: **N02 done.** `@admin-cost` fully green (2 scenarios / 24 steps).
+`modules/admin/stats.ts` created; `/stats` mounted on admin router. `@unwired` removed.
+Prisma aggregations: `llmCall.aggregate` for totalTokens, in-memory groupBy for perOccupation.
+`averageDurationMs` returns 0 when no completed rows with timestamps. lint + typecheck clean.
 
 ## Execution protocol (follow exactly)
 
@@ -28,13 +21,7 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**N02 — Admin stats aggregation (`GET /admin/stats`)**, sonnet-tier (MODELS.md). N01 is
-`done`, so N02 is eligible. Mount it at the marked slot in `modules/admin/router.ts` — the
-`requireAuth` + `requireAdmin` gate is inherited from `router.use`, do not restate it per
-route (ADR-N01). First move: delete `@unwired` from `@AC-18` in
-`.agents/features/admin_cost.feature` and run it red. Its `totalTokens` counts **deleted**
-interviews (K11), so it bypasses `userInterviews` the same way N01's list does, with the same
-`ADMIN AUDIT` comment on the call site. See N01's `## Notes` → "For N02".
+**All admin tasks done.** N01 and N02 both `done`. Admin ledger fully green.
 
 ## Environment
 
@@ -98,7 +85,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | ID | Title | Repo | Status | Depends on |
 |----|-------|------|--------|------------|
 | N01 | Admin-role gate + soft-delete audit path: `requireAdmin`, `GET /admin/interviews`, `DELETE /interviews/:id`, `GET /me/interviews` | | done | F01, F02, F03, A01, A02, I03, I06, I08 |
-| N02 | Admin stats aggregation: `GET /admin/stats` (K11 metrics) | | todo | N01 |
+| N02 | Admin stats aggregation: `GET /admin/stats` (K11 metrics) | | done | N01 |
 
 ## Critical path
 

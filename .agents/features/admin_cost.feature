@@ -16,7 +16,7 @@ Feature: Admin interview cost visibility
     Then the interview is present with deleted true
     And its cost is unchanged
 
-  @admin-cost @backend @AC-18 @unwired
+  @admin-cost @backend @AC-18
   Scenario: Admin interview and stats endpoints require admin role
     Given a non-admin user has a session
     When the non-admin user fetches GET "/admin/interviews"
