@@ -27,6 +27,12 @@ async function registerViaApi(request: APIRequestContext, email: string): Promis
   ).toBe(201);
 }
 
+// Both smokes use accounts that have just been created, so K8.7 (A06) routes them to the
+// first unfilled onboarding step rather than to `/dashboard`. `/dashboard` is the terminal
+// case of that rule — onboarding done AND at least one interview — which no account this
+// file creates can reach. The rule's own branches are the auth cucumber ring's business.
+const FIRST_RUN_URL = /\/onboarding\/1$/;
+
 test.describe('auth smoke', () => {
   // The sign-in smoke gets its account from the API, not from the register UI. Driving one
   // browser flow to set up another makes the second test fail whenever the first one does,
@@ -39,23 +45,23 @@ test.describe('auth smoke', () => {
     await request.dispose();
   });
 
-  test('register lands on the dashboard', async ({ page }) => {
+  test('register lands on the first-run step', async ({ page }) => {
     await page.goto('/register');
 
     await page.locator('#email').fill(uniqueEmail('new'));
     await page.locator('#password').fill(PASSWORD);
     await page.locator('button[type="submit"]').click();
 
-    await expect(page).toHaveURL(/\/dashboard$/);
+    await expect(page).toHaveURL(FIRST_RUN_URL);
   });
 
-  test('sign-in lands on the dashboard', async ({ page }) => {
+  test('sign-in lands on the first-run step', async ({ page }) => {
     await page.goto('/sign-in');
 
     await page.locator('#email').fill(existing);
     await page.locator('#password').fill(PASSWORD);
     await page.locator('button[type="submit"]').click();
 
-    await expect(page).toHaveURL(/\/dashboard$/);
+    await expect(page).toHaveURL(FIRST_RUN_URL);
   });
 });

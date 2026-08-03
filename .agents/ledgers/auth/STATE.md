@@ -1,7 +1,16 @@
 # Auth — State
 
 Last updated: 2026-08-03
-Last session ended: **A06 done; this ledger is otherwise clear except A03's own blocker.**
+Last session ended: **A03 done — the auth ledger is green, all six rows.** BLOCKER-1b is fixed
+in F03: `docker compose up -d --build` brings all 8 containers up, `api` healthy, `edge`
+serving. Ran A03's two Verification commands against that stack — component ring 13 passed,
+`npx playwright test tests/smoke/auth.spec.ts` 2 passed. The smoke's landing assertion moved
+`/dashboard` → `/onboarding/1`: A06's K8.7 rule superseded it and `/dashboard` is now the
+rule's terminal branch, unreachable by a fresh account. Gates clean; `npx cucumber-js -p auth`
+still 23/195. Two environment traps recorded in A03's `## Notes` (register limiter 3/hr/IP;
+a host-local Postgres shadowing the container port as `P1010`).
+
+Previous: **A06 done; this ledger is otherwise clear except A03's own blocker.**
 Shipped `GET/PATCH /me/profile`, `POST /me/profile/complete`, `GET /me` widened with
 `onboardingCompletedAt`/`interviewCount`, `lib/first-run.ts`, and the three `/onboarding/[step]`
 card screens with server-driven resume. `npx cucumber-js -p auth` → 23 scenarios, 195 steps, all
@@ -49,23 +58,13 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-All six auth tasks are now `done` or as-done-as-scope-allows. **A03** stays `blocked` on
-BLOCKER-1b (Sezai's, unrelated to this ledger's scope) — its own code and component-ring
-verification are green. **A06** is `done`; its CV-upload step and two cucumber scenarios are
-deferred pending I11 (`POST /uploads`) landing — see A06's task file `## Notes` for the
-hand-off to interview-core. Nothing further in this ledger needs a session until I11 lands
-or BLOCKER-1b is fixed.
+**None. All six rows are `done` and the ledger is green.** BLOCKER-1 and BLOCKER-1b are both
+closed (F03 landed the packaging fix; verified 2026-08-03 by booting the stack and running
+A03's smoke against it).
 
-**A03 stays `blocked` on BLOCKER-1b below** — not on anything in this ledger. Its own scope is
-finished and its component-ring verification is green; only the second Verification command
-(the Playwright smoke, which needs a running stack) is outstanding. BLOCKER-1's defects (2)
-and (3) have since been fixed, but `docker compose up -d --build` still fails to start `api`
-for three packaging reasons recorded as BLOCKER-1b. Once those are fixed, re-run
-`npx playwright test tests/smoke/auth.spec.ts` and flip A03 to `done`.
-
-A04 and A05 went ahead of it deliberately: A03's code is merged on master and both depend on
-that code, not on A03's outstanding browser smoke. Both verify off the auth cucumber ring, which
-BLOCKER-1b cannot reach. Neither they nor A06 can close BLOCKER-1b.
+One deferred item remains, and it is not a task: **A06's CV-upload step and its two cucumber
+scenarios wait on I11 (`POST /uploads`, interview-core, Sezai)**. Hand-off is in A06's task
+file `## Notes`. Nothing in this ledger needs a session until I11 lands.
 
 ## Environment
 
@@ -96,6 +95,14 @@ npm run test:acceptance -- --tags "@AC-4 or @AC-5"             # A02 check
 ```
 
 ## Open blockers / decisions for the user
+
+**BLOCKER-1 and BLOCKER-1b — RESOLVED 2026-08-03.** F03 landed the packaging fix; the whole
+text below is kept as the historical record. Verified by `docker compose up -d --build`:
+8/8 containers, `api` healthy, `edge` serving, `/api/healthz` 200, `/api/me` 401
+`UNAUTHENTICATED`, and `npx playwright test tests/smoke/auth.spec.ts` → 2 passed. Defects (6)
+and (7) are fixed in `backend/Dockerfile` (the `deps` stage now installs `@interviewly/ai`
+too, and the build asserts `test -f backend/dist/src/index.js`); (8) is fixed in
+`packages/ai/package.json` (`main` is `dist/index.js`). A03 is `done`.
 
 **BLOCKER-1 (2026-07-31) — `docker compose up` does not produce a working stack.**
 Blocks: A03's Playwright smoke, and every later browser-facing task. Owner: **Sezai (F03)**.
@@ -254,7 +261,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 |----|-------|------|--------|------------|
 | A01 | Creating the backend auth module: register, login, logout, session cookie, and `/me` | | done | F01, F02, F03 |
 | A02 | Adding Google OAuth (arctic PKCE), account linking, and admin password restriction | | done | A01 |
-| A03 | Building the frontend login and register forms | | blocked | A02 |
+| A03 | Building the frontend login and register forms | | done | A02 |
 | A04 | Building email verification: tokens, the mail job, the gate, and the two screens | | done | A03 |
 | A05 | Building password reset: enumeration-safe request, session-revoking confirm, two screens | | done | A04 |
 | A06 | Building the onboarding profile: three cards, CV upload, and first-run routing | | done | A03 |
@@ -288,6 +295,10 @@ because Redis (rate-limit counters) is not wired.
 
 - ~~**`sessions(user_id)` index for bulk revocation**~~ — **shipped in A05** (2026-08-03) as
   `backend/prisma/migrations/*_sessions_user_id_idx/`, index-only.
+- **The Playwright smoke is not runnable twice an hour from one IP.** `tests/smoke/auth.spec.ts`
+  spends 2 of the register limiter's 3/hr/IP budget per run, so a rerun fails in `beforeAll`
+  with 429 and reads like an app regression. Needs an ephemeral Redis (or a limiter reset hook)
+  before the smoke goes into CI. Trigger: whoever wires Playwright into `.github/workflows/ci.yml`.
 - **Rate-limit Cucumber coverage (`rate_limits.feature` @AC-13)** — auth implements the
   middleware; the feature file is owned by `interview-core` since it covers interview-start
   limits alongside auth limits. Promote if auth needs to own its own coverage separately.

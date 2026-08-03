@@ -1,5 +1,5 @@
 # A03 — Building the frontend login and register forms
-REPO: (this repo) · Depends: A02 · Status: todo
+REPO: (this repo) · Depends: A02 · Status: done
 Read first: STATE.md, REFERENCE.md, then this.
 **Model: claude-sonnet-4.6** — pure UI form wiring over an existing API; no new trust boundary; moderate reasoning is sufficient.
 
@@ -158,7 +158,7 @@ the running app.
   - Add a `playwright.config.ts` at repo root if it does not exist (F03 may have
     created a skeleton; extend it, do not overwrite).
 
-- [ ] **10. Run Verification commands.**
+- [x] **10. Run Verification commands.**
 
 ## Definition of done
 - `/register` form submits with a 10-char password and redirects to `/dashboard`; short
@@ -192,7 +192,41 @@ round-trip is wired, not that the business rules are correct (those are AC-1 thr
 
 ## Notes
 
-**Status 2026-07-31: `blocked`, not `done`.** The component ring is complete and green;
+**Status 2026-08-03: `done`.** BLOCKER-1b is fixed in F03 — `docker compose up -d --build`
+brings all 8 containers up, `api` healthy and `edge` serving. Both Verification commands ran
+against that stack:
+
+```
+npm run -w frontend test -- --testPathPattern="(sign-in|register)"   13 passed
+npx playwright test tests/smoke/auth.spec.ts                          2 passed
+```
+
+Gates: `npm run lint`, `npm run typecheck`, `npm test` (122) clean; `npx cucumber-js -p auth`
+23 scenarios / 195 steps passed (behaviour untouched, run as evidence).
+
+**The smoke's landing assertion moved from `/dashboard` to `/onboarding/1`.** A06 replaced
+`DEFAULT_LANDING_PATH` with the K8.7 rule (`lib/first-run.ts`), exactly as this file's
+"For A04 / A06" note anticipated, so a brand-new account no longer reaches `/dashboard`.
+`/dashboard` is the rule's terminal branch — onboarding complete **and** ≥1 interview — which
+no account this smoke creates can reach. **This file's Definition of done still says
+`/dashboard`; it is superseded by K8.7, not unmet.** The rule's own branches are covered by
+the auth cucumber ring, not here.
+
+**Two environment traps for whoever runs this next (neither is a code defect):**
+- **Register limiter is 3/hr/IP.** The smoke spends 2 per run, so a second run inside the
+  hour fails in `beforeAll` with 429. Clear with
+  `docker compose exec cache redis-cli DEL 'ratelimit:register:::ffff:<ip>'` — not `FLUSHALL`,
+  which drops the seeded demo admin's session state too. CI needs an ephemeral Redis.
+- **A host-local Postgres on `127.0.0.1:5432` shadows the container's published port** and
+  makes `npx cucumber-js -p auth` fail with `P1010: User was denied access` — a connection
+  problem wearing a credentials error's clothes. Check with
+  `lsof -nP -iTCP:5432 -sTCP:LISTEN`; route around it with a socat container on a free port
+  rather than editing `compose.dev.yaml` (F03's file). Also note the harness refuses any
+  database not named `*_test`/`*ci`, so `DATABASE_URL` must point at `interviewly_test`.
+
+---
+
+**Historical — status 2026-07-31: `blocked`, not `done`.** The component ring is complete and green;
 the Playwright smoke cannot run *from `docker compose up`* because that stack does not
 come up. Three F03 defects, all reproduced — see STATE.md → `## Open blockers`.
 
