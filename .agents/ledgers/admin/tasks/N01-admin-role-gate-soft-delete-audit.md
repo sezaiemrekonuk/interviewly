@@ -1,5 +1,5 @@
 # N01 — Admin-role gate + soft-delete audit path: `requireAdmin`, `GET /admin/interviews`, `DELETE /interviews/:id`, `GET /me/interviews`
-REPO: (this repo) · Depends: F01, F02, F03, A01, A02, I03, I06, I08 · Status: todo
+REPO: (this repo) · Depends: F01, F02, F03, A01, A02, I03, I06, I08 · Status: done
 Read first: STATE.md, REFERENCE.md, then this.
 **Model: claude-opus-4.8** — admin-role trust boundary + soft-delete-audit correctness. A deleted row leaking into a user list, or an open `/admin/*` surface, is a 5-point security regression; a cheaper model has produced role checks that pass `req.user` through without asserting the role, and soft deletes that hard-delete under a rename.
 
@@ -81,27 +81,27 @@ endpoint behind the same `requireAdmin` gate this task hardens.
   rejects).
 
 ## Steps
-- [ ] **1. Confirm dependency artefacts exist** — `requireAuth` + `app.ts` mount point +
+- [x] **1. Confirm dependency artefacts exist** — `requireAuth` + `app.ts` mount point +
   error handler (A01); `userInterviews`/`activeInterview`/`prisma` (F02); I03's
   `modules/interview/router.ts`, `ownership.ts` (`:id` resolver), `csrf.ts`; a seeded
   `role=admin` user (F02 seed); interview + answer + `llm_calls` rows reachable (I06/I08/I02).
   If any is missing, set this task to `blocked` in STATE.md and stop.
-- [ ] **2. Create `modules/admin/middleware.ts`** — `requireAdmin`; `403 FORBIDDEN` unless
+- [x] **2. Create `modules/admin/middleware.ts`** — `requireAdmin`; `403 FORBIDDEN` unless
   `req.user.role === 'admin'`. Export it.
-- [ ] **3. Create `modules/admin/interviews.ts`** — `GET /admin/interviews`: direct
+- [x] **3. Create `modules/admin/interviews.ts`** — `GET /admin/interviews`: direct
   `prisma.interview.findMany` (ADMIN AUDIT comment, no `deleted_at` filter), cursor page, map to
   the item shape, compute `totalTokens` and `deleted`, read `costUsd` from `spent_usd`.
   Log `ADMIN_INTERVIEWS_LISTED` ({ traceId, count }).
-- [ ] **4. Create `modules/admin/router.ts`** — `router.use(requireAuth, requireAdmin)`, mount
+- [x] **4. Create `modules/admin/router.ts`** — `router.use(requireAuth, requireAdmin)`, mount
   `GET /interviews`, leave the N02 `/stats` slot comment.
-- [ ] **5. Create `modules/interview/delete.ts`** — soft-delete handler; `204`; log
+- [x] **5. Create `modules/interview/delete.ts`** — soft-delete handler; `204`; log
   `INTERVIEW_SOFT_DELETED`.
-- [ ] **6. Create `modules/interview/my-interviews.ts`** — `GET /me/interviews` via
+- [x] **6. Create `modules/interview/my-interviews.ts`** — `GET /me/interviews` via
   `userInterviews`, cursor page.
-- [ ] **7. Mount routes** — admin router + `GET /me/interviews` in `app.ts`; `DELETE
+- [x] **7. Mount routes** — admin router + `GET /me/interviews` in `app.ts`; `DELETE
   /interviews/:id` on I03's interview router behind the `:id` ownership resolver and CSRF
   middleware. Confirm the error handler maps `FORBIDDEN`/`INTERVIEW_NOT_FOUND`.
-- [ ] **8. Tests — negative and positive cases.** Wire the Cucumber step definitions for
+- [x] **8. Tests — negative and positive cases.** Wire the Cucumber step definitions for
   `admin_cost.feature` @AC-17. The step "a candidate owns an interview with recorded cost"
   seeds an interview with `llm_calls`/`spent_usd` (fixture, direct DB). The negative case is
   the non-owner delete → `404 INTERVIEW_NOT_FOUND` and the interview STILL present in the
@@ -109,7 +109,7 @@ endpoint behind the same `requireAdmin` gate this task hardens.
   present in `/admin/interviews` with `deleted: true` and unchanged cost. If step definitions
   are missing, create them in `tests/step-definitions/admin.ts` against
   `http://localhost:${PORT}`.
-- [ ] **9. Run the Verification command and confirm @AC-17 green.**
+- [x] **9. Run the Verification command and confirm @AC-17 green.**
 
 ## Definition of done
 - `GET /admin/interviews` requires an admin session; a non-admin gets `403 FORBIDDEN` (the
@@ -141,9 +141,77 @@ grep -rn "ADMIN AUDIT" backend/modules/admin/interviews.ts      # must print the
 
 ## Notes
 
-(Empty until the task is done. Fill with: what actually happened, every deviation from the
-plan, the Cucumber output verbatim, whether step definitions needed creating and where they
-live, how the `totalTokens` aggregation was queried (per-interview `llm_calls` sum), how the
-cursor was encoded, what was deliberately NOT done and why, and a "For N02" hand-off paragraph
-noting the exported `requireAdmin`, the admin router's `/stats` mount slot, and the
-`GET /admin/interviews` item shape N02's stats endpoint should stay consistent with.)
+Done 2026-08-03. `1 scenario (1 passed) / 13 steps (13 passed)` for @AC-17. Full default
+profile `40 scenarios (40 passed) / 298 steps`; `auth` profile `18 scenarios (18 passed)`;
+vitest `19 files / 117 tests`; lint + typecheck clean.
+
+**What exists now**
+- `modules/admin/middleware.ts` — `requireAdmin`, exported. `req.user?.role !== 'admin'` →
+  `ApiError('FORBIDDEN')`.
+- `modules/admin/router.ts` — `router.use(requireAuth, requireAdmin)` then
+  `GET /interviews`. Carries the `// N02 mounts GET /stats below this line` slot.
+- `modules/admin/interviews.ts` — the audit list. `ADMIN AUDIT` comment on the bypass.
+- `modules/interview/delete.ts`, `modules/interview/my-interviews.ts`.
+- `modules/interview/cursor.ts` — `encodeCursor`/`decodeCursor`/`pageLimit`, shared by both
+  lists. **N02 does not need it** (`/admin/stats` is unpaginated).
+- `src/app.ts` — `app.get('/me/interviews', requireAuth, listMyInterviews)` and
+  `app.use('/admin', adminRouter)`. `DELETE /:id` on I03's router (inherits `requireAuth`,
+  `requirePublicOrigin`, `router.param('id', resolveInterview)`).
+
+**Deviations from the plan**
+- **Steps live in `backend/features/step_definitions/admin.steps.ts` (default ring), not
+  `tests/step-definitions/admin.ts` (auth ring)** as the task file said. The task predates
+  A04's two-profile split. `npm run test:acceptance` is the `default` profile only, so the
+  Verification command as written can only be non-vacuous there — and since I03 the default
+  ring already boots the real app over HTTP against Postgres, so it hosts this fine.
+  REFERENCE.md § Commands still names the auth-profile form; corrected there.
+- **`@AC-18` tagged `@unwired`** in `admin_cost.feature` (ADR-I26 mechanism). **N02 deletes
+  that tag** before writing its steps, then runs it red.
+- `cucumber.js` `default.paths` gained `.agents/features/admin_cost.feature`.
+- `AiWorld` gained `actors`, `recordedCost` and `httpDelete` — @AC-17 is the first scenario
+  with three actors and the first `DELETE` in the ring.
+- Added unit tests the ACs cannot reach: `modules/admin/middleware.test.ts` (the gate's DENY
+  path — @AC-17 only signs in the admin, and @AC-18 is still `@unwired`) and
+  `modules/interview/cursor.test.ts`.
+
+**How things were queried**
+- `totalTokens`: one `prisma.llmCall.groupBy({ by: ['interview_id'], _sum })` over the page's
+  ids, not a sum per row. `input_tokens`/`output_tokens` are nullable — coalesced to 0.
+- `costUsd`: `row.spent_usd.toFixed(6)` (Decimal → six-decimal string).
+- Cursor: `base64url(id)`, decoded back and shape-checked against `^[a-z0-9]{20,32}$`;
+  anything else is treated as no cursor rather than 500ing off a query string.
+  `take: limit + 1` then slice is how `nextCursor` is decided.
+
+**Not done, deliberately**
+- `GET /admin/stats` — N02's.
+- Faceted admin filters (`?occupationCluster&state&userId`) — STATE backlog; only
+  `cursor`/`limit` are implemented.
+- **`and not @AC-29` in `cucumber.js`'s `auth` profile is still there.** That comment asks
+  "whichever task ships `GET /me/interviews`" to wire the auth ring's interview steps and
+  delete it. The endpoint now exists, so it is unblocked — but the steps and the scenarios
+  are `email_verification.feature`, auth ledger, **Ahmet's**. Left for A06.
+
+**Local environment gotcha** (cost ~20 min): root `.env` uses the docker-internal hostnames
+`db`/`cache`, so acceptance cannot run from the host with it. Run with host overrides:
+`DATABASE_URL=postgresql://interviewly:interviewly@localhost:5432/interviewly_test`,
+`REDIS_URL=redis://localhost:6380` (compose.dev maps 6380→6379). `interviewly_test` did not
+exist — `db/init.sql` creates it but only on a fresh volume, so it had to be created and
+`prisma migrate deploy`d by hand.
+
+### For N02
+
+`requireAdmin` is exported from `modules/admin/middleware.ts` but **you do not need to import
+it**: mount `GET /stats` at the marked slot in `modules/admin/router.ts` and it inherits the
+gate from `router.use` (ADR-N01). That inheritance is unit-tested — do not restate the gate
+per route.
+
+Stay consistent with the `GET /admin/interviews` item shape: `costUsd` is a **six-decimal
+string** (`Decimal.toFixed(6)`), never a number; `totalTokens` is a **number** with nulls
+coalesced to 0. `/admin/stats`'s `totalTokens` must include deleted interviews (K11) — so it
+bypasses `userInterviews` the same way, and the `ADMIN AUDIT` comment goes on that call site
+too. `@AC-18` also re-asserts `GET /admin/interviews` (403 for non-admin, deleted rows
+included); that endpoint is done, so those steps are assertions, not new implementation.
+
+Delete `@unwired` from `@AC-18` in `.agents/features/admin_cost.feature` **first**, confirm it
+runs red, then write the steps. `admin_cost.feature` is already in `cucumber.js` `default.paths`
+and `AiWorld` already has `actors` + `httpDelete`.

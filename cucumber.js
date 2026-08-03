@@ -82,6 +82,7 @@ module.exports = {
       '.agents/features/profiling.feature',
       '.agents/features/interview_flow.feature',
       '.agents/features/voice_session.feature',
+      '.agents/features/admin_cost.feature',
     ],
     tags: 'not @unwired',
     require: ['backend/features/step_definitions/**/*.ts'],
