@@ -654,3 +654,61 @@ refusing the edge 409s a legal interview at its last answer.
 
 **Consequences:** I07 inherits the edge — do not "tidy" it away. Not the same thing as
 `cut_short` (I10), which ends an interview that still has questions left.
+
+## ADR-I29 — 2026-08-03 — the SSE route is `GET /interviews/:id/events`
+
+**Context:** the task file and REFERENCE.md named `GET /events/interviews/:id`, which cannot
+sit on the interview router (`app.ts` mounts it at `/interviews`).
+
+**Decision:** mount it as `/interviews/:id/events`. It then inherits `requireAuth`,
+`router.param('id', resolveInterview)` and `requirePublicOrigin`'s GET exemption; a
+root-mounted twin would re-wire all three by hand, which is how an owner check goes missing.
+
+**Consequences:** REFERENCE.md line 108 patched. Frontend and voice consume this path.
+
+## ADR-I30 — 2026-08-03 — one Redis subscriber connection per open SSE stream
+
+**Context:** the task file said to reuse the single Redis client. ioredis puts a connection
+into subscriber mode exclusively — a shared client that subscribes stops serving commands,
+and the rate limiter and PKCE store share it.
+
+**Decision:** publish on the shared `redis`; `redis.duplicate()` per open stream, `quit()` on
+`req.close`. Rejected: one process-wide subscriber, which needs a channel → response map and
+refcounted unsubscribe before a second concurrent room is safe.
+
+**Consequences:** connection count scales with concurrent rooms, not interviews. `ponytail:`
+comment in `sse.ts` names the upgrade. A module-level eager client here would also hang the
+cucumber run (see `features/step_definitions/server.ts`).
+
+## ADR-I31 — 2026-08-03 — `POST /interviews` inserts at `created`, then transitions
+
+**Context:** @AC-16 lists `created → profiling` as an emitting transition, but the row was
+inserted straight into `profiling` — the one state change in the system with no
+`INTERVIEW_STATE_CHANGED` and no guard.
+
+**Decision:** insert at `state: 'created'` and call `applyTransition(interview, 'profiling')`
+in the same request. `applyTransition` is now the sole writer of `interviews.state`; the only
+remaining literal is that `create`. `POST /profile` lost its inline `state: 'hr_round'` write
+and its hand-rolled log line for the same reason.
+
+**Consequences:** one extra UPDATE per interview created. `applyTransition` mutates
+`interview.state` in place so a request that transitions twice (`POST /profile`, then a
+failed generation pausing it) computes the second `from` correctly.
+
+## ADR-I32 — 2026-08-03 — the state write is conditional on the state it read
+
+**Context:** Copilot review of the I07 PR. `applyTransition` checked `TRANSITIONS` against
+`interview.state`, read when `resolveInterview` loaded the row, then wrote by id alone. Two
+concurrent requests both pass the table check and both write — TOCTOU, and worse across
+replicas. `POST /profile` twice generated two HR batches, because the losing request reached
+`generateRound` instead of 409ing.
+
+**Decision:** `updateMany({ where: { id, state: from } })`; `count === 0` is
+`INVALID_STATE_TRANSITION`. Same shape as ADR-I06's `current_index` advance — the write is
+the guard, not a check before it.
+
+**Consequences:** callers that transition on a failure path must not let the 409 replace their
+own error. `generation.ts` catches and logs `INTERVIEW_PAUSE_FAILED` around the pause so
+`AI_PROVIDER_UNAVAILABLE` still reaches the candidate. Same review: `publishStateChanged` is
+best-effort (`INTERVIEW_EVENT_PUBLISH_FAILED`) because a room recovers via `GET /state`;
+`enqueueReport` is deliberately **not**, since a dropped report job is data loss (R01).

@@ -57,7 +57,7 @@ Feature: Sequential interview flow
     Then the response status is 200
     And the interview state is "hr_round"
 
-  @interview-flow @backend @AC-16 @unwired
+  @interview-flow @backend @AC-16
   Scenario: The state machine accepts only listed HTTP transitions
     Given the backend state transition table is loaded
     When each listed HTTP transition is exercised through its endpoint

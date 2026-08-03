@@ -33,4 +33,25 @@ describe('canTransition', () => {
     expect(canTransition('hr_round', 'created')).toBe(false);
     expect(canTransition('tech_round', 'profiling')).toBe(false);
   });
+
+  // I07 additions. The acceptance walk drives each of these once; these pin the closed half
+  // around them, which no scenario reaches.
+  it('opens and closes the interview', () => {
+    expect(canTransition('created', 'profiling')).toBe(true);
+    expect(canTransition('profiling', 'hr_round')).toBe(true);
+    expect(canTransition('evaluating', 'completed')).toBe(true);
+    expect(canTransition('evaluating', 'failed')).toBe(true);
+    expect(canTransition('completed', 'evaluating')).toBe(false);
+    expect(canTransition('created', 'hr_round')).toBe(false);
+  });
+
+  it('pauses and resumes the HR round only', () => {
+    expect(canTransition('hr_round', 'paused')).toBe(true);
+    expect(canTransition('paused', 'hr_round')).toBe(true);
+    // The only pause source is a failed generation, and ADR-I22 puts both batches in the HR
+    // round — a `tech_round` pause would have no trigger and no way back.
+    expect(canTransition('tech_round', 'paused')).toBe(false);
+    expect(canTransition('paused', 'tech_round')).toBe(false);
+    expect(canTransition('paused', 'evaluating')).toBe(false);
+  });
 });
