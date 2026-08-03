@@ -21,8 +21,8 @@
 // one run is an ambiguous-step failure before any assertion executes. Profiles keep each
 // ring's steps with the world they were written against.
 //
-// Each task appends its own feature file to its own profile as it wires the steps. Next up:
-// I07 wires interview_flow.feature @AC-16 and I08 wires @AC-11.
+// Each task appends its own feature file to its own profile as it wires the steps. I07 wired
+// interview_flow.feature @AC-16; next up, I08 wires @AC-11.
 //
 // I05 hit the case the file-level allow-list cannot express: interview_flow.feature is owned
 // by four tasks, and only @AC-15 is I05's. Keeping the file out of `paths` would make I05's

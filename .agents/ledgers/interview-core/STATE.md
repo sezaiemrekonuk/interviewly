@@ -1,15 +1,14 @@
 # Interview-core — State
 
-Last updated: 2026-07-31
-Last session ended: **I06 done.** `POST /:id/answers` live: guarded `updateMany` advance,
-answer + `chat_messages` write, `ensureTechBatch` on every HR answer (ADR-I22), handover
-through the new `machine.ts`. **ADR-I26 corrects ADR-I25: a CLI `--tags` is ANDed with
-`not @unwired`, it does not replace it** — the Verification command reported `0 scenarios`
-and exit 0 until the tags were deleted, so **I07 (@AC-16) and I08 (@AC-11) delete their tag
-BEFORE the first red run.** **ADR-I27:** `asked_at` is stamped by `GET /state` on delivery
-and `clock.now()` (`src/lib/clock.ts`) is the one server-clock seam. **ADR-I28:**
-`hr_round → evaluating` is in the table. @AC-8/9/10 green; suite 31/31, 86 unit. Details in
-I06 `## Notes`. Not committed.
+Last updated: 2026-08-03
+Last session ended: **I07 done, uncommitted** (I06 is merged; the old "not committed" line was
+stale). `TRANSITIONS` complete, `applyTransition` is the **sole writer of `interviews.state`**
+(`setup.ts` `create` at `'created'` is the one remaining literal). New `resume.ts`, `sse.ts`.
+**ADR-I29:** SSE is `GET /interviews/:id/events`. **ADR-I30:** one `redis.duplicate()` per open
+stream. **ADR-I31:** `POST /interviews` inserts at `created` then transitions, so no state
+change is eventless. **ADR-I32 (PR review):** the write is `updateMany where { id, state: from
+}`, so a caller transitioning on a failure path must catch the 409 or it replaces its own error
+code. @AC-16 green; rings 32/32 + 11/11, 95 unit. Details in I07 `## Notes`.
 
 ## Execution protocol (follow exactly)
 
@@ -26,17 +25,17 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**I07 (state machine, pause/resume, SSE).** I06 is done; I07 and I10 are both eligible
-(`I07 <- I06, I02`; `I10 <- I06`), and I07 comes first by ID order.
+**I08 (budget enforcement).** I07 is done; I08 and I10 are both eligible
+(`I08 <- I06, I02`; `I10 <- I06`), and I08 comes first by ID order.
 
-Three live hand-offs, all in I06 `## Notes` → "For I07":
+Live hand-offs, from I07 `## Notes` → "For I08":
 
-- **Delete `@unwired` from @AC-16 before your first run** (ADR-I26) or the scoped command
+- **Delete `@unwired` from @AC-11 before your first run** (ADR-I26) or the scoped command
   reports `0 scenarios` and exits 0 — a skip that looks like a pass.
-- **Extend `machine.ts` by adding rows to `TRANSITIONS`.** Every state write goes through
-  `applyTransition`, which is where the SSE fan-out hooks. One exception to route through it:
-  `generation.ts` still writes `state: 'paused'` directly on `AI_PROVIDER_UNAVAILABLE`, and
-  @AC-16 exercises that edge.
+- The ceiling mounts at the `>>> I08` marker in `answers.ts`: after the turn is stored, before
+  the handover's AI call. The exhaustion path is
+  `applyTransition(interview, 'evaluating', { traceId })` — both `hr_round` and `tech_round`
+  already list that target; do **not** write `interviews.state` yourself.
 - An SSE-pushed question must stamp `questions.asked_at` itself (ADR-I27), or its
   `duration_ms` is null.
 
@@ -121,7 +120,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | I04 | Profiling + round question generation (HR batch, tech batch during HR) | | done | I02, I03 |
 | I05 | CSRF/origin enforcement on state-changing routes | | done | I04 |
 | I06 | Answer submission, guarded advance, duration, round handover, resume | | done | I04 |
-| I07 | State machine transition table + pause/resume + SSE state events | | todo | I06, I02 |
+| I07 | State machine transition table + pause/resume + SSE state events | | done | I06, I02 |
 | I08 | Budget enforcement (in-transaction ceiling, exhaustion path) | | todo | I06, I02 |
 | I09 | Report generation + `ReportPayload` schema gate + completion | | todo | I07, I02 |
 | I10 | Language detection + two-consecutive-turn switch counting | | todo | I06 |

@@ -12,9 +12,9 @@ import { z } from 'zod';
 
 import { ApiError } from '../../src/lib/api-error';
 import { prisma } from '../../src/lib/db';
-import { logger } from '../../src/lib/logger';
 
 import { generateRound } from './generation';
+import { applyTransition } from './machine';
 
 /** §3.3 layer 2. Every field optional — an answered form with one field is still an answer. */
 const perInterviewSchema = z.object({
@@ -109,7 +109,6 @@ export const submitProfile: RequestHandler = async (req, res) => {
       // NULL column, not a column holding the JSON literal `null`.
       candidate_profile: (mergeProfile(account.profile, perInterview) as Prisma.InputJsonObject) ??
         Prisma.DbNull,
-      state: 'hr_round',
       started_at: interview.started_at ?? new Date(),
       // The first HR question becomes current the moment the batch exists. `state.ts` leaves
       // this to I04/I06 on purpose — a room refreshed mid-interview reconstructs from it.
@@ -117,13 +116,13 @@ export const submitProfile: RequestHandler = async (req, res) => {
     },
   });
 
-  logger.info(
-    { traceId: req.traceId, interviewId: interview.id, state: 'hr_round' },
-    'INTERVIEW_STATE_CHANGED',
-  );
+  // I07: the state column is written by `applyTransition` and by nothing else, so this edge
+  // is guarded and emits `INTERVIEW_STATE_CHANGED` on the same terms as every other one.
+  await applyTransition(updated, 'hr_round', { traceId: req.traceId! });
 
   // Nothing generates the technical batch here (ADR-I22): it is generated during the HR round
   // via `ensureTechBatch`, so this request pays for one LLM call and the handover pays for none.
+  // A provider failure below pauses `updated`, which is why the transition above ran first.
   await generateRound(updated, 'hr', { traceId: req.traceId! });
 
   res.status(200).json({ state: updated.state });

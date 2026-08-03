@@ -1,5 +1,5 @@
 # I07 — State machine transition table + pause/resume + SSE state events
-REPO: (this repo) · Depends: I06, I02 · Status: todo
+REPO: (this repo) · Depends: I06, I02 · Status: done
 Read first: STATE.md, REFERENCE.md, then this.
 **Model: claude-opus-4.8** — the full server-owned state machine is the interview-integrity invariant (K2). An illegal transition that slips through, or a pause that loses the answer, corrupts the interview; the transition table must reject every unlisted edge with no side effect.
 
@@ -72,19 +72,19 @@ those target states so those tasks attach cleanly.
   `state:` writes after this task and confirm they all route through `applyTransition`.
 
 ## Steps
-- [ ] **1. Complete `machine.ts`** — the full `TRANSITIONS` map (listed edges above),
+- [x] **1. Complete `machine.ts`** — the full `TRANSITIONS` map (listed edges above),
   `canTransition`, `applyTransition` emitting `INTERVIEW_STATE_CHANGED`.
-- [ ] **2. Route all state writes** through `applyTransition` (answers handover, generation
+- [x] **2. Route all state writes** through `applyTransition` (answers handover, generation
   pause). Grep-confirm no direct `state:` write remains.
-- [ ] **3. Write `resume.ts`** — `paused`-only → prior round; attach to the router (CSRF).
-- [ ] **4. Write `sse.ts`** — owner-scoped SSE over the Redis channel; `applyTransition`
+- [x] **3. Write `resume.ts`** — `paused`-only → prior round; attach to the router (CSRF).
+- [x] **4. Write `sse.ts`** — owner-scoped SSE over the Redis channel; `applyTransition`
   publishes; expose the `enqueueReport` emission hook (`REPORT_JOB_ENQUEUED`) for `→
   evaluating`.
-- [ ] **5. Wire the `hr_round → paused` edge** from I04's generation failure path.
-- [ ] **6. Wire acceptance step-defs** for `interview_flow.feature` @AC-16 (each listed
+- [x] **5. Wire the `hr_round → paused` edge** from I04's generation failure path.
+- [x] **6. Wire acceptance step-defs** for `interview_flow.feature` @AC-16 (each listed
   transition succeeds + emits the event; each unlisted transition is 409
   `INVALID_STATE_TRANSITION` with no state change).
-- [ ] **7. Run the `## Verification` command.**
+- [x] **7. Run the `## Verification` command.**
 
 ## Definition of done
 - Every listed transition succeeds and emits `INTERVIEW_STATE_CHANGED` with from/to/
@@ -101,4 +101,49 @@ npm run test:acceptance -- --tags "@interview-flow and @AC-16"
 ```
 
 ## Notes
-_(fill in when the task is done)_
+
+**What exists now**
+
+- `machine.ts` — table complete: `created→profiling`, `profiling→hr_round`,
+  `hr_round→{tech_round,evaluating,paused}`, `tech_round→evaluating`, `paused→hr_round`,
+  `evaluating→{completed,failed}`. `applyTransition` writes the column **conditionally on the
+  state it read** (`updateMany where { id, state: from }`, `count === 0` → 409, ADR-I32),
+  **mutates `interview.state` in place** (a request that transitions twice — `POST /profile`
+  then a failed generation — would otherwise re-read a stale `from`), logs, publishes
+  best-effort, and calls `enqueueReport` on `→ evaluating`.
+- **A caller that transitions on a failure path must not let a 409 replace its own error.**
+  `generation.ts` catches around the pause and logs `INTERVIEW_PAUSE_FAILED`.
+- `sse.ts` — `EVENT_CHANNEL_PREFIX` (`interview:events:`), `eventChannel(id)`,
+  `publishStateChanged`, `enqueueReport` (logs `REPORT_JOB_ENQUEUED`; R01 replaces the body
+  with the BullMQ job), `streamInterviewEvents`.
+- `resume.ts` — `paused`-only guard, then `paused → hr_round`.
+- **`applyTransition` is now the sole writer of `interviews.state`.** `grep "state: '"` over
+  `backend/modules backend/src` returns one hit: `setup.ts`'s `create` at `'created'`.
+
+**Deviations from the task file**
+
+- **ADR-I29: the SSE route is `GET /interviews/:id/events`, not `/events/interviews/:id`.**
+  On the existing router it inherits `requireAuth`, `router.param('id', resolveInterview)`
+  and the GET exemption in `requirePublicOrigin`; a root-mounted path would duplicate all
+  three. REFERENCE.md line 108 patched.
+- **ADR-I30: one `redis.duplicate()` per open stream, not the shared client.** ioredis puts a
+  connection into subscriber mode exclusively. Sharing one subscriber needs a channel →
+  response map plus refcounted unsubscribe — deferred, `ponytail:` comment in `sse.ts`.
+- **ADR-I31: `POST /interviews` inserts at `state: 'created'` and transitions.** One extra
+  UPDATE per interview; the alternative is the only state change in the system that emits no
+  `INTERVIEW_STATE_CHANGED`, and @AC-16 lists the edge.
+- No `tech_round → paused` / `paused → tech_round`: ADR-I22 generates both batches during the
+  HR round, so no trigger exists. Add the edges with the source that needs them.
+
+**For I08** — the budget ceiling lands in `answers.ts` where the `>>> I08` marker is, and its
+exhaustion path is `applyTransition(interview, 'evaluating', …)`; both source states already
+list that target. `@AC-11` still carries `@unwired` — **delete it before your first run**
+(ADR-I26) or the scoped command matches 0 scenarios and exits 0.
+
+**For I09** — `enqueueReport(interviewId, ctx)` in `sse.ts` is the emission point on
+`→ evaluating`. Replace its body; do not add a second call site.
+
+**Verification** — `npm run test:acceptance -- --tags "@interview-flow and @AC-16"` →
+`1 scenario (1 passed), 8 steps (8 passed)`. Full rings: default 32/32, auth 11/11.
+`lint`, `typecheck`, `test` (95 unit) green. Local run needs `DATABASE_URL` /`REDIS_URL` on
+the published host ports (`localhost:5432`, `localhost:6380`), not `.env`'s compose names.

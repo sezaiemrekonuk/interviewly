@@ -7,7 +7,9 @@ import { submitAnswer } from './answers';
 import { requirePublicOrigin } from './csrf';
 import { resolveInterview } from './ownership';
 import { submitProfile } from './profile';
+import { resumeInterview } from './resume';
 import { setupInterview } from './setup';
+import { streamInterviewEvents } from './sse';
 import { getInterviewState } from './state';
 
 const router = Router();
@@ -27,7 +29,9 @@ router.get('/:id/state', getInterviewState);
 router.post('/:id/profile', submitProfile);
 router.post('/:id/answers', submitAnswer);
 
-// I07 mounts here: router.post('/:id/resume', ...)
+router.post('/:id/resume', resumeInterview);
+router.get('/:id/events', streamInterviewEvents);
+
 // I12 mounts here: router.get('/:id/report/download', ...)
 
 export default router;

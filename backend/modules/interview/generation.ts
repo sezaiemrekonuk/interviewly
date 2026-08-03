@@ -20,6 +20,8 @@ import { ApiError } from '../../src/lib/api-error';
 import { prisma } from '../../src/lib/db';
 import { logger } from '../../src/lib/logger';
 
+import { applyTransition } from './machine';
+
 export interface GenerateOpts {
   traceId: string;
   /** Defaults to the module's client. Injected only by tests that need a misbehaving one. */
@@ -123,11 +125,20 @@ export async function generateRound(
   } catch (err) {
     if (!(err instanceof AiError)) throw err;
     if (err.code === 'AI_PROVIDER_UNAVAILABLE') {
-      await prisma.interview.update({ where: { id: interview.id }, data: { state: 'paused' } });
-      logger.warn(
-        { traceId: opts.traceId, interviewId: interview.id, roundType },
-        'INTERVIEW_STATE_CHANGED',
-      );
+      // I07: routed through applyTransition — the sole writer of interviews.state — so this
+      // edge also gets the INTERVIEW_STATE_CHANGED emission + SSE fan-out for free.
+      //
+      // A failure to pause must not replace the caller's error. `applyTransition` now rejects
+      // a transition another request already made, and answering 409 to a candidate whose
+      // provider fell over would name the wrong problem.
+      try {
+        await applyTransition(interview, 'paused', { traceId: opts.traceId });
+      } catch (pauseErr) {
+        logger.error(
+          { err: pauseErr, traceId: opts.traceId, interviewId: interview.id, roundType },
+          'INTERVIEW_PAUSE_FAILED',
+        );
+      }
     }
     throw new ApiError(err.code);
   }

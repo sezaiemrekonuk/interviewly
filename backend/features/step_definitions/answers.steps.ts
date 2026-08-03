@@ -28,7 +28,7 @@ After(function resetScenarioState() {
 });
 
 /** The question row a *global* `current_index` points at — the walk `state.ts` does. */
-async function questionIdAt(world: AiWorld, index: number): Promise<string> {
+export async function questionIdAt(world: AiWorld, index: number): Promise<string> {
   const interview = await prisma.interview.findUniqueOrThrow({ where: { id: world.interviewId } });
   const type = index <= interview.hr_question_count ? 'hr' : 'tech';
   const question = await prisma.question.findFirstOrThrow({

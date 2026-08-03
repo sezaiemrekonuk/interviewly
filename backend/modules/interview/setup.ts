@@ -4,6 +4,8 @@ import { z } from 'zod';
 import { ApiError } from '../../src/lib/api-error';
 import { prisma } from '../../src/lib/db';
 
+import { applyTransition } from './machine';
+
 const schema = z.object({
   mode: z.enum(['voice', 'text']),
   jobText: z.string().trim().min(1).optional(),
@@ -70,10 +72,15 @@ export const setupInterview: RequestHandler = async (req, res) => {
       language: req.user!.locale,
       target_question_count: targetQuestionCount,
       hr_question_count: hrCount,
-      state: 'profiling',
+      // Born `created`, moved by the guard in the same request. Inserting straight into
+      // `profiling` would be one write fewer and the only state change in the system that
+      // emits no `INTERVIEW_STATE_CHANGED` (@AC-16 lists this edge).
+      state: 'created',
       current_index: 0,
     },
   });
+
+  await applyTransition(interview, 'profiling', { traceId: req.traceId! });
 
   res.status(201).json({ interviewId: interview.id, hrCount, techCount });
 };
