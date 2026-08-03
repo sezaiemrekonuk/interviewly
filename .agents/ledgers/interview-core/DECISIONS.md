@@ -731,3 +731,19 @@ generation's `llm_calls` rows: folding them into the gate's transaction would ro
 audit — and the charge — for an attempt that really was billed, which is the opposite of what
 the ceiling is for. Cost: one interview's generations serialise, and the transaction is open
 for the call's duration (45 s cap).
+
+## ADR-I34 — 2026-08-03 — `enqueueReport` stays a log line; nothing calls `runReport` in-process
+
+**Context:** I09 step 3 says wire I07's `enqueueReport` hook to `runReport`. Doing it breaks
+two things. `interview_flow.feature` @AC-16 parks an interview in `evaluating` and asserts an
+unlisted `POST /resume` leaves it there — an auto-run report would have moved it to
+`completed`/`failed` first. And `enqueueReport` fires inside `applyTransition`, so the last
+answer's HTTP request would pay for a 90 s report call before responding.
+
+**Decision:** `sse.ts` keeps emitting `REPORT_JOB_ENQUEUED` only. `runReport(interviewId,
+{ traceId, client? })` is a plain exported function; the acceptance step-def calls it directly
+and R01's BullMQ consumer binds to the same signature.
+
+**Consequences:** no interview-core path generates a report by itself — R01 owns the trigger.
+The DoD ("a plain callable function the worker can invoke") is met; the enqueue *binding* is
+the report ledger's, which is where the queue lives anyway.

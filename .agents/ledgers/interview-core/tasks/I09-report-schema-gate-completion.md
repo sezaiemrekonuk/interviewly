@@ -76,17 +76,18 @@ its worker job and adds rendering on top.
   handler.
 
 ## Steps
-- [ ] **1. Write `report-run.ts`** — `runReport(interviewId)`: load transcript, call
+- [x] **1. Write `report-run.ts`** — `runReport(interviewId)`: load transcript, call
   `generateReport`, branch on validity, transition + persist or transition + log.
-- [ ] **2. Reuse the I01 `ReportPayload` schema** for the gate; treat a thrown
+- [x] **2. Reuse the I01 `ReportPayload` schema** for the gate; treat a thrown
   `AI_OUTPUT_INVALID` (chain-exhausted schema failure) as the `failed` branch.
-- [ ] **3. Wire the enqueue hook** (I07) to `runReport` for in-process invocation; the real
-  BullMQ binding is the report ledger's.
-- [ ] **4. Wire acceptance step-defs** for `schema_validation.feature` @AC-11 (stub returns
+- [x] **3. ~~Wire the enqueue hook~~ — deliberately NOT wired, ADR-I34.** In-process
+  invocation from `applyTransition` breaks `interview_flow.feature` @AC-16 and puts a 90 s
+  call inside an answer request. `runReport` is callable; R01 binds the queue.
+- [x] **4. Wire acceptance step-defs** for `schema_validation.feature` @AC-11 (stub returns
   `overall_score 7` → no payload stored, state `failed`, `AI_OUTPUT_SCHEMA_INVALID` emitted;
   stub returns a valid `ReportPayload` → state `completed`, payload stored with the asserted
   integer/range constraints).
-- [ ] **5. Run the `## Verification` command.**
+- [x] **5. Run the `## Verification` command.**
 
 ## Definition of done
 - A malformed report (e.g. `overall_score 7`) transitions the interview to `failed`, stores
@@ -102,4 +103,52 @@ npm run test:acceptance -- --tags "@schema-validation"
 ```
 
 ## Notes
-_(fill in when the task is done)_
+
+**Shipped.** `backend/modules/interview/report-run.ts` — `runReport(interviewId, { traceId,
+client? })`, plus `backend/features/step_definitions/report-run.steps.ts` and
+`schema_validation.feature` added to `cucumber.js` `paths` (default profile).
+
+Order inside `runReport`: load interview (`deleted_at: null`) → build transcript → 
+`generateReport` → gate → `applyTransition` → persist. Details that are not obvious:
+
+- **Transcript carries question ids** — `[hr 1] (question_id: <id>) Q: … A: …`, answered turns
+  only, HR round first (sorted in JS, not by enum `orderBy`). Without the id the model has
+  nothing to key `questions[].question_id` on and `report_questions` cannot be written.
+- **Two failure branches, one handler.** A thrown `AiError('AI_OUTPUT_INVALID')` and a local
+  `ReportPayloadSchema.safeParse` failure both → `failed` + `logger.warn(…,
+  'AI_OUTPUT_SCHEMA_INVALID')` + **no `reports` row at all** (not a row with null payload).
+  Any other throw (`AI_PROVIDER_UNAVAILABLE`, timeout) leaves the interview in `evaluating`
+  for R01's retry — the terminal edge is one-shot, do not burn it on a transport failure.
+- **`applyTransition` before the write, on purpose.** It is the CAS (`updateMany where state
+  = 'evaluating'`), so it is what makes a second concurrent job fail instead of writing a
+  second report. `applyTransition` uses the global `prisma`, so it cannot join the `$transaction`
+  that writes `reports` + `report_questions` — a crash between the two leaves `completed` with
+  no report. Marked `ponytail:`; R01's dead-letter is the recovery path.
+- **`reports.status` is `ready`**, not `completed` — the `ReportStatus` enum is
+  `queued|generating|ready|failed`. `pdf_key` stays null (I12/R01).
+- **`prompt_uuid`/`prompt_version`** come from `loadPromptRegistry().resolve(
+  PROMPT_NAMES.generateReport)` (memoised), not from the `llm_calls` row: the chain can fall
+  back to another provider, never to another prompt.
+- **Model-invented `question_id`s are dropped** from `report_questions` (logged
+  `REPORT_QUESTION_ID_UNKNOWN`) and kept in `payload` — a bad FK must not roll back a valid
+  report.
+- **`ended_reason` untouched** on both branches, so I08's `budget_exhausted` survives.
+
+**Deviation: ADR-I34** — step 3's enqueue wiring is not done, deliberately. See the ADR.
+
+**Test-side notes.** `failed` is terminal, so the scenario's second `the report job runs`
+provisions a fresh interview in `evaluating` (the step re-provisions when the subject is not
+`evaluating`). `AI_OUTPUT_SCHEMA_INVALID` is captured by patching the pino singleton's `warn`
+inside the step file (restored in `After`), the same shape as `clock.now` in answers.steps.ts;
+the assertion step itself is ai-provider.steps.ts's existing `an "…" event is emitted` regex,
+so events go into `world.events`.
+
+Verification: `npm run test:acceptance -- --tags "@schema-validation"` → `1 scenario (1
+passed) / 15 steps (15 passed)`. Red first with the gate stubbed out (`1 !== 0` on the stored
+payload). Full rings: default 40/40, auth 18/18 (auth needs `DATABASE_URL=…/interviewly_test`),
+105 unit, lint + typecheck + `npm run -w @interviewly/backend build` clean.
+
+**For R01:** call `runReport(interviewId, { traceId })` from the BullMQ consumer — that is the
+whole binding. It throws on transport failures (retry) and returns normally on both terminal
+branches. PDF rendering hangs off the `reports` row it wrote (`status: 'ready'`, `pdf_key`
+null). `report_questions` is already denormalised for K11.
