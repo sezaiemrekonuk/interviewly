@@ -1,10 +1,10 @@
 ---
 task: A03
 author: Ahmet
-sessions: [2026-07-31]
-model: claude-opus-4.8[1m]
+sessions: [2026-07-31, 2026-08-03]
+model: claude-opus-5[1m]
 model_recommended: claude-sonnet-4.6
-iterations: 3
+iterations: 4
 tools: [superpowers:brainstorming, superpowers:test-driven-development]
 ---
 
@@ -182,3 +182,54 @@ anything. A CSS variable names a font; it does not use it.
   assembled by hand, not against `docker compose up`, which is what the Definition of done
   names. The row stays `blocked`; the run is recorded as evidence for the proposed F03 fix
   rather than as the verification it is not.
+
+## Session 3 — 2026-08-03
+
+### What I asked for / what came back
+
+"Do what's left with auth." A03 was the only row not `done`, blocked for two sessions on
+BLOCKER-1b. Checked the three packaging defects before assuming anything: `backend/Dockerfile`
+now links `@interviewly/ai`, asserts `test -f backend/dist/src/index.js`, and
+`packages/ai/package.json` `main` is `dist/index.js`. All three fixed by F03. So the blocker
+was stale and the only outstanding work was step 10 — verification.
+
+Tier mismatch again, and again overridden by the human: `MODELS.md` says
+`claude-sonnet-4.6`, this session is `claude-opus-5[1m]`. No implementation was authored;
+one test assertion moved.
+
+### Methodology trace
+
+```
+docker compose up -d --build        → 8/8 containers, api healthy, edge running
+/api/healthz 200 · /sign-in 200 · /api/me 401 UNAUTHENTICATED
+component ring                      → 13 passed
+playwright smoke                    → 2 failed: expected /dashboard, got /onboarding/1
+smoke assertion → K8.7              → 2 passed
+lint · typecheck · npm test (122)   → clean
+cucumber -p auth                    → 23 scenarios, 195 steps, passed
+```
+
+### Friction
+
+Two environment traps, neither a code defect:
+
+- **The register limiter ate the fixture.** 3/hr/IP, and the first (failing) smoke run had
+  already spent it. Deleted the two `ratelimit:register:*` keys rather than `FLUSHALL` — the
+  same DB holds the seeded demo admin. The smoke is still twice-per-hour-per-IP; CI needs an
+  ephemeral Redis or a reset hook, as session 2 already noted.
+- **`npx cucumber-js -p auth` could not reach the container's Postgres.** A Postgres on this
+  machine holds `127.0.0.1:5432`, so `localhost` resolves to it and not to the published
+  container port — `P1010: User was denied access`, which reads like a credentials problem
+  and is not. Confirmed with `lsof -nP -iTCP:5432 -sTCP:LISTEN`, then ran the ring through a
+  throwaway `alpine/socat` container on 5434. No repo file changed for it.
+
+### What I rejected and rewrote by hand
+
+- **"Fix the code, never the command" applied literally to the failing smoke.** The smoke
+  asserted `/dashboard`; the app sent a brand-new account to `/onboarding/1`. Reverting the
+  routing to satisfy it would have deleted K8.7 — A06's whole point, and asserted by the
+  component ring one commit earlier. The test was written before A06 and A03's own Notes had
+  predicted the change ("`DEFAULT_LANDING_PATH` is the single call site A06 replaces"). Moved
+  the assertion, and wrote down why `/dashboard` is unreachable from this file: it is the
+  terminal branch of the rule, needing onboarding done *and* one interview.
+- **`redis-cli FLUSHALL` to clear the limiter.** Scoped to two `DEL`'d keys instead.
