@@ -1,7 +1,10 @@
 # Adaptive — State
 
-Last updated: 2026-07-30
-Last session ended: **—** Ledger written; no task has started yet.
+Last updated: 2026-08-01
+Last session ended: **D02 done (Fatih, 2026-08-01).** `prepareNextCandidates` at
+`backend/modules/interview/candidate-prep.ts`; selftest exits 0 printing `candidate-prep selftest
+OK`. N+1 row resolved via `currentQuestionRow` (state.ts), `priorScore=3` midpoint, topics from
+asked questions. typecheck + eslint clean. Next: D03 (opus-tier, both D01 and D02 done).
 
 ## Execution protocol (follow exactly)
 
@@ -18,12 +21,14 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**D01 — Adaptive score→question selector and malformed-score guard** is the first `todo`
-task and has no in-ledger dependency. It consumes the `Scores` schema from `@interviewly/ai`
-(I01) and the `ChosenReason` enum vocabulary (F02), so those must be `done` in their ledgers
-(see Cross-ledger section). It is a **pure module** — no DB, no network — so its trap is
-correctness, not wiring: every row of the B5 selection table, both end-clamps, and the
-malformed-score branch must be covered by the self-check before you claim it green.
+**D02 is done (2026-08-01).** Per EXECUTE.md § 4 the next adaptive task is **D03 — Score-driven
+promotion and malformed-score fallback** (D01 and D02 both `done`). D03 is **opus-tier**
+(`claude-opus-4.8` per MODELS.md) — must be run in an Opus session or the tier check stops it.
+
+D01 (delivered): pure `selectNextQuestion(rawScore, current)` at
+`backend/modules/interview/adaptive-select.ts` validates the raw score against `ScoresSchema`
+(imported from `@interviewly/ai`), applies the B5 table with clamped difficulty shifts, and
+returns `fallback` for any schema-invalid score. Self-check at `adaptive-select.selftest.ts`.
 
 ## Environment
 
@@ -69,8 +74,8 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 
 | ID | Title | Repo | Status | Depends on |
 |----|-------|------|--------|------------|
-| D01 | Adaptive score→question selector and malformed-score guard (pure module) | | todo | F01, F02, F03, I01 |
-| D02 | Next-question candidate pre-generation during a turn | | todo | F01, F02, F03, I01, I02, I04 |
+| D01 | Adaptive score→question selector and malformed-score guard (pure module) | | done | F01, F02, F03, I01 |
+| D02 | Next-question candidate pre-generation during a turn | | done | F01, F02, F03, I01, I02, I04 |
 | D03 | Score-driven promotion and malformed-score fallback (greens `@adaptive-questions`) | | todo | D01, D02, I02, I06 |
 
 D01 and D02 are **genuinely independent** of each other — either order is safe. D03 depends on

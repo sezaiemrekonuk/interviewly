@@ -1,5 +1,5 @@
 # D01 — Adaptive score→question selector and malformed-score guard (pure module)
-REPO: (this repo) · Depends: F01, F02, I01 · Status: todo
+REPO: (this repo) · Depends: F01, F02, I01 · Status: done
 Read first: STATE.md, REFERENCE.md, then this.
 **Model: claude-opus-4.8** — this module maps an answer score to a next-question difficulty/topic move AND guards the invariant that a malformed score can never select a graded question; a cheaper model has produced off-by-one difficulty clamps and guards that let out-of-range values through on similar AI-trust tasks.
 
@@ -57,7 +57,7 @@ bad score never yields a graded pick.
   index-±1 without clamp under/overflows the enum. Test both clamps explicitly.
 
 ## Steps
-- [ ] **1. Create `backend/modules/interview/adaptive-select.ts`**
+- [x] **1. Create `backend/modules/interview/adaptive-select.ts`**
   - Import `Scores` from `@interviewly/ai`; import `Difficulty`, `ChosenReason` types from the
     Prisma client (F02).
   - Define the discriminated-union return type described in Non-negotiables.
@@ -72,7 +72,7 @@ bad score never yields a graded pick.
       `chosenReason: 'score_high'`.
   - Implement the level shift via an ordered array `['easy','medium','hard']` with a clamped
     index — no `if` ladder that silently falls through.
-- [ ] **2. Create `backend/modules/interview/adaptive-select.selftest.ts`**
+- [x] **2. Create `backend/modules/interview/adaptive-select.selftest.ts`**
   - Plain Node asserts, no test framework (ponytail: one runnable check, no fixtures).
   - Assert the five representative rows: `overall 0`, `2`, `3`, `4`, `5` from a `medium`+`X`
     current → the expected difficulty / topicMove / chosenReason.
@@ -82,7 +82,7 @@ bad score never yields a graded pick.
     `{ overall: 3.5 }` → each returns `{ graded: false, chosenReason: 'fallback' }`.
   - `console.log('adaptive-select selftest OK')` and `process.exit(0)` on success; any failed
     assert throws and exits non-zero.
-- [ ] **3. Run the Verification command; confirm it exits 0.**
+- [x] **3. Run the Verification command; confirm it exits 0.**
 
 ## Definition of done
 - `selectNextQuestion` returns the B5 table result for every valid `overall`, with both
@@ -105,7 +105,36 @@ exits non-zero — fix the code, never the assert.
 
 ## Notes
 
-(Empty until the task is done. Fill with: what actually happened, any deviation from the B5
-table, the exact `Scores` import path used, whether the `ChosenReason`/`Difficulty` types
-imported cleanly from the Prisma client or needed a type shim, the selftest output verbatim,
-and a "For D03" hand-off line noting the exact return-type shape D03 will branch on.)
+**Done 2026-08-01.** Both files created; verification exits 0.
+
+- **What happened:** implemented `selectNextQuestion(rawScore, current)` in
+  `backend/modules/interview/adaptive-select.ts` exactly per the B5 table — no deviation. Level
+  shift is an ordered `['easy','medium','hard']` array with a `Math.min/Math.max` clamped index
+  (no `if` ladder), so `hard`+1 clamps to `hard` and `easy`-1 clamps to `easy`.
+- **Import correction:** the task/REFERENCE pseudocode says `import { Scores }` and
+  `Scores.safeParse`, but `@interviewly/ai` exports the **schema** as `ScoresSchema` (the value)
+  and `Scores` as the inferred **type**. Used `import { ScoresSchema } from '@interviewly/ai'`
+  for `safeParse`. No local redefinition — single-sourced.
+- **Enums:** `import type { ChosenReason, Difficulty } from '@prisma/client'` imported cleanly,
+  **no type shim needed** (Prisma generates them as string-literal unions). The graded/fallback
+  `chosenReason` values are typed via `Extract<ChosenReason, …>` so a renamed enum member breaks
+  the compile rather than drifting silently.
+- **Purity:** no DB, no network, no logging, no `Date.now()`, no randomness, no new error code.
+  A malformed score is a return value (`fallback`), never a throw.
+- **Selftest output (verbatim):** `adaptive-select selftest OK`, exit code 0. Covers the 5 B5
+  rows, both clamps, and the malformed guard four ways (`{overall:9}`, `null`, `"bad"`,
+  `{overall:3.5}`).
+- **Gates:** repo `npm run typecheck` = 0; `eslint` on both new files = 0. `npm test`: 74/74
+  tests pass; 2 unrelated test *files* (`csrf.test.ts`, `profile.test.ts`, I05/I06) crash at
+  import on `env.ts` `process.exit(1)` (`ENV_VALIDATION_FAILED`) because there is no local
+  `.env` — pre-existing, orthogonal to D01, which imports neither.
+
+**For D03:** import `{ selectNextQuestion, type AdaptiveSelection } from './adaptive-select'`.
+Branch on the discriminant `graded`:
+- `{ graded: false, chosenReason: 'fallback' }` → keep the default next-question row, log
+  `LLM_FALLBACK_TRIGGERED` (questionId only).
+- `{ graded: true, difficulty, topicMove: 'same'|'new', chosenReason: 'score_low'|'score_mid'|'score_high' }`
+  → rewrite the next unasked row's `difficulty`/`chosen_reason`; `topicMove` tells you whether
+  to keep `current.topic` (`'same'`) or move to a new one (`'new'`). The selector deliberately
+  does **not** pick the concrete new topic string — that is D03's call using the pre-generated
+  candidates (D02).
