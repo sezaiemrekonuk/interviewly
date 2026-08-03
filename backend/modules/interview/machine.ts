@@ -34,7 +34,9 @@ export function canTransition(from: InterviewState, to: InterviewState): boolean
 export async function applyTransition(
   interview: Interview,
   to: InterviewState,
-  ctx: { traceId: string },
+  // I08: the terminal edges carry why they ended. Written with the state so the two cannot
+  // disagree — `ended_reason` set in a follow-up write would be visible unset for a moment.
+  ctx: { traceId: string; endedReason?: Interview['ended_reason'] },
 ): Promise<InterviewState> {
   const from = interview.state;
   if (!canTransition(from, to)) throw new ApiError('INVALID_STATE_TRANSITION');
@@ -44,7 +46,7 @@ export async function applyTransition(
   // at write time, which is what makes the guard hold across concurrent requests and replicas.
   const { count } = await prisma.interview.updateMany({
     where: { id: interview.id, state: from },
-    data: { state: to },
+    data: { state: to, ...(ctx.endedReason ? { ended_reason: ctx.endedReason } : {}) },
   });
   if (count === 0) throw new ApiError('INVALID_STATE_TRANSITION');
 

@@ -1,5 +1,5 @@
 # I08 — Budget enforcement (in-transaction ceiling, exhaustion path)
-REPO: (this repo) · Depends: I06, I02 · Status: todo
+REPO: (this repo) · Depends: I06, I02 · Status: done
 Read first: STATE.md, REFERENCE.md, then this.
 **Model: claude-opus-4.8** — the $0.50 ceiling is the cost invariant (§7.3). Reading `spent_usd` outside the `llm_calls` transaction opens a double-charge race; losing the triggering answer on exhaustion is a data-loss defect. Both are subtle.
 
@@ -64,17 +64,16 @@ path itself — it wraps the call site.
   AI call + `spent_usd` increment. Do not fold the answer insert into the budget transaction.
 
 ## Steps
-- [ ] **1. Write `budget.ts`** — `withBudget(interviewId, tx, fn)`: in-tx ceiling read, throw
-  `BudgetExceeded` on exhaustion (no call), else run `fn` and increment `spent_usd` in `tx`.
-- [ ] **2. Wrap the AI call** in `answers.ts` with `prisma.$transaction(tx =>
-  withBudget(...))`, after the answer is already persisted.
-- [ ] **3. Handle `BudgetExceeded`** — `applyTransition(→ evaluating)`, `ended_reason =
+- [x] **1. Write `budget.ts`** — `withBudget(interviewId, fn)`: advisory-locked ceiling read,
+  throw `BudgetExceeded` on exhaustion (no call), else run `fn` under the lock (ADR-I33).
+- [x] **2. Wrap the AI call** in `answers.ts`, after the answer is already persisted.
+- [x] **3. Handle `BudgetExceeded`** — `applyTransition(→ evaluating)`, `ended_reason =
   'budget_exhausted'`, log `BUDGET_EXHAUSTED`, 402 `BUDGET_EXCEEDED`.
-- [ ] **4. Confirm** the exhaustion `→ evaluating` edges are listed in `machine.ts` (I07).
-- [ ] **5. Wire acceptance step-defs** for `interview_flow.feature` @AC-11 (spent equals
+- [x] **4. Confirm** the exhaustion `→ evaluating` edges are listed in `machine.ts` (I07).
+- [x] **5. Wire acceptance step-defs** for `interview_flow.feature` @AC-11 (spent equals
   budget inside the next AI transaction → 402 `BUDGET_EXCEEDED`, answer stored, no AI call
   recorded, state `evaluating`, endedReason `budget_exhausted`).
-- [ ] **6. Run the `## Verification` command.**
+- [x] **6. Run the `## Verification` command.**
 
 ## Definition of done
 - When `spent_usd >= budget_usd` inside the AI transaction, no provider call is made, the
@@ -89,4 +88,43 @@ npm run test:acceptance -- --tags "@interview-flow and @AC-11"
 ```
 
 ## Notes
-_(fill in when the task is done)_
+
+**What exists.** `backend/modules/interview/budget.ts`: `BudgetExceeded` +
+`withBudget(interviewId, fn)`. Signature is `(id, fn)`, **not** the `(id, tx, fn)` this file
+sketched — see the deviation below. `answers.ts` wraps the ADR-I22 `ensureTechBatch` call in
+it; `BudgetExceeded` → `BUDGET_EXHAUSTED` log → `applyTransition(→ evaluating,
+{ endedReason: 'budget_exhausted' })` → 402 `BUDGET_EXCEEDED`. `machine.ts`'s `applyTransition`
+now takes an optional `ctx.endedReason` and writes it with the state in the one `updateMany`.
+
+**Deviation — ADR-I33.** The brief's literal shape (row-level `FOR UPDATE`, charge joining the
+gate's transaction) was implemented first and fails two ways:
+
+- **Deadlock.** `generateRound`'s question insert takes `FOR KEY SHARE` on the same
+  `interviews` row from another connection. Every HR `@interview-flow` scenario hung 5 s and
+  500'd. `FOR NO KEY UPDATE` fixes that one but not the `applyTransition(→ paused)` on
+  `generateRound`'s provider-failure path, which needs the same row from a third connection.
+- **Lost charges.** Any throw after a paid attempt (`AI_OUTPUT_INVALID` is the live one) rolls
+  the gate's transaction back, so `llm_calls` and the `spent_usd` increment vanish for a call
+  that really was billed. A retry loop would then bill without limit — the exact failure the
+  ceiling exists to stop.
+
+The gate is therefore `pg_advisory_xact_lock(8108, hashtext(id))` held across the call, with
+the charge left in `recordLlmCall`'s own transaction. `llm_calls.tx` plumbing through
+`@interviewly/ai` is **not** needed and was not added — `writeLlmCall`'s existing `tx?`
+parameter stays unused by this task.
+
+**Gate placement.** `hr_round` only, because that is the only round whose answer incurs an AI
+call (ADR-I22). A `tech_round` answer makes no call, so it is not gated; the interview reaches
+`evaluating` on its own and I09 sees the spend there.
+
+**Verification.** `npm run test:acceptance -- --tags "@interview-flow and @AC-11"` → 1
+scenario, 9 steps, passed. Full rings 33/33 and 11/11, 97 unit, lint + typecheck clean.
+`@AC-11`'s `@unwired` tag is deleted (ADR-I26).
+
+**For I09.** The exhaustion path lands in `evaluating` with `ended_reason` already set and
+`REPORT_JOB_ENQUEUED` already emitted, so the report runs from whatever answers exist. Do not
+re-set `ended_reason` on that path — a completed report must not overwrite `budget_exhausted`.
+
+**For I13/anyone adding an advisory lock.** Namespace `8108` is taken. Pick another; a
+collision inside a namespace only over-serialises, but two features sharing one is a
+throughput bug nobody will find.

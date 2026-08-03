@@ -712,3 +712,22 @@ own error. `generation.ts` catches and logs `INTERVIEW_PAUSE_FAILED` around the 
 `AI_PROVIDER_UNAVAILABLE` still reaches the candidate. Same review: `publishStateChanged` is
 best-effort (`INTERVIEW_EVENT_PUBLISH_FAILED`) because a room recovers via `GET /state`;
 `enqueueReport` is deliberately **not**, since a dropped report job is data loss (R01).
+
+## ADR-I33 — 2026-08-03 — the budget gate is an advisory lock, not a row lock
+
+**Context:** I08's brief says the ceiling read shares the `llm_calls` transaction. Built that
+way (`SELECT … FOR UPDATE` on `interviews`, charge joining the same tx) it deadlocks: the
+question insert inside `generateRound` takes `FOR KEY SHARE` on the same row from another
+connection, and every `@interview-flow` HR scenario hung 5 s and 500'd.
+
+**Decision:** `withBudget(interviewId, fn)` opens a short interactive transaction, takes
+`pg_advisory_xact_lock(8108, hashtext(id))`, reads `spent_usd >= budget_usd` under it, and
+runs `fn` with the lock held. The charge stays where I02 put it — `recordLlmCall`'s own
+transaction, on its own connection.
+
+**Consequences:** mutual exclusion across the provider call is what actually closes the
+check-then-call race, and this closes it without touching row locks. It also keeps a failed
+generation's `llm_calls` rows: folding them into the gate's transaction would roll back the
+audit — and the charge — for an attempt that really was billed, which is the opposite of what
+the ceiling is for. Cost: one interview's generations serialise, and the transaction is open
+for the call's duration (45 s cap).

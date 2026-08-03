@@ -186,7 +186,7 @@ All paths relative to repo root. Each exists once its providing task lands.
 | `backend/modules/interview/machine.ts` | I06 | K2 transition table + guard (extended I07) |
 | `backend/modules/interview/resume.ts` | I07 | `POST /resume`: `paused → round` |
 | `backend/modules/interview/sse.ts` | I07 | `INTERVIEW_STATE_CHANGED` SSE fan-out |
-| `backend/modules/interview/budget.ts` | I08 | In-transaction ceiling read |
+| `backend/modules/interview/budget.ts` | I08 | `withBudget(id, fn)`: advisory-locked ceiling (ADR-I33) |
 | `backend/modules/interview/report-run.ts` | I09 | `evaluating → completed\|failed`, store payload |
 | `backend/modules/interview/language.ts` | I10 | Two-consecutive-turn switch counting |
 | `backend/modules/interview/uploads.ts` | I11 | `POST /uploads`: validate, extract, dedup |
