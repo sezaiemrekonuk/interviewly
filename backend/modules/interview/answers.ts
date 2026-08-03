@@ -15,6 +15,7 @@ import { clock } from '../../src/lib/clock';
 import { prisma } from '../../src/lib/db';
 import { logger } from '../../src/lib/logger';
 
+import { BudgetExceeded, withBudget } from './budget';
 import { ensureTechBatch } from './generation';
 import { applyTransition } from './machine';
 import { currentQuestionRow } from './state';
@@ -86,13 +87,35 @@ export const submitAnswer: RequestHandler = async (req, res) => {
     'ANSWER_RECORDED',
   );
 
-  // >>> I08 mounts the budget ceiling HERE: after the turn is stored (@AC-11 keeps the answer
-  // >>> that trips the ceiling) and before the AI call the handover below may incur.
-
   const nextIndex = expected + 1;
   // ADR-I22: the technical batch is generated during the HR round, not by the transition into
   // it, so the handover is never a loading screen. Idempotent — every HR answer may call it.
-  if (interview.state === 'hr_round') await ensureTechBatch(interview, { traceId });
+  //
+  // I08 mounts the ceiling here, after the turn is stored: @AC-11 keeps the answer that trips
+  // it. An exhausted budget ends the interview rather than refusing this one call, because
+  // every remaining turn — and the report — would cost too.
+  if (interview.state === 'hr_round') {
+    try {
+      await withBudget(interview.id, () => ensureTechBatch(interview, { traceId }));
+    } catch (err) {
+      if (!(err instanceof BudgetExceeded)) throw err;
+      logger.warn({ traceId, interviewId: interview.id }, 'BUDGET_EXHAUSTED');
+      // ADR-I32: a losing transition must not replace the caller's error — the request is a
+      // 402 whether or not this one is the request that moved the interview.
+      try {
+        await applyTransition(interview, 'evaluating', {
+          traceId,
+          endedReason: 'budget_exhausted',
+        });
+      } catch (transitionErr) {
+        logger.error(
+          { err: transitionErr, traceId, interviewId: interview.id },
+          'INTERVIEW_END_FAILED',
+        );
+      }
+      throw new ApiError('BUDGET_EXCEEDED');
+    }
+  }
 
   let state: InterviewState = interview.state;
   if (nextIndex > interview.target_question_count) {

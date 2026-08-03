@@ -34,7 +34,7 @@ Feature: Sequential interview flow
     And the stored answer duration_ms is 12000
     And no audio session is required
 
-  @interview-flow @backend @AC-11 @unwired
+  @interview-flow @backend @AC-11
   Scenario: Budget exhaustion preserves the triggering answer without an AI call
     Given I am on the current question of an interview
     And the interview spent_usd equals its budget_usd inside the next AI transaction
