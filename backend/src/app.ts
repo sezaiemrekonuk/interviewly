@@ -13,6 +13,7 @@ import authRouter, { meRouter } from '../modules/auth/router';
 import { mountTestSeam } from '../modules/auth/test-seam';
 import { listMyInterviews } from '../modules/interview/my-interviews';
 import interviewRouter from '../modules/interview/router';
+import { createUpload, uploadMiddleware } from '../modules/interview/uploads';
 import voiceRouter from '../modules/voice/session';
 
 export const app = express();
@@ -31,6 +32,7 @@ app.get('/healthz', (_req, res) => {
 app.use('/auth', authRouter);
 app.use('/', meRouter);
 app.get('/me/interviews', requireAuth, listMyInterviews);
+app.post('/uploads', requireAuth, uploadMiddleware, createUpload);
 app.use('/interviews', voiceRouter);
 app.use('/interviews', interviewRouter);
 app.use('/admin', adminRouter);
