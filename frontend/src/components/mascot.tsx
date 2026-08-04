@@ -4,9 +4,10 @@ import { useTranslations } from 'next-intl';
 // sha256 of the seed's PLACEHOLDER_WEBP (backend/prisma/seed.ts). Real artwork lands at a
 // different digest, so the deployed value is env-supplied; this is only the seeded default.
 const SEED_SHA256 = '86be52bdb7547413cafb3ed175a806a798c65de98b40849e0b974c47d187de65';
-const SHA256 = process.env.NEXT_PUBLIC_MASCOT_SHA256 || SEED_SHA256;
+const rawSha256 = process.env.NEXT_PUBLIC_MASCOT_SHA256;
+const SHA256 = rawSha256 && /^[0-9a-f]{64}$/i.test(rawSha256) ? rawSha256.toLowerCase() : SEED_SHA256;
 // Mirrors the backend's S3_PUBLIC_PREFIX; the edge proxies it to the bucket.
-const ASSET_PREFIX = process.env.NEXT_PUBLIC_ASSETS_PREFIX || '/assets';
+const ASSET_PREFIX = (process.env.NEXT_PUBLIC_ASSETS_PREFIX || '/assets').replace(/\/+$/, '');
 
 export function mascotKey(pose: MascotPose): string {
   return `mascot/${pose}-${SHA256}.webp`;
