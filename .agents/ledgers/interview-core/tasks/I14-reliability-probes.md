@@ -42,14 +42,14 @@ This task adds the two probe routes. No auth, no rate limit.
   dependency checks in `/readyz` only.
 
 ## Steps
-- [ ] **1. Write `probes.ts`** — `liveness()` and `readiness()` (Postgres `SELECT 1` + Redis
+- [x] **1. Write `probes.ts`** — `liveness()` and `readiness()` (Postgres `SELECT 1` + Redis
   `PING`, each timeout-bounded).
-- [ ] **2. Mount** `GET /healthz` and `GET /readyz` in `app.ts` before auth, returning 200 /
+- [x] **2. Mount** `GET /healthz` and `GET /readyz` in `app.ts` before auth, returning 200 /
   503 `NOT_READY`.
-- [ ] **3. Wire acceptance step-defs** for `reliability.feature` @AC-19 (`/healthz` → 200;
+- [x] **3. Wire acceptance step-defs** for `reliability.feature` @AC-19 (`/healthz` → 200;
   both deps reachable → `/readyz` 200; Postgres down → `/readyz` 503 `NOT_READY`; Redis down →
   `/readyz` 503 `NOT_READY`).
-- [ ] **4. Run the `## Verification` command.**
+- [x] **4. Run the `## Verification` command.**
 
 ## Definition of done
 - `GET /healthz` returns 200 with no dependency checks.
@@ -62,4 +62,12 @@ npm run test:acceptance -- --tags "@reliability"
 ```
 
 ## Notes
-_(fill in when the task is done)_
+- `probes.ts` pings via existing clients: `prisma` (F02) and `redis` from
+  `modules/auth/rate-limit.ts` — no new Redis client.
+- Test seam `setProbeOverrides({ pingPostgres?, pingRedis? })`, same shape as
+  `setEmailQueue`. `{}` resets both to real pings; wired into `server.ts`'s `Before` hook so
+  no scenario leaks a forced-down probe into the next.
+- `reliability.feature` was authored (Stage 2) but missing from `cucumber.js`'s `default`
+  allow-list — added it there; that's why `--tags @reliability` matched 0 scenarios at first.
+- `/healthz` body changed `{status:'ok'}` → `{ok:true}` per this task's spec; nothing else
+  asserted on the old shape (grepped).
