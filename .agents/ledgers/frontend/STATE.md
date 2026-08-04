@@ -1,13 +1,16 @@
 # Frontend — State
 
 Last updated: 2026-08-04
-Last session ended: **W02 done**, plus a W01 repair: `assets.test.ts` asserted local literals
-against local literals (a 6th seed pose passed). It now reads `packages/types/src/index.ts`,
-the `schema.prisma` enums and `seed.ts` and requires all three to agree — 58 ui-checks tests. React Query layer (`lib/query.ts` — `queryKeys`, `ApiError`,
-`createQueryClient`), `useInterviewEvents` (listens to the **named** `INTERVIEW_STATE_CHANGED`
-event; payload never read), `routeForError`, `<LocaleSwitcher>` + `NEXT_LOCALE` cookie read in
-`i18n.ts`, `Providers` mounted in `layout.tsx`. New test utils W06/W07/W10 must reuse:
-`src/test/event-source-mock.ts`, `renderWithProviders`. Frontend ring 109 pass, root 217.
+Last session ended: **W03 done.** Landing is a Server Component (`page.tsx` + `page.module.css`,
+locale switcher the only client island). `<Mascot pose size? alt? className?>` exports
+`mascotKey`/`mascotUrl` and renders its own per-pose `<link rel=preload>` — every later screen
+reuses it instead of building a key. Asset URL = `NEXT_PUBLIC_ASSETS_PREFIX` (default `/assets`)
++ `mascot/{pose}-{NEXT_PUBLIC_MASCOT_SHA256}.webp` (default = seed placeholder digest); W06's
+`<Avatar>` needs the same two constants. Copy: `landing.*` (nested `props.*`) + `mascot.*` alts
+in both locales. `frontend/tsconfig.json` now maps `@interviewly/types` (root-config mirror) —
+without it `next build` fails while root `tsc` passes, so **run `npm run -w frontend build`
+before pushing**. Frontend ring 125 pass, root 236. **New blocker below: the edge `/assets/*`
+route cannot serve the bucket, so the mascot 404s in the composed stack.**
 
 ## Execution protocol (follow exactly)
 
@@ -24,8 +27,8 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**W03 (`<- W01, W02`)** is now the eligible task — landing + `<Mascot>`. W04/W05/W07/W08/W11
-also unblock (deps `done`); § 4 order picks the lowest ID.
+**W04 (`<- W02, A06`)** is next — onboarding host, screens 6–8. W05/W07/W08/W11 are also
+eligible (deps `done`); § 4 order picks the lowest ID.
 
 ## Environment
 
@@ -71,6 +74,16 @@ npx playwright test                               # smokes against `docker compo
 
 ## Open blockers / decisions for the user
 
+- **The edge cannot serve bucket objects, so every avatar/mascot `<img>` 404s in the composed
+  stack** (found in W03). Two gaps, both infra, neither in a frontend task's scope: (1)
+  `Caddyfile` uses `handle /assets/*` → `bucket:9000`, so MinIO receives `/assets/mascot/…` and
+  reads `assets` as the bucket name — it needs the `interviewly` bucket segment (`handle_path` +
+  rewrite, or a bucket named `assets`); (2) `seed.ts` PUTs the objects with a public-read cache
+  header but never sets an anonymous-read bucket policy. Frontend resolves the key correctly
+  (`mascotUrl`), so this is one Caddy route + one policy call away. **Chase in foundations
+  (F03/F02, Sezai) as its own task — do not patch the Caddyfile from a `W` task.** Blocks
+  nothing at test time; blocks the demo looking right.
+
 - **`GET /interviews/:id` (report+transcript read) is owned by no task.** The backend spec
   defines it (line 107, `{ interview, transcript, report? }`) and report **R01**'s DoD assumes
   it (`report/tasks/R01-...md:127`), but no task adds the handler — the interview router has no
@@ -93,7 +106,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 |----|-------|------|--------|------------|
 | W01 | UI build/seed checks: token lint, AA-contrast (incl. gradient stops), avatar/mascot set completeness + budgets + content-hash keys, gradient route-list, shadow-tier | | done | F01, F02 |
 | W02 | App shell + React Query data layer + `useInterviewEvents` SSE hook + error-code→route map + locale switcher | | done | F01, A01 |
-| W03 | Landing (screen 1) + `<Mascot>` primitive with per-pose preload | | todo | W01, W02 |
+| W03 | Landing (screen 1) + `<Mascot>` primitive with per-pose preload | | done | W01, W02 |
 | W04 | Onboarding host (screens 6–8): 3 cards, per-card PATCH, CV upload, skip/complete, server-derived resume | | todo | W02, A06 |
 | W05 | Setup (screen 9) + 390px mobile: listing textarea, chips, option cards, detected-summary edit, pre-questions/skip | | todo | W02, I03, I04, I11 |
 | W06 | Interview room text mode (screen 11) + widgets + 390px: two tiles, banner, avatar state machine, typed animation, guarded submit, handover, report-wait | | todo | W02, I03, I06, I07 |

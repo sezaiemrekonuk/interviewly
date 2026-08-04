@@ -19,7 +19,10 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      // Same mapping as the root tsconfig. The package ships `types: dist/…` and nothing
+      // builds it, so `next build` must resolve it from source or it cannot typecheck.
+      "@interviewly/types": ["../packages/types/src/index.ts"]
     }
   },
   "include": [

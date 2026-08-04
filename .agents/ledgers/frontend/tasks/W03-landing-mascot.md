@@ -1,5 +1,5 @@
 # W03 — Landing page (screen 1) + the `<Mascot>` primitive
-REPO: (this repo) · Depends: W01, W02 · Status: todo
+REPO: (this repo) · Depends: W01, W02 · Status: done
 Read first: STATE.md, REFERENCE.md, then this.
 **Model: claude-sonnet-4.6** — a mostly-static marketing screen plus one reusable presentational
 component. No trust boundary, no state machine; the judgement is layout and the LCP budget.
@@ -50,14 +50,14 @@ reuse for every mascot appearance.
   islands are only the locale switcher and (if added) a tiny CTA handler.
 
 ## Steps
-- [ ] **1. `mascot.tsx`** — the `<Mascot pose>` primitive over the content-addressed key, typed on
+- [x] **1. `mascot.tsx`** — the `<Mascot pose>` primitive over the content-addressed key, typed on
   `MascotPose`.
-- [ ] **2. `landing.*` copy** in both message files.
-- [ ] **3. Replace `page.tsx`** — hero (56 px), value props, one `--primary` register CTA, a
+- [x] **2. `landing.*` copy** in both message files.
+- [x] **3. Replace `page.tsx`** — hero (56 px), value props, one `--primary` register CTA, a
   `<Mascot pose="wave" />`, locale switcher; keep it a Server Component.
-- [ ] **4. `page.test.tsx`** — hero present, exactly one `--primary` CTA → `/register`, mascot in
+- [x] **4. `page.test.tsx`** — hero present, exactly one `--primary` CTA → `/register`, mascot in
   `wave`, EN+TR copy resolves.
-- [ ] **5. Run the `## Verification` command.**
+- [x] **5. Run the `## Verification` command.**
 
 ## Definition of done
 - `/` renders the real landing screen: a 56 px hero, value props, exactly one `--primary` CTA to
@@ -75,4 +75,43 @@ mascot and EN/TR copy; the mascot suite asserts pose→key resolution for all fi
 
 ## Notes
 
-(Empty until the task is done.)
+**Shipped:** `src/components/mascot.tsx` (+`mascot.test.tsx`), `src/app/page.tsx` +
+`page.module.css` (+`page.test.tsx`), `landing.*` and `mascot.*` in `messages/{en,tr}.json`,
+two `NEXT_PUBLIC_*` lines in `.env.example`.
+
+**`<Mascot>` API — reuse it, do not re-resolve a key:**
+- `Mascot({ pose, size = 96, alt?, className? })`. `alt` omitted → localized `mascot.<pose>`;
+  `alt=""` for decorative use (the landing hero passes `""`).
+- `mascotKey(pose)` → `mascot/{pose}-{sha}.webp`; `mascotUrl(pose)` → prefixed URL. Both exported.
+- URL = `NEXT_PUBLIC_ASSETS_PREFIX` (default `/assets`, mirrors backend `S3_PUBLIC_PREFIX`) + key.
+  Digest = `NEXT_PUBLIC_MASCOT_SHA256`, default = the seed `PLACEHOLDER_WEBP` sha256
+  (`86be52bd…de65`). Recompute the default if `seed.ts` swaps the placeholder bytes.
+- Renders its own `<link rel="preload" as="image">` for that pose only — screens must not add
+  a second preload.
+
+**For W06's `<Avatar>`:** same prefix/digest problem, different key template
+(`personas/{personaId}/{state}-{sha}.webp`). Reuse `ASSET_PREFIX`'s env name; consider lifting
+both constants into `src/lib/assets.ts` at that point rather than duplicating them.
+
+**Deviations:** none from the task; two additions. (1) `alt` now comes from a `mascot.*`
+message namespace, per REFERENCE ("alt from `mascot.*`") — the task file only said "optional
+`alt`". (2) Copy was rewritten from the previous run's placeholder strings: value props are
+`props.{practice,feedback,progress}.{title,body}` (nested), not flat `valueProp1..3`.
+
+**Untested here:** the asset URL against the running stack. See STATE.md blockers — the Caddy
+`/assets/*` route does not add the bucket segment MinIO's path-style API needs, so the mascot
+`<img>` 404s under `docker compose up` today. Frontend side is correct; the edge route is F03's.
+
+**`frontend/tsconfig.json` now maps `@interviewly/types` to `../packages/types/src/index.ts`**,
+mirroring the root config. Required: this task is the first frontend import of the package, the
+package ships `types: dist/…`, and nothing builds it — `next build` (the CI `build` job) failed
+with `Cannot find module '@interviewly/types'` while root `tsc` passed. Any later frontend file
+importing a workspace package needs the same mapping added.
+
+**Verification:** `npm run -w frontend test -- src/app/page.test.tsx src/components/mascot.test.tsx`
+→ 16 pass. Root gates: `npm run lint`, `npm run typecheck` clean, `npm test` 236 pass (31 files).
+`npm run -w frontend build` succeeds. `test:acceptance` not run — no backend behaviour touched.
+JS budget not asserted: Next 16 prints no per-route First Load JS table; gzip of the whole
+`.next/static/chunks` tree is ~255 KB across **all** routes, an upper bound, not the landing
+figure. Measure the route properly (bundle analyzer or a Playwright transfer-size assert) when
+W07 closes the demo path.

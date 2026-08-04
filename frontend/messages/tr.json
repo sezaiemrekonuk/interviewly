@@ -5,6 +5,34 @@
     "localeEnglish": "English",
     "localeTurkish": "Türkçe"
   },
+  "landing": {
+    "hero": "Gerçeğinden önce mülakata hazırlan",
+    "subhead": "Bir İK ve bir teknik mülakatçı, gerçek bir görüşme ve her cevaba puanlı rapor.",
+    "cta": "Hesap oluştur",
+    "ctaNote": "Önizleme sürecinde ücretsiz. Kart yok, kurulum yok.",
+    "signIn": "Hesabın var mı? Giriş yap",
+    "props": {
+      "practice": {
+        "title": "Rolüne özel sorular",
+        "body": "İlanı yapıştır ya da rolü yaz — sorular jenerik listeyi değil onu takip eder."
+      },
+      "feedback": {
+        "title": "Her cevaba geri bildirim",
+        "body": "Her cevap, mülakatçının sorduğu kriterlere göre puanlanır."
+      },
+      "progress": {
+        "title": "Tekrar okunabilir rapor",
+        "body": "Güçlü yanlar, eksikler ve tam konuşma dökümü oturum bittikten sonra da durur."
+      }
+    }
+  },
+  "mascot": {
+    "wave": "El sallayan maskot",
+    "point": "Formu işaret eden maskot",
+    "think": "Düşünen maskot",
+    "cheer": "Tezahürat yapan maskot",
+    "shrug": "Omuz silken maskot"
+  },
   "auth": {
     "signIn": "Giriş yap",
     "signInTitle": "Tekrar hoş geldiniz",

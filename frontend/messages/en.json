@@ -5,6 +5,34 @@
     "localeEnglish": "English",
     "localeTurkish": "Türkçe"
   },
+  "landing": {
+    "hero": "Practise the interview before it counts",
+    "subhead": "An HR and a technical interviewer, a real conversation, and a scored report on every answer.",
+    "cta": "Create account",
+    "ctaNote": "Free while in preview. No card, no setup.",
+    "signIn": "Already have an account? Sign in",
+    "props": {
+      "practice": {
+        "title": "Questions for your role",
+        "body": "Paste a job listing or name the role — the questions follow it, not a generic list."
+      },
+      "feedback": {
+        "title": "Feedback on every answer",
+        "body": "Each answer is scored against the criteria the interviewer asked it for."
+      },
+      "progress": {
+        "title": "A report you can reread",
+        "body": "Strengths, gaps and the full transcript, kept after the session ends."
+      }
+    }
+  },
+  "mascot": {
+    "wave": "Mascot waving hello",
+    "point": "Mascot pointing at the form",
+    "think": "Mascot thinking",
+    "cheer": "Mascot cheering",
+    "shrug": "Mascot shrugging"
+  },
   "auth": {
     "signIn": "Sign in",
     "signInTitle": "Welcome back",
