@@ -6,6 +6,7 @@ import { requireVerifiedEmail } from '../auth/verify-email';
 import { submitAnswer } from './answers';
 import { requirePublicOrigin } from './csrf';
 import { deleteInterview } from './delete';
+import { getInterview } from './get';
 import { downloadReport } from './download';
 import { resolveInterview } from './ownership';
 import { submitProfile } from './profile';
@@ -26,6 +27,7 @@ router.param('id', resolveInterview);
 
 // K8.6 — the only gated endpoint in the system (A04's exported middleware; §11.3).
 router.post('/', requireVerifiedEmail, setupInterview);
+router.get('/:id', getInterview);
 router.get('/:id/state', getInterviewState);
 router.delete('/:id', deleteInterview);
 

@@ -5,9 +5,13 @@
   "main": "src/index.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "test": "node --env-file-if-exists=../.env ../node_modules/.bin/vitest run",
     "lint": "cd .. && eslint --config eslint.config.js worker/src"
   },
   "dependencies": {
+    "@interviewly/backend": "*",
     "bullmq": "^6.0.2",
     "ioredis": "^5.11.1",
     "nodemailer": "^9.0.3",
@@ -15,6 +19,8 @@
     "zod": "^3"
   },
   "devDependencies": {
-    "@types/nodemailer": "^8.0.1"
+    "@types/nodemailer": "^8.0.1",
+    "tsx": "^4.23.1",
+    "vitest": "^4.1.10"
   }
 }

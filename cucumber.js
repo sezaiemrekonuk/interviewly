@@ -86,6 +86,7 @@ module.exports = {
       '.agents/features/voice_webhook.feature',
       '.agents/features/admin_cost.feature',
       '.agents/features/schema_validation.feature',
+      '.agents/features/report.feature',
       '.agents/features/upload.feature',
       '.agents/features/object_storage.feature',
     ],

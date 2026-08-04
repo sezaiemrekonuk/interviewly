@@ -4,6 +4,10 @@
     "module": "commonjs",
     "moduleResolution": "node",
     "noEmit": false,
+    // R01: `@interviewly/backend`'s `types` field points at this build's `.d.ts` output, so
+    // `worker` (the only external consumer so far) gets real types on `runReport` instead of
+    // the `implicitly has an 'any' type` tsc gives an untyped `.js` import.
+    "declaration": true,
     "outDir": "dist",
     // All three pinned together, and they have to stay together. The root config maps
     // `@interviewly/*` onto `packages/*/src/*.ts`; those sources then join THIS program, tsc's

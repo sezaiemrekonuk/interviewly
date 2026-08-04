@@ -7,6 +7,7 @@ import { join } from 'node:path';
 
 import { app } from '../../src/app';
 import { prisma } from '../../src/lib/db';
+import { reportQueue } from '../../src/lib/queue';
 import { redis } from '../../modules/auth/rate-limit';
 
 let server: Server | undefined;
@@ -70,4 +71,8 @@ export async function stopApp(): Promise<void> {
   });
   await prisma.$disconnect();
   redis.disconnect();
+  // R01: `app` mounts the interview router, which pulls in `src/lib/queue.ts` and its eager
+  // BullMQ connection. Unclosed it holds the event loop open and the ring hangs after the
+  // summary. This ring never enqueues a report; it only has to let go of the connection.
+  await reportQueue.close();
 }

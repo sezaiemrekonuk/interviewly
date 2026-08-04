@@ -12,6 +12,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint . --ext .ts,.tsx",
     "test": "node --env-file-if-exists=.env node_modules/.bin/vitest run",
+    "//test:integration": "The vitest files `test` excludes: they need a live Postgres and Redis, which the CI `unit` job has neither of. Run against host-reachable servers — `.env`'s `db:5432`/`cache:6379` only resolve inside the compose network — by exporting DATABASE_URL and REDIS_URL first (a shell export wins over --env-file).",
+    "test:integration": "INTEGRATION=1 node --env-file-if-exists=.env node_modules/.bin/vitest run --project worker",
     "test:acceptance": "cucumber-js",
     "seed": "npm run -w backend seed",
     "//prepare": "`|| true` is required for the production image builds: husky is a root dev dependency, so `npm ci --omit=dev` runs this script with husky already uninstalled and the install dies on `sh: husky: not found` (exit 127). HUSKY=0 does not help — npm still invokes the missing binary. There are no git hooks to install in a Docker build stage anyway.",

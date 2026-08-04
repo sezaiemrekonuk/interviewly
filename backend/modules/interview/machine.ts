@@ -74,10 +74,10 @@ export async function applyTransition(
     );
   }
 
-  // NOT wrapped: once R01 makes this a real BullMQ enqueue, a swallowed failure is an
+  // NOT wrapped: this is a real BullMQ enqueue (R01) now, and a swallowed failure would be an
   // interview that reaches `evaluating` and never gets a report. That has to be loud.
   if (to === 'evaluating') {
-    enqueueReport(interview.id, ctx);
+    await enqueueReport(interview.id, ctx);
     // I10: no more turns follow `evaluating` (K2), so no streak can ever complete — drop it
     // rather than let a mid-streak interview's entry sit in the Map until process restart.
     clearLanguageStreak(interview.id);

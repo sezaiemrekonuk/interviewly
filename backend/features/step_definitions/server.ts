@@ -10,6 +10,7 @@ import { setEmailQueue } from '../../modules/auth/mail-queue';
 import { redis } from '../../modules/auth/rate-limit';
 import { app } from '../../src/app';
 import { prisma } from '../../src/lib/db';
+import { reportQueue } from '../../src/lib/queue';
 
 export const serverState: { baseUrl: string } = { baseUrl: '' };
 
@@ -66,12 +67,15 @@ Before(async function resetSharedState() {
   }
 });
 
-// Both `redis` (ioredis, module-level, eager-connects on import) and `prisma` stay open for
-// the whole run. Without closing them here the event loop never drains and cucumber-js hangs
-// after printing its summary instead of exiting — a false "stuck" run, not a failing one.
+// `redis` (ioredis, module-level, eager-connects on import), `prisma` and — since R01 —
+// `reportQueue` (BullMQ, its own connection, constructed at import of src/lib/queue.ts) all
+// stay open for the whole run. Without closing them here the event loop never drains and
+// cucumber-js hangs after printing its summary instead of exiting — a false "stuck" run, not
+// a failing one. This is the same trap the `setEmailQueue` seam above exists for; the report
+// queue cannot take that route because AC-20 asserts on the real job.
 AfterAll(async function stopServer() {
   await new Promise<void>((resolve, reject) => {
     server.close((err) => (err ? reject(err) : resolve()));
   });
-  await Promise.all([prisma.$disconnect(), redis.quit()]);
+  await Promise.all([prisma.$disconnect(), redis.quit(), reportQueue.close()]);
 });
