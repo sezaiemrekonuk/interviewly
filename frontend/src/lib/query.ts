@@ -75,7 +75,10 @@ export function useInterviewState(
 ): UseQueryResult<InterviewStateResponse, ApiError> {
   return useQuery({
     queryKey: queryKeys.interviewState(id ?? ''),
-    queryFn: () => fetchJson<InterviewStateResponse>(`/interviews/${id}/state`),
+    queryFn: () => {
+      if (!id) throw new ApiError('UNKNOWN');
+      return fetchJson<InterviewStateResponse>(`/interviews/${id}/state`);
+    },
     enabled: Boolean(id),
   });
 }
