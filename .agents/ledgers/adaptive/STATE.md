@@ -1,10 +1,14 @@
 # Adaptive — State
 
-Last updated: 2026-08-01
-Last session ended: **D02 done (Fatih, 2026-08-01).** `prepareNextCandidates` at
-`backend/modules/interview/candidate-prep.ts`; selftest exits 0 printing `candidate-prep selftest
-OK`. N+1 row resolved via `currentQuestionRow` (state.ts), `priorScore=3` midpoint, topics from
-asked questions. typecheck + eslint clean. Next: D03 (opus-tier, both D01 and D02 done).
+Last updated: 2026-08-04
+Last session ended: **D03 done (Fatih, 2026-08-04, opus).** Adaptive hook
+`promoteNextQuestion` at `backend/modules/interview/adaptive.ts`, wired into `advanceWithAnswer`
+(I06) as a fail-safe try/catch. **Gated on pre-generated candidates** so an MVP interview is a
+no-op — the full acceptance profile stays 79/79. Steps at
+`backend/features/step_definitions/adaptive.steps.ts` (direct call + injected score client);
+feature added to `cucumber.js`. Adaptive `When` renamed to avoid a verbatim clash with I08's
+budget step. `@adaptive-questions` 6/6, ATDD red confirmed; lint/typecheck/test all clean.
+**All three adaptive tasks (D01–D03) are done — the ledger is complete.**
 
 ## Execution protocol (follow exactly)
 
@@ -21,14 +25,20 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**D02 is done (2026-08-01).** Per EXECUTE.md § 4 the next adaptive task is **D03 — Score-driven
-promotion and malformed-score fallback** (D01 and D02 both `done`). D03 is **opus-tier**
-(`claude-opus-4.8` per MODELS.md) — must be run in an Opus session or the tier check stops it.
+**D03 is done (2026-08-04) — the adaptive ledger (D01–D03) is complete.** All three tasks are
+`done`; there is no next adaptive task. Per EXECUTE.md § 4, pick up work from another ledger.
 
 D01 (delivered): pure `selectNextQuestion(rawScore, current)` at
 `backend/modules/interview/adaptive-select.ts` validates the raw score against `ScoresSchema`
 (imported from `@interviewly/ai`), applies the B5 table with clamped difficulty shifts, and
 returns `fallback` for any schema-invalid score. Self-check at `adaptive-select.selftest.ts`.
+
+D02 (delivered): `prepareNextCandidates` at `backend/modules/interview/candidate-prep.ts`
+generates the three N+1 candidates and persists them to `questions.candidates`.
+
+D03 (delivered): `promoteNextQuestion` at `backend/modules/interview/adaptive.ts` scores the
+answer, runs the D01 selector, and promotes the matching D02 candidate into the next row —
+gated on pre-generated candidates so the MVP flow is untouched. Greens `@adaptive-questions`.
 
 ## Environment
 
@@ -65,7 +75,13 @@ Verification command.
 
 ## Open blockers / decisions for the user
 
-None at ledger-write time.
+D03 is complete and blocks nothing. One **non-blocking follow-up** surfaced: nothing wires
+*automatic* candidate pre-generation into the base answer turn yet (D02's `prepareNextCandidates`
+runs only on a language switch), so adaptive promotion is inert in production until a trigger
+exists. Adding one needs a way to distinguish adaptive interviews from MVP ones — there is no
+`adaptive` flag or dedicated `mode` in the schema, and F02 owns `schema.prisma`. Whoever picks
+this up decides the gating (a flag vs. always-on with the MVP tests updated). D03 itself promotes
+correctly whenever candidates are present, which is all `@adaptive-questions` requires.
 
 ## Task ledger (D01–D03)
 
@@ -76,7 +92,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 |----|-------|------|--------|------------|
 | D01 | Adaptive score→question selector and malformed-score guard (pure module) | | done | F01, F02, F03, I01 |
 | D02 | Next-question candidate pre-generation during a turn | | done | F01, F02, F03, I01, I02, I04 |
-| D03 | Score-driven promotion and malformed-score fallback (greens `@adaptive-questions`) | | todo | D01, D02, I02, I06 |
+| D03 | Score-driven promotion and malformed-score fallback (greens `@adaptive-questions`) | | done | D01, D02, I02, I06 |
 
 D01 and D02 are **genuinely independent** of each other — either order is safe. D03 depends on
 both. Both D01 and D02 also carry cross-ledger dependencies (below) that must be green first.
