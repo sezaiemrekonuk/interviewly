@@ -98,8 +98,8 @@ function pickCandidate(
   move: Extract<AdaptiveSelection, { graded: true }>,
   currentTopic: string,
 ): Candidate | undefined {
-  const byDifficulty = candidates.filter((c) => c.difficulty === move.difficulty);
-  const pool = byDifficulty.length > 0 ? byDifficulty : candidates;
   const wantSameTopic = move.topicMove === 'same';
-  return pool.find((c) => (c.topic === currentTopic) === wantSameTopic) ?? pool[0];
+  return candidates.find(
+    (c) => c.difficulty === move.difficulty && (c.topic === currentTopic) === wantSameTopic,
+  );
 }
