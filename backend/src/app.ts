@@ -6,6 +6,7 @@ import express, { type ErrorRequestHandler } from 'express';
 import { ApiError, httpStatusFor } from './lib/api-error';
 import { config } from './lib/env';
 import { logger } from './lib/logger';
+import { liveness, readiness } from './lib/probes';
 
 import adminRouter from '../modules/admin/router';
 import { requireAuth } from '../modules/auth/middleware';
@@ -34,8 +35,15 @@ app.use((req, _res, next) => {
   next();
 });
 
+// Liveness: no dependency checks (a Postgres/Redis blip must not restart-loop a live
+// process). Readiness pings both; NOT_READY leaks no connection detail (I14).
 app.get('/healthz', (_req, res) => {
-  res.status(200).json({ status: 'ok' });
+  res.status(200).json(liveness());
+});
+app.get('/readyz', async (_req, res) => {
+  const { ready } = await readiness();
+  if (ready) res.status(200).json({ ready: true });
+  else res.status(503).json({ error: { code: 'NOT_READY' } });
 });
 
 app.use('/auth', authRouter);

@@ -10,6 +10,7 @@ import { setEmailQueue } from '../../modules/auth/mail-queue';
 import { redis } from '../../modules/auth/rate-limit';
 import { app } from '../../src/app';
 import { prisma } from '../../src/lib/db';
+import { setProbeOverrides } from '../../src/lib/probes';
 import { reportQueue } from '../../src/lib/queue';
 
 export const serverState: { baseUrl: string } = { baseUrl: '' };
@@ -44,6 +45,7 @@ BeforeAll(async function startServer() {
  * are upserted on deterministic ids: idempotent against a machine that *has* been seeded.
  */
 Before(async function resetSharedState() {
+  setProbeOverrides({});
   const keys = await redis.keys('ratelimit:*');
   if (keys.length > 0) await redis.del(...keys);
 

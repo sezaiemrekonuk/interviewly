@@ -1,13 +1,11 @@
 # Interview-core — State
 
 Last updated: 2026-08-04
-Last session ended: **I13 done, uncommitted** (I10–I12 are merged — `8917828`, `#28`).
-A01's `limiter` is now the exported `keyedLimiter({prefix,limit,windowMs,keyOf,code,event})`
-and `slidingWindowHit` scores from `clock.now()`, so a fixed clock rolls every window.
-`modules/interview/rate-limit.ts` = `dailyInterviewCap` (5/24 h/user, `DAILY_INTERVIEW_LIMIT`,
-`DAILY_LIMIT_HIT`) + `interviewStartLimiter` (10/h/user), both mounted on `POST /interviews`.
-`rate_limits.feature` in `cucumber.js` default profile. Rings 62/62 + auth 23/23, 147 unit,
-lint + typecheck clean. Details in I13 `## Notes`.
+Last session ended: **I14 done, uncommitted.** `probes.ts` (`liveness`/`readiness`, timeout-
+bounded pings over the existing `prisma`/`redis` clients) mounted at `/healthz` (200, no
+deps) and `/readyz` (200/503 `NOT_READY`), before auth. Test seam `setProbeOverrides`, reset
+per-scenario in `server.ts`. Added `reliability.feature` to `cucumber.js` default paths (was
+missing). `@reliability` 3/3 green, lint+typecheck clean. Details in I14 `## Notes`.
 
 ## Execution protocol (follow exactly)
 
@@ -24,9 +22,7 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**I14 (reliability probes: `/healthz`, `/readyz`).** I13 is done. `I14 <- F02, F03` and
-`I15 <- F03` are both eligible — I14 comes first by ID order. Note `/healthz` already exists
-in `src/app.ts` (static 200); I14 owns `/readyz` and whatever `/healthz` must become.
+**I15.** I14 is done. `I15 <- F03` is eligible.
 
 Live hand-offs still open:
 
@@ -130,7 +126,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | I11 | Upload validation (MIME/magic/size/pages/text) + `sha256` dedup | | done | A01, F02 |
 | I12 | Object-storage signed-URL wrapper + report download endpoint | | done | I03 |
 | I13 | Rate limits: daily interview cap + interview-start limiter | | done | I03, A01 |
-| I14 | Reliability probes: `/healthz`, `/readyz` | | todo | F02, F03 |
+| I14 | Reliability probes: `/healthz`, `/readyz` | | done | F02, F03 |
 | I15 | Config: extend env schema with this ledger's keys, fail-fast | | todo | F03 |
 
 ## Critical path
