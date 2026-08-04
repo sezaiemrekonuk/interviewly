@@ -779,3 +779,20 @@ about the real presigner.
 
 **Consequences:** one new runtime dependency. Changing the store means keeping the SigV4 query
 shape or rewriting `parseSignedExpiry`. `FakeStorage` is test-only and stays out of `src/lib`.
+
+## ADR-I37 — 2026-08-04 — `env.ts` is the first import in `index.ts`, ahead of Prisma
+
+**Context:** @AC-5 asserts a missing required var stops the boot. It did not: `@prisma/client`
+loads a repo-root `.env` into `process.env` when imported, and `index.ts` imported
+`../modules/ai` (→ prisma) before `./lib/env`, so the validator saw a backfilled environment
+and served on config the process was never given. Invisible in Docker (no `.env` in the
+image), which is why nothing caught it before an acceptance test spawned a real child process.
+
+**Decision:** `import { config } from './lib/env'` is the first statement in
+`backend/src/index.ts` and stays first; the file says so at the line. F03's single
+parse-or-exit is otherwise untouched. `REDIS_URL` gains `.url()` — it was `z.string()` and
+accepted `not-a-url`.
+
+**Consequences:** the boot validates the real environment, so a local run without `.env`
+exported now fails fast instead of silently borrowing it. `worker/src/index.ts` has the same
+import shape and was not touched (Backlog).

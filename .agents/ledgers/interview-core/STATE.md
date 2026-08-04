@@ -1,11 +1,12 @@
 # Interview-core — State
 
 Last updated: 2026-08-04
-Last session ended: **I14 done, uncommitted.** `probes.ts` (`liveness`/`readiness`, timeout-
-bounded pings over the existing `prisma`/`redis` clients) mounted at `/healthz` (200, no
-deps) and `/readyz` (200/503 `NOT_READY`), before auth. Test seam `setProbeOverrides`, reset
-per-scenario in `server.ts`. Added `reliability.feature` to `cucumber.js` default paths (was
-missing). `@reliability` 3/3 green, lint+typecheck clean. Details in I14 `## Notes`.
+Last session ended: **I15 done, uncommitted — the ledger is green (I01–I15).** `REDIS_URL`
+tightened to `.url()`; every other key F03 already declared. Real find: `@prisma/client`
+loads repo-root `.env` on import, so `index.ts` importing `../modules/ai` before `./lib/env`
+let a missing var be backfilled — `./lib/env` is now the first import and must stay first.
+`config.feature` wired via `features/fixtures/env-boot.ts` (spawns the API as a detached
+child; kill by process group or cucumber hangs). @config 4/4, default 69/69, auth 23/23.
 
 ## Execution protocol (follow exactly)
 
@@ -22,7 +23,8 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**I15.** I14 is done. `I15 <- F03` is eligible.
+**None — I01–I15 are all `done`.** This ledger is green. Remaining work for Sezai is the
+frontend ledger (`W01`–`W11`); EXECUTE.md § 4 picks `W01 <- F01, F02` next.
 
 Live hand-offs still open:
 
@@ -127,7 +129,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | I12 | Object-storage signed-URL wrapper + report download endpoint | | done | I03 |
 | I13 | Rate limits: daily interview cap + interview-start limiter | | done | I03, A01 |
 | I14 | Reliability probes: `/healthz`, `/readyz` | | done | F02, F03 |
-| I15 | Config: extend env schema with this ledger's keys, fail-fast | | todo | F03 |
+| I15 | Config: extend env schema with this ledger's keys, fail-fast | | done | F03 |
 
 ## Critical path
 
@@ -162,6 +164,10 @@ entry not wired — means I01 has nowhere to publish the `@interviewly/ai` packa
 | I12 | `storage.ts` signed-URL wrapper | report (signs the rendered PDF key), infra (configures the real bucket) |
 
 ## Backlog (deferred, unnumbered — promote to a task when its trigger fires)
+
+- **`worker/src/index.ts` imports prisma before its env check** — the same shape ADR-I37 fixed
+  in `backend/src/index.ts`: `@prisma/client` backfills `process.env` from a repo-root `.env`,
+  so a missing var can pass the worker's boot check. Out of I15's scope (worker ledger).
 
 - **`backend/tsconfig.json` does not exist** — `backend/package.json` has
   `"build": "tsc -p tsconfig.json"` and there is no such file, so `npm run -w backend build`

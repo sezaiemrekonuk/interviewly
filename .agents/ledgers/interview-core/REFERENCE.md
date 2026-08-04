@@ -194,6 +194,8 @@ All paths relative to repo root. Each exists once its providing task lands.
 | `backend/modules/interview/download.ts` | I12 | Report signed-URL handout |
 | `backend/modules/interview/rate-limit.ts` | I13 | Daily interview cap + interview-start limiter |
 | `backend/src/lib/probes.ts` | I14 | `/healthz`, `/readyz` |
+| `backend/src/lib/env.ts` | F03 + I15 | One Zod schema, one parse-or-exit; imported **first** in `index.ts` (ADR-I37) |
+| `backend/features/fixtures/env-boot.ts` | I15 | Boots the API as a detached child with a mutated env (@config only) |
 
 ## Schema (tables this ledger reads/writes)
 

@@ -50,16 +50,16 @@ the green run. It does not rewrite the base validator.
   let one path serve while the other rejects.
 
 ## Steps
-- [ ] **1. Extend the Zod schema** in `env.ts` with `S3_BUCKET`, `PUBLIC_ORIGIN`, `REDIS_URL`,
+- [x] **1. Extend the Zod schema** in `env.ts` with `S3_BUCKET`, `PUBLIC_ORIGIN`, `REDIS_URL`,
   `AI_ENABLED`, provider keys, storage endpoint/credentials — each with its shape.
-- [ ] **2. Confirm the single fail-fast path** names any invalid key via
+- [x] **2. Confirm the single fail-fast path** names any invalid key via
   `ENV_VALIDATION_FAILED` before serving (reuse F03's parse-or-exit; add nothing parallel).
-- [ ] **3. Add the new keys** to `.env.example` / `compose.yaml` with valid dev values.
-- [ ] **4. Wire acceptance step-defs** for `config.feature` @AC-5 (unset `DATABASE_URL`,
+- [x] **3. Add the new keys** to `.env.example` / `compose.yaml` with valid dev values.
+- [x] **4. Wire acceptance step-defs** for `config.feature` @AC-5 (unset `DATABASE_URL`,
   malformed `REDIS_URL`, unset `S3_BUCKET`, malformed `PUBLIC_ORIGIN` each → boot fails before
   serving with `ENV_VALIDATION_FAILED` naming the key; a full valid set serves and raises no
   boot error).
-- [ ] **5. Run the `## Verification` command.**
+- [x] **5. Run the `## Verification` command.**
 
 ## Definition of done
 - Every required key (base F03 + this ledger's) is validated by the single Zod schema; a
@@ -73,4 +73,36 @@ npm run test:acceptance -- --tags "@config"
 ```
 
 ## Notes
-_(fill in when the task is done)_
+
+**Schema.** F03 already declared every key this task lists. Only real gap: `REDIS_URL` was
+`z.string()`, so `not-a-url` passed. Now `z.string().url()`. `.env.example` and `compose.yaml`
+(api reads `env_file: [.env]`) already carry all keys — nothing added.
+
+**The bug this task actually found (ADR-worthy).** `@prisma/client` loads repo-root `.env`
+into `process.env` on import. `backend/src/index.ts` imported `../modules/ai` (→ prisma)
+*before* `./lib/env`, so a var the process was never given was backfilled from `.env` and the
+boot "succeeded" on config nobody deployed. `import { config } from './lib/env'` is now the
+**first** import in `index.ts` and must stay first — comment says so at the line. Same shape
+likely exists in `worker/src/index.ts`; not touched (out of scope, see Backlog).
+
+**Acceptance seam.** `env.ts` calls `process.exit(1)` at import time, so "fails before
+serving" cannot be observed in-process — it would kill the cucumber runner. New
+`backend/features/fixtures/env-boot.ts` spawns the API as a real child
+(`node --import tsx backend/src/index.ts`, ephemeral port, mutated env) and resolves on
+either exit or `SERVER_STARTED`; `serving` = `GET /healthz` → 200.
+
+**Shared step texts.** `the API starts`, `startup fails before serving|serves requests` and
+`the boot error code is {string}` collide with `ai_provider.feature` (I02's in-process
+provider-key boot). cucumber allows one definition per text, so those three live in
+`ai-provider.steps.ts` and branch on `envBoot.active` — the repo's existing two-rings idiom.
+`config.steps.ts` owns only the config-unique steps. **Do not redefine those three texts.**
+
+**Two traps for whoever spawns processes from a step next.** (1) A surviving child keeps its
+stdio pipes open and cucumber hangs *after* printing its summary — kill every child, not the
+last. (2) `node node_modules/.bin/tsx x.ts` puts the server in a grandchild; killing the child
+leaves it listening. Spawned `detached: true`, killed by group (`process.kill(-pid)`).
+
+**Verification.** `npm run test:acceptance -- --tags "@config"` → 4 scenarios, 40 steps, all
+passed. Full default profile 69/69, auth profile 23/23 (auth needs `interviewly_test`),
+lint/typecheck clean, vitest 147/147. Local runs need host ports:
+`DATABASE_URL=…@127.0.0.1:5432/… REDIS_URL=redis://127.0.0.1:6380 S3_ENDPOINT=http://127.0.0.1:9000`.

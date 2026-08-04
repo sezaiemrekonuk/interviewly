@@ -20,6 +20,8 @@ import {
 import { prisma } from '../../src/lib/db';
 import { voiceSeam } from '../../modules/voice/session';
 
+import { envBoot, startApi } from '../fixtures/env-boot';
+
 import { AiWorld, type Tier1Outcome } from './world';
 
 const CARDINALITY: Record<string, number> = { one: 1, two: 2 };
@@ -86,8 +88,11 @@ When(
   },
 );
 
-When('the API starts', function (this: AiWorld) {
-  boot(this);
+// Two boots behind one step text: `config.feature` @AC-5 spawns a real child process with a
+// mutated env (I15), everything else exercises the in-process provider-key check (I02).
+When('the API starts', async function (this: AiWorld) {
+  if (envBoot.active) envBoot.result = await startApi();
+  else boot(this);
 });
 
 // ---------------------------------------------------------------- then
@@ -201,6 +206,16 @@ Then('startup performed no provider-key validation', function (this: AiWorld) {
 Then(
   /^startup (fails before serving|serves requests)$/,
   function (this: AiWorld, outcome: string) {
+    if (envBoot.active) {
+      const result = envBoot.result!;
+      if (outcome === 'serves requests') {
+        assert.equal(result.serving, true, `the API did not serve:\n${result.output}`);
+        return;
+      }
+      assert.notEqual(result.exitCode, 0, `expected a non-zero exit:\n${result.output}`);
+      assert.equal(result.serving, false, 'the API served despite a failed boot');
+      return;
+    }
     if (outcome === 'serves requests') {
       assert.equal(this.bootError, undefined, `startup failed: ${String(this.bootError)}`);
       return;
@@ -210,6 +225,11 @@ Then(
 );
 
 Then('the boot error code is {string}', function (this: AiWorld, code: string) {
+  if (envBoot.active) {
+    const { output } = envBoot.result!;
+    assert.ok(output.includes(code), `expected ${code} in the boot output:\n${output}`);
+    return;
+  }
   if (code === '') {
     assert.equal(this.bootError, undefined, 'a boot error was raised but none was expected');
     return;
