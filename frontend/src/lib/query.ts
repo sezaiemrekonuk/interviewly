@@ -10,6 +10,7 @@ import {
 } from '@tanstack/react-query';
 
 import { apiGet, apiPatch, apiPost } from './api';
+import { SILENT_REFETCH_CODES } from './error-routing';
 import type { SessionUser } from './use-require-auth';
 
 /**
@@ -115,6 +116,15 @@ export function useSaveProfileCard(): UseMutationResult<
   });
 }
 
+/** One tile's identity. `avatarSet` carries the content-addressed keys (`personas.avatar_set`). */
+export interface RoomPersona {
+  id: string;
+  role: string;
+  name: string;
+  roundType: 'hr' | 'tech';
+  avatarSet: Record<string, string>;
+}
+
 /** The single room truth (`GET /interviews/:id/state`) — see REFERENCE for the shape. */
 export interface InterviewStateResponse {
   interviewId: string;
@@ -124,7 +134,10 @@ export interface InterviewStateResponse {
   targetQuestionCount: number;
   endedReason: string | null;
   language: string;
-  persona: { role: string; name: string; avatarState: string };
+  /** The ACTIVE speaker only — `null` outside a live round. */
+  persona: { id: string; role: string; name: string; avatarState: string } | null;
+  /** Both rounds' personas, hr then tech: the two tiles, never a second live speaker. */
+  personas: RoomPersona[];
   currentQuestion: {
     id: string;
     text: string;
@@ -132,6 +145,12 @@ export interface InterviewStateResponse {
     widget: unknown | null;
     deliveredAt: string;
   } | null;
+  transcript: {
+    questionId: string;
+    question: string;
+    answer: string;
+    roundType: 'hr' | 'tech';
+  }[];
   transcriptCursor: number;
 }
 
@@ -175,5 +194,52 @@ export function useCreateInterview(): UseMutationResult<
       if (!result.ok) throw new ApiError(result.code ?? 'UNKNOWN');
       return result.data as CreateInterviewResponse;
     },
+  });
+}
+
+export interface SubmitAnswerBody {
+  questionId: string;
+  transcript: string;
+  inputMode: 'text';
+}
+
+
+/**
+ * I06 — never retried (W02 mutation policy). The silent refetch for the "client is behind"
+ * codes lives here, not in the composer: every caller of this mutation owes the same
+ * reconciliation, and a second caller (W10's voice submit) would otherwise have to remember it.
+ * `routeForError` owns which codes those are (§4.5).
+ */
+export function useSubmitAnswer(
+  interviewId: string,
+): UseMutationResult<unknown, ApiError, SubmitAnswerBody> {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: SubmitAnswerBody) => {
+      const result = await apiPost(`/interviews/${interviewId}/answers`, body);
+      if (!result.ok) throw new ApiError(result.code ?? 'UNKNOWN');
+      return result.data;
+    },
+    onError: (err) => {
+      if (SILENT_REFETCH_CODES.has(err.code)) {
+        void client.invalidateQueries({ queryKey: queryKeys.interviewState(interviewId) });
+      }
+    },
+    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.interviewState(interviewId) }),
+  });
+}
+
+/** I07 — resume from `paused`; `BUDGET_EXCEEDED` refetches into `evaluating` (W07's surface). */
+export function useResumeInterview(
+  interviewId: string,
+): UseMutationResult<unknown, ApiError, void> {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const result = await apiPost(`/interviews/${interviewId}/resume`, {});
+      if (!result.ok) throw new ApiError(result.code ?? 'UNKNOWN');
+      return result.data;
+    },
+    onSettled: () => client.invalidateQueries({ queryKey: queryKeys.interviewState(interviewId) }),
   });
 }

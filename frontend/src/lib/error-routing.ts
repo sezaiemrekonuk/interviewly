@@ -6,6 +6,18 @@ import { DEFAULT_LANDING_PATH, signInPathFor } from './auth-redirect';
  */
 export type ErrorAction = 'navigated' | 'refetch' | 'inline' | 'not-authorized';
 
+/**
+ * The client is behind the server; refetching state is the whole fix, with no toast.
+ * `BUDGET_EXCEEDED` resolves the same way — the refetch lands in `evaluating` and the room
+ * shows report-wait. Exported because the answer mutation reconciles on the same set (K2);
+ * a second copy there would drift.
+ */
+export const SILENT_REFETCH_CODES = new Set([
+  'QUESTION_NOT_CURRENT',
+  'INVALID_STATE_TRANSITION',
+  'BUDGET_EXCEEDED',
+]);
+
 export interface ErrorRouter {
   replace: (path: string) => void;
   push?: (path: string) => void;
@@ -42,15 +54,7 @@ export function routeForError(
       router.replace(`/verify-email?returnPath=${encodeURIComponent(ctx.pathname)}`);
       return 'navigated';
 
-    // The client is behind the server. Refetching state is the whole fix; BUDGET_EXCEEDED
-    // resolves the same way — the refetch lands in `evaluating` and the room shows
-    // report-wait.
-    case 'QUESTION_NOT_CURRENT':
-    case 'INVALID_STATE_TRANSITION':
-    case 'BUDGET_EXCEEDED':
-      return 'refetch';
-
     default:
-      return 'inline';
+      return SILENT_REFETCH_CODES.has(code) ? 'refetch' : 'inline';
   }
 }

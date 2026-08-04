@@ -109,10 +109,14 @@ SCREAMING_SNAKE_CASE code — never a display string. All `:id` routes are owner
 | `GET /healthz` | — | 200 `{ ok: true }` | — | I14 |
 | `GET /readyz` | — | 200 `{ ready: true }` / 503 `NOT_READY` | `NOT_READY` | I14 |
 
-Room-state shape (`GET /state`, backend spec §6, implemented I03): `{ interviewId, state,
-mode, currentIndex, targetQuestionCount, endedReason, language, persona: { role, name,
-avatarState } | null, currentQuestion: { id, text, kind, widget, deliveredAt } | null,
-transcriptCursor }`. This supersedes an earlier draft of this shape that used `question` +
+Room-state shape (`GET /state`, backend spec §6, implemented I03; **extended by W06,
+ADR-W06**): `{ interviewId, state, mode, currentIndex, targetQuestionCount, endedReason,
+language, persona: { id, role, name, avatarState } | null, personas: [{ id, role, name,
+roundType, avatarSet }], currentQuestion: { id, text, kind, widget, deliveredAt } | null,
+transcript: [{ questionId, question, answer, roundType }], transcriptCursor }`. `personas` is
+both rounds' personas (hr then tech) — the room's two tiles; `persona` still names the one
+live speaker. `transcript` is answered turns in global order (`orderTranscript`, unit-tested in
+`state.test.ts`); `transcriptCursor` is unchanged (`chat_messages` count). This supersedes an earlier draft of this shape that used `question` +
 `hrQuestionCount`/`spentUsd`/`budgetUsd` instead — the spec.md §6 jsonc is the one actually
 built. Resumable after a refresh — `currentIndex` and `state` reconstruct the room with no
 client memory (§3.8). `persona`/`currentQuestion` are null until a round exists (I04);

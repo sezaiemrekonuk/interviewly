@@ -116,6 +116,21 @@
     "starting": "Başlatılıyor…",
     "start": "Başla"
   },
+  "room": {
+    "live": "CANLI",
+    "roleHr": "İK görüşmecisi",
+    "roleTech": "Teknik görüşmeci",
+    "progress": "Soru {index} / {total}",
+    "waiting": "Sonraki soru bekleniyor…",
+    "answerLabel": "Cevabınız",
+    "answerPlaceholder": "Cevabınızı yazın",
+    "submit": "Cevabı gönder",
+    "submitting": "Gönderiliyor…",
+    "paused": "Bu görüşme duraklatıldı.",
+    "resume": "Devam et",
+    "transcriptTitle": "Şimdiye kadarki cevaplar",
+    "transcriptEmpty": "Henüz cevap yok."
+  },
   "errors": {
     "PASSWORD_TOO_SHORT": "Şifre en az 10 karakter olmalıdır.",
     "EMAIL_TAKEN": "Bu e-posta adresiyle bir hesap zaten mevcut.",

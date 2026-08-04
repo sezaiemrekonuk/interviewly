@@ -1,5 +1,5 @@
 # W06 — Interview room, TEXT mode (screen 11): two-tile room, client avatar state machine, guarded answer submit
-REPO: (this repo) · Depends: W02, I03, I06, I07 · Status: todo
+REPO: (this repo) · Depends: W02, I03, I06, I07 · Status: done
 Read first: STATE.md, REFERENCE.md, then this.
 **Model: claude-opus-4.8** — the demoable core and the invariant's sharpest edge. The two-tile
 speaker resolution, the client-driven `AvatarState` lifecycle (§3.8), the SSE-nudge-then-refetch
@@ -97,16 +97,16 @@ text mode only and needs no `V02` webhook.
   room test must prove the render followed a refetch, not the event body.
 
 ## Steps
-- [ ] **1. `room-avatar.ts`** — the pure §3.8 lifecycle→`AvatarState` reducer + its unit test.
-- [ ] **2. `avatar.tsx`** — `<Avatar personaId state>` with the `idle` fallback + set preload.
-- [ ] **3. `persona-tiles.tsx`** — two tiles, active-only `--live`, inactive resolved from rounds.
-- [ ] **4. `question-panel.tsx`** — 40-char/sec type animation, reduced-motion instant.
-- [ ] **5. `answer-composer.tsx` + `answers`/`resume` mutations** — `{ inputMode: 'text' }`, no
+- [x] **1. `room-avatar.ts`** — the pure §3.8 lifecycle→`AvatarState` reducer + its unit test.
+- [x] **2. `avatar.tsx`** — `<Avatar personaId state>` with the `idle` fallback + set preload.
+- [x] **3. `persona-tiles.tsx`** — two tiles, active-only `--live`, inactive resolved from rounds.
+- [x] **4. `question-panel.tsx`** — 40-char/sec type animation, reduced-motion instant.
+- [x] **5. `answer-composer.tsx` + `answers`/`resume` mutations** — `{ inputMode: 'text' }`, no
   retry, `409` → silent refetch.
-- [ ] **6. `transcript.tsx`** — answered turns to `transcriptCursor` (reused by W07).
-- [ ] **7. `room/page.tsx`** — compose it over `useInterviewState` + `useInterviewEvents`; guard
+- [x] **6. `transcript.tsx`** — answered turns to `transcriptCursor` (reused by W07).
+- [x] **7. `room/page.tsx`** — compose it over `useInterviewState` + `useInterviewEvents`; guard
   auth; route error codes; flat `--bg`/`--shadow-hairline`, no mascot; mobile stack.
-- [ ] **8. `room.*` copy + tests** (render-from-refetch, single text submit, silent `409`, reducer,
+- [x] **8. `room.*` copy + tests** (render-from-refetch, single text submit, silent `409`, reducer,
   active-tile `--live`). Run the `## Verification` command.
 
 ## Definition of done
@@ -130,4 +130,54 @@ text-mode submit, silent `409` refetch, the §3.8 avatar states, and active-tile
 
 ## Notes
 
-(Empty until the task is done.)
+**Room-state was extended to build this — ADR-W06.** The shipped payload could not feed the
+screen: no `persona.id` (so no avatar key), no round list (so no second tile), `transcriptCursor`
+is a count with no rows. `backend/modules/interview/state.ts` now also returns:
+
+- `persona.id` — the active speaker's persona id.
+- `personas: [{ id, role, name, roundType, avatarSet }]` — both rounds, hr then tech. The two
+  tiles. `avatarSet` is `personas.avatar_set`, i.e. the real content-addressed keys.
+- `transcript: [{ questionId, question, answer, roundType }]` — answered turns in global order
+  (`orderTranscript`, pure + unit-tested in `state.test.ts`).
+
+Additive only; `transcriptCursor` and every other field are untouched, so I03/I06 acceptance
+steps still hold. Verified with `npm test` (root, 275 pass).
+
+**What exists now**
+
+| File | Notes |
+|---|---|
+| `lib/room-avatar.ts` | `roomPhase()` derives the phase from (state, question, typedFor, submitting) — no effects, no local queue. `resolveAvatarState()` lets the phase win except in `settled`, where the server's sync value applies (unknown value → `idle`). |
+| `components/avatar.tsx` | `<Avatar personaId state avatarSet>` + `avatarUrl()` + `<AvatarPreload sets>`. Prefix is `NEXT_PUBLIC_ASSETS_PREFIX` (default `/assets`), same contract as `mascot.tsx` — kept local so the room never imports a mascot module. |
+| `components/room/*` | tiles / question-panel / answer-composer / transcript + one shared `room.module.css`. Composer is presentational: the page owns the mutation so one `isPending` drives the avatar's `acknowledging` beat. |
+| `room/page.tsx` | auth gate → skeleton → state query + SSE nudge. Navigation lives in effects (routing during render fires twice). `evaluating/completed/failed/abandoned` → `replace('/interviews/:id')` (W07's surface). |
+| `lib/error-routing.ts` | `SILENT_REFETCH_CODES` exported and reused by `useSubmitAnswer` — one home for §4.5's refetch set. |
+
+**Deviations / traps for the next session**
+
+- `--live` is an `outline`, not a second `box-shadow`: `ui-checks/tokens.test.ts` caps the room at
+  `--shadow-hairline` and rejects raw box-shadow values. Same file rejects non-multiple-of-4 px.
+- The question is fully in the DOM from frame 1 (`.srOnly` span + `aria-live`); only the visible
+  span types. A screen reader must not wait 6 s for the question.
+- `QuestionPanel.onTyped` reports the **question id**, not a boolean — a boolean makes the next
+  question inherit "already typed" and skip its animation.
+- Reduced motion is read via `window.matchMedia` (jsdom returns false by default), and the
+  reduced case is the panel's **initial state** — `<QuestionPanel key={question.id}>` gives one
+  instance per question, so no effect ever calls `setShown` synchronously.
+- **`npm run lint` is weaker than the pre-commit hook.** Husky runs
+  `eslint --config frontend/eslint.config.mjs` over staged `frontend/**`, which has
+  `react-hooks/refs` and `react-hooks/set-state-in-effect` (both rejected a first draft of
+  `question-panel.tsx`). Run that config on changed files before committing, not just `npm run lint`.
+- `state.ts` ships the whole transcript on every refetch — `ponytail:` comment names the paging
+  upgrade if turn counts ever grow.
+
+**For W07/W09/W10:** reuse `<Transcript>` (already read-only) and room-state's `transcript[]`
+rather than waiting on `GET /interviews/:id`. W10 replaces the composer only — tiles, phase
+machine and preload are mode-agnostic; add `voice` to `SubmitAnswerBody['inputMode']` there.
+
+**Verification:** `npm run -w frontend test -- "src/app/interviews/[id]/room" src/lib/room-avatar.test.ts`
+→ 2 files, 15 tests pass. Root gates: `lint` clean, `typecheck` clean, `npm test` 275 pass.
+`npm run test:acceptance` **could not run from the host**: `.env`'s `REDIS_URL` names the
+compose-internal host `cache` (`getaddrinfo ENOTFOUND cache`), so the suite stalls on ioredis
+retries. Running it inside the `api` container would truncate the dev database — left for CI /
+a human. The backend change is additive and covered by `state.test.ts`.

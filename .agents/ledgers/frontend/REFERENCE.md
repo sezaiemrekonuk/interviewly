@@ -105,14 +105,17 @@ if a shape is not yet built, the task's `Depends on` names it and the task stops
   "targetQuestionCount": 8,
   "endedReason": null,              // completed|cut_short|budget_exhausted|time_exhausted|abandoned|error
   "language": "en",
-  "persona": { "role": "…", "name": "…", "avatarState": "idle" },  // the ACTIVE speaker only; resolve the other tile from the round list
+  "persona": { "id": "…", "role": "…", "name": "…", "avatarState": "idle" } | null,  // the ACTIVE speaker only
+  "personas": [{ "id": "…", "role": "hr", "name": "…", "roundType": "hr", "avatarSet": { "idle": "personas/…/idle-<sha>.webp" } }],  // both tiles, hr then tech (ADR-W06)
   "currentQuestion": { "id": "…", "text": "…", "kind": "text", "widget": null, "deliveredAt": "…" } | null,
+  "transcript": [{ "questionId": "…", "question": "…", "answer": "…", "roundType": "hr" }],  // answered turns, global order (ADR-W06)
   "transcriptCursor": 3             // count of chat_messages == answered turns
 }
 ```
 
-- `persona` describes **one** speaker (the active round's). The two-tile room resolves the other
-  tile from the rounds it already has — never invent a second live speaker (§3.2, K2).
+- `persona` names the **one** live speaker; `personas` is the roster both tiles render from —
+  never invent a second live speaker (§3.2, K2). `avatarSet` carries the content-addressed keys,
+  so no screen guesses a sha (`<Avatar avatarSet state>`).
 - `currentQuestion.widget` is `null` until the widget question kind is built (I04/I06 scope,
   currently always null — `state.ts`); when present it is
   `{ kind: 'mcq'|'ordering'|'code', options?, language? }`.
