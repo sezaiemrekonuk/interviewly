@@ -41,6 +41,7 @@ export function ListingUpload({
     <div>
       <textarea
         aria-label={t('listingPaste')}
+        style={{ font: 'inherit' }}
         onChange={(e) => onJobText(e.target.value)}
         disabled={uploading || disabled}
       />
