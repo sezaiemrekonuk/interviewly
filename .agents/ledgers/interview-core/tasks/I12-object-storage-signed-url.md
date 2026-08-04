@@ -1,5 +1,5 @@
 # I12 — Object-storage signed-URL wrapper + report download endpoint
-REPO: (this repo) · Depends: I03 · Status: todo
+REPO: (this repo) · Depends: I03 · Status: done
 Read first: STATE.md, REFERENCE.md, then this.
 **Model: claude-opus-4.8** — owner-scoped, short-lived signed URLs for private objects (§7.2, K14). A TTL that is too long, a URL under the public route, or an ownership slip leaks another candidate's report.
 
@@ -59,15 +59,15 @@ fixture seeds a report row + object key (per the boundary note).
   with `min(ttlSeconds, 300)`.
 
 ## Steps
-- [ ] **1. Write `storage.ts`** — `put`/`get`/`signedUrl` with the 300 s hard cap and the
+- [x] **1. Write `storage.ts`** — `put`/`get`/`signedUrl` with the 300 s hard cap and the
   injected `Clock`; the S3-compatible client from env; the `FakeStorage`/`Clock` seam.
-- [ ] **2. Write `download.ts`** — ownership-resolved, sign `reports.pdf_key`, 200 `{ url }`;
+- [x] **2. Write `download.ts`** — ownership-resolved, sign `reports.pdf_key`, 200 `{ url }`;
   non-owner → 404 `INTERVIEW_NOT_FOUND`.
-- [ ] **3. Attach the download route** behind ownership (GET, no CSRF).
-- [ ] **4. Wire acceptance step-defs** for `object_storage.feature` @AC-6 (owner → 200 with a
+- [x] **3. Attach the download route** behind ownership (GET, no CSRF).
+- [x] **4. Wire acceptance step-defs** for `object_storage.feature` @AC-6 (owner → 200 with a
   signed URL ≤ 300 s ahead, not under `/assets/`; other candidate → 404 `INTERVIEW_NOT_FOUND`
   no URL; URL fetch 200 before TTL, 403 after the clock passes the TTL).
-- [ ] **5. Run the `## Verification` command.**
+- [x] **5. Run the `## Verification` command.**
 
 ## Definition of done
 - `storage.signedUrl` returns a private-object URL expiring ≤ 300 s ahead of the injected
@@ -82,4 +82,43 @@ npm run test:acceptance -- --tags "@object-storage"
 ```
 
 ## Notes
-_(fill in when the task is done)_
+
+**What exists now**
+
+- `src/lib/storage.ts` — `Storage { put, get, signedUrl }`, plus exported `MAX_TTL_SECONDS`
+  (300) and `cappedTtl(ttl) = max(1, min(ttl, 300))`. Real impl presigns with
+  `@aws-sdk/s3-request-presigner`'s `getSignedUrl` and `signingDate: clock.now()` — the Clock
+  seam the fixed-clock scenario needs. `setStorage` seam unchanged (I11).
+- **New dependency:** `@aws-sdk/s3-request-presigner@^3.1101.0` in `backend/package.json`.
+  `npm audit` findings are unchanged by it (pre-existing `tar` advisories only).
+- `modules/interview/download.ts` — `GET /interviews/:id/report/download`, mounted in
+  `router.ts` under `router.param('id', resolveInterview)`, so a non-owner 404s before the
+  handler runs. Picks the newest `reports` row **with a non-null `pdf_key`**; none → the same
+  `INTERVIEW_NOT_FOUND` (not-ready and not-yours are indistinguishable). Signs at
+  `MAX_TTL_SECONDS`. Never logs the URL.
+- `features/fixtures/fake-storage.ts` — `makeFakeStorage()` + `parseSignedExpiry(url)`. Signs
+  SigV4-shaped URLs (`X-Amz-Date`/`X-Amz-Expires`/`X-Amz-Signature`) so the TTL assertions
+  parse a real presigned URL byte-identically; `fetchSigned(url)` is 200 before the expiry and
+  403 after, read off `clock.now()`.
+- `features/step_definitions/object-storage.steps.ts` — the 11 new steps. Reuses
+  `I am signed in as a candidate` (interview-setup), `another candidate is signed in` (admin),
+  `the fixed clock is {string}` (answers), `the response status is {int}` (ai-provider),
+  `the response error code is {string}` (interview-setup).
+- `cucumber.js` default profile: `.agents/features/object_storage.feature` added.
+
+**Deviations**
+
+- `Storage` widened, so `uploads.steps.ts`'s put-only fake now spreads `makeFakeStorage()`.
+  One line; the recording `put` those scenarios assert on is untouched.
+- `FakeStorage` lives under `features/fixtures/`, not in `src/lib/storage.ts` — test-only code
+  stays out of the shipped module.
+- No `clock.now` restore hook here: `answers.steps.ts`'s global `After` already restores it
+  for every scenario in the ring.
+
+**Verification** — `npm run test:acceptance -- --tags "@object-storage"` → `2 scenarios (2
+passed), 22 steps`. Full default ring 51/51, 144 unit, lint + typecheck clean. Local runs need
+`DATABASE_URL`/`REDIS_URL`/`S3_ENDPOINT` on the published host ports (`5432`, `6380`, `9000`),
+not `.env`'s compose hostnames.
+
+**For R03** — sign `reports.pdf_key` through `storage.signedUrl`; do not build a URL. The cap
+is enforced inside, so passing a larger TTL silently yields 300 s.

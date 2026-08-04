@@ -6,7 +6,7 @@
  * the contract — the advance is what proves the caller won the race, so nothing is written
  * before it and the handover runs only for the caller that did.
  */
-import type { InterviewState } from '@prisma/client';
+import type { Interview, InterviewState } from '@prisma/client';
 import type { RequestHandler } from 'express';
 import { z } from 'zod';
 
@@ -29,22 +29,29 @@ const bodySchema = z.object({
   inputMode: z.enum(['voice', 'text', 'widget']),
 });
 
-export const submitAnswer: RequestHandler = async (req, res) => {
-  const interview = req.interview!;
-  const traceId = req.traceId!;
+type AnswerInput = z.infer<typeof bodySchema>;
+
+/**
+ * Core answer-progression logic, shared by the HTTP handler and the voice webhook (V02).
+ * Validates state, advances `current_index` atomically, records the turn, and runs all
+ * post-answer side-effects.
+ */
+export async function advanceWithAnswer(
+  interview: Interview,
+  data: AnswerInput,
+  opts: { traceId: string },
+): Promise<{ state: InterviewState; nextIndex: number }> {
+  const { traceId } = opts;
 
   if (interview.state !== 'hr_round' && interview.state !== 'tech_round') {
     throw new ApiError('INVALID_STATE_TRANSITION');
   }
 
-  const parsed = bodySchema.safeParse(req.body);
-  if (!parsed.success) throw new ApiError('VALIDATION_ERROR');
-
   const expected = interview.current_index;
   const question = await currentQuestionRow(interview);
   // A body naming any question but the current one is the same rejection as losing the race,
   // and the response does not say which question it should have been.
-  if (!question || question.id !== parsed.data.questionId) {
+  if (!question || question.id !== data.questionId) {
     throw new ApiError('QUESTION_NOT_CURRENT');
   }
 
@@ -66,8 +73,8 @@ export const submitAnswer: RequestHandler = async (req, res) => {
     prisma.answer.create({
       data: {
         question_id: question.id,
-        transcript: parsed.data.transcript,
-        input_mode: parsed.data.inputMode,
+        transcript: data.transcript,
+        input_mode: data.inputMode,
         started_at: question.asked_at,
         answered_at: answeredAt,
         duration_ms: durationMs,
@@ -77,7 +84,7 @@ export const submitAnswer: RequestHandler = async (req, res) => {
       data: {
         interview_id: interview.id,
         role: 'user',
-        content: parsed.data.transcript,
+        content: data.transcript,
         trace_id: traceId,
       },
     }),
@@ -91,7 +98,7 @@ export const submitAnswer: RequestHandler = async (req, res) => {
   // I10: a pure heuristic, no `llm_calls` row. It runs before the handover below because a
   // switch has to reach the technical batch that ADR-I22 generates in `interview.language`.
   const nextIndex = expected + 1;
-  interview.language = await trackLanguage(interview, parsed.data.transcript, {
+  interview.language = await trackLanguage(interview, data.transcript, {
     question,
     nextIndex,
     traceId,
@@ -133,7 +140,18 @@ export const submitAnswer: RequestHandler = async (req, res) => {
     state = await applyTransition(interview, 'tech_round', { traceId });
   }
 
-  res.status(200).json({ state, nextIndex });
+  return { state, nextIndex };
+}
+
+export const submitAnswer: RequestHandler = async (req, res) => {
+  const interview = req.interview!;
+  const traceId = req.traceId!;
+
+  const parsed = bodySchema.safeParse(req.body);
+  if (!parsed.success) throw new ApiError('VALIDATION_ERROR');
+
+  const result = await advanceWithAnswer(interview, parsed.data, { traceId });
+  res.status(200).json(result);
 };
 
 export default submitAnswer;

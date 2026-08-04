@@ -104,6 +104,9 @@ export class AiWorld extends World {
   /** N01: the fixture cost the admin audit must read back unchanged after a soft delete. */
   recordedCost?: { costUsd: string; totalTokens: number };
 
+  /** N02 AC-18: llm_calls token sum before the scenario fixture inserts new rows. */
+  tokenBaseline = 0;
+
   // I04: the body `POST /interviews/:id/profile` will be sent with — `{ skip: true }` until a
   // scenario answers the pre-questions. The two profiling.feature paths differ only here.
   profileBody: Record<string, unknown> = { skip: true };
@@ -157,6 +160,31 @@ export class AiWorld extends World {
         ...extra,
       },
       body: JSON.stringify(body),
+    });
+    this.captureCookie(res);
+    this.lastStatus = res.status;
+    this.lastBody = await res.json().catch(() => undefined);
+  }
+
+  /**
+   * I11: `POST /uploads` is the one multipart endpoint. `kind` is appended only when the
+   * scenario asks for it — "with no kind" is a real request shape the endpoint must reject,
+   * not an oversight. undici derives the boundary and the Content-Length itself.
+   */
+  async httpUpload(path: string, filename: string, bytes: Buffer, kind?: string): Promise<void> {
+    const form = new FormData();
+    if (kind !== undefined) form.append('kind', kind);
+    // Uint8Array.from, not the Buffer itself: Buffer is typed over ArrayBufferLike, which is
+    // not a BlobPart under `strict` because it could be a SharedArrayBuffer.
+    form.append('file', new Blob([Uint8Array.from(bytes)], { type: 'application/pdf' }), filename);
+
+    const res = await fetch(`${serverState.baseUrl}${path}`, {
+      method: 'POST',
+      headers: {
+        origin: config.PUBLIC_ORIGIN,
+        ...(this.cookie ? { cookie: this.cookie } : {}),
+      },
+      body: form,
     });
     this.captureCookie(res);
     this.lastStatus = res.status;

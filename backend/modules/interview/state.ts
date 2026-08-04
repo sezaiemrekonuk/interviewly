@@ -40,7 +40,7 @@ export async function currentQuestionRow(interview: IndexedInterview) {
  * server clock, the first time the question is handed to a client. That timestamp is the only
  * `duration_ms` baseline I06 will accept — a client-supplied start time is not evidence.
  */
-async function deliverCurrentQuestion(interview: IndexedInterview) {
+export async function deliverCurrentQuestion(interview: IndexedInterview) {
   const question = await currentQuestionRow(interview);
   if (!question) return null;
 

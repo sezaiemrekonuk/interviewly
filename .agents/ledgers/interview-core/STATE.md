@@ -1,14 +1,13 @@
 # Interview-core — State
 
 Last updated: 2026-08-03
-Last session ended: **I10 done, uncommitted** (I09 landed before it).
-New `language.ts` — `trackLanguage(interview, transcript, { question, traceId })`, called from
-`answers.ts` after `ANSWER_RECORDED` and **before** `ensureTechBatch`, returning the language
-the interview runs in (the handler reassigns `interview.language` so a switch reaches the
-ADR-I22 batch). Streak is a process-local `Map`, reset by ambiguous / same-language /
-unsupported-language turns. `language_detection.feature` added to `cucumber.js` and green.
-Rings 45/45 + 23/23 (auth needs `interviewly_test`), 122 unit, lint + typecheck clean.
-Details in I10 `## Notes`.
+Last session ended: **I12 done, uncommitted** (I10 and I11 landed before it, also uncommitted).
+`storage.ts` now `put`/`get`/`signedUrl` — `cappedTtl` hard-caps at `MAX_TTL_SECONDS` 300 and
+presigns with `signingDate: clock.now()`. `GET /interviews/:id/report/download` mounted behind
+`router.param('id')`. New dep `@aws-sdk/s3-request-presigner`. `object_storage.feature` added
+to `cucumber.js`; `features/fixtures/fake-storage.ts` signs SigV4-shaped URLs so the TTL
+assertions parse a real presigned URL identically. Rings 51/51, 144 unit, lint + typecheck
+clean. Details in I12 `## Notes`.
 
 ## Execution protocol (follow exactly)
 
@@ -25,11 +24,18 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**I11 (upload validation + dedup).** I10 is done. `I11 <- A01, F02`, `I12 <- I03`,
-`I13 <- I03, A01`, `I14 <- F02, F03` and `I15 <- F03` are all eligible — I11 comes first by
-ID order. I11 also unblocks the `not @AC-32` deferral in `cucumber.js`'s auth profile.
+**I13 (rate limits: daily interview cap + interview-start limiter).** I12 is done.
+`I13 <- I03, A01`, `I14 <- F02, F03` and `I15 <- F03` are all eligible — I13 comes first by
+ID order.
 
 Live hand-offs still open:
+
+- `storage.signedUrl(key, ttl)` is capped at 300 s and never logged; R03 signs `reports.pdf_key`
+  through it rather than building a URL.
+- `server.ts`'s `Before` clears `ratelimit:*` between scenarios — I13's own feature is the one
+  place that must not rely on it.
+- `cucumber.js`'s auth profile can drop `and not @AC-32` now that `POST /uploads` exists —
+  A06's CV scenarios, so A06's session, not this ledger's.
 
 - An SSE-pushed question must stamp `questions.asked_at` itself (ADR-I27), or its
   `duration_ms` is null.
@@ -121,8 +127,8 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | I08 | Budget enforcement (in-transaction ceiling, exhaustion path) | | done | I06, I02 |
 | I09 | Report generation + `ReportPayload` schema gate + completion | | done | I07, I02 |
 | I10 | Language detection + two-consecutive-turn switch counting | | done | I06 |
-| I11 | Upload validation (MIME/magic/size/pages/text) + `sha256` dedup | | todo | A01, F02 |
-| I12 | Object-storage signed-URL wrapper + report download endpoint | | todo | I03 |
+| I11 | Upload validation (MIME/magic/size/pages/text) + `sha256` dedup | | done | A01, F02 |
+| I12 | Object-storage signed-URL wrapper + report download endpoint | | done | I03 |
 | I13 | Rate limits: daily interview cap + interview-start limiter | | todo | I03, A01 |
 | I14 | Reliability probes: `/healthz`, `/readyz` | | todo | F02, F03 |
 | I15 | Config: extend env schema with this ledger's keys, fail-fast | | todo | F03 |

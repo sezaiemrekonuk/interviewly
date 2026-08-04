@@ -1,5 +1,5 @@
 # I11 — Upload validation (MIME/magic/size/pages/text) + `sha256` dedup
-REPO: (this repo) · Depends: A01, F02 · Status: todo
+REPO: (this repo) · Depends: A01, F02 · Status: done
 Read first: STATE.md, REFERENCE.md, then this.
 **Model: claude-opus-4.8** — an uploaded PDF is untrusted input reaching text extraction (§7.2, K12). A MIME-only check, an unbounded page count, or an extraction that runs on a hostile file is a real vulnerability class.
 
@@ -81,17 +81,17 @@ listing and once as a CV is one stored object, and the referencing side records 
   extracting 31 pages of text.
 
 ## Steps
-- [ ] **1. Add deps** — `unpdf` + a multipart parser in `backend/package.json`.
-- [ ] **2. Write `uploads.ts`** — hash → dedup → size → magic+MIME → pages → extract → min
+- [x] **1. Add deps** — `unpdf` + a multipart parser in `backend/package.json`.
+- [x] **2. Write `uploads.ts`** — hash → dedup → size → magic+MIME → pages → extract → min
   chars → store → 201. Each failure returns its code with no write.
-- [ ] **3. Storage put** — via `storage.ts` (or the minimal `put` if I12 has not landed).
-- [ ] **4. Attach `POST /uploads`** behind `requireAuth`.
-- [ ] **5. Add the fixtures** the feature names (`pdf-over-10mb.pdf`, `renamed-text-file.pdf`,
+- [x] **3. Storage put** — via `storage.ts` (or the minimal `put` if I12 has not landed).
+- [x] **4. Attach `POST /uploads`** behind `requireAuth`.
+- [x] **5. Add the fixtures** the feature names (`pdf-over-10mb.pdf`, `renamed-text-file.pdf`,
   `pdf-31-pages.pdf`, `scanned-short-text.pdf`, `valid-3-page-listing.pdf`,
   `another-valid-listing.pdf`) — no PII in any fixture.
-- [ ] **6. Wire acceptance step-defs** for `upload.feature` @AC-14 (the four rejections + the
+- [x] **6. Wire acceptance step-defs** for `upload.feature` @AC-14 (the four rejections + the
   valid 201) and @AC-3 (dedup: same `uploadId`, one row per `sha256`; different file, new row).
-- [ ] **7. Run the `## Verification` command.**
+- [x] **7. Run the `## Verification` command.**
 
 ## Definition of done
 - Each invalid fixture is rejected with its exact status/code and creates no `uploads` row;
@@ -106,4 +106,42 @@ npm run test:acceptance -- --tags "@upload"
 ```
 
 ## Notes
-_(fill in when the task is done)_
+
+**What exists now.** `POST /uploads` (app.ts, behind `requireAuth`, no CSRF check — it is not
+on the interview router). `modules/interview/uploads.ts` exports `uploadMiddleware` (multer,
+memory storage, `fileSize: 10 MB`, `files: 1`) and `createUpload`.
+
+Pipeline order, all of it load-bearing: `kind` (Zod `listing|cv`) → `sha256` → dedup
+short-circuit → MIME + `%PDF-` magic → `getDocumentProxy` (parse failure → 415) → `numPages`
+→ `extractText` (unpdf, no OCR) → 200-char floor on whitespace-collapsed text →
+`storage.put` → `prisma.upload.upsert`. Response is `{ uploadId }` only.
+
+**Deviations from the task file.**
+- Size is enforced twice: a `Content-Length > 10 MB + 4096` pre-check (refuses before
+  buffering; the slack is multipart framing, so a file of exactly 10 MB still passes) and
+  multer's own limit as the backstop, whose `MulterError` is mapped — `LIMIT_FILE_SIZE` →
+  `UPLOAD_TOO_LARGE`, anything else → `VALIDATION_ERROR`. Unmapped it was a 500, which is
+  what the first red run caught.
+- `upsert` rather than `create`, keyed on the unique `sha256`: two identical uploads racing
+  past the `findUnique` would otherwise make the second a P2002 instead of a dedup hit.
+- Fixtures are **built, not committed** — `backend/features/fixtures/pdf.ts` emits an
+  uncompressed PDF 1.4 with a real xref table (`buildPdf(pages, padBytes)`), so the 10 MB
+  file costs no repo bytes. `fixtureBytes(name)` serves the six names the feature uses.
+
+**Shared files touched.** `src/lib/storage.ts` is **I12's** — I11 created it with `put` +
+the `setStorage` seam only; extend it with `get`/`signedUrl(key, ttl)` rather than reworking
+it. `world.ts` gained `httpUpload(path, filename, bytes, kind?)`. `cucumber.js` `paths`
+gained `upload.feature` (default profile). `backend/package.json` gained `multer`,
+`@types/multer`, `unpdf`.
+
+**Deliberate, spec'd, worth knowing.** `uploads.sha256` is globally `@unique` (F02, K12), so
+dedup crosses users: an identical PDF returns the *first* uploader's row id and that row's
+`kind` is whichever role it was first stored under. The bytes are identical, so nothing is
+disclosed that the second uploader did not already hold.
+
+**For A06.** `kind: 'cv'` is accepted and stored; nothing writes `users.cv_upload_id` or
+`users.profile.cv_text` yet. `cucumber.js`'s auth profile can now drop `and not @AC-32`.
+
+**Verification.** `npm run test:acceptance -- --tags "@upload"` → 3 scenarios, 29 steps,
+all passing, from an empty `uploads` table. Full default profile 48/48, auth profile 23/23,
+122 unit, lint + typecheck clean.
