@@ -1,6 +1,9 @@
 {
   "common": {
-    "loading": "Loading…"
+    "loading": "Loading…",
+    "locale": "Language",
+    "localeEnglish": "English",
+    "localeTurkish": "Türkçe"
   },
   "auth": {
     "signIn": "Sign in",

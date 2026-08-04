@@ -1,5 +1,5 @@
 # W01 — UI build/seed checks: token lint, AA-contrast, avatar/mascot set validation, gradient/shadow tiers
-REPO: (this repo) · Depends: F01, F02 · Status: todo
+REPO: (this repo) · Depends: F01, F02 · Status: done
 Read first: STATE.md, REFERENCE.md, then this.
 **Model: claude-sonnet-4.6** — a deterministic Vitest suite over fixed token values and the seeded
 asset contract. No runtime state, no trust boundary; the reasoning is arithmetic (contrast ratios)
@@ -74,16 +74,16 @@ six check families. It guards the token/asset foundation every later screen comp
   CSS, do not hard-code the spec hex.
 
 ## Steps
-- [ ] **1. `entry-routes.ts`** — `ENTRY_ROUTES` closed list + `SURFACE_SHADOW` map, the single home
+- [x] **1. `entry-routes.ts`** — `ENTRY_ROUTES` closed list + `SURFACE_SHADOW` map, the single home
   for the ground/shadow decision.
-- [ ] **2. `tokens.test.ts`** — token presence/uniqueness/value + the stray-literal scan.
-- [ ] **3. `contrast.test.ts`** — the WCAG luminance helper + every pinned pair incl. the three
+- [x] **2. `tokens.test.ts`** — token presence/uniqueness/value + the stray-literal scan.
+- [x] **3. `contrast.test.ts`** — the WCAG luminance helper + every pinned pair incl. the three
   gradient stops, each ≥ 4.5.
-- [ ] **4. `grounds.test.ts`** — assert the gradient route-list and the shadow-tier map are the
+- [x] **4. `grounds.test.ts`** — assert the gradient route-list and the shadow-tier map are the
   closed sets the spec pins.
-- [ ] **5. `assets.test.ts`** — `AvatarState`/`MascotPose` exact membership, the content-addressed
+- [x] **5. `assets.test.ts`** — `AvatarState`/`MascotPose` exact membership, the content-addressed
   key regex, the seed's set coverage, and the byte-budget ceilings.
-- [ ] **6. Run the `## Verification` command** and see every check pass (and confirm a deliberately
+- [x] **6. Run the `## Verification` command** and see every check pass (and confirm a deliberately
   wrong token value makes `tokens.test.ts` red — do not commit that, just prove the check bites).
 
 ## Definition of done
@@ -102,4 +102,16 @@ and asset check families as passing, and zero stray-literal violations in `src/*
 
 ## Notes
 
-(Empty until the task is done.)
+- `assets.test.ts` reads `packages/types/src/index.ts` **as source** rather than importing
+  `@interviewly/types`: the package ships `main: dist/...` and no task has run `tsc` there
+  yet. Whichever task builds it can switch to a real import — the assertions don't change.
+  It also cross-checks the `schema.prisma` enums and the seed arrays; all three must agree
+  exactly (a seed *extra*, not only a gap, is red).
+- Byte budgets decode `PLACEHOLDER_WEBP` out of `seed.ts` — no hardcoded size. Key-shape
+  tests render the seed's own template with the real sha256 and include negative cases.
+- `entry-routes.ts` is new (`ENTRY_ROUTES`, `SURFACE_SHADOW`) — W02's shell and every later
+  screen should import from here rather than re-deciding the ground/shadow per screen.
+- Proved red before reverting: a broken `--text-muted` value fails `contrast.test.ts`
+  (6 pairs); a 6th pose in the seed's `MASCOT_POSES` fails `assets.test.ts` naming `salute`;
+  dropping `acknowledging` from the types union fails 3 assertions. All reverted.
+- `npm run -w frontend test -- src/ui-checks` → 4 files, 58 tests.

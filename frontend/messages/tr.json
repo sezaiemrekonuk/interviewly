@@ -1,6 +1,9 @@
 {
   "common": {
-    "loading": "Yükleniyor…"
+    "loading": "Yükleniyor…",
+    "locale": "Dil",
+    "localeEnglish": "English",
+    "localeTurkish": "Türkçe"
   },
   "auth": {
     "signIn": "Giriş yap",

@@ -1,5 +1,5 @@
 # W02 — App shell + React Query data layer + SSE hook + error-code→route map + locale switcher
-REPO: (this repo) · Depends: F01, A01 · Status: todo
+REPO: (this repo) · Depends: F01, A01 · Status: done
 Read first: STATE.md, REFERENCE.md, then this.
 **Model: claude-opus-4.8** — the layer every screen trusts. The single-source-of-truth query key,
 the nudge-then-refetch SSE seam, and the error-routing table carry the client-truth invariant
@@ -84,18 +84,18 @@ table, and the EN/TR locale switcher. It renders no screen of its own — W03 is
   reconnect (`open`) triggers exactly one more.
 
 ## Steps
-- [ ] **1. Add `@tanstack/react-query`** to `frontend/package.json`; `npm install` at root.
-- [ ] **2. `query.ts`** — `queryClient` (GET-only retry, no mutation retry) + `queryKeys` factory +
+- [x] **1. Add `@tanstack/react-query`** to `frontend/package.json`; `npm install` at root.
+- [x] **2. `query.ts`** — `queryClient` (GET-only retry, no mutation retry) + `queryKeys` factory +
   `useMe`/`useInterviewState` typed over `apiGet`.
-- [ ] **3. `providers.tsx` + mount in `layout.tsx`** — preserve locale + CSP nonce.
-- [ ] **4. `use-interview-events.ts`** — one `EventSource` on the real events path, invalidate the
+- [x] **3. `providers.tsx` + mount in `layout.tsx`** — preserve locale + CSP nonce.
+- [x] **4. `use-interview-events.ts`** — one `EventSource` on the real events path, invalidate the
   state key on every event and once on reconnect `open`, close on unmount.
-- [ ] **5. `error-routing.ts`** — the §4.5 code→route table over `auth-redirect.ts`; no new code.
-- [ ] **6. `locale-switcher.tsx`** + `common.locale*` keys in both message files.
-- [ ] **7. Test utils** — `src/test/event-source-mock.ts` and a `renderWithProviders`; unit-test the
+- [x] **5. `error-routing.ts`** — the §4.5 code→route table over `auth-redirect.ts`; no new code.
+- [x] **6. `locale-switcher.tsx`** + `common.locale*` keys in both message files.
+- [x] **7. Test utils** — `src/test/event-source-mock.ts` and a `renderWithProviders`; unit-test the
   SSE hook (one invalidation per event, one on reconnect) and `routeForError` (each mapped code
   navigates where the table says, unmapped codes navigate nowhere).
-- [ ] **8. Run the `## Verification` command.**
+- [x] **8. Run the `## Verification` command.**
 
 ## Definition of done
 - `useInterviewEvents(id)` opens one `EventSource` on `/api/interviews/:id/events`, invalidates
@@ -116,4 +116,25 @@ per reconnect; every mapped error code routes to its documented destination.
 
 ## Notes
 
-(Empty until the task is done.)
+- `queryKeys` (`src/lib/query.ts`) is the only place a key is spelled. `fetchJson` throws
+  `ApiError { code }` on a refusal, so `error.code` feeds `routeForError`/`useErrorMessage`
+  directly. `createQueryClient()` — GET retry 2, `mutations.retry: false`.
+- Backend emits a **named** SSE event, `INTERVIEW_STATE_CHANGED` (`backend/modules/interview/sse.ts:68`),
+  so `onmessage` alone never fires. `useInterviewEvents` registers both it and `onmessage`.
+  First `open` does not invalidate (the mount query already fetched); every later `open`
+  (reconnect) does.
+- `routeForError(code, router, ctx)` returns `'navigated' | 'refetch' | 'inline' | 'not-authorized'`.
+  Callers own the refetch: on `'refetch'` invalidate `queryKeys.interviewState(id)`. `FORBIDDEN`
+  on a `/admin*` path returns `'not-authorized'` (render in place) instead of bouncing.
+- `INTERVIEW_NOT_FOUND` routes to `/not-found`; no such route file exists yet, so Next serves
+  its `_not-found` page. W07/W08 can add a real one — no code change here if they do.
+- Locale: `src/lib/locales.ts` holds `locales`/`Locale`/`LOCALE_COOKIE`/`writeLocaleCookie`,
+  client-safe (`i18n.ts` pulls `next/headers`, so a client component cannot import from it).
+  `i18n.ts` now falls back to the `NEXT_LOCALE` cookie — without that patch the switcher wrote
+  a cookie nothing read. `layout.tsx` passes an explicit `locale` to `NextIntlClientProvider`
+  and to `<html lang>`.
+- Test utils for W06/W07/W10: `src/test/event-source-mock.ts` (`installEventSourceMock()`,
+  `MockEventSource.instances`, `.emit(type, data)`, `.emitOpen()`) and `renderWithProviders`
+  in `src/test/render.tsx` (intl + QueryClientProvider, retry off).
+- Gates: `npm run -w frontend test` 109 pass, root `npm test` 217 pass, root `npm run lint`,
+  `npm run typecheck` and `npm run -w frontend build` all clean.
