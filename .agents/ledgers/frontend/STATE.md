@@ -7,7 +7,9 @@ locale switcher the only client island). `<Mascot pose size? alt? className?>` e
 reuses it instead of building a key. Asset URL = `NEXT_PUBLIC_ASSETS_PREFIX` (default `/assets`)
 + `mascot/{pose}-{NEXT_PUBLIC_MASCOT_SHA256}.webp` (default = seed placeholder digest); W06's
 `<Avatar>` needs the same two constants. Copy: `landing.*` (nested `props.*`) + `mascot.*` alts
-in both locales. Frontend ring 125 pass, root 236. **New blocker below: the edge `/assets/*`
+in both locales. `frontend/tsconfig.json` now maps `@interviewly/types` (root-config mirror) —
+without it `next build` fails while root `tsc` passes, so **run `npm run -w frontend build`
+before pushing**. Frontend ring 125 pass, root 236. **New blocker below: the edge `/assets/*`
 route cannot serve the bucket, so the mascot 404s in the composed stack.**
 
 ## Execution protocol (follow exactly)

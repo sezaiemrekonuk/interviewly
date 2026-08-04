@@ -102,6 +102,16 @@ message namespace, per REFERENCE ("alt from `mascot.*`") — the task file only 
 `/assets/*` route does not add the bucket segment MinIO's path-style API needs, so the mascot
 `<img>` 404s under `docker compose up` today. Frontend side is correct; the edge route is F03's.
 
+**`frontend/tsconfig.json` now maps `@interviewly/types` to `../packages/types/src/index.ts`**,
+mirroring the root config. Required: this task is the first frontend import of the package, the
+package ships `types: dist/…`, and nothing builds it — `next build` (the CI `build` job) failed
+with `Cannot find module '@interviewly/types'` while root `tsc` passed. Any later frontend file
+importing a workspace package needs the same mapping added.
+
 **Verification:** `npm run -w frontend test -- src/app/page.test.tsx src/components/mascot.test.tsx`
 → 16 pass. Root gates: `npm run lint`, `npm run typecheck` clean, `npm test` 236 pass (31 files).
-`test:acceptance` not run — no backend behaviour touched.
+`npm run -w frontend build` succeeds. `test:acceptance` not run — no backend behaviour touched.
+JS budget not asserted: Next 16 prints no per-route First Load JS table; gzip of the whole
+`.next/static/chunks` tree is ~255 KB across **all** routes, an upper bound, not the landing
+figure. Measure the route properly (bundle analyzer or a Playwright transfer-size assert) when
+W07 closes the demo path.

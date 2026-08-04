@@ -4,7 +4,7 @@ author: Sezai
 sessions: [2026-08-04]
 model: claude-sonnet-4.6
 model_recommended: claude-sonnet-4.6
-iterations: 1
+iterations: 2
 tools: [superpowers:test-driven-development, cavecrew-investigator]
 ---
 
@@ -32,6 +32,11 @@ tools: [superpowers:test-driven-development, cavecrew-investigator]
 - Tracing the URL end to end turned up an infra defect: Caddy's `/assets/*` route hands MinIO a
   path with no bucket segment, and the bucket has no anonymous-read policy. Left the frontend
   correct, wrote it into STATE.md blockers rather than editing `Caddyfile` from a `W` task.
+- **The local gates lied.** `lint`/`typecheck`/`test` were all green while the CI `build` job
+  failed: root `tsc` maps `@interviewly/types`, `frontend/tsconfig.json` did not, and a
+  type-only import is erased before Vitest ever resolves it. Fixed by mirroring the mapping.
+  Lesson for this ledger: `npm run -w frontend build` is the only gate that runs Next's own
+  typechecker — run it before pushing anything that imports a workspace package.
 - W01's stray-literal scan rules out inline styles for anything sized or coloured — the page had
   to be a CSS module from the start. Worth knowing before writing the JSX, not after.
 
