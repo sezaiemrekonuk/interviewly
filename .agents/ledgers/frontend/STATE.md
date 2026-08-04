@@ -1,16 +1,15 @@
 # Frontend — State
 
 Last updated: 2026-08-04
-Last session ended: **W04 done.** `/onboarding/[step]` now runs on React Query: `useProfile()`
-+ `useSaveProfileCard()` in `lib/query.ts` (types `AccountProfile`/`ProfileResponse`/`ProfileCard`
-live there too — W05+ reuse them, do not redeclare). A refused card PATCH sets `saveError`,
-shows `errors.<CODE>` and does **not** advance; a completed account or a too-far deep-link
-renders `null` while the redirect runs (no card flash). `api.ts` gained `apiPatch` + `apiUpload`
-(multipart, no content-type). Poses point/think/cheer via W03's `<Mascot>`. **Test trap:**
-`useRouter` must be mocked as ONE hoisted object — a fresh `{...}` per call re-runs
-`useRequireAuth`'s effect forever and hangs `act`; `use(params)` needs
-`await act(async () => { render(...) })`. Ring: frontend 129, root 240. New blocker below:
-`kind='cv'` uploads are never linked to the user (A06 step 5 was deferred).
+Last session ended: **W05 done.** `/interviews/new` posts one `POST /interviews` and routes to
+`/room` (text) or `/pre-join` (voice) — never before the create resolves. **Two verified API facts
+W06+ must not re-derive:** the create body carries **no occupation/language** (I03 classifies from
+`jobText`, language from `req.user.locale`), so both selects are client-side only; and **`uploadId`
+without `jobText` is `VALIDATION_ERROR`** (`setup.ts:55`), so the form requires pasted text even
+after a clean PDF upload — drop that guard when I11 returns extracted text. The round split is a
+**client preview mirroring I03's `max(2, round(target*0.4))`** because setup navigates away before
+the 201 can render — duplicated server logic, flagged in the task Notes. `useCreateInterview()` in
+`lib/query.ts` (retry off); reuse its types. Ring: frontend 150, root 258.
 
 ## Execution protocol (follow exactly)
 
@@ -27,8 +26,8 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**W05 (`<- W02, I03, I04, I11`)** is next — setup, screen 9. W07/W08/W11 are also eligible
-(deps `done`); § 4 order picks the lowest ID.
+**W06 (`<- W02, I03, I06, I07`)** is next — interview room text mode, screen 11 (opus-tier).
+W07/W08/W11 are also eligible (deps `done`); § 4 order picks the lowest ID.
 
 ## Environment
 
@@ -116,7 +115,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | W02 | App shell + React Query data layer + `useInterviewEvents` SSE hook + error-code→route map + locale switcher | | done | F01, A01 |
 | W03 | Landing (screen 1) + `<Mascot>` primitive with per-pose preload | | done | W01, W02 |
 | W04 | Onboarding host (screens 6–8): 3 cards, per-card PATCH, CV upload, skip/complete, server-derived resume | | done | W02, A06 |
-| W05 | Setup (screen 9) + 390px mobile: listing textarea, chips, option cards, detected-summary edit, pre-questions/skip | | todo | W02, I03, I04, I11 |
+| W05 | Setup (screen 9) + 390px mobile: listing textarea, chips, option cards, detected-summary edit, pre-questions/skip | | done | W02, I03, I04, I11 |
 | W06 | Interview room text mode (screen 11) + widgets + 390px: two tiles, banner, avatar state machine, typed animation, guarded submit, handover, report-wait | | todo | W02, I03, I06, I07 |
 | W07 | Report + transcript (screen 12): report-wait (SSE + bounded poll) → render `ReportPayload` read-only | | todo | W02, R01 |
 | W08 | History / dashboard (screen 13): list, Continue, optimistic Delete | | todo | W02, N01 |

@@ -1,5 +1,5 @@
 # W05 — Interview setup (screen 9): occupation/language + listing, mobile layout
-REPO: (this repo) · Depends: W02, I03, I04, I11 · Status: todo
+REPO: (this repo) · Depends: W02, I03, I04, I11 · Status: done
 Read first: STATE.md, REFERENCE.md, then this.
 **Model: claude-sonnet-4.6** — a form that POSTs one create call and routes into the room. The one
 sharp edge (the setup response is missing the detected summary) is a recorded gap, not a design
@@ -64,16 +64,16 @@ routing a created interview into `/interviews/:id/room` (or `/pre-join` when mod
   rounds from the counts; leave the editable detected-summary affordance visibly pending on I03.
 
 ## Steps
-- [ ] **1. `POST /interviews` mutation** in `query.ts` (no retry).
-- [ ] **2. `new/page.tsx`** — occupation/language, round shape, Start CTA, `point` mascot,
+- [x] **1. `POST /interviews` mutation** in `query.ts` (no retry).
+- [x] **2. `new/page.tsx`** — occupation/language, round shape, Start CTA, `point` mascot,
   entry ground; route by mode on success.
-- [ ] **3. `listing-upload.tsx`** — paste/upload via `POST /uploads` (`kind=listing`), error
+- [x] **3. `listing-upload.tsx`** — paste/upload via `POST /uploads` (`kind=listing`), error
   mapping, `uploadId` into the create body.
-- [ ] **4. Round split from `hrCount`/`techCount`; mark the detected-summary affordance pending.**
-- [ ] **5. `setup.*` copy** in both files; mobile single-column at ≤ 375 px.
-- [ ] **6. `page.test.tsx`** — one create call + navigate, limit-error inline no-navigate, round
+- [x] **4. Round split from `hrCount`/`techCount`; mark the detected-summary affordance pending.**
+- [x] **5. `setup.*` copy** in both files; mobile single-column at ≤ 375 px.
+- [x] **6. `page.test.tsx`** — one create call + navigate, limit-error inline no-navigate, round
   split rendered, detected-summary pending.
-- [ ] **7. Run the `## Verification` command.**
+- [x] **7. Run the `## Verification` command.**
 
 ## Definition of done
 - Submitting `/interviews/new` calls `POST /interviews` once and, on success, navigates to
@@ -92,4 +92,33 @@ handling, the round split, and the pending detected-summary affordance.
 
 ## Notes
 
-(Empty until the task is done.)
+**Shipped.** `/interviews/new` — occupation/language/mode/round-shape + paste-or-upload listing,
+one `POST /interviews`, mode-routed nav. `setup.module.css` carries the entry ground
+(`--gradient-entry` + `--shadow-soft` card); the form is a flex column at every width, so 375/390 px
+needs no branch.
+
+**Contract facts (verified against `backend/modules/interview/setup.ts`, not assumed):**
+- Body is `{ mode, jobText?, uploadId?, targetQuestionCount }` — **no occupation, no language.**
+  I03 classifies `occupation` from `jobText` and takes `language` from `req.user.locale`.
+  The two selects are therefore client-side only and say so via `setup.choiceNotSent`.
+- **`uploadId` with no `jobText` is `VALIDATION_ERROR`, not a valid create** (`setup.ts:55`) —
+  the extracted-text handoff is I11's unbuilt contract. The form requires pasted text even when a
+  PDF uploaded cleanly, and refuses locally with `LISTING_REQUIRED` rather than spending a round
+  trip on a message that does not name the real problem. **Delete that guard once I11 returns
+  extracted text.**
+- 201 is `{ interviewId, hrCount, techCount }` only. Confirmed gap; nothing claims detection.
+
+**Deviation — the round split is a client preview, not the response.** The task says render the
+split from `hrCount`/`techCount`, but setup navigates away the moment the create resolves, so the
+201's counts can never be on screen. `splitRounds()` in `page.tsx` mirrors I03's deterministic
+`max(2, round(target*0.4))`. **This is duplicated server logic** — if I03's split changes, this
+drifts silently. Collapse it when the create response can be shown (or I03 exposes the split
+pre-create).
+
+**For W06:** the room is entered only after the create resolves; no state is seeded into
+`['interview',id,'state']`, so the room fetches its own truth. `useCreateInterview()` in
+`lib/query.ts` (retry off) — reuse, do not redeclare `CreateInterviewBody`/`CreateInterviewResponse`.
+
+**Verification:** `npm run -w frontend test -- src/app/interviews/new/page.test.tsx` → 9 passed.
+Ring: frontend 150, root 258. lint + typecheck clean. `test:acceptance` **not run** — it needs a
+composed Postgres/Redis and hangs without one; this diff touches no backend behaviour.

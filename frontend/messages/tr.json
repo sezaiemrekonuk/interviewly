@@ -100,6 +100,22 @@
     "continueButton": "Devam et",
     "finish": "Bitir"
   },
+  "setup": {
+    "title": "Mülakatını ayarla",
+    "occupation": "Meslek",
+    "language": "Dil",
+    "choiceNotSent": "Seçimlerin yalnızca bu ekranı biçimlendirir — mülakat, ayar algılama gelene kadar mesleği ilandan, dili hesabından okur.",
+    "mode": "Mod",
+    "modeText": "Metin",
+    "modeVoice": "Sesli",
+    "roundShape": "Soru sayısı",
+    "roundSplit": "{hrCount} İK + {techCount} teknik soru",
+    "detectedSummaryPending": "Tespit edilen özet (yakında)",
+    "listingPaste": "İş ilanını yapıştır",
+    "listingUpload": "Veya PDF yükle",
+    "starting": "Başlatılıyor…",
+    "start": "Başla"
+  },
   "errors": {
     "PASSWORD_TOO_SHORT": "Şifre en az 10 karakter olmalıdır.",
     "EMAIL_TAKEN": "Bu e-posta adresiyle bir hesap zaten mevcut.",

@@ -9,7 +9,7 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query';
 
-import { apiGet, apiPatch } from './api';
+import { apiGet, apiPatch, apiPost } from './api';
 import type { SessionUser } from './use-require-auth';
 
 /**
@@ -145,5 +145,35 @@ export function useInterviewState(
       return fetchJson<InterviewStateResponse>(`/interviews/${id}/state`);
     },
     enabled: Boolean(id),
+  });
+}
+
+/** I03 body — occupation/language are NOT sent (API gap, STATE blocker); server infers nothing. */
+export interface CreateInterviewBody {
+  mode: 'text' | 'voice';
+  jobText?: string;
+  uploadId?: string;
+  targetQuestionCount: number;
+}
+
+/** I03's 201 — no occupation/language/cluster back either. Round split only. */
+export interface CreateInterviewResponse {
+  interviewId: string;
+  hrCount: number;
+  techCount: number;
+}
+
+/** W05 — never retried, the room is entered only after this resolves (no optimistic nav). */
+export function useCreateInterview(): UseMutationResult<
+  CreateInterviewResponse,
+  ApiError,
+  CreateInterviewBody
+> {
+  return useMutation({
+    mutationFn: async (body: CreateInterviewBody) => {
+      const result = await apiPost<CreateInterviewResponse>('/interviews', body);
+      if (!result.ok) throw new ApiError(result.code ?? 'UNKNOWN');
+      return result.data as CreateInterviewResponse;
+    },
   });
 }
