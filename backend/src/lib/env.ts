@@ -17,7 +17,7 @@ const schema = z.object({
   INTERNAL_API_URL:            z.string().url(),
   DATABASE_URL:                z.string(),
   SHADOW_DATABASE_URL:         z.string(),
-  REDIS_URL:                   z.string(),
+  REDIS_URL:                   z.string().url(),
   SESSION_SECRET:              z.string().min(32),
   SESSION_TTL_DAYS:            z.coerce.number().default(7),
   SESSION_COOKIE_SECURE:       zBoolean(true),

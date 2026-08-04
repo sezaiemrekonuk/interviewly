@@ -1,8 +1,13 @@
+// FIRST, and it stays first (I15): `@prisma/client` loads a repo-root `.env` into
+// process.env when it is imported, so any import ahead of this one lets a variable the
+// process was NOT given pass the check — the boot would then "succeed" on config nobody
+// deployed. env.ts must see the real environment.
+import { config } from './lib/env';
+
 import { AiError } from '@interviewly/ai';
 
 import { validateAiProviderKeys } from '../modules/ai';
 import { app } from './app';
-import { config } from './lib/env';
 import { logger } from './lib/logger';
 
 // B7 fail-fast, alongside the F03 env check: a provider named by a loaded prompt file with
