@@ -47,7 +47,8 @@ function firstUnfilledStep(profile: AccountProfile): 1 | 2 | 3 | null {
 
 export default function OnboardingStepPage({ params }: { params: Promise<{ step: string }> }) {
   const { step: stepParam } = use(params);
-  const step = Number(stepParam) as 1 | 2 | 3;
+  const stepNumber = Number(stepParam);
+  const step: 1 | 2 | 3 = stepNumber === 1 || stepNumber === 2 || stepNumber === 3 ? stepNumber : 1;
   const t = useTranslations('onboarding');
   const errorMessage = useErrorMessage();
   const router = useRouter();
