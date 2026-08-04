@@ -40,3 +40,12 @@ Feature: Voice session minting
     When I POST "/interviews/:id/voice/session"
     Then the response status is 201
     And a voice_sessions row is written for the interview
+
+  @voice-session @voice @AC-11
+  Scenario: A pre-join device denial downgrades the interview to text without creating a voice session
+    Given I am signed in as a candidate
+    And I own an interview in a state that can host a voice round
+    When I POST "/interviews/:id/voice/downgrade"
+    Then the response status is 200
+    And the interview mode becomes "text"
+    And no voice_sessions row is written
