@@ -130,6 +130,14 @@ but I06 not — means the webhook's `submit_answer` has no guarded-advance path 
 **None.** Voice is authored last (§12, AUTHOR_DOCS "write it last; do not let it block anything").
 No other ledger cites a `V0x` task in its `Depends on`. Record no ledger as depending on voice.
 
+## ⚠ Known tech debt
+
+- **[V02] Double `currentQuestionRow` query on `submit_answer`** — webhook handler fetches
+  the row to obtain `question.id`, then `advanceWithAnswer` fetches it again internally
+  (its own `QUESTION_NOT_CURRENT` guard). 2× round+question queries per webhook answer.
+  Not a correctness issue; fix requires `advanceWithAnswer` to accept a pre-fetched row.
+  Promote to a task when D03 or the next `answers.ts` touch lands.
+
 ## Backlog (deferred, unnumbered — promote to a task when its trigger fires)
 
 - **Voice room surface + avatar drivers (frontend, out-of-ring)** — the ASR transcript panel,
