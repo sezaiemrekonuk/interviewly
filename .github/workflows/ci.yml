@@ -134,6 +134,11 @@ jobs:
       # regardless (auth STATE.md, BLOCKER-2). A new ring must be added here or it is not run.
       - run: npm run test:acceptance
       - run: npx cucumber-js -p auth
+      # R01's queue integration test. It lives in the vitest tree but is excluded from
+      # `npm test` (the `unit` job has no Postgres and no Redis) — this is the only job with
+      # both, so if it is not run here it is not run at all. The job-level DATABASE_URL and
+      # REDIS_URL above win over the `.env` copied in the step before, same as for cucumber.
+      - run: npm run test:integration
 
   audit:
     runs-on: ubuntu-latest

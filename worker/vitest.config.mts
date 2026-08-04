@@ -9,6 +9,13 @@ import { defineConfig } from 'vitest/config';
 // Both aliases point at source, not `dist/`: `@interviewly/backend`'s barrel
 // (`worker-exports.ts`) imports `@interviewly/ai` internally, and the CI `unit` job never
 // builds either package first — same reasoning as the root config's `@interviewly/ai` alias.
+// `*.integration.test.ts` needs a reachable Postgres and Redis. The CI `unit` job that runs
+// `npm test` has neither, and `.env.example` names compose-internal hosts (`db:5432`,
+// `cache:6379`) that resolve nowhere else — so those files are excluded by default and this
+// flag is the only way to run them. `npm run test:integration` sets it; the CI `acceptance`
+// job runs that script, being the one job that already stands both services up.
+const integration = process.env.INTEGRATION === '1';
+
 export default defineConfig({
   resolve: {
     alias: {
@@ -20,12 +27,18 @@ export default defineConfig({
     name: 'worker',
     root: fileURLToPath(new URL('.', import.meta.url)),
     environment: 'node',
-    // Same forcing as cucumber.js, for the same reason: `consumer.test.ts` drives the real
-    // `runReport`, and a developer's `.env` with `AI_ENABLED=true` would bill live providers
-    // and make the assertions non-deterministic. Overrides the file, which is loaded by the
-    // `--env-file-if-exists` in the `test` script.
+    // Same forcing as cucumber.js, for the same reason: `consumer.integration.test.ts` drives
+    // the real `runReport`, and a developer's `.env` with `AI_ENABLED=true` would bill live
+    // providers and make the assertions non-deterministic. Overrides the file, which is
+    // loaded by the `--env-file-if-exists` in the `test` script.
     env: { AI_ENABLED: 'false' },
-    include: ['src/**/*.test.ts'],
-    exclude: ['**/node_modules/**', '**/dist/**'],
+    // Under INTEGRATION=1 this project is *only* the integration files: they are the ring
+    // being asked for, and the unit ring already ran in the `unit` job.
+    include: [integration ? 'src/**/*.integration.test.ts' : 'src/**/*.test.ts'],
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      ...(integration ? [] : ['**/*.integration.test.ts']),
+    ],
   },
 });

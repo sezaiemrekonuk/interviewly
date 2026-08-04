@@ -1,84 +1,68 @@
 /**
- * R01 integration coverage for the report queue: a real BullMQ `Worker` running
- * `processReportJob`, dequeuing a job this file enqueues itself, driving the real
- * `runReport` (I09) end to end. Needs `db` and `cache` up (`docker compose up -d db cache`)
- * and `AI_ENABLED=false` (the repo default outside a developer's own `.env` — see
- * `packages/ai`'s `resolveAiClient`), which resolves to `StubAiClient` and keeps this fast,
- * free and deterministic without injecting a client into `runReport` (production never does).
+ * The queue-free half of R01's coverage: what `processReportJob` itself owns, which is the
+ * `traceId` it derives, the failure it must not swallow, and the K6 log pair around the call.
+ * `consumer.integration.test.ts` covers the other half — the real BullMQ dequeue against a
+ * real `runReport` — and needs Postgres and Redis, which the CI `unit` job has neither of.
  *
- * `report-run.ts`'s unit-ish coverage (the acceptance `report-run.steps.ts`) calls `runReport`
- * directly; this is the one thing that cannot reach — the queue itself.
+ * `@interviewly/backend` is mocked whole rather than just `runReport`: its barrel
+ * (`worker-exports.ts`) constructs a `PrismaClient` and a BullMQ `Queue` at import time, so
+ * loading it for real is exactly the connection this file exists to avoid.
  */
-import { randomUUID } from 'node:crypto';
+import type { Job } from 'bullmq';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { Queue, QueueEvents, Worker } from 'bullmq';
-import { afterAll, describe, expect, it } from 'vitest';
+import { runReport } from '@interviewly/backend';
 
-import { prisma, REPORT_QUEUE } from '@interviewly/backend';
+import { logger } from './lib/logger';
 
 import { processReportJob, type ReportJobData } from './consumer';
 
-const connection = { url: process.env.REDIS_URL! };
+vi.mock('@interviewly/backend', () => ({ runReport: vi.fn() }));
+vi.mock('./lib/logger', () => ({ logger: { info: vi.fn() } }));
 
-async function seedEvaluatingInterview(): Promise<string> {
-  const user = await prisma.user.create({
-    data: { email_lower: `r01-${randomUUID()}@test.local` },
-  });
-  const interview = await prisma.interview.create({
-    data: {
-      user_id: user.id,
-      mode: 'text',
-      job_text: 'Backend engineer, Postgres experience.',
-      job_source: 'paste',
-      occupation: 'Backend Engineer',
-      language: 'en',
-      target_question_count: 5,
-      hr_question_count: 3,
-      state: 'evaluating',
-    },
-  });
-  return interview.id;
+const runReportMock = vi.mocked(runReport);
+const infoMock = vi.mocked(logger.info);
+
+/** Only the two fields the processor reads; BullMQ's `Job` is far too wide to build here. */
+function fakeJob(interviewId: string, jobId = interviewId): Job<ReportJobData> {
+  return { id: jobId, data: { interviewId } } as Job<ReportJobData>;
 }
 
-describe('report queue consumer', () => {
-  const queue = new Queue(REPORT_QUEUE, { connection });
-  const queueEvents = new QueueEvents(REPORT_QUEUE, { connection });
-  const worker = new Worker<ReportJobData>(REPORT_QUEUE, processReportJob, { connection });
+/** The `EVENT_NAME` of every `logger.info` call, in order — pino's message is arg 2 (K6). */
+function loggedEvents(): unknown[] {
+  return infoMock.mock.calls.map(([, event]) => event);
+}
 
-  afterAll(async () => {
-    await worker.close();
-    await queueEvents.close();
-    await queue.close();
+describe('processReportJob', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
   });
 
-  it(
-    'dequeues the job, runs runReport, and leaves the report ready',
-    async () => {
-      const interviewId = await seedEvaluatingInterview();
+  it('runs the report for the job\'s interview under a job-scoped traceId', async () => {
+    await processReportJob(fakeJob('int-1', 'job-7'));
 
-      const job = await queue.add(REPORT_QUEUE, { interviewId }, { jobId: interviewId });
-      await job.waitUntilFinished(queueEvents, 20_000);
+    expect(runReportMock).toHaveBeenCalledExactlyOnceWith('int-1', { traceId: 'worker-job-7' });
+  });
 
-      const report = await prisma.report.findFirst({ where: { interview_id: interviewId } });
-      expect(report?.status).toBe('ready');
+  it('logs the K6 lifecycle pair around a successful run', async () => {
+    await processReportJob(fakeJob('int-1', 'job-7'));
 
-      const interview = await prisma.interview.findUniqueOrThrow({ where: { id: interviewId } });
-      expect(interview.state).toBe('completed');
-    },
-    25_000,
-  );
+    expect(loggedEvents()).toEqual(['REPORT_JOB_STARTED', 'REPORT_JOB_COMPLETED']);
+    expect(infoMock).toHaveBeenNthCalledWith(
+      1,
+      { interviewId: 'int-1', jobId: 'job-7' },
+      'REPORT_JOB_STARTED',
+    );
+  });
 
-  it('is idempotent per interviewId (jobId dedup, AC-20)', async () => {
-    const interviewId = await seedEvaluatingInterview();
+  it('propagates a runReport failure so BullMQ fails the job (R03 retries on this)', async () => {
+    runReportMock.mockRejectedValueOnce(new Error('schema gate rejected the transcript'));
 
-    const first = await queue.add(REPORT_QUEUE, { interviewId }, { jobId: interviewId });
-    const second = await queue.add(REPORT_QUEUE, { interviewId }, { jobId: interviewId });
-
-    // A re-add for a known jobId returns the same job rather than creating a second one —
-    // the mechanism AC-20's "no additional report job is enqueued" relies on.
-    expect(second.id).toBe(first.id);
-    expect((await queue.getJob(interviewId))?.id).toBe(interviewId);
-
-    await first.waitUntilFinished(queueEvents, 20_000);
-  }, 25_000);
+    await expect(processReportJob(fakeJob('int-1'))).rejects.toThrow(
+      'schema gate rejected the transcript',
+    );
+    // The COMPLETED line is the signal R01 emits for a report that actually landed; a failed
+    // run must not produce one.
+    expect(loggedEvents()).toEqual(['REPORT_JOB_STARTED']);
+  });
 });
