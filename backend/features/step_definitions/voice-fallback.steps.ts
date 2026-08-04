@@ -1,0 +1,171 @@
+/**
+ * `voice_fallback.feature` @AC-6 — the voice → text downgrade (V03).
+ *
+ * Driven entirely through `FakeVoiceSession`: the fatal signal is a mint whose driver throws,
+ * which is the one voice failure the server observes for itself (§3.8). No network.
+ */
+import assert from 'node:assert/strict';
+import { After, Before, Given, Then, When } from '@cucumber/cucumber';
+
+import { FakeVoiceSession } from '../../modules/voice/fake-session';
+import { setVoiceSession } from '../../modules/voice/session';
+import { prisma } from '../../src/lib/db';
+import { logger } from '../../src/lib/logger';
+
+import { questionIdAt } from './answers.steps';
+import { signIn } from './interview-generation.steps';
+import { AiWorld } from './world';
+
+// target 8 → hr 3 (setup.ts split), so question 3 is the last HR question: the downgrade and
+// the answer that follows it both happen inside one round, and `mode` is the only thing that
+// changed between them.
+const TOTAL_QUESTIONS = 8;
+
+const realInfo = logger.info;
+
+// ponytail: third copy of this patch (report-run.steps `captureWarnings`, voice-webhook.steps
+// `captureLogs`). Extract to one step-definition helper when a fourth ring needs it.
+Before({ tags: '@voice-fallback' }, function (this: AiWorld) {
+  this.resetEvents();
+  captureInfo(this);
+});
+
+/** `VOICE_DOWNGRADED_TO_TEXT` is the only event this feature asserts, and it is info-level. */
+function captureInfo(world: AiWorld): void {
+  logger.info = function capturedInfo(obj: unknown, msg?: string) {
+    if (typeof msg === 'string') {
+      world.events.push({ level: 'info', event: msg, fields: obj as Record<string, unknown> });
+    }
+    return realInfo.call(logger, obj as object, msg);
+  } as typeof logger.info;
+}
+
+After({ tags: '@voice-fallback' }, function () {
+  logger.info = realInfo;
+});
+
+// ---------------------------------------------------------------- helpers
+
+async function interviewRow(world: AiWorld) {
+  return prisma.interview.findUniqueOrThrow({ where: { id: world.interviewId } });
+}
+
+async function answerFor(world: AiWorld, index: number) {
+  return prisma.answer.findFirst({ where: { question_id: await questionIdAt(world, index) } });
+}
+
+// ---------------------------------------------------------------- given
+
+/**
+ * Parks a voice-mode interview on `index`, answering everything before it **by voice** — the
+ * only way a voice interview honestly arrives at question 3. That matters for the assertion
+ * later on: "the answers are preserved with input_mode voice" is vacuous if the fixture wrote
+ * them as text, so the next step states the precondition out loud and checks it.
+ */
+Given(
+  'I am in an interview in voice mode on question {int}',
+  async function (this: AiWorld, index: number) {
+    if (!this.candidateId) await signIn.call(this, 'candidate');
+
+    await this.httpPost('/interviews', {
+      mode: 'voice',
+      jobText: 'Voice interview position — backend developer, remote.',
+      targetQuestionCount: TOTAL_QUESTIONS,
+    });
+    assert.equal(this.lastStatus, 201, `setup failed: ${JSON.stringify(this.lastBody)}`);
+    this.interviewId = (this.lastBody?.interviewId as string | undefined) ?? '';
+
+    await this.httpPost(`/interviews/${this.interviewId}/profile`, { skip: true });
+    assert.equal(this.lastStatus, 200, `profile failed: ${JSON.stringify(this.lastBody)}`);
+
+    for (let i = 1; i < index; i++) {
+      // The GET is what delivers the question and stamps `asked_at`, exactly as a room does.
+      await this.httpGet(`/interviews/${this.interviewId}/state`);
+      await this.httpPost(`/interviews/${this.interviewId}/answers`, {
+        questionId: await questionIdAt(this, i),
+        transcript: `A spoken answer to question ${i}.`,
+        inputMode: 'voice',
+      });
+      assert.equal(this.lastStatus, 200, `answer ${i} failed: ${JSON.stringify(this.lastBody)}`);
+    }
+    await this.httpGet(`/interviews/${this.interviewId}/state`);
+
+    const interview = await interviewRow(this);
+    assert.equal(interview.current_index, index);
+    assert.equal(interview.mode, 'voice');
+  },
+);
+
+Given(
+  'I answered questions {int} and {int} by voice',
+  async function (this: AiWorld, first: number, second: number) {
+    for (const index of [first, second]) {
+      const answer = await answerFor(this, index);
+      assert.ok(answer, `no answer row for question ${index}`);
+      assert.equal(answer.input_mode, 'voice');
+    }
+  },
+);
+
+// ---------------------------------------------------------------- when
+
+/**
+ * `failNext()` makes the driver throw on the mint the room is about to attempt. Installed here
+ * rather than in a hook because the `@voice` hook (voice-session.steps) replaces the session
+ * with a clean fake at scenario start and would overwrite an earlier install.
+ */
+When('the fake voice session reports a fatal error', async function (this: AiWorld) {
+  const fake = new FakeVoiceSession();
+  fake.failNext();
+  setVoiceSession(fake);
+
+  this.resetEvents();
+  await this.httpPost(`/interviews/${this.interviewId}/voice/session`, {});
+  assert.equal(this.lastStatus, 503, `expected VOICE_UNAVAILABLE: ${JSON.stringify(this.lastBody)}`);
+});
+
+When('the fake voice session completes a turn without error', async function (this: AiWorld) {
+  this.resetEvents();
+  await this.httpPost(`/interviews/${this.interviewId}/voice/session`, {});
+  assert.equal(this.lastStatus, 201, `mint failed: ${JSON.stringify(this.lastBody)}`);
+});
+
+When('I POST {string} after the downgrade', async function (this: AiWorld, path: string) {
+  await this.httpPost(path.replace(':id', this.interviewId), {});
+});
+
+// ---------------------------------------------------------------- then
+
+// `the response status is {int}` (ai-provider.steps), `the response error code is {string}`
+// (interview-setup.steps), `the interview currentIndex is {int}` (answers.steps),
+// `a {string} event is emitted with the interviewId` (voice-webhook.steps) and
+// `no {string} event is emitted` (prompt-builder.steps) are already global over AiWorld and
+// mean exactly what this feature means. Redefining any of them is an ambiguous-step failure.
+
+Then('the interview mode becomes {string}', async function (this: AiWorld, mode: string) {
+  assert.equal((await interviewRow(this)).mode, mode);
+});
+
+Then('the interview mode is still {string}', async function (this: AiWorld, mode: string) {
+  assert.equal((await interviewRow(this)).mode, mode);
+});
+
+Then(
+  'the answers for questions {int} and {int} are preserved with input_mode {string}',
+  async function (this: AiWorld, first: number, second: number, mode: string) {
+    for (const index of [first, second]) {
+      const answer = await answerFor(this, index);
+      assert.ok(answer, `answer for question ${index} was lost by the downgrade`);
+      assert.equal(answer.input_mode, mode);
+    }
+  },
+);
+
+Then(
+  'the stored answer for question {int} has input_mode {string}',
+  async function (this: AiWorld, index: number, mode: string) {
+    const answer = await answerFor(this, index);
+    assert.ok(answer, `no answer row for question ${index}`);
+    assert.equal(answer.input_mode, mode);
+  },
+);

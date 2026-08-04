@@ -11,6 +11,7 @@ import { activeInterview, prisma } from '../../src/lib/db';
 import { config } from '../../src/lib/env';
 import { logger } from '../../src/lib/logger';
 
+import { downgradeToText } from './downgrade';
 import { ElevenLabsSession } from './elevenlabs-session';
 import type { VoiceSession } from './VoiceSession';
 
@@ -49,7 +50,9 @@ export const mintVoiceSession: RequestHandler = async (req, res) => {
 
   if (!voiceSeam.aiEnabled) throw new ApiError('VOICE_UNAVAILABLE');
 
-  if (interview.mode !== 'voice') throw new ApiError('VOICE_UNAVAILABLE');
+  // V03: `text` is where a downgraded interview lives, and the downgrade is one-directional
+  // (§3.8) — asking for voice from there is an illegal transition, not a transient outage.
+  if (interview.mode !== 'voice') throw new ApiError('INVALID_STATE_TRANSITION');
 
   if (!VOICE_CAPABLE_STATES.has(interview.state)) {
     throw new ApiError('INVALID_STATE_TRANSITION');
@@ -61,7 +64,24 @@ export const mintVoiceSession: RequestHandler = async (req, res) => {
   if (ttlSeconds <= 0) throw new ApiError('VOICE_UNAVAILABLE');
 
   const nonce = randomBytes(32).toString('hex');
-  const { token, wssOrigin } = await _session.mint(interview.id, nonce, ttlSeconds);
+
+  // V03: only the driver call is wrapped. A pre-check refusal above (kill switch off, wrong
+  // state, not the owner) has not failed *at voice*, and must not spend the one-directional
+  // downgrade; a `VoiceSession` fatal error has, and §3.8 says the same interview continues
+  // in text rather than dead-ending. No `voice_sessions` row is written on this path.
+  let minted: { token: string; wssOrigin: string };
+  try {
+    minted = await _session.mint(interview.id, nonce, ttlSeconds);
+  } catch (err) {
+    // Both drivers raise VOICE_UNAVAILABLE; anything else is a defect, and swallowing it
+    // behind the 503 without a line is how it stays invisible.
+    if (!(err instanceof ApiError)) {
+      logger.error({ err, traceId: req.traceId, interviewId: interview.id }, 'VOICE_MINT_FAILED');
+    }
+    await downgradeToText(interview, { traceId: req.traceId! });
+    throw new ApiError('VOICE_UNAVAILABLE');
+  }
+  const { token, wssOrigin } = minted;
 
   const expiresAt = new Date(clock.now().getTime() + ttlSeconds * 1000);
   await prisma.voiceSession.create({
