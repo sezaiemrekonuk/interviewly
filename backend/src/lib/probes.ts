@@ -9,10 +9,16 @@ import { prisma } from './db';
 const PING_TIMEOUT_MS = 2_000;
 
 async function withTimeout(p: Promise<unknown>): Promise<void> {
-  await Promise.race([
-    p,
-    new Promise((_, reject) => setTimeout(() => reject(new Error('PING_TIMEOUT')), PING_TIMEOUT_MS)),
-  ]);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error('PING_TIMEOUT')), PING_TIMEOUT_MS);
+  });
+
+  try {
+    await Promise.race([p, timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 /** Overridable pings — the acceptance seam for "Postgres/Redis is unreachable" (same shape as `setEmailQueue`). */
