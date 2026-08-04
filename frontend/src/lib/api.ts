@@ -61,16 +61,13 @@ export async function apiGet<T>(path: string): Promise<ApiResult<T>> {
   return { status: response.status, ok: true, data: payload as T, code: null, payload };
 }
 
-export async function apiPost<T>(path: string, body: unknown): Promise<ApiResult<T>> {
+async function apiSend<T>(
+  path: string,
+  init: RequestInit,
+): Promise<ApiResult<T>> {
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}${path}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      // The session cookie is the whole point of these two endpoints.
-      credentials: 'same-origin',
-      body: JSON.stringify(body),
-    });
+    response = await fetch(`${API_BASE}${path}`, { credentials: 'same-origin', ...init });
   } catch {
     return { status: 0, ok: false, data: null, code: TRANSPORT_FAILURE, payload: null };
   }
@@ -88,4 +85,28 @@ export async function apiPost<T>(path: string, body: unknown): Promise<ApiResult
   }
 
   return { status: response.status, ok: true, data: payload as T, code: null, payload };
+}
+
+export function apiPost<T>(path: string, body: unknown): Promise<ApiResult<T>> {
+  return apiSend<T>(path, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+export function apiPatch<T>(path: string, body: unknown): Promise<ApiResult<T>> {
+  return apiSend<T>(path, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+/** Multipart upload (`POST /uploads`) — no JSON content-type, the browser sets the boundary. */
+export function apiUpload<T>(kind: 'cv' | 'listing', file: File): Promise<ApiResult<T>> {
+  const form = new FormData();
+  form.append('kind', kind);
+  form.append('file', file);
+  return apiSend<T>('/uploads', { method: 'POST', body: form });
 }

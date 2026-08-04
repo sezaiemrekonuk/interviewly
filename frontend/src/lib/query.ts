@@ -1,8 +1,15 @@
 'use client';
 
-import { QueryClient, useQuery, type UseQueryResult } from '@tanstack/react-query';
+import {
+  QueryClient,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type UseMutationResult,
+  type UseQueryResult,
+} from '@tanstack/react-query';
 
-import { apiGet } from './api';
+import { apiGet, apiPatch } from './api';
 import type { SessionUser } from './use-require-auth';
 
 /**
@@ -48,6 +55,64 @@ export function createQueryClient(): QueryClient {
 
 export function useMe(): UseQueryResult<{ user: SessionUser }, ApiError> {
   return useQuery({ queryKey: queryKeys.me(), queryFn: () => fetchJson<{ user: SessionUser }>('/me') });
+}
+
+export interface EducationRow {
+  school: string;
+  degree: string;
+  field: string;
+  graduationYear: number;
+}
+
+/** `users.profile` (A06 §3.3 layer 1). Every field optional — a fresh account has `{}`. */
+export interface AccountProfile {
+  fullName?: string;
+  jobTitle?: string;
+  dateOfBirth?: string;
+  education?: EducationRow[];
+  hobbies?: string[];
+  interestsText?: string;
+}
+
+export interface ProfileResponse {
+  profile: AccountProfile;
+  onboardingCompletedAt: string | null;
+  cvUploadId: string | null;
+}
+
+/** `enabled=false` while `useRequireAuth` is still resolving — an anonymous 401 here is noise. */
+export function useProfile(enabled = true): UseQueryResult<ProfileResponse, ApiError> {
+  return useQuery({
+    queryKey: queryKeys.meProfile(),
+    queryFn: () => fetchJson<ProfileResponse>('/me/profile'),
+    enabled,
+  });
+}
+
+export type ProfileCard =
+  | { step: 1; fields: Pick<AccountProfile, 'fullName' | 'jobTitle' | 'dateOfBirth'> }
+  | { step: 2; fields: { education: EducationRow[] } }
+  | { step: 3; fields: Pick<AccountProfile, 'hobbies' | 'interestsText'> };
+
+/**
+ * A06 merge-not-replace: one card, one PATCH, carrying only that card's fields. Never
+ * retried (a refused save is shown, not repeated) and it invalidates the profile so a
+ * back-nav re-hydrates the draft from the server's copy.
+ */
+export function useSaveProfileCard(): UseMutationResult<
+  { profile: AccountProfile },
+  ApiError,
+  ProfileCard
+> {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (card: ProfileCard) => {
+      const result = await apiPatch<{ profile: AccountProfile }>('/me/profile', card);
+      if (!result.ok) throw new ApiError(result.code ?? 'UNKNOWN');
+      return result.data as { profile: AccountProfile };
+    },
+    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.meProfile() }),
+  });
 }
 
 /** The single room truth (`GET /interviews/:id/state`) — see REFERENCE for the shape. */

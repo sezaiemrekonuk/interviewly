@@ -1,5 +1,5 @@
 # W04 — Onboarding host (screens 6–8): the three-step profile cards
-REPO: (this repo) · Depends: W02, A06 · Status: todo
+REPO: (this repo) · Depends: W02, A06 · Status: done
 Read first: STATE.md, REFERENCE.md, then this.
 **Model: claude-sonnet-4.6** — a linear three-step wizard over a settled per-step API. The
 merge-not-replace save and the first-run routing already exist (A06 / `auth-redirect.ts`); this is
@@ -66,14 +66,14 @@ already targets — over the A06 profile endpoints.
   half-finished profile on a mid-flow drop. Save per step, complete only finalizes.
 
 ## Steps
-- [ ] **1. `useProfile()` + `PATCH /me/profile` mutation** in `query.ts` (no retry, invalidate
+- [x] **1. `useProfile()` + `PATCH /me/profile` mutation** in `query.ts` (no retry, invalidate
   `['me','profile']`).
-- [ ] **2. `(onboarding)` layout/host** — auth + completion guard, step routing, prev/next.
-- [ ] **3. `step-basics` / `step-cv` / `step-confirm`** with their poses; CV upload maps `CV_*`.
-- [ ] **4. `onboarding.*` copy** in both message files.
-- [ ] **5. `page.test.tsx`** — per-step isolated save, failure keeps draft, complete → setup,
+- [x] **2. `(onboarding)` layout/host** — auth + completion guard, step routing, prev/next.
+- [x] **3. `step-basics` / `step-cv` / `step-confirm`** with their poses; CV upload maps `CV_*`.
+- [x] **4. `onboarding.*` copy** in both message files.
+- [x] **5. `page.test.tsx`** — per-step isolated save, failure keeps draft, complete → setup,
   pre-completed redirects.
-- [ ] **6. Run the `## Verification` command.**
+- [x] **6. Run the `## Verification` command.**
 
 ## Definition of done
 - `/onboarding/1|2|3` render the three cards with the `point`/`think`/`cheer` mascots; each step
@@ -92,4 +92,38 @@ complete→setup navigation, and the completion/auth guards.
 
 ## Notes
 
-(Empty until the task is done.)
+A06 had already shipped a raw-`fetch` version of `/onboarding/[step]` (its Notes say so). This
+task rewired it, it did not create it.
+
+What exists now:
+- `lib/query.ts`: `useProfile(enabled)`, `useSaveProfileCard()`, and the shared types
+  `AccountProfile` / `EducationRow` / `ProfileResponse` / `ProfileCard`. **W05+ import these,
+  do not redeclare a profile shape.** The mutation throws `ApiError(code)` and invalidates
+  `queryKeys.meProfile()`; no retry (W02 policy).
+- `lib/api.ts`: `apiPost` / `apiPatch` / `apiUpload` now share one `apiSend`. `apiUpload(kind,
+  file)` posts multipart with no content-type header (the browser sets the boundary).
+- `page.tsx`: `useRequireAuth` gates the query (`enabled`); server state is **never mirrored
+  into local state** — `draft` holds only touched fields and the query's copy is the fallback
+  (`draft.fullName ?? profile?.fullName ?? ''`), so there is no hydration effect and a
+  post-save refetch cannot stamp on a live edit. `saveError` renders `errors.<CODE>` inline and
+  blocks the advance; the component returns `null` while a redirect (completed / too-far
+  deep-link) is in flight.
+
+Deviations from the task text:
+- No `components/onboarding/step-*.tsx` split. The three cards are three branches in one
+  ~280-line file; splitting them means threading 8 draft fields through props for no reuse.
+- Date of birth still not collected (A06 left it out; backend accepts and strips it).
+- CV upload posts and reports fine, but **nothing links the upload to the account** — see
+  STATE.md Open blockers (A06 step 5, owner Ahmet).
+
+Verification (`npm run -w frontend test -- "src/app/(onboarding)"`): 4 passed. Root ring 240
+passed, `npm run lint` / `typecheck` / `npm run -w frontend build` all clean.
+
+**`npm run lint` is not the gate husky runs.** The pre-commit hook runs
+`eslint --config frontend/eslint.config.mjs` on staged files, which carries React-Compiler
+rules the root config does not (`react-hooks/set-state-in-effect` rejected the first
+hydration-effect version). Run that config on changed frontend files before committing.
+
+For W05: mock `useRouter` as one hoisted object (a fresh object per call loops
+`useRequireAuth` forever), and wrap a `use(params)` page in
+`await act(async () => { render(...) })` inside `<Suspense>`.
