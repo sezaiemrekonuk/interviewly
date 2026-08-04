@@ -1,11 +1,13 @@
 # Voice — State
 
-Last updated: 2026-08-03
-Last session ended: **V02 done.** Four gates (`webhook-auth.ts`) + `POST /webhooks/elevenlabs/:action`
-(`webhook-router.ts`), raw-body parser scoped to `/webhooks` in `app.ts`. ADR-V02-2: gate 3 dropped its
-expiry filter — expiry is gate 4's, or @AC-4's `time_exhausted` end is unreachable. I06 consumed via a
-new `advanceWithAnswer` export, not a self-call. 6/6 voice_webhook, 52/52 default, 23/23 auth, 144/144
-vitest, `docker compose build` green. Next: V03 (downgrade); V04 also unblocked and reuses V02's verifiers.
+Last updated: 2026-08-04
+Last session ended: **V03 done.** `downgrade.ts` → `downgradeToText`, a guarded
+`updateMany({ where: { mode: 'voice' } })` — ADR-V03-2: `applyTransition` writes `state` only, so the
+"routed through I07" of ADR-V03 was not implementable; the predicate is both the one-directional rule
+and the idempotency. Only `_session.mint()` is wrapped in `session.ts`, so a kill-switch 503 does not
+downgrade; `mode !== 'voice'` now returns `INVALID_STATE_TRANSITION`, not `VOICE_UNAVAILABLE`. No HTTP
+endpoint — V05 calls the exported function. 2/2 voice_fallback, 59/59 default, 23/23 auth, 144/144
+vitest, lint + typecheck clean. Next: V04 (reconciliation), then V05.
 
 ## Execution protocol (follow exactly)
 
@@ -22,7 +24,7 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**V03** (voice → text downgrade) is next: `todo`, deps V01/I06/I07 all `done`. V04 is also unblocked now (V02 + I08 green) and reuses `webhook-auth.ts`'s `verifySignature`/`checkFreshness`; §4 ledger order gives V03 first.
+**V04** (post-call reconciliation worker job) is next: `todo`, deps V02/I08 both `done`. It reuses `webhook-auth.ts`'s `verifySignature`/`checkFreshness` for gates 1–2. V05 is also unblocked (V01 + V03 green); §4 ledger order gives V04 first.
 
 ## Environment
 
@@ -89,7 +91,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 |----|-------|------|--------|------------|
 | V01 | `VoiceSession` seam, `FakeVoiceSession`, and the session-mint endpoint | | done | F01, F02, F03, A01, I03, I07 |
 | V02 | ElevenLabs webhook authentication: the four gates + submit_answer/next_question/end_round + log redaction | | done | V01, I06, I07 |
-| V03 | Voice → text downgrade on a fatal voice failure | | todo | V01, I06, I07 |
+| V03 | Voice → text downgrade on a fatal voice failure | | done | V01, I06, I07 |
 | V04 | Post-call usage reconciliation worker job (idempotent `spent_usd` + `llm_calls` transaction) | | todo | V02, I08 |
 | V05 | Pre-join device check + active-speaker signal for the two persona tiles | | todo | V01, V03 |
 
@@ -130,7 +132,20 @@ but I06 not — means the webhook's `submit_answer` has no guarded-advance path 
 **None.** Voice is authored last (§12, AUTHOR_DOCS "write it last; do not let it block anything").
 No other ledger cites a `V0x` task in its `Depends on`. Record no ledger as depending on voice.
 
+## ⚠ Known tech debt
+
+- **[V02] Double `currentQuestionRow` query on `submit_answer`** — webhook handler fetches
+  the row to obtain `question.id`, then `advanceWithAnswer` fetches it again internally
+  (its own `QUESTION_NOT_CURRENT` guard). 2× round+question queries per webhook answer.
+  Not a correctness issue; fix requires `advanceWithAnswer` to accept a pre-fetched row.
+  Promote to a task when D03 or the next `answers.ts` touch lands.
+
 ## Backlog (deferred, unnumbered — promote to a task when its trigger fires)
+
+- **Extract the cucumber `logger.info/warn` capture helper** — three copies now:
+  `report-run.steps.ts` (`captureWarnings`), `voice-webhook.steps.ts` (`captureLogs`),
+  `voice-fallback.steps.ts` (`captureInfo`). Each patches the pino singleton and restores it in a
+  tagged `After`. Promote to one step-definition helper when a fourth ring needs it.
 
 - **Voice room surface + avatar drivers (frontend, out-of-ring)** — the ASR transcript panel,
   mic-level bar, self-camera tile (AC-8), the direct WSS connection (AC-9), and the

@@ -84,6 +84,7 @@ module.exports = {
       '.agents/features/language_detection.feature',
       '.agents/features/voice_session.feature',
       '.agents/features/voice_webhook.feature',
+      '.agents/features/voice_fallback.feature',
       '.agents/features/admin_cost.feature',
       '.agents/features/schema_validation.feature',
       '.agents/features/report.feature',

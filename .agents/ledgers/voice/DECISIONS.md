@@ -132,3 +132,25 @@ the mint (ADR-V01), so no second clock source exists.
 **Consequences:** the two rejections stay distinguishable, which is what makes @AC-4's
 `time_exhausted` assertion reachable. REFERENCE.md's gate-3 row patched to match. V04's `post_call`
 webhook is unaffected: it runs gates 1–2 only.
+
+---
+
+## ADR-V03-2 — 2026-08-04 — `mode` is a guarded column write, not an I07 transition; only a driver failure downgrades
+
+**Context:** ADR-V03 says the downgrade is "routed through the I07 transition". `applyTransition`
+writes `interviews.state` and nothing else — it has no `mode` parameter and `mode` is not a K2
+edge — so there is no I07 path to route through. Separately, the mint refuses for four reasons
+(non-owner, kill switch off, non-voice-capable state, driver failure) and only one of them is a
+voice failure.
+
+**Decision:** `downgradeToText` is a single guarded `updateMany({ where: { id, mode: 'voice' } })`.
+The `mode: 'voice'` predicate *is* both the one-directional rule and the idempotency — a repeat
+signal matches no row, rewrites nothing and emits no second event. Only the `VoiceSession.mint`
+call is wrapped: a pre-check refusal has not failed at voice and must not spend the one-way
+downgrade. The mint's `mode !== 'voice'` refusal changed `VOICE_UNAVAILABLE` → `INVALID_STATE_TRANSITION`,
+which is what `voice_fallback.feature` @AC-6 asserts for a post-downgrade mint.
+
+**Consequences:** no endpoint ships in V03 — the client-signalled degradations (mic denied, WSS
+drop) call the exported `downgradeToText` from V05's pre-join, which is where the spec puts them.
+Kill-switch-off still returns 503 and leaves `mode = 'voice'`, so `voice_session.feature` @AC-2 is
+unaffected.

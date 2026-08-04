@@ -133,7 +133,7 @@ marked with the creating task.
 | `backend/modules/voice/session.ts` | **V01** | `POST /interviews/:id/voice/session` handler; writes `voice_sessions` |
 | `backend/modules/voice/webhook-auth.ts` | **V02** | The four gates + HMAC/freshness verifier (reused by V04) |
 | `backend/modules/voice/webhook-router.ts` | **V02** | `submit_answer` / `next_question` / `end_round` handlers |
-| `backend/modules/voice/downgrade.ts` | **V03** | `voice → text` via `applyTransition`; `VOICE_DOWNGRADED_TO_TEXT` |
+| `backend/modules/voice/downgrade.ts` | **V03** | `downgradeToText` — guarded `mode: voice → text` update (ADR-V03-2, not `applyTransition`); `VOICE_DOWNGRADED_TO_TEXT` |
 | `backend/modules/voice/reconcile-webhook.ts` | **V04** | `post_call` webhook: verify (gates 1–2) + enqueue the job |
 | `worker/src/jobs/voice-reconcile.ts` | **V04** | Writes `llm_calls` + `spent_usd` in one idempotent transaction |
 | `worker/src/lib/logger.ts`, `worker/src/lib/env.ts` | F03 | Worker's pino factory + env subset |
@@ -147,7 +147,7 @@ Owned by F02 — **no structural change here** (ADR-F02 / §10). Voice reads and
   against an unexpired, unconsumed row (V02 gate 3).
 - `answers` — written by the I06 guarded advance with `input_mode = 'voice'` on a voice
   `submit_answer` (V02).
-- `interviews` — `mode` (`voice → text` on downgrade, V03), `state`/`ended_reason`
+- `interviews` — `mode` (`voice → text` on downgrade, V03; guarded on `mode: 'voice'`), `state`/`ended_reason`
   (`time_exhausted` via I07, V02 gate 4), `spent_usd`/`budget_usd` (reconcile via I08 tx, V04),
   `current_index` (never rewound by a downgrade).
 - `llm_calls` — one reconciliation row (V04): `provider='elevenlabs'`, `unit_kind='second'`,
