@@ -43,7 +43,8 @@ export function reset(): void {
 }
 
 export function validValue(key: string): string {
-  return VALID[key] ?? 'valid';
+  if (!(key in VALID)) throw new Error(`no validValue fixture for env key "${key}"`);
+  return VALID[key]!;
 }
 
 // Every child, not just the last: a scenario boots twice (invalid, then valid) and a
