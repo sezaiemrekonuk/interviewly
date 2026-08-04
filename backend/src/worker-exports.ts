@@ -8,7 +8,9 @@
  * subpaths it was never granted.
  */
 export { runReport, type ReportOpts } from '../modules/interview/report-run';
-export { REPORT_QUEUE, reportQueue } from './lib/queue';
+export { reconcileVoiceUsage, type ReconcileResult } from '../modules/voice/reconcile';
+export type { VoiceReconcileJob } from '../modules/voice/reconcile-webhook';
+export { REPORT_QUEUE, reportQueue, VOICE_RECONCILE_QUEUE, voiceReconcileQueue } from './lib/queue';
 // Not used by `worker/src/consumer.ts` (which only calls `runReport`) — exported so the
 // worker's own integration test can seed a fixture interview and assert the row `runReport`
 // wrote, without a second `PrismaClient` and a second connection pool.

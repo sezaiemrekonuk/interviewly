@@ -1,13 +1,14 @@
 # Voice — State
 
 Last updated: 2026-08-04
-Last session ended: **V03 done.** `downgrade.ts` → `downgradeToText`, a guarded
-`updateMany({ where: { mode: 'voice' } })` — ADR-V03-2: `applyTransition` writes `state` only, so the
-"routed through I07" of ADR-V03 was not implementable; the predicate is both the one-directional rule
-and the idempotency. Only `_session.mint()` is wrapped in `session.ts`, so a kill-switch 503 does not
-downgrade; `mode !== 'voice'` now returns `INVALID_STATE_TRANSITION`, not `VOICE_UNAVAILABLE`. No HTTP
-endpoint — V05 calls the exported function. 2/2 voice_fallback, 59/59 default, 23/23 auth, 144/144
-vitest, lint + typecheck clean. Next: V04 (reconciliation), then V05.
+Last session ended: **V04 done.** ADR-V04-2: the K13 transaction is `modules/voice/reconcile.ts`
+(`reconcileVoiceUsage`), not the worker job — cucumber never builds `worker/`'s dist, so @AC-7 would
+have asserted a mirror. `worker/src/jobs/voice-reconcile.ts` keeps the lifecycle only. Existence
+check on `(interview_id, provider='elevenlabs')` runs **inside** the transaction; `recordLlmCall(…,
+tx)` is I08's helper. `post_call` router mounts **before** `webhook-router` or its `/:action`
+swallows it. New `voice.reconcile` queue needed closing in both cucumber teardowns. 1/1
+voice_reconciliation, 65/65 default, 23/23 auth, 151/151 vitest, lint + typecheck clean.
+Next: V05 (pre-join + active speaker) — the last voice row.
 
 ## Execution protocol (follow exactly)
 
@@ -24,7 +25,7 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**V04** (post-call reconciliation worker job) is next: `todo`, deps V02/I08 both `done`. It reuses `webhook-auth.ts`'s `verifySignature`/`checkFreshness` for gates 1–2. V05 is also unblocked (V01 + V03 green); §4 ledger order gives V04 first.
+**V05** (pre-join device check + active-speaker signal) is next and last in this ledger: `todo`, deps V01/V03 both `done`. A denied microphone calls V03's exported `downgradeToText` — it does not mint. Append `voice_session.feature`'s pre-join scenarios (or its own file) to `cucumber.js` `paths` the way V04 appended `voice_reconciliation.feature`.
 
 ## Environment
 
@@ -92,7 +93,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | V01 | `VoiceSession` seam, `FakeVoiceSession`, and the session-mint endpoint | | done | F01, F02, F03, A01, I03, I07 |
 | V02 | ElevenLabs webhook authentication: the four gates + submit_answer/next_question/end_round + log redaction | | done | V01, I06, I07 |
 | V03 | Voice → text downgrade on a fatal voice failure | | done | V01, I06, I07 |
-| V04 | Post-call usage reconciliation worker job (idempotent `spent_usd` + `llm_calls` transaction) | | todo | V02, I08 |
+| V04 | Post-call usage reconciliation worker job (idempotent `spent_usd` + `llm_calls` transaction) | | done | V02, I08 |
 | V05 | Pre-join device check + active-speaker signal for the two persona tiles | | todo | V01, V03 |
 
 **V02 and V03 are genuinely independent** — both depend on V01, I06 and I07 but not on each other;
@@ -142,10 +143,11 @@ No other ledger cites a `V0x` task in its `Depends on`. Record no ledger as depe
 
 ## Backlog (deferred, unnumbered — promote to a task when its trigger fires)
 
-- **Extract the cucumber `logger.info/warn` capture helper** — three copies now:
+- **Extract the cucumber `logger.info/warn` capture helper — TRIGGER FIRED (V04).** Four copies now:
   `report-run.steps.ts` (`captureWarnings`), `voice-webhook.steps.ts` (`captureLogs`),
-  `voice-fallback.steps.ts` (`captureInfo`). Each patches the pino singleton and restores it in a
-  tagged `After`. Promote to one step-definition helper when a fourth ring needs it.
+  `voice-fallback.steps.ts` (`captureInfo`), `voice-reconcile.steps.ts` (`captureLogs`). Each
+  patches the pino singleton and restores it in a tagged `After`. V04 stayed in scope and copied it;
+  promote to one shared helper as its own task.
 
 - **Voice room surface + avatar drivers (frontend, out-of-ring)** — the ASR transcript panel,
   mic-level bar, self-camera tile (AC-8), the direct WSS connection (AC-9), and the

@@ -154,3 +154,22 @@ which is what `voice_fallback.feature` @AC-6 asserts for a post-downgrade mint.
 drop) call the exported `downgradeToText` from V05's pre-join, which is where the spec puts them.
 Kill-switch-off still returns 503 and leaves `mode = 'voice'`, so `voice_session.feature` @AC-2 is
 unaffected.
+
+---
+
+## ADR-V04-2 — 2026-08-04 — The reconciliation transaction lives in `backend`; `worker/src/jobs/` is the processor
+
+**Context:** ADR-V04 puts the K13 transaction in `worker/src/jobs/voice-reconcile.ts`. Cucumber runs
+against backend source via tsx and never builds `worker/`'s dist (`report-job.steps.ts`, ci.yml
+`acceptance`), so `voice_reconciliation.feature` @AC-7 could only assert a *mirror* of the
+transaction — the one invariant this task exists to prove would go untested.
+
+**Decision:** `reconcileVoiceUsage` (existence check + `recordLlmCall` + `spent_usd`, one
+`$transaction`) lives in `backend/modules/voice/reconcile.ts` and is exported through
+`worker-exports.ts`. `worker/src/jobs/voice-reconcile.ts` owns only the job lifecycle and traceId —
+the same split `consumer.ts`/`runReport` already uses for R01.
+
+**Consequences:** the acceptance ring calls the real function; the worker test covers the processor
+with `@interviewly/backend` mocked (no Postgres in CI `unit`). `cost_usd` is stored `0` on a missing
+price row, not null — `llm_calls.cost_usd` is NOT NULL in F02, the same constraint I02 hit
+(`modules/ai/index.ts`); `PRICE_MISSING` is what keeps it from being silent.
