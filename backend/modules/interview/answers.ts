@@ -23,13 +23,16 @@ import { currentQuestionRow } from './state';
 
 // A client-supplied `duration_ms` is accepted by the parser and dropped by it — Zod strips
 // unknown keys, which is the whole handling this field gets (@AC-10 sends 999).
-const bodySchema = z.object({
+// Exported because `advanceWithAnswer` takes PARSED input: every caller must run this first,
+// and V02's webhook is an untrusted server-to-server body with no `requireAuth` in front of it
+// (§7.1 item 4). A second schema there would be a second thing to drift.
+export const answerInputSchema = z.object({
   questionId: z.string().min(1),
   transcript: z.string().trim().min(1).max(20_000),
   inputMode: z.enum(['voice', 'text', 'widget']),
 });
 
-type AnswerInput = z.infer<typeof bodySchema>;
+type AnswerInput = z.infer<typeof answerInputSchema>;
 
 /**
  * Core answer-progression logic, shared by the HTTP handler and the voice webhook (V02).
@@ -147,7 +150,7 @@ export const submitAnswer: RequestHandler = async (req, res) => {
   const interview = req.interview!;
   const traceId = req.traceId!;
 
-  const parsed = bodySchema.safeParse(req.body);
+  const parsed = answerInputSchema.safeParse(req.body);
   if (!parsed.success) throw new ApiError('VALIDATION_ERROR');
 
   const result = await advanceWithAnswer(interview, parsed.data, { traceId });

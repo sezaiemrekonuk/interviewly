@@ -13,7 +13,7 @@ import type { Interview } from '@prisma/client';
 import { ApiError } from '../../src/lib/api-error';
 import { logger } from '../../src/lib/logger';
 
-import { advanceWithAnswer } from '../interview/answers';
+import { advanceWithAnswer, answerInputSchema } from '../interview/answers';
 import { applyTransition } from '../interview/machine';
 import { currentQuestionRow, deliverCurrentQuestion } from '../interview/state';
 
@@ -67,11 +67,16 @@ export const handleVoiceWebhook: RequestHandler = async (req, res) => {
     case 'submit_answer': {
       const question = await currentQuestionRow(interview);
       if (!question) throw new ApiError('INVALID_STATE_TRANSITION');
-      const result = await advanceWithAnswer(
-        interview,
-        { questionId: question.id, transcript: req.body?.transcript, inputMode: 'voice' },
-        { traceId },
-      );
+      // `advanceWithAnswer` takes parsed input, and `req.body.transcript` is untrusted `any`
+      // off the wire — parsing here is what keeps the agent's transcript inside the same
+      // length/shape bounds the HTTP route enforces (§7.1 item 4).
+      const parsed = answerInputSchema.safeParse({
+        questionId: question.id,
+        transcript: req.body?.transcript,
+        inputMode: 'voice',
+      });
+      if (!parsed.success) throw new ApiError('VALIDATION_ERROR');
+      const result = await advanceWithAnswer(interview, parsed.data, { traceId });
       res.status(200).json(result);
       return;
     }
