@@ -1,11 +1,14 @@
+import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { getRequestConfig } from 'next-intl/server';
 
-export const locales = ['en', 'tr'] as const;
-export type Locale = typeof locales[number];
+import { LOCALE_COOKIE, locales, type Locale } from './lib/locales';
+
+export { locales, LOCALE_COOKIE };
+export type { Locale };
 
 export default getRequestConfig(async ({ requestLocale }) => {
-  const requested = await requestLocale;
+  const requested = (await requestLocale) ?? (await cookies()).get(LOCALE_COOKIE)?.value;
   const locale = (requested && locales.includes(requested as Locale))
     ? (requested as Locale)
     : (process.env.NEXT_PUBLIC_DEFAULT_LOCALE as Locale) ?? 'en';

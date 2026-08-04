@@ -1,7 +1,13 @@
 # Frontend — State
 
-Last updated: 2026-08-03
-Last session ended: **—** Ledger written; no task has started yet.
+Last updated: 2026-08-04
+Last session ended: **W02 done**, plus a W01 repair: `assets.test.ts` asserted local literals
+against local literals (a 6th seed pose passed). It now reads `packages/types/src/index.ts`,
+the `schema.prisma` enums and `seed.ts` and requires all three to agree — 58 ui-checks tests. React Query layer (`lib/query.ts` — `queryKeys`, `ApiError`,
+`createQueryClient`), `useInterviewEvents` (listens to the **named** `INTERVIEW_STATE_CHANGED`
+event; payload never read), `routeForError`, `<LocaleSwitcher>` + `NEXT_LOCALE` cookie read in
+`i18n.ts`, `Providers` mounted in `layout.tsx`. New test utils W06/W07/W10 must reuse:
+`src/test/event-source-mock.ts`, `renderWithProviders`. Frontend ring 109 pass, root 217.
 
 ## Execution protocol (follow exactly)
 
@@ -18,9 +24,8 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**W01 (ui build/seed checks)** is the first `todo` task and depends only on `F01`, `F02`.
-`W02 <- F01, A01` is eligible in parallel once those are `done`. Everything else waits on
-W01/W02. Order by ID once eligible.
+**W03 (`<- W01, W02`)** is now the eligible task — landing + `<Mascot>`. W04/W05/W07/W08/W11
+also unblock (deps `done`); § 4 order picks the lowest ID.
 
 ## Environment
 
@@ -86,8 +91,8 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 
 | ID | Title | Repo | Status | Depends on |
 |----|-------|------|--------|------------|
-| W01 | UI build/seed checks: token lint, AA-contrast (incl. gradient stops), avatar/mascot set completeness + budgets + content-hash keys, gradient route-list, shadow-tier | | todo | F01, F02 |
-| W02 | App shell + React Query data layer + `useInterviewEvents` SSE hook + error-code→route map + locale switcher | | todo | F01, A01 |
+| W01 | UI build/seed checks: token lint, AA-contrast (incl. gradient stops), avatar/mascot set completeness + budgets + content-hash keys, gradient route-list, shadow-tier | | done | F01, F02 |
+| W02 | App shell + React Query data layer + `useInterviewEvents` SSE hook + error-code→route map + locale switcher | | done | F01, A01 |
 | W03 | Landing (screen 1) + `<Mascot>` primitive with per-pose preload | | todo | W01, W02 |
 | W04 | Onboarding host (screens 6–8): 3 cards, per-card PATCH, CV upload, skip/complete, server-derived resume | | todo | W02, A06 |
 | W05 | Setup (screen 9) + 390px mobile: listing textarea, chips, option cards, detected-summary edit, pre-questions/skip | | todo | W02, I03, I04, I11 |

@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, type RenderResult } from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
 import type { ReactElement } from 'react';
@@ -15,4 +16,20 @@ export function renderWithIntl(ui: ReactElement): RenderResult {
       {ui}
     </NextIntlClientProvider>,
   );
+}
+
+/**
+ * For screens that mount React Query hooks. A fresh client per render keeps one test's
+ * cache out of the next; retries off so a failing query resolves in the first tick.
+ */
+export function renderWithProviders(
+  ui: ReactElement,
+  client = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+): RenderResult & { queryClient: QueryClient } {
+  const result = render(
+    <NextIntlClientProvider locale="en" messages={messages}>
+      <QueryClientProvider client={client}>{ui}</QueryClientProvider>
+    </NextIntlClientProvider>,
+  );
+  return { ...result, queryClient: client };
 }
