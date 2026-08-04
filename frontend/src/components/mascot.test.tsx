@@ -44,7 +44,7 @@ describe('<Mascot>', () => {
 
   it('falls back to the localized per-pose alt text', () => {
     renderWithIntl(<Mascot pose="cheer" />);
-    expect(screen.getByRole('img')).toHaveAccessibleName(/.+/);
+    expect(screen.getByRole('img')).toHaveAccessibleName(messages.mascot.cheer);
   });
 
   it('renders decorative when alt is empty', () => {
