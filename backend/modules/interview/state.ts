@@ -121,7 +121,7 @@ export function orderTranscript(questions: TranscriptQuestion[]) {
     .map((q) => ({
       questionId: q.id,
       question: q.text,
-      answer: q.answers[0].transcript,
+      answer: q.answers[q.answers.length - 1].transcript,
       roundType: q.round.type,
     }));
 }
