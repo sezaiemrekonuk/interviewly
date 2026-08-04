@@ -1,8 +1,9 @@
-import { REPORT_QUEUE } from '@interviewly/backend';
+import { REPORT_QUEUE, VOICE_RECONCILE_QUEUE, type VoiceReconcileJob } from '@interviewly/backend';
 import { Worker } from 'bullmq';
 
 import { processReportJob, type ReportJobData } from './consumer';
 import { sendEmail, type EmailJob } from './jobs/email-send';
+import { processVoiceReconcileJob } from './jobs/voice-reconcile';
 import { config } from './lib/env';
 import { logger } from './lib/logger';
 
@@ -52,13 +53,31 @@ reportWorker.on('failed', (job, err) => {
   );
 });
 
+const voiceReconcileWorker = new Worker<VoiceReconcileJob>(
+  VOICE_RECONCILE_QUEUE,
+  processVoiceReconcileJob,
+  { connection: { url: config.REDIS_URL } },
+);
+
+// A failed reconciliation under-bills the interview, so it must be loud even while BullMQ
+// still has attempts left.
+voiceReconcileWorker.on('failed', (job, err) => {
+  logger.warn(
+    { queue: VOICE_RECONCILE_QUEUE, interviewId: job?.data?.interviewId, reason: err.message },
+    'VOICE_RECONCILE_JOB_FAILED',
+  );
+});
+
 logger.info(
-  { queues: [EMAIL_QUEUE_NAME, REPORT_QUEUE], reportConcurrency: REPORT_CONCURRENCY },
+  {
+    queues: [EMAIL_QUEUE_NAME, REPORT_QUEUE, VOICE_RECONCILE_QUEUE],
+    reportConcurrency: REPORT_CONCURRENCY,
+  },
   'WORKER_STARTED',
 );
 
 async function shutdown(): Promise<void> {
-  await Promise.all([emailWorker.close(), reportWorker.close()]);
+  await Promise.all([emailWorker.close(), reportWorker.close(), voiceReconcileWorker.close()]);
   process.exit(0);
 }
 

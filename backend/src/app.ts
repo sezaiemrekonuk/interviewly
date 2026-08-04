@@ -15,11 +15,16 @@ import { mountTestSeam } from '../modules/auth/test-seam';
 import { listMyInterviews } from '../modules/interview/my-interviews';
 import interviewRouter from '../modules/interview/router';
 import { createUpload, uploadMiddleware } from '../modules/interview/uploads';
+import reconcileWebhookRouter from '../modules/voice/reconcile-webhook';
 import voiceRouter from '../modules/voice/session';
 import voiceWebhookRouter from '../modules/voice/webhook-router';
 
 export const app = express();
 
+// V02: the ElevenLabs HMAC is computed over the bytes ElevenLabs sent, and `JSON.stringify`
+// of the parsed body does not reproduce them. Mounted BEFORE the global parser — body-parser
+// marks the request `_body` and the global instance then skips it, so /webhooks/* is parsed
+// exactly once, here, with the raw buffer kept alongside.
 app.use(
   '/webhooks',
   express.json({
@@ -52,6 +57,9 @@ app.get('/me/interviews', requireAuth, listMyInterviews);
 app.post('/uploads', requireAuth, uploadMiddleware, createUpload);
 app.use('/interviews', voiceRouter);
 app.use('/interviews', interviewRouter);
+// V04 before V02: `webhook-router`'s `/:action` matches `post_call` too, and would answer
+// VALIDATION_ERROR before the reconciliation handler was ever reached.
+app.use('/webhooks/elevenlabs', reconcileWebhookRouter);
 app.use('/webhooks/elevenlabs', voiceWebhookRouter);
 app.use('/admin', adminRouter);
 

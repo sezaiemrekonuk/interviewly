@@ -11,7 +11,7 @@ import { redis } from '../../modules/auth/rate-limit';
 import { app } from '../../src/app';
 import { prisma } from '../../src/lib/db';
 import { setProbeOverrides } from '../../src/lib/probes';
-import { reportQueue } from '../../src/lib/queue';
+import { reportQueue, voiceReconcileQueue } from '../../src/lib/queue';
 
 export const serverState: { baseUrl: string } = { baseUrl: '' };
 
@@ -70,7 +70,8 @@ Before(async function resetSharedState() {
 });
 
 // `redis` (ioredis, module-level, eager-connects on import), `prisma` and — since R01 —
-// `reportQueue` (BullMQ, its own connection, constructed at import of src/lib/queue.ts) all
+// `reportQueue` — and since V04 `voiceReconcileQueue` — (BullMQ, their own connections,
+// constructed at import of src/lib/queue.ts) all
 // stay open for the whole run. Without closing them here the event loop never drains and
 // cucumber-js hangs after printing its summary instead of exiting — a false "stuck" run, not
 // a failing one. This is the same trap the `setEmailQueue` seam above exists for; the report
@@ -79,5 +80,10 @@ AfterAll(async function stopServer() {
   await new Promise<void>((resolve, reject) => {
     server.close((err) => (err ? reject(err) : resolve()));
   });
-  await Promise.all([prisma.$disconnect(), redis.quit(), reportQueue.close()]);
+  await Promise.all([
+    prisma.$disconnect(),
+    redis.quit(),
+    reportQueue.close(),
+    voiceReconcileQueue.close(),
+  ]);
 });

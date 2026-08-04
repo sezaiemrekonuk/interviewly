@@ -134,8 +134,9 @@ marked with the creating task.
 | `backend/modules/voice/webhook-auth.ts` | **V02** | The four gates + HMAC/freshness verifier (reused by V04) |
 | `backend/modules/voice/webhook-router.ts` | **V02** | `submit_answer` / `next_question` / `end_round` handlers |
 | `backend/modules/voice/downgrade.ts` | **V03** | `downgradeToText` — guarded `mode: voice → text` update (ADR-V03-2, not `applyTransition`); `VOICE_DOWNGRADED_TO_TEXT` |
-| `backend/modules/voice/reconcile-webhook.ts` | **V04** | `post_call` webhook: verify (gates 1–2) + enqueue the job |
-| `worker/src/jobs/voice-reconcile.ts` | **V04** | Writes `llm_calls` + `spent_usd` in one idempotent transaction |
+| `backend/modules/voice/reconcile-webhook.ts` | **V04** | `post_call` webhook: verify (gates 1–2) + enqueue on `voice.reconcile`; mounted BEFORE `webhook-router` |
+| `backend/modules/voice/reconcile.ts` | **V04** | `reconcileVoiceUsage` — `llm_calls` + `spent_usd` in one idempotent transaction (ADR-V04-2) |
+| `worker/src/jobs/voice-reconcile.ts` | **V04** | BullMQ processor: job lifecycle + traceId, calls `reconcileVoiceUsage` |
 | `worker/src/lib/logger.ts`, `worker/src/lib/env.ts` | F03 | Worker's pino factory + env subset |
 
 ## Schema (tables this ledger reads/writes)
@@ -150,9 +151,11 @@ Owned by F02 — **no structural change here** (ADR-F02 / §10). Voice reads and
 - `interviews` — `mode` (`voice → text` on downgrade, V03; guarded on `mode: 'voice'`), `state`/`ended_reason`
   (`time_exhausted` via I07, V02 gate 4), `spent_usd`/`budget_usd` (reconcile via I08 tx, V04),
   `current_index` (never rewound by a downgrade).
-- `llm_calls` — one reconciliation row (V04): `provider='elevenlabs'`, `unit_kind='second'`,
-  `units = seconds`, `cost_usd`, `trace_id`. Idempotency: existence check on
-  `(interview_id, provider='elevenlabs')`.
+- `llm_calls` — one reconciliation row (V04): `provider='elevenlabs'`, `model='conversational'`,
+  `unit_kind='second'`, `units = seconds`, `cost_usd = seconds × per_minute_usd / 60` (0 + a
+  `PRICE_MISSING` warn if the price row is absent — the column is NOT NULL), `trace_id`.
+  Idempotency: existence check on `(interview_id, provider='elevenlabs')`, **inside** the
+  transaction.
 
 ## Conventions
 
