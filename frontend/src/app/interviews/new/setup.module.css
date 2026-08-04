@@ -1,0 +1,88 @@
+/* Entry surface (§ui): gradient ground + one soft-shadow card, W01 token constants. */
+.ground {
+  min-height: 100vh;
+  padding: 24px 16px 64px;
+  background: var(--gradient-entry);
+  background-attachment: fixed;
+}
+
+.card {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 24px;
+  background: var(--surface);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-soft);
+}
+
+.mascot {
+  display: block;
+  margin: 0 auto 0.5rem;
+}
+
+.title {
+  margin: 0 0 1.25rem;
+  font-size: 1.5rem;
+  text-align: center;
+}
+
+/* Single column at every width — the form never becomes a grid, so ≤375px needs no
+   separate branch and the CTA stays above the fold on a 390px viewport. */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.field input,
+.field select {
+  font: inherit;
+  font-weight: 400;
+  padding: 0.5rem 0.625rem;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-input);
+}
+
+.split {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.pending {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.error {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--danger);
+}
+
+.cta {
+  padding: 0.75rem 1rem;
+  font: inherit;
+  font-weight: 600;
+  color: var(--surface);
+  cursor: pointer;
+  background: var(--primary);
+  border: none;
+  border-radius: var(--radius-button);
+}
+
+.cta:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}

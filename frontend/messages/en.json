@@ -100,6 +100,22 @@
     "continueButton": "Continue",
     "finish": "Finish"
   },
+  "setup": {
+    "title": "Set up your interview",
+    "occupation": "Occupation",
+    "language": "Language",
+    "choiceNotSent": "Your picks shape this screen only — the interview reads the occupation from the listing and the language from your account until setup detection ships.",
+    "mode": "Mode",
+    "modeText": "Text",
+    "modeVoice": "Voice",
+    "roundShape": "Number of questions",
+    "roundSplit": "{hrCount} HR + {techCount} technical questions",
+    "detectedSummaryPending": "Detected summary (coming soon)",
+    "listingPaste": "Paste job listing",
+    "listingUpload": "Or upload a PDF",
+    "starting": "Starting…",
+    "start": "Start"
+  },
   "errors": {
     "PASSWORD_TOO_SHORT": "Password must be at least 10 characters.",
     "EMAIL_TAKEN": "An account with this email already exists.",
