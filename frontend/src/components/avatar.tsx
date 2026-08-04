@@ -73,7 +73,11 @@ export function Avatar({
 export function AvatarPreload({ sets }: { sets: AvatarSet[] }) {
   const hrefs = [
     ...new Set(
-      sets.flatMap((set) => Object.values(set).map((key) => `${ASSET_PREFIX}/${key}`)),
+      sets.flatMap((set) =>
+        Object.values(set)
+          .filter((key): key is string => Boolean(key))
+          .map((key) => `${ASSET_PREFIX}/${key}`),
+      ),
     ),
   ];
   return (
