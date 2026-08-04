@@ -1,7 +1,15 @@
 # Frontend — State
 
 Last updated: 2026-08-04
-Last session ended: **W05 done.** `/interviews/new` posts one `POST /interviews` and routes to
+Last session ended: **W06 done.** `/interviews/:id/room` renders text mode off
+`['interview',id,'state']` only; SSE is a nudge (proven in `page.test.tsx`). **Room-state was
+extended to make that possible (ADR-W06):** `persona.id`, `personas[]` (both tiles, each with
+`avatarSet`) and `transcript[]` now ship from `backend/modules/interview/state.ts` — W07/W09/W10
+read them, do not re-derive. `<Avatar>` takes the `avatarSet` keys, never a client-guessed sha.
+Silent-refetch codes live once in `error-routing.ts` (`SILENT_REFETCH_CODES`), reused by
+`useSubmitAnswer`. Ring: frontend 165, root 275.
+
+Previous: **W05 done.** `/interviews/new` posts one `POST /interviews` and routes to
 `/room` (text) or `/pre-join` (voice) — never before the create resolves. **Two verified API facts
 W06+ must not re-derive:** the create body carries **no occupation/language** (I03 classifies from
 `jobText`, language from `req.user.locale`), so both selects are client-side only; and **`uploadId`
@@ -26,8 +34,9 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**W06 (`<- W02, I03, I06, I07`)** is next — interview room text mode, screen 11 (opus-tier).
-W07/W08/W11 are also eligible (deps `done`); § 4 order picks the lowest ID.
+**W07 (`<- W02, R01`)** is next — report + transcript, screen 12 (opus-tier). W08/W09/W11 are
+also eligible (deps `done`); § 4 order picks the lowest ID. W07 can reuse `<Transcript>` and
+room-state's `transcript[]` (ADR-W06) while `GET /interviews/:id` stays thin (see blockers).
 
 ## Environment
 
@@ -116,7 +125,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | W03 | Landing (screen 1) + `<Mascot>` primitive with per-pose preload | | done | W01, W02 |
 | W04 | Onboarding host (screens 6–8): 3 cards, per-card PATCH, CV upload, skip/complete, server-derived resume | | done | W02, A06 |
 | W05 | Setup (screen 9) + 390px mobile: listing textarea, chips, option cards, detected-summary edit, pre-questions/skip | | done | W02, I03, I04, I11 |
-| W06 | Interview room text mode (screen 11) + widgets + 390px: two tiles, banner, avatar state machine, typed animation, guarded submit, handover, report-wait | | todo | W02, I03, I06, I07 |
+| W06 | Interview room text mode (screen 11) + widgets + 390px: two tiles, banner, avatar state machine, typed animation, guarded submit, handover, report-wait | | done | W02, I03, I06, I07 |
 | W07 | Report + transcript (screen 12): report-wait (SSE + bounded poll) → render `ReportPayload` read-only | | todo | W02, R01 |
 | W08 | History / dashboard (screen 13): list, Continue, optimistic Delete | | todo | W02, N01 |
 | W09 | Pre-join device check (screen 10, voice): camera off-by-default, mic level bar, continue-in-text | | todo | W06, V02 |

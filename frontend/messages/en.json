@@ -116,6 +116,21 @@
     "starting": "Starting…",
     "start": "Start"
   },
+  "room": {
+    "live": "LIVE",
+    "roleHr": "HR interviewer",
+    "roleTech": "Technical interviewer",
+    "progress": "Question {index} of {total}",
+    "waiting": "Waiting for the next question…",
+    "answerLabel": "Your answer",
+    "answerPlaceholder": "Type your answer",
+    "submit": "Send answer",
+    "submitting": "Sending…",
+    "paused": "This interview is paused.",
+    "resume": "Resume",
+    "transcriptTitle": "Answers so far",
+    "transcriptEmpty": "No answers yet."
+  },
   "errors": {
     "PASSWORD_TOO_SHORT": "Password must be at least 10 characters.",
     "EMAIL_TAKEN": "An account with this email already exists.",

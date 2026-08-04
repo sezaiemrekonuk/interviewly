@@ -59,19 +59,88 @@ export async function deliverCurrentQuestion(interview: IndexedInterview) {
   };
 }
 
-// ponytail: avatarState is a fixed 'idle' placeholder — driving it off live SSE interaction
-// is I07's job (§3.6). Upgrade when the SSE avatar driver lands.
-async function resolvePersona(interviewId: string, state: string) {
-  const roundType = state === 'hr_round' ? 'hr' : state === 'tech_round' ? 'tech' : null;
-  if (!roundType) return null;
+const ROUND_ORDER = { hr: 0, tech: 1 } as const;
 
-  const round = await prisma.interviewRound.findFirst({
-    where: { interview_id: interviewId, type: roundType },
+/**
+ * The active speaker plus the full round roster. The room shows two tiles and only one may be
+ * live (§3.2, K2), so the inactive tile needs an identity the client cannot invent — `persona`
+ * alone forced W06 to guess one. `avatar_set` rides along because it is the only source of the
+ * content-addressed `personas/{id}/{state}-{sha}.webp` keys.
+ *
+ * ponytail: avatarState is a fixed 'idle' placeholder — driving it off live SSE interaction
+ * is I07's job (§3.6). Upgrade when the SSE avatar driver lands.
+ */
+async function resolvePersonas(interviewId: string, state: string) {
+  const rounds = await prisma.interviewRound.findMany({
+    where: { interview_id: interviewId },
     include: { persona: true },
   });
-  if (!round) return null;
 
-  return { role: round.persona.role, name: round.persona.name, avatarState: 'idle' as const };
+  const personas = rounds
+    .slice()
+    .sort((a, b) => ROUND_ORDER[a.type] - ROUND_ORDER[b.type])
+    .map((round) => ({
+      id: round.persona.id,
+      role: round.persona.role,
+      name: round.persona.name,
+      roundType: round.type,
+      avatarSet: round.persona.avatar_set,
+    }));
+
+  const activeType = state === 'hr_round' ? 'hr' : state === 'tech_round' ? 'tech' : null;
+  const active = activeType ? personas.find((p) => p.roundType === activeType) : undefined;
+
+  return {
+    personas,
+    persona: active
+      ? { id: active.id, role: active.role, name: active.name, avatarState: 'idle' as const }
+      : null,
+  };
+}
+
+export interface TranscriptQuestion {
+  id: string;
+  text: string;
+  order_index: number;
+  round: { type: 'hr' | 'tech' };
+  answers: { transcript: string; answered_at: Date | null }[];
+}
+
+/**
+ * Answered turns in the order they were asked — HR round first, then technical (K2's global
+ * index order, which `order_index` alone does not carry because it is per-round).
+ * Exported pure so the ordering is testable without a database.
+ */
+export function orderTranscript(questions: TranscriptQuestion[]) {
+  return questions
+    .filter((q) => q.answers.length > 0)
+    .sort(
+      (a, b) =>
+        ROUND_ORDER[a.round.type] - ROUND_ORDER[b.round.type] || a.order_index - b.order_index,
+    )
+    .map((q) => ({
+      questionId: q.id,
+      question: q.text,
+      answer: q.answers[q.answers.length - 1].transcript,
+      roundType: q.round.type,
+    }));
+}
+
+// ponytail: the whole transcript ships on every room refetch. At <= 10 turns that is a few KB;
+// page it off a cursor if the turn count ever grows.
+async function resolveTranscript(interviewId: string) {
+  const questions = await prisma.question.findMany({
+    where: { round: { interview_id: interviewId } },
+    select: {
+      id: true,
+      text: true,
+      order_index: true,
+      round: { select: { type: true } },
+      answers: { select: { transcript: true, answered_at: true }, orderBy: { answered_at: 'asc' } },
+    },
+  });
+
+  return orderTranscript(questions as TranscriptQuestion[]);
 }
 
 // req.interview is attached by resolveInterview (ownership.ts); a non-owned or deleted id
@@ -81,9 +150,10 @@ export const getInterviewState: RequestHandler = async (req, res) => {
 
   // Every field is derived from the DB, nothing from the request: a refreshed room with no
   // client memory reconstructs to the same place (§3.8, @AC-9).
-  const [persona, currentQuestion, transcriptCursor] = await Promise.all([
-    resolvePersona(interview.id, interview.state),
+  const [{ persona, personas }, currentQuestion, transcript, transcriptCursor] = await Promise.all([
+    resolvePersonas(interview.id, interview.state),
     deliverCurrentQuestion(interview),
+    resolveTranscript(interview.id),
     prisma.chatMessage.count({ where: { interview_id: interview.id } }),
   ]);
 
@@ -96,7 +166,9 @@ export const getInterviewState: RequestHandler = async (req, res) => {
     endedReason: interview.ended_reason,
     language: interview.language,
     persona,
+    personas,
     currentQuestion,
+    transcript,
     transcriptCursor,
   });
 };

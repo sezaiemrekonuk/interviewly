@@ -159,3 +159,23 @@ backend route (C is out of scope), and never guesses a shape (B).
 shape once R01 is green; if R01 lands without the `GET /interviews/:id` handler, W07's verification
 (mocked API) still passes but the composed Playwright smoke will 404 — the blocker note tells the
 executor to confirm the handler exists before claiming the demo path closed.
+
+## ADR-W06 — 2026-08-04 — room-state gains `personas`, `persona.id` and `transcript` rather than the room guessing them
+
+**Context:** W06 must render two tiles (only one live), content-addressed avatars
+(`personas/{id}/{state}-{sha}.webp`) and the answered turns — all "from `GET /interviews/:id/state`"
+(K11). The shipped payload carried none of it: `persona` had no `id`, there was no round list, and
+`transcriptCursor` is a count with no rows. Options: (A) derive client-side (guess `seed-persona-hr`,
+guess the sha, invent the second tile); (B) block W06 on an interview-core task; (C) extend the I03
+handler, additively, in this task.
+
+**Decision:** (C). `state.ts` now returns `persona.id`, `personas[]` (both rounds, hr→tech, each with
+its `avatar_set`) and `transcript[]` (answered turns, global order). Additive only — every existing
+field, including `transcriptCursor`, is untouched, so I03/I06 acceptance steps still hold.
+(A) makes the room render identities the server never named — the exact K11/K2 failure this layer
+exists to prevent, and a wrong sha is a broken tile in the one screen that must not flicker.
+(B) stalls the demo spine for a payload gap the same owner (Sezai) holds anyway.
+
+**Consequences:** interview-core REFERENCE room-state shape updated. W07 can reuse `transcript`
+until R01's `GET /interviews/:id` grows its own. The whole transcript ships on every refetch —
+`ponytail:` comment in `state.ts` names the paging upgrade if turn counts grow.
