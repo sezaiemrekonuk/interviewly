@@ -41,6 +41,7 @@ export function roomPhase(input: {
   submitting: boolean;
 }): RoomPhase {
   if (input.submitting) return 'just-submitted';
-  if (!input.question) return LIVE_STATES.has(input.state) ? 'awaiting-next' : 'settled';
+  if (!LIVE_STATES.has(input.state)) return 'settled';
+  if (!input.question) return 'awaiting-next';
   return input.typedFor === input.question.id ? 'awaiting-answer' : 'typing-question';
 }
