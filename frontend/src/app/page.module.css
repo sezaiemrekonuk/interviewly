@@ -1,0 +1,128 @@
+/* Screen 1. Entry surface: gradient ground (ENTRY_ROUTES) + --shadow-soft, tokens only. */
+
+.ground {
+  min-height: 100vh;
+  padding: 24px 16px 64px;
+  background: var(--gradient-entry);
+  background-attachment: fixed;
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 72rem;
+  margin: 0 auto;
+}
+
+.wordmark {
+  font-family: var(--font-heading), sans-serif;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 32px;
+  align-items: center;
+  max-width: 72rem;
+  margin: 64px auto 0;
+}
+
+.title {
+  max-width: 16ch;
+  font-family: var(--font-heading), sans-serif;
+  font-size: 56px;
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+
+.subhead {
+  max-width: 52ch;
+  margin-top: 20px;
+  font-size: 20px;
+  color: var(--text-muted);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  margin-top: 32px;
+}
+
+.cta {
+  padding: 16px 28px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--surface);
+  background: var(--primary);
+  border-radius: var(--radius-button);
+  box-shadow: var(--shadow-soft);
+  transition: opacity var(--duration-default) var(--easing-default);
+}
+
+.cta:hover {
+  opacity: 0.92;
+}
+
+.secondary {
+  font-size: 14px;
+  color: var(--text-muted);
+  text-decoration: underline;
+}
+
+.note {
+  margin-top: 16px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.props {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  max-width: 72rem;
+  margin: 64px auto 0;
+  list-style: none;
+}
+
+.prop {
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-soft);
+}
+
+.propTitle {
+  font-family: var(--font-heading), sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.propBody {
+  margin-top: 8px;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+/* 390 px is the mobile reference width (ui §4.3). */
+@media (width <= 48rem) {
+  .hero {
+    grid-template-columns: 1fr;
+    margin-top: 32px;
+  }
+
+  .title {
+    font-size: 40px;
+  }
+
+  .props {
+    grid-template-columns: 1fr;
+    margin-top: 32px;
+  }
+}
