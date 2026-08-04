@@ -1,16 +1,16 @@
 # Frontend — State
 
 Last updated: 2026-08-04
-Last session ended: **W03 done.** Landing is a Server Component (`page.tsx` + `page.module.css`,
-locale switcher the only client island). `<Mascot pose size? alt? className?>` exports
-`mascotKey`/`mascotUrl` and renders its own per-pose `<link rel=preload>` — every later screen
-reuses it instead of building a key. Asset URL = `NEXT_PUBLIC_ASSETS_PREFIX` (default `/assets`)
-+ `mascot/{pose}-{NEXT_PUBLIC_MASCOT_SHA256}.webp` (default = seed placeholder digest); W06's
-`<Avatar>` needs the same two constants. Copy: `landing.*` (nested `props.*`) + `mascot.*` alts
-in both locales. `frontend/tsconfig.json` now maps `@interviewly/types` (root-config mirror) —
-without it `next build` fails while root `tsc` passes, so **run `npm run -w frontend build`
-before pushing**. Frontend ring 125 pass, root 236. **New blocker below: the edge `/assets/*`
-route cannot serve the bucket, so the mascot 404s in the composed stack.**
+Last session ended: **W04 done.** `/onboarding/[step]` now runs on React Query: `useProfile()`
++ `useSaveProfileCard()` in `lib/query.ts` (types `AccountProfile`/`ProfileResponse`/`ProfileCard`
+live there too — W05+ reuse them, do not redeclare). A refused card PATCH sets `saveError`,
+shows `errors.<CODE>` and does **not** advance; a completed account or a too-far deep-link
+renders `null` while the redirect runs (no card flash). `api.ts` gained `apiPatch` + `apiUpload`
+(multipart, no content-type). Poses point/think/cheer via W03's `<Mascot>`. **Test trap:**
+`useRouter` must be mocked as ONE hoisted object — a fresh `{...}` per call re-runs
+`useRequireAuth`'s effect forever and hangs `act`; `use(params)` needs
+`await act(async () => { render(...) })`. Ring: frontend 129, root 240. New blocker below:
+`kind='cv'` uploads are never linked to the user (A06 step 5 was deferred).
 
 ## Execution protocol (follow exactly)
 
@@ -27,8 +27,8 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**W04 (`<- W02, A06`)** is next — onboarding host, screens 6–8. W05/W07/W08/W11 are also
-eligible (deps `done`); § 4 order picks the lowest ID.
+**W05 (`<- W02, I03, I04, I11`)** is next — setup, screen 9. W07/W08/W11 are also eligible
+(deps `done`); § 4 order picks the lowest ID.
 
 ## Environment
 
@@ -91,6 +91,14 @@ npx playwright test                               # smokes against `docker compo
   API), but before anyone claims the demo path closed, confirm the handler exists in the running
   stack. Chase it in the report or interview-core ledger; do not add it from this ledger.
   (ADR-W07)
+- **A `kind='cv'` upload is never linked to the account.** W04 posts the PDF to `POST /uploads`
+  and gets an `uploadId`, but nothing writes `users.cv_upload_id` or `profile.cv_text`:
+  `uploads.ts` only creates the row, and `patchMyProfile`'s Zod cards strip an unknown
+  `cvUploadId`, so `GET /me/profile` returns `cvUploadId: null` forever. This is **A06 step 5**,
+  explicitly deferred in that task's Notes (it waited on I11, which is now `done`). Frontend
+  cannot close it — the fix is one `prisma.user.update` in the backend. **Owner: Ahmet (auth
+  ledger).** Blocks the CV reaching the interview prompt; blocks no frontend task.
+
 - **`POST /interviews` returns only `{ interviewId, hrCount, techCount }`** (`setup.ts:85`),
   not the `occupation`/`occupationCluster`/`language` the setup screen's "detected summary,
   editable" step (§3.7, W05) needs. W05 renders the count split it does get and marks the
@@ -107,7 +115,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | W01 | UI build/seed checks: token lint, AA-contrast (incl. gradient stops), avatar/mascot set completeness + budgets + content-hash keys, gradient route-list, shadow-tier | | done | F01, F02 |
 | W02 | App shell + React Query data layer + `useInterviewEvents` SSE hook + error-code→route map + locale switcher | | done | F01, A01 |
 | W03 | Landing (screen 1) + `<Mascot>` primitive with per-pose preload | | done | W01, W02 |
-| W04 | Onboarding host (screens 6–8): 3 cards, per-card PATCH, CV upload, skip/complete, server-derived resume | | todo | W02, A06 |
+| W04 | Onboarding host (screens 6–8): 3 cards, per-card PATCH, CV upload, skip/complete, server-derived resume | | done | W02, A06 |
 | W05 | Setup (screen 9) + 390px mobile: listing textarea, chips, option cards, detected-summary edit, pre-questions/skip | | todo | W02, I03, I04, I11 |
 | W06 | Interview room text mode (screen 11) + widgets + 390px: two tiles, banner, avatar state machine, typed animation, guarded submit, handover, report-wait | | todo | W02, I03, I06, I07 |
 | W07 | Report + transcript (screen 12): report-wait (SSE + bounded poll) → render `ReportPayload` read-only | | todo | W02, R01 |
