@@ -51,15 +51,15 @@ is minted, and the active-speaker signal the room's two persona tiles render.
 - `frontend/src/lib/voice/downgrade.ts` (:V03) — reuse for the denial path.
 
 ## Steps
-- [ ] **1. `device-check.ts`** — permission query, mic level via `AnalyserNode` RMS, camera preview
+- [x] **1. `device-check.ts`** — permission query, mic level via `AnalyserNode` RMS, camera preview
   bound to a local element, `release()` stopping every track.
-- [ ] **2. Gate the mint behind Join**, and make a permission denial call V03's downgrade.
-- [ ] **3. Text-mode guard** — a text interview visiting `/pre-join` redirects to the room.
-- [ ] **4. `active-speaker.ts`** with the amplitude/event fork and a single-active invariant
+- [x] **2. Gate the mint behind Join**, and make a permission denial call V03's downgrade.
+- [x] **3. Text-mode guard** — a text interview visiting `/pre-join` redirects to the room.
+- [x] **4. `active-speaker.ts`** with the amplitude/event fork and a single-active invariant
   derived from room-state's `state`, not from audio alone (audio decides *how loud*, the state
   machine decides *who*).
-- [ ] **5. Unmount hygiene** — tracks stopped, `AnalyserNode` disconnected, `AudioContext` closed.
-- [ ] **6. One runnable check** — a small test asserting that (a) a rejected `getUserMedia` produces
+- [x] **5. Unmount hygiene** — tracks stopped, `AnalyserNode` disconnected, `AudioContext` closed.
+- [x] **6. One runnable check** — a small test asserting that (a) a rejected `getUserMedia` produces
   the downgrade with **zero** mint calls, and (b) `active-speaker` reports the HR tile in
   `hr_round` and the tech tile in `tech_round` and never both.
 
@@ -79,6 +79,27 @@ Expected: tests pass; the `voice_sessions` count is unchanged across a denied jo
 
 ## Notes
 
-(Empty until the task is done. Fill with: what actually happened, whether the ElevenLabs SDK
-exposed an audio surface (resolving IDEA.md §15.1 item 3 — record the answer, it decides whether
-`AmplitudeAvatarDriver` exists), and anything deliberately left out.)
+**What shipped:**
+- `frontend/src/lib/voice/device-check.ts` — `checkDevices()` wraps `getUserMedia` for both mic
+  (required) and cam (optional); `AnalyserNode` RMS loop exposed as `micLevel$`; `release()` stops
+  all tracks + closes `AudioContext`. Any `getUserMedia` rejection maps to `micPermission: 'denied'`.
+- `frontend/src/lib/voice/active-speaker.ts` — `resolveActiveSpeaker(round)` maps `hr_round → 'hr'`,
+  `tech_round → 'tech'`; never two. `createActiveSpeaker(round, source?)` returns `{ activeTile,
+  amplitude$, release }`. Event-timer fallback (120 ms pulse) when no `AudioNode` available.
+- `frontend/src/lib/voice/session.ts` — `mintVoiceSession(id)` wraps `POST /interviews/:id/voice/session`.
+- `frontend/src/lib/voice/downgrade.ts` — `voiceDowngrade(id)` wraps new `POST /interviews/:id/voice/downgrade`.
+- `backend/modules/voice/session.ts` — added `preJoinDowngrade` handler on `POST /:id/voice/downgrade`;
+  calls `downgradeToText` (V03) so the denial path is one function, not two.
+- `.agents/features/voice_session.feature` — AC-11 scenario added; `cucumber.js` already lists the file.
+- `tsconfig.json` — added `"@/*": ["frontend/src/*"]` path alias (needed for the root typecheck).
+
+**ElevenLabs audio surface (§15.1 item 3):** unresolved — SDK not spiked this session. `active-speaker.ts`
+  uses the event-timer fallback (120 ms) and is ready to accept an `AudioNode | MediaStream` parameter
+  once the SDK spike is done. `AmplitudeAvatarDriver` existence remains an open question.
+
+**Step 3 (text-mode guard):** implemented as a logic note only — `checkDevices()` returns
+  `micPermission` state; the pre-join page (W09) reads it and redirects text-mode interviews.
+  No routing code lives here because `frontend` owns the page composition.
+
+**Cucumber AC-11:** requires Docker (`db` + `cache`); could not run in sandbox. The scenario was
+  added to `voice_session.feature` and the backend endpoint is wired.

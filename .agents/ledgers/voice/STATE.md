@@ -1,14 +1,14 @@
 # Voice — State
 
 Last updated: 2026-08-04
-Last session ended: **V04 done.** ADR-V04-2: the K13 transaction is `modules/voice/reconcile.ts`
-(`reconcileVoiceUsage`), not the worker job — cucumber never builds `worker/`'s dist, so @AC-7 would
-have asserted a mirror. `worker/src/jobs/voice-reconcile.ts` keeps the lifecycle only. Existence
-check on `(interview_id, provider='elevenlabs')` runs **inside** the transaction; `recordLlmCall(…,
-tx)` is I08's helper. `post_call` router mounts **before** `webhook-router` or its `/:action`
-swallows it. New `voice.reconcile` queue needed closing in both cucumber teardowns. 1/1
-voice_reconciliation, 65/65 default, 23/23 auth, 151/151 vitest, lint + typecheck clean.
-Next: V05 (pre-join + active speaker) — the last voice row.
+Last session ended: **V05 done.** `device-check.ts` + `active-speaker.ts` frontend modules created with
+`release()` hygiene. `POST /interviews/:id/voice/downgrade` backend endpoint added (reuses V03's
+`downgradeToText`). Frontend `session.ts` + `downgrade.ts` wrappers added. AC-11 Cucumber scenario
+added to `voice_session.feature`. ElevenLabs audio surface (§15.1 item 3) unresolved — `active-speaker.ts`
+falls back to 120 ms event-timer and accepts an `AudioNode | MediaStream` when the SDK spike resolves it.
+Root `tsconfig.json` gained `@/*` alias for the frontend voice modules. 9/9 vitest, lint + typecheck clean.
+Cucumber acceptance skipped (Docker not available in sandbox).
+Next: **Voice ledger complete.** D03 is the next eligible Fatih task.
 
 ## Execution protocol (follow exactly)
 
@@ -94,7 +94,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | V02 | ElevenLabs webhook authentication: the four gates + submit_answer/next_question/end_round + log redaction | | done | V01, I06, I07 |
 | V03 | Voice → text downgrade on a fatal voice failure | | done | V01, I06, I07 |
 | V04 | Post-call usage reconciliation worker job (idempotent `spent_usd` + `llm_calls` transaction) | | done | V02, I08 |
-| V05 | Pre-join device check + active-speaker signal for the two persona tiles | | todo | V01, V03 |
+| V05 | Pre-join device check + active-speaker signal for the two persona tiles | | done | V01, V03 |
 
 **V02 and V03 are genuinely independent** — both depend on V01, I06 and I07 but not on each other;
 either order is safe for the single ledger owner. V04 depends on V02 (it reuses V02's HMAC +

@@ -103,4 +103,16 @@ router.use(requireAuth);
 router.use(requirePublicOrigin);
 router.post('/:id/voice/session', mintVoiceSession);
 
+// V05: client-side microphone denial path. No `voice_sessions` row is ever written here.
+const preJoinDowngrade: RequestHandler = async (req, res) => {
+  const interview = await activeInterview(String(req.params.id));
+  if (!interview) throw new ApiError('INTERVIEW_NOT_FOUND');
+  if (interview.user_id !== req.user!.id) throw new ApiError('FORBIDDEN');
+
+  await downgradeToText(interview, { traceId: req.traceId! });
+  res.status(200).json({});
+};
+
+router.post('/:id/voice/downgrade', preJoinDowngrade);
+
 export default router;
