@@ -7,6 +7,7 @@
  * before it and the handover runs only for the caller that did.
  */
 import type { Interview, InterviewState } from '@prisma/client';
+import type { AiClient } from '@interviewly/ai';
 import type { RequestHandler } from 'express';
 import { z } from 'zod';
 
@@ -15,6 +16,7 @@ import { clock } from '../../src/lib/clock';
 import { prisma } from '../../src/lib/db';
 import { logger } from '../../src/lib/logger';
 
+import { promoteNextQuestion } from './adaptive';
 import { BudgetExceeded, withBudget } from './budget';
 import { ensureTechBatch } from './generation';
 import { trackLanguage } from './language';
@@ -42,7 +44,7 @@ type AnswerInput = z.infer<typeof answerInputSchema>;
 export async function advanceWithAnswer(
   interview: Interview,
   data: AnswerInput,
-  opts: { traceId: string },
+  opts: { traceId: string; client?: AiClient },
 ): Promise<{ state: InterviewState; nextIndex: number }> {
   const { traceId } = opts;
 
@@ -72,7 +74,7 @@ export async function advanceWithAnswer(
     ? answeredAt.getTime() - question.asked_at.getTime()
     : null;
 
-  await prisma.$transaction([
+  const [answer] = await prisma.$transaction([
     prisma.answer.create({
       data: {
         question_id: question.id,
@@ -141,6 +143,17 @@ export async function advanceWithAnswer(
     state = await applyTransition(interview, 'evaluating', { traceId });
   } else if (interview.state === 'hr_round' && nextIndex > interview.hr_question_count) {
     state = await applyTransition(interview, 'tech_round', { traceId });
+  }
+
+  // K4 (ADR-D03): additive adaptive hook. A failure here must not fail the answer — the
+  // default next row is a working MVP question, so a scoring/generation hiccup degrades to it.
+  try {
+    await promoteNextQuestion(interview, question, answer.id, data.transcript, nextIndex, {
+      traceId,
+      client: opts.client,
+    });
+  } catch (err) {
+    logger.warn({ err, traceId, interviewId: interview.id }, 'ADAPTIVE_HOOK_FAILED');
   }
 
   return { state, nextIndex };

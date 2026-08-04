@@ -69,13 +69,13 @@ both cases**. This is the task that greens `@adaptive-questions` (both `@AC-12` 
   through as data, not as an exception.
 
 ## Steps
-- [ ] **1. Confirm the D02 candidates exist for the next row.** Adaptive pre-generation
+- [x] **1. Confirm the D02 candidates exist for the next row.** Adaptive pre-generation
   (D02) must have run earlier in the turn; if the next row has no `candidates`, treat it as
   the fallback path (keep default row) — never block the submit.
-- [ ] **2. At I06's marked adaptive slot in `answers.ts`, after the answer record + advance:**
+- [x] **2. At I06's marked adaptive slot in `answers.ts`, after the answer record + advance:**
   - `const raw = await aiClient.scoreAnswer({ question, answer, ctx });`
   - `const move = selectNextQuestion(raw, { difficulty: current.difficulty, topic: current.topic });`
-- [ ] **3. Graded branch (`move.graded === true`):**
+- [x] **3. Graded branch (`move.graded === true`):**
   - Resolve the next unasked row via I06's helper.
   - Pick the candidate from `nextRow.candidates` matching `move.difficulty` and
     `move.topicMove` (new vs same topic).
@@ -83,19 +83,19 @@ both cases**. This is the task that greens `@adaptive-questions` (both `@AC-12` 
     difficulty: move.difficulty, topic: cand.topic, chosen_reason: move.chosenReason } })`.
   - `logger.info({ traceId, interviewId, questionId: nextRow.id, chosenReason:
     move.chosenReason }, 'ADAPTIVE_QUESTION_PROMOTED')`.
-- [ ] **4. Fallback branch (`move.graded === false`):**
+- [x] **4. Fallback branch (`move.graded === false`):**
   - Do **not** promote. `prisma.question.update({ where: { id: nextRow.id }, data: {
     chosen_reason: 'fallback' } })` (default text/difficulty/topic untouched).
   - `logger.warn({ traceId, interviewId, questionId: nextRow.id }, 'LLM_FALLBACK_TRIGGERED')`.
-- [ ] **5. Return 200 in both branches** with I06's existing response shape (`{ state,
+- [x] **5. Return 200 in both branches** with I06's existing response shape (`{ state,
   nextIndex }`). The adaptive outcome changes the next row's content, not the status code.
-- [ ] **6. Idempotency guard:** if the next row already has a `chosen_reason` for this turn,
+- [x] **6. Idempotency guard:** if the next row already has a `chosen_reason` for this turn,
   skip re-scoring/re-promoting (resume/refresh safety, §3.8).
-- [ ] **7. Wire the Cucumber step definitions** for `adaptive_questions.feature` if not
+- [x] **7. Wire the Cucumber step definitions** for `adaptive_questions.feature` if not
   already present (`tests/step-definitions/adaptive.ts`) — HTTP against the running api,
   stubbed AI. The score Outline drives the graded rows; the malformed scenario sends a stub
   score with `overall: 9` and asserts the default (non-graded) next question + a 200.
-- [ ] **8. Run the Verification command; confirm both `@AC-12` scenarios green.**
+- [x] **8. Run the Verification command; confirm both `@AC-12` scenarios green.**
 
 ## Definition of done
 - Submitting an answer with a graded score promotes the next row to the selector's
@@ -125,7 +125,60 @@ docker compose logs api | grep -E "reasons|answer.*text|candidate.*text"
 
 ## Notes
 
-(Empty until the task is done. Fill with: what actually happened, the exact I06 slot the
-hook attached to, how the next-row helper was reused, the candidate-matching logic used,
-whether step definitions were created and where, the idempotency guard chosen, the Cucumber
-output verbatim, and a note confirming the MVP path survives with the hook removed.)
+Delivered 2026-08-04 (Fatih, opus session — tier matched). Both `@AC-12` scenarios green.
+
+**Where the hook attached.** New module `backend/modules/interview/adaptive.ts` exporting
+`promoteNextQuestion`. Wired into `advanceWithAnswer` (I06's `answers.ts`) at the very end,
+after the transition block, in a `try/catch` that only logs `ADAPTIVE_HOOK_FAILED` — a
+scoring hiccup can never fail the answer. Captured `answer.id` from the existing
+`$transaction` (`const [answer] = ...`) to score the right row. `opts.client?` threads an
+injectable `AiClient` through I06 → hook (the established generation.ts/report-run pattern).
+
+**Next-row reuse.** `currentQuestionRow({ ...current_index: nextIndex })` — same helper I06's
+guard uses, no re-derived index. `nextIndex = expected + 1`; I06 leaves `interview.current_index`
+pre-advance in memory, so the index is passed explicitly.
+
+**The gating decision (the crux).** Wiring `scoreAnswer` into every submit would add an
+`llm_calls` row per turn and break the MVP ledger (`language.steps` asserts zero new calls per
+submit; I08 budget). IDEA §3.7 L357 — "the K4 ledger cannot break the MVP ledger" — is
+decisive. So the hook is **gated on pre-generated candidates**: `nextRow.candidates` absent →
+return before any scoring, LLM call, or write. An MVP interview never pre-generates, so the
+hook is a pure no-op for it. Confirmed by the full acceptance profile: 79/79 still green.
+
+**Candidate matching.** `pickCandidate` filters by `move.difficulty`, then matches
+`(c.topic === currentTopic) === (move.topicMove === 'same')`, falling back to the first of the
+difficulty pool. `chosen_reason`/`difficulty` written from the selector; `text`/`topic` from
+the promoted candidate, in one `$transaction` with the answer's `scores`.
+
+**Invariant.** The raw score is handed to `selectNextQuestion` unparsed (D01 owns validation).
+Malformed (`overall:9`) → `graded:false` → set `chosen_reason:'fallback'`, `logger.warn`
+`LLM_FALLBACK_TRIGGERED`, **no** `answer.scores` write, still returns normally. Never a 500.
+
+**Idempotency.** Returns early if `nextRow.chosen_reason` is already set (resume/refresh, §3.8).
+
+**Step defs.** `backend/features/step_definitions/adaptive.steps.ts` (not `tests/…` — reality
+diverged; all step defs live under `features/step_definitions`). Parks a **tech-round** question
+(index 5/8, so the submit fires no HR→tech handover or batch gen), overrides its topic/difficulty,
+seeds the next row's `candidates` via prisma, then calls `advanceWithAnswer` **directly** with an
+injected client whose `scoreAnswer` returns the configured score — the module seam @AC-1 already
+uses when HTTP can't configure the AI. `Before/After @adaptive-questions` capture `logger.info/warn`
+into `world.events` for the shared event step. Added the feature to `cucumber.js` default `paths`.
+
+**One feature edit.** The authored `When I submit an answer for the current question` collided
+verbatim with I08's budget step (HTTP, real client — incompatible mechanism). Renamed the
+adaptive `When` to `I submit the current answer for adaptive scoring`. No acceptance criterion
+changed (same Examples, same Then assertions).
+
+**Cucumber output.** `6 scenarios (6 passed) / 46 steps (46 passed)`. ATDD red confirmed:
+neutralising the promotion made all 6 fail. Full default profile `79 scenarios (79 passed)`.
+`npm run lint`, `npm run typecheck`, `npm test` (229 passed) all clean. Log lines carry only
+`traceId/interviewId/questionId/chosenReason` — no transcript/answer/candidate text or reasons.
+
+**MVP survives.** Remove the `promoteNextQuestion` call from `answers.ts` and I06's default next
+row stands — a working MVP interview. Verified by the no-candidate gate no-oping across all 79.
+
+**Follow-up (not blocking D03).** Nothing wires **automatic** candidate pre-generation into the
+base turn yet — D02's `prepareNextCandidates` is only called on a language switch. Enabling
+adaptive end-to-end in production needs a trigger, which needs a way to distinguish adaptive
+interviews (no `adaptive`/mode flag exists; F02 owns the schema). D03 promotes whenever
+candidates exist; seeding them in the general flow is a separate, schema-touching decision.
