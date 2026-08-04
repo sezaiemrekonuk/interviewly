@@ -9,6 +9,7 @@ import { deleteInterview } from './delete';
 import { getInterview } from './get';
 import { downloadReport } from './download';
 import { resolveInterview } from './ownership';
+import { dailyInterviewCap, interviewStartLimiter } from './rate-limit';
 import { submitProfile } from './profile';
 import { resumeInterview } from './resume';
 import { setupInterview } from './setup';
@@ -26,7 +27,7 @@ router.use(requirePublicOrigin);
 router.param('id', resolveInterview);
 
 // K8.6 — the only gated endpoint in the system (A04's exported middleware; §11.3).
-router.post('/', requireVerifiedEmail, setupInterview);
+router.post('/', requireVerifiedEmail, dailyInterviewCap, interviewStartLimiter, setupInterview);
 router.get('/:id', getInterview);
 router.get('/:id/state', getInterviewState);
 router.delete('/:id', deleteInterview);

@@ -1,6 +1,7 @@
-import type { RequestHandler } from 'express';
+import type { Request, RequestHandler } from 'express';
 import { Redis } from 'ioredis';
 
+import { clock } from '../../src/lib/clock';
 import { config } from '../../src/lib/env';
 import { logger } from '../../src/lib/logger';
 
@@ -8,10 +9,12 @@ import { logger } from '../../src/lib/logger';
 // PKCE state storage — do not open a second connection.
 export const redis = new Redis(config.REDIS_URL, { maxRetriesPerRequest: null });
 
-// Sliding-window counter over a sorted set keyed by IP. Returns the count inside the
-// window after recording this hit; the caller rejects when it exceeds the limit.
-async function slidingWindowHit(key: string, windowMs: number): Promise<number> {
-  const now = Date.now();
+// Sliding-window counter over a sorted set. Returns the count inside the window after
+// recording this hit; the caller rejects when it exceeds the limit.
+// I13: scored from `clock.now()`, not `Date.now()` — rate_limits.feature rolls the window
+// by moving the fixed clock, and a real-clock score would never leave it.
+export async function slidingWindowHit(key: string, windowMs: number): Promise<number> {
+  const now = clock.now().getTime();
   const member = `${now}-${Math.random()}`;
   const results = await redis
     .multi()
@@ -25,14 +28,32 @@ async function slidingWindowHit(key: string, windowMs: number): Promise<number> 
   return typeof count === 'number' ? count : 0;
 }
 
-function limiter(prefix: string, limit: number, windowMs: number): RequestHandler {
+export interface KeyedLimit {
+  prefix: string;
+  limit: number;
+  windowMs: number;
+  /** IP for public endpoints, `user_id` for authenticated ones. */
+  keyOf: (req: Request) => string;
+  code?: string;
+  event?: string;
+}
+
+/** I13 generalised A01's factory: the key and the error code are the only axes that vary. */
+export function keyedLimiter({
+  prefix,
+  limit,
+  windowMs,
+  keyOf,
+  code = 'RATE_LIMITED',
+  event = 'RATE_LIMIT_HIT',
+}: KeyedLimit): RequestHandler {
   return (req, res, next) => {
-    const ip = req.ip ?? 'unknown';
-    void slidingWindowHit(`ratelimit:${prefix}:${ip}`, windowMs)
+    const key = keyOf(req);
+    void slidingWindowHit(`ratelimit:${prefix}:${key}`, windowMs)
       .then((count) => {
         if (count > limit) {
-          logger.warn({ ip, traceId: req.traceId }, 'RATE_LIMIT_HIT');
-          res.status(429).json({ error: { code: 'RATE_LIMITED' } });
+          logger.warn({ key, traceId: req.traceId }, event);
+          res.status(429).json({ error: { code } });
           return;
         }
         next();
@@ -41,13 +62,30 @@ function limiter(prefix: string, limit: number, windowMs: number): RequestHandle
   };
 }
 
+const byIp = (req: Request): string => req.ip ?? 'unknown';
+
 // K8 / REFERENCE: register 3/hour per IP, login 5/minute per IP.
-export const registerLimiter = limiter('register', 3, 60 * 60 * 1000);
-export const loginLimiter = limiter('login', 5, 60 * 1000);
+export const registerLimiter = keyedLimiter({
+  prefix: 'register',
+  limit: 3,
+  windowMs: 60 * 60 * 1000,
+  keyOf: byIp,
+});
+export const loginLimiter = keyedLimiter({
+  prefix: 'login',
+  limit: 5,
+  windowMs: 60 * 1000,
+  keyOf: byIp,
+});
 // A05: 5/hour per IP. Keyed by IP like the two above and unlike the resend limits below —
 // a per-account key would answer 429 only for addresses that have an account, which is the
 // enumeration leak the endpoint's identical 202 exists to prevent.
-export const passwordResetLimiter = limiter('passwordreset', 5, 60 * 60 * 1000);
+export const passwordResetLimiter = keyedLimiter({
+  prefix: 'passwordreset',
+  limit: 5,
+  windowMs: 60 * 60 * 1000,
+  keyOf: byIp,
+});
 
 // --------------------------------------------------------------------- A04: mail resends
 //
@@ -91,16 +129,9 @@ export async function withinResendQuota(userId: string): Promise<boolean> {
 
 // A06: 60/hour per user. Keyed by user (like the resend pair above), not IP — this
 // endpoint is authenticated, so the account is what is worth protecting.
-export const profilePatchLimiter: RequestHandler = (req, res, next) => {
-  const userId = req.user!.id;
-  void slidingWindowHit(`ratelimit:profile:${userId}`, 60 * 60 * 1000)
-    .then((count) => {
-      if (count > 60) {
-        logger.warn({ userId, traceId: req.traceId }, 'RATE_LIMIT_HIT');
-        res.status(429).json({ error: { code: 'RATE_LIMITED' } });
-        return;
-      }
-      next();
-    })
-    .catch(next);
-};
+export const profilePatchLimiter = keyedLimiter({
+  prefix: 'profile',
+  limit: 60,
+  windowMs: 60 * 60 * 1000,
+  keyOf: (req) => req.user!.id,
+});

@@ -89,6 +89,7 @@ module.exports = {
       '.agents/features/report.feature',
       '.agents/features/upload.feature',
       '.agents/features/object_storage.feature',
+      '.agents/features/rate_limits.feature',
     ],
     tags: 'not @unwired',
     require: ['backend/features/step_definitions/**/*.ts'],
