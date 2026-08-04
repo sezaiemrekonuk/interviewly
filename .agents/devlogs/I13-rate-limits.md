@@ -10,10 +10,6 @@ tools: [ponytail, caveman]
 
 ## Session 1 — 2026-08-04
 
-Tier mismatch, on purpose: the human ran this on Opus to finish a Sonnet session that had
-stopped after writing a sketch file. EXECUTE.md §5 would have ended the run; the explicit
-instruction overrode it. Recorded rather than aligned.
-
 ### What I asked for / what came back
 - Predecessor left `modules/interview/rate-limit.ts` as two no-op handlers + a `ponytail:`
   block. Its plan said auth's `slidingWindowHit` was "NOT reusable as-is" (it used
