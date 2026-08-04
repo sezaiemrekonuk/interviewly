@@ -2,7 +2,7 @@ import type { MascotPose } from '@interviewly/types';
 import { screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
-import { renderWithIntl } from '../test/render';
+import { messages, renderWithIntl } from '../test/render';
 import { Mascot, mascotKey, mascotUrl } from './mascot';
 
 // The five poses, typed — a sixth added to the union without a seed object is caught by
