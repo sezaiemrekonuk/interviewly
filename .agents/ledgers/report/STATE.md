@@ -3,7 +3,10 @@
 Last updated: 2026-08-05
 Last session ended: **R04 done.** Added `profiling|hr_round|paused -> abandoned` edges in
 `backend/modules/interview/machine.ts` + `machine.test.ts` assertions. New
-`worker/src/jobs/abandon-sweep.ts`: bounded stale-scan from `chat_messages/started_at/created_at`,
+`worker/src/jobs/abandon-sweep.ts`: staleness is a WHERE clause (`created_at`/`started_at`/
+`chat_messages` vs a 24 h cutoff), so `take: 500` bounds transitions, not rows read; covered by
+`abandon-sweep.integration.test.ts` because a stubbed `findMany` can only re-state the literal.
+Then
 `applyTransition(..., 'abandoned', endedReason: 'abandoned')`, `INVALID_STATE_TRANSITION`
 skip, per-row failure isolation. Registered repeatable `interview.abandon-sweep` in
 `worker/src/index.ts` with clean shutdown close. **bullmq 6 dropped `repeat` from `JobsOptions`

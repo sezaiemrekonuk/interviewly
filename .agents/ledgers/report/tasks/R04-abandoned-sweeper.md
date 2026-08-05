@@ -136,12 +136,15 @@ exactly once.
 Added `profiling|hr_round|paused -> abandoned` edges in `backend/modules/interview/machine.ts`
 and pinned them with new assertions in `machine.test.ts`.
 
-New `worker/src/jobs/abandon-sweep.ts`: scans only non-deleted interviews in
-`profiling|hr_round|paused` (bounded, `take: 500` + `orderBy created_at asc` — the derived
-staleness predicate cannot be pushed into SQL, so candidate rows are loaded before being judged;
-a swept row leaves the state set, so the next tick continues, and a full batch is reported as
-`truncated`), derives `lastActivity = max(chat_messages.created_at, started_at, created_at)`,
-marks stale rows (`>24h`) as `abandoned` through `applyTransition(..., { endedReason:
+New `worker/src/jobs/abandon-sweep.ts`. `lastActivity = max(chat_messages.created_at,
+started_at, created_at)` and `lastActivity < cutoff` is the same predicate as each term being
+`< cutoff` individually, so the staleness filter is **in the query**, not in this process:
+`deleted_at: null`, `state in (profiling|hr_round|paused)`, `created_at < cutoff`,
+`started_at IS NULL OR started_at < cutoff`, `chat_messages: { none: { created_at: >= cutoff } }`
+(vacuously true for an interview with no messages — the fallback case). `take: 500` +
+`orderBy created_at asc` therefore bounds the transitions a tick performs rather than the rows
+it reads; a swept row leaves the state set, so the next tick continues, and a full batch is
+reported as `truncated`. Rows are ended through `applyTransition(..., { endedReason:
 'abandoned' })`. `from` is captured **before** the call — `applyTransition` writes `state` back
 onto the object it is given, so reading `candidate.state` afterwards logs `abandoned`.
 
@@ -156,10 +159,16 @@ the type error, would enqueue a single job that never repeats. Scheduling goes t
 { name, opts })`; the `jobSchedulerId` is the fixed identity the task asks for, so a worker
 restart upserts the one scheduler instead of stacking a second.
 
-New worker unit file `worker/src/jobs/abandon-sweep.test.ts` covers swept (asserting the `from`
-state per row), not-swept (query shape for the excluded states + soft-deleted, freshness for
-in-scope rows), idempotent/race-safe, continue-on-row-failure, and batch truncation.
+Tests are split along the same line as the code. `worker/src/jobs/abandon-sweep.test.ts` (unit)
+covers the loop: the transition arguments, the `from` state per row, the skip and per-row-failure
+branches, batch truncation, and the query shape. `worker/src/jobs/abandon-sweep.integration.test.ts`
+covers the predicate against real Postgres, where it can actually run: the three stale states
+swept; fresh-by-`created_at`, fresh-by-`started_at`, fresh-by-message untouched (one per fallback
+in the derived definition); `created`/`tech_round`/`evaluating`/`completed`/soft-deleted
+untouched; a double sweep ending a row exactly once; a resumed interview untouched once the
+resume writes a turn.
 
-Verification: `docker compose up -d db cache && npm run -w worker test` — 6/6 files, 35/35 tests.
+Verification: `docker compose up -d db cache && npm run -w worker test` — 6/6 files, 34/34 tests.
 Plus `npm run -w worker build` (the task command alone does not cover `index.ts`: the suite mocks
-bullmq, so the registration bug above passed the tests and failed `tsc`).
+bullmq, so a `queue.add({ repeat })` that never repeats passed the tests and failed `tsc`) and
+`npm run test:integration` — 3/3 files, 12/12 tests.

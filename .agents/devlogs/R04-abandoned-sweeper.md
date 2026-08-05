@@ -78,6 +78,37 @@ Result:
   `frontend/src/components/admin/stats-panel.tsx` (w11, untouched here).
 - `eslint worker/src backend/modules/interview` — clean.
 
+## Session 3 — 2026-08-05 (staleness pushed into SQL)
+
+`max(created_at, started_at, last_message) < cutoff` is the same predicate as
+`created_at < cutoff AND (started_at IS NULL OR started_at < cutoff) AND no message >= cutoff`,
+and that form is expressible in Prisma. The sweeper now filters in the query:
+
+- The `chatMessage.groupBy` round trip and the in-process `newest`/`stale` helpers are gone.
+- `take: 500` now bounds the *transitions* a tick performs, not the rows it reads — the
+  database returns stale rows only, so the bound is no longer a coverage gap.
+- `select` narrowed to `id`/`state`/`ended_reason`; `started_at`/`created_at` had no reader left.
+- The batch summary lost `candidates` (it equalled `stale`).
+
+Cost: the predicate is no longer reachable from a unit test with a stubbed `findMany` — asserting
+it there would only re-state the object literal. New `worker/src/jobs/abandon-sweep.integration.test.ts`
+covers it against real Postgres: the three stale states swept; fresh-by-`created_at`,
+fresh-by-`started_at` and fresh-by-message left alone (one per fallback in the derived
+definition); `created`/`tech_round`/`evaluating`/`completed`/soft-deleted untouched; a double
+sweep ending a row exactly once; and a resumed interview going untouched once the resume writes
+a turn. `abandon-sweep.test.ts` keeps the loop behaviour and pins the query shape.
+
+### Verification
+- `npm run -w worker build` — clean; `npm run -w worker test` — 6 files, 34 tests.
+- `npm run test:integration` — 3 files, 12 tests (was 2 files, 9).
+
+### Local-environment trap
+A host Postgres on `127.0.0.1:5432`/`[::1]:5432` shadows the container's `0.0.0.0:5432` publish,
+so `DATABASE_URL=...@localhost:5432` reaches the *host* server and Prisma reports
+`P1010 User was denied access on the database` — which reads like a credentials bug and is not.
+Point `DATABASE_URL`/`REDIS_URL` at the machine's LAN address instead, and `docker compose stop
+worker` first (the container holds the same DB and, with `immediately: true`, sweeps on boot).
+
 ### Trap for next session
 `npm run -w worker test` does **not** cover `worker/src/index.ts`. Run `npm run -w worker build`
 before calling any queue-wiring task done — the whole R04 registration bug was invisible to the
