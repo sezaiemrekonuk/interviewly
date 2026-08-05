@@ -244,7 +244,7 @@ export interface ReportPayload {
   language: string;
 }
 
-/** `GET /interviews/:id` (R01) — thin by design: transcript/endedReason come from state (ADR-W07). */
+/** `GET /interviews/:id` (R01) — thin by design: transcript/endedReason come from state (ADR-W08). */
 export interface ReportResponse {
   interviewId: string;
   state: string;
