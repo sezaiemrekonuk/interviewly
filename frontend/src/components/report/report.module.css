@@ -1,0 +1,155 @@
+/* Report surface: flat --bg, hairline shadow only, no gradient, no mascot (ui §4.2). */
+
+.page {
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px 16px 32px;
+  max-width: 880px;
+  margin: 0 auto;
+}
+
+.skeleton {
+  min-height: 100dvh;
+  background: var(--bg);
+}
+
+.wait,
+.waitTimedOut {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-hairline);
+  padding: 32px 20px;
+  text-align: center;
+  font-size: 16px;
+}
+
+.waitTimedOut {
+  color: var(--text-muted);
+}
+
+.report {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.header {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-hairline);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.header h1 {
+  font-size: 20px;
+}
+
+/* --accent keys section headers only; it is never a CTA on this screen. */
+.sectionTitle {
+  font-size: 16px;
+  color: var(--accent);
+}
+
+.earlyEnd {
+  background: var(--primary-soft);
+  border-radius: var(--radius-card);
+  padding: 12px 16px;
+  font-size: 14px;
+}
+
+.score {
+  font-size: 40px;
+  font-weight: 600;
+  display: flex;
+  flex-direction: column;
+}
+
+.scoreLabel {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.impression {
+  font-size: 16px;
+}
+
+.rounds,
+.questions,
+.narrative ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.round,
+.question {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-hairline);
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.round h3 {
+  font-size: 16px;
+}
+
+.roundScore,
+.questionScore {
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  gap: 8px;
+}
+
+.star,
+.note {
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.narrative {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.narrative li {
+  font-size: 14px;
+}
+
+.questionText {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.error {
+  color: var(--danger);
+  font-size: 14px;
+}
+
+@media (max-width: 480px) {
+  .page {
+    padding: 16px 12px 24px;
+  }
+
+  .narrative {
+    grid-template-columns: 1fr;
+  }
+}

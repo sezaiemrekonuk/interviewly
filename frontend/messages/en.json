@@ -131,6 +131,21 @@
     "transcriptTitle": "Answers so far",
     "transcriptEmpty": "No answers yet."
   },
+  "report": {
+    "title": "Your report",
+    "waitGenerating": "Generating your report…",
+    "waitTimedOut": "This is taking longer than expected. Refresh in a moment.",
+    "earlyEnd": "This interview ended early — the report scores what was answered.",
+    "scoreLabel": "Overall score",
+    "scoreValue": "{score} / 5",
+    "roundsTitle": "Rounds",
+    "roundHr": "HR round",
+    "roundTech": "Technical round",
+    "strengths": "Strengths",
+    "improvements": "Areas to improve",
+    "questionsTitle": "Question by question",
+    "star": "STAR {percent}%"
+  },
   "errors": {
     "PASSWORD_TOO_SHORT": "Password must be at least 10 characters.",
     "EMAIL_TAKEN": "An account with this email already exists.",

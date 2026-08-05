@@ -229,6 +229,51 @@ export function useSubmitAnswer(
   });
 }
 
+/**
+ * K15 `reports.payload`, verbatim — snake_case because the backend stores what the model
+ * returned and `ReportPayloadSchema` (`packages/ai/src/schemas.ts`) gates those exact keys.
+ * Every score is an integer 0..5. Renamed here and the read silently drifts from the gate.
+ */
+export interface ReportPayload {
+  overall_impression: string;
+  overall_score: number;
+  strengths: string[];
+  improvements: string[];
+  rounds: { type: 'hr' | 'tech'; score: number; summary: string; note?: string }[];
+  questions: { question_id: string; score: number; reason: string; star_adherence: number }[];
+  language: string;
+}
+
+/** `GET /interviews/:id` (R01) — thin by design: transcript/endedReason come from state (ADR-W08). */
+export interface ReportResponse {
+  interviewId: string;
+  state: string;
+  report: { status: string; payload: ReportPayload } | null;
+}
+
+/** 12 polls at 5 s covers the §8.1 < 60 s report budget; the page stops asking at the ceiling. */
+const REPORT_POLL_MS = 5_000;
+
+/**
+ * W07. SSE (`useInterviewEvents`) is primary — this `refetchInterval` is the fallback for a
+ * silent stream, so it is off unless the caller is inside the wait budget AND no report has
+ * landed. An always-on interval would hammer `/interviews/:id` for every completed report.
+ */
+export function useReport(
+  id: string | null,
+  poll = false,
+): UseQueryResult<ReportResponse, ApiError> {
+  return useQuery({
+    queryKey: queryKeys.interview(id ?? ''),
+    queryFn: () => {
+      if (!id) throw new ApiError('UNKNOWN');
+      return fetchJson<ReportResponse>(`/interviews/${id}`);
+    },
+    enabled: Boolean(id),
+    refetchInterval: (query) => (poll && !query.state.data?.report ? REPORT_POLL_MS : false),
+  });
+}
+
 /** I07 — resume from `paused`; `BUDGET_EXCEEDED` refetches into `evaluating` (W07's surface). */
 export function useResumeInterview(
   interviewId: string,

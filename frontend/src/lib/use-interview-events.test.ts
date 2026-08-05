@@ -35,13 +35,15 @@ describe('useInterviewEvents', () => {
     expect(MockEventSource.instances[0].url).toBe('/api/interviews/int-1/events');
   });
 
-  it('invalidates only the state key, once per event, without reading the payload', () => {
+  // The prefix, not the state key: one nudge has to reach the room's `['interview',id,'state']`
+  // and W07's `['interview',id]` report read, which the report screen mounts together.
+  it('invalidates the interview prefix, once per event, without reading the payload', () => {
     renderHook(() => useInterviewEvents('int-1'), { wrapper: wrapper(client) });
 
     MockEventSource.instances[0].emit('INTERVIEW_STATE_CHANGED', '{"to":"tech_round"}');
 
     expect(invalidate).toHaveBeenCalledTimes(1);
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.interviewState('int-1') });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.interview('int-1') });
   });
 
   it('invalidates once more on a reconnect, not on the first open', () => {

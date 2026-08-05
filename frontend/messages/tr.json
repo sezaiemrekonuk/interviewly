@@ -131,6 +131,21 @@
     "transcriptTitle": "Şimdiye kadarki cevaplar",
     "transcriptEmpty": "Henüz cevap yok."
   },
+  "report": {
+    "title": "Raporunuz",
+    "waitGenerating": "Raporunuz hazırlanıyor…",
+    "waitTimedOut": "Bu beklenenden uzun sürüyor. Bir süre sonra sayfayı yenileyin.",
+    "earlyEnd": "Bu görüşme erken sona erdi — rapor yalnızca cevaplanan soruları puanlar.",
+    "scoreLabel": "Genel puan",
+    "scoreValue": "{score} / 5",
+    "roundsTitle": "Turlar",
+    "roundHr": "İK turu",
+    "roundTech": "Teknik tur",
+    "strengths": "Güçlü yönler",
+    "improvements": "Gelişim alanları",
+    "questionsTitle": "Soru soru",
+    "star": "STAR %{percent}"
+  },
   "errors": {
     "PASSWORD_TOO_SHORT": "Şifre en az 10 karakter olmalıdır.",
     "EMAIL_TAKEN": "Bu e-posta adresiyle bir hesap zaten mevcut.",

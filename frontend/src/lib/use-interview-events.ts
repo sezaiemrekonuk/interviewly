@@ -11,7 +11,11 @@ const STATE_CHANGED = 'INTERVIEW_STATE_CHANGED';
 
 /**
  * K11 — nudge, then refetch. The event body says *that* something changed, never *what*:
- * the room re-renders from `['interview',id,'state']`, so the payload is never read.
+ * the caller re-renders from its own query key, so the payload is never read.
+ *
+ * `['interview',id]` is invalidated as a *prefix*, so one nudge reaches both the room's
+ * `['interview',id,'state']` and W07's report read — no per-caller key parameter, and no
+ * screen that mounts both can be nudged into a half-refreshed state.
  */
 export function useInterviewEvents(interviewId: string | null): void {
   const queryClient = useQueryClient();
@@ -21,7 +25,7 @@ export function useInterviewEvents(interviewId: string | null): void {
 
     const source = new EventSource(`${API_BASE}/interviews/${interviewId}/events`);
     const invalidate = () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.interviewState(interviewId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.interview(interviewId) });
     };
 
     // A drop and re-open means events were missed while the socket was down; the first

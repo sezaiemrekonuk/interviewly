@@ -56,7 +56,7 @@ never renders).
 |---|---|---|
 | `src/app/providers.tsx` | W02 | `QueryClientProvider` (+ `NextIntlClientProvider` if not already at root); mounted in `layout.tsx` |
 | `src/lib/query.ts` | W02 | the `QueryClient` and the query-key factory (K11 shapes) |
-| `src/lib/use-interview-events.ts` | W02 | one `EventSource` on `GET /interviews/:id/events` → invalidate `['interview',id,'state']` |
+| `src/lib/use-interview-events.ts` | W02 | one `EventSource` on `GET /interviews/:id/events` → invalidate the `['interview',id]` **prefix** (both the room's state key and W07's report read, ADR-W08) |
 | `src/lib/error-routing.ts` | W02 | the §4.5 code→route table (`UNAUTHENTICATED`→sign-in, `FORBIDDEN`→dashboard, `BUDGET_EXCEEDED`→report-wait, `EMAIL_NOT_VERIFIED`→verify, …) |
 | `src/components/locale-switcher.tsx` | W02 | EN/TR toggle writing the locale cookie; UI copy only, never `interviews.language` |
 | `src/app/page.tsx` | W03 | landing (screen 1) — replaces the current 6-line stub |
@@ -66,7 +66,7 @@ never renders).
 | `src/app/interviews/new/page.tsx` | W05 | setup (screen 9) |
 | `src/app/interviews/[id]/room/page.tsx` | W06/W10 | interview room (screen 11) |
 | `src/app/interviews/[id]/pre-join/page.tsx` | W09 | pre-join (screen 10) |
-| `src/app/interviews/[id]/page.tsx` | W07 | report + transcript (screen 12) |
+| `src/app/interviews/[id]/page.tsx` | W07 | report + transcript (screen 12); `useReport` + `useInterviewState`, `<ReportView>`/`<ReportWait>`, reused `<Transcript>` |
 | `src/app/dashboard/page.tsx` | W08 | history (screen 13) |
 | `src/app/admin/page.tsx` | W11 | admin list + stats (screen 14) |
 
@@ -88,7 +88,7 @@ if a shape is not yet built, the task's `Depends on` names it and the task stops
 | `POST /interviews/:id/answers` | body `{ questionId, transcript, inputMode: 'text'\|'widget'\|'voice' }` → `{ state, nextIndex }`; non-current → `409 QUESTION_NOT_CURRENT` | I06 |
 | `POST /interviews/:id/resume` | `paused` → round | I07 |
 | `GET /interviews/:id/events` | SSE `{ type }` events — **the real path** | I07 |
-| `GET /interviews/:id` | `{ interview, transcript, report? }` — **handler unowned, see STATE blockers** | R01 |
+| `GET /interviews/:id` | `{ interviewId, state, report }` — thin; `transcript`/`endedReason` come from `/state` (ADR-W08) | R01 |
 | `GET /me/interviews` | `{ items, nextCursor }` (deleted excluded) | N01 |
 | `DELETE /interviews/:id` | `204` (soft delete) | N01 |
 | `GET /admin/interviews` | `{ items, nextCursor }` (deleted included, `deleted` flag, `totalTokens`, `costUsd`) | N01 |
