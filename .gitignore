@@ -13,5 +13,8 @@ blob-report/
 .playwright/
 .playwright-mcp/
 
+.issues/*
+!.issues/FINDINGS.md
+
 # any kind of .DS_Store file
 **/.DS_Store
