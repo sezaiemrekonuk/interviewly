@@ -54,4 +54,19 @@ describe('canTransition', () => {
     expect(canTransition('paused', 'tech_round')).toBe(false);
     expect(canTransition('paused', 'evaluating')).toBe(false);
   });
+
+  it('allows stale interview states to end as abandoned', () => {
+    expect(canTransition('profiling', 'abandoned')).toBe(true);
+    expect(canTransition('hr_round', 'abandoned')).toBe(true);
+    expect(canTransition('paused', 'abandoned')).toBe(true);
+  });
+
+  it('keeps abandoned closed from non-stale or terminal states', () => {
+    expect(canTransition('created', 'abandoned')).toBe(false);
+    expect(canTransition('tech_round', 'abandoned')).toBe(false);
+    expect(canTransition('evaluating', 'abandoned')).toBe(false);
+    expect(canTransition('completed', 'abandoned')).toBe(false);
+    expect(canTransition('failed', 'abandoned')).toBe(false);
+    expect(canTransition('abandoned', 'abandoned')).toBe(false);
+  });
 });
