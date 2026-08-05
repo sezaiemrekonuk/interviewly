@@ -6,6 +6,7 @@ import {
   useMutation,
   useQuery,
   useQueryClient,
+  type InfiniteData,
   type UseInfiniteQueryResult,
   type UseMutationResult,
   type UseQueryResult,
