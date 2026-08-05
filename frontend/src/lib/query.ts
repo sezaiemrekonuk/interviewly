@@ -343,7 +343,7 @@ export function useDeleteInterview(): UseMutationResult<void, ApiError, string> 
       const result = await apiDelete(`/interviews/${interviewId}`);
       if (!result.ok) throw new ApiError(result.code ?? 'UNKNOWN');
     },
-    // Prefix key: the infinite query is stored under `['me','interviews',{cursor:null}]`.
-    onSuccess: () => client.invalidateQueries({ queryKey: ['me', 'interviews'] }),
+    // Infinite query key is `queryKeys.meInterviews()`.
+    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.meInterviews() }),
   });
 }
