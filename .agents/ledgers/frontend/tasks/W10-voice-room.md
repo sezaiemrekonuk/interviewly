@@ -81,14 +81,14 @@ end-state (voice), but text (W06) is built and demoed first.
   server drives *truth*. Advance and transcript always come from the state refetch.
 
 ## Steps
-- [ ] **1. Confirm V02/V05 session endpoints resolve.** If not, stop and flag them in STATE.
-- [ ] **2. `use-voice-session.ts`** — connect/capture/play/turn-boundary/reconnect/teardown over
+- [x] **1. Confirm V02/V05 session endpoints resolve.** If not, stop and flag them in STATE.
+- [x] **2. `use-voice-session.ts`** — connect/capture/play/turn-boundary/reconnect/teardown over
   V02's transport; emits the local avatar phase; unit test with a mocked transport.
-- [ ] **3. `voice-controls.tsx`** — mic/speaker/session-status/reconnect.
-- [ ] **4. Branch `room/page.tsx` on `mode`** — voice surface reusing W06's tiles/transcript/avatar/
+- [x] **3. `voice-controls.tsx`** — mic/speaker/session-status/reconnect.
+- [x] **4. Branch `room/page.tsx` on `mode`** — voice surface reusing W06's tiles/transcript/avatar/
   reducer; local beats from the session, truth from the state refetch.
-- [ ] **5. `room.*` voice copy** in both files.
-- [ ] **6. Tests** — render-from-refetch, turn-boundary beat vs. server advance, reconnect re-sync,
+- [x] **5. `room.*` voice copy** in both files.
+- [x] **6. Tests** — render-from-refetch, turn-boundary beat vs. server advance, reconnect re-sync,
   mic released on unmount. Run the `## Verification` command.
 
 ## Definition of done
@@ -108,7 +108,54 @@ server advance, reconnect re-sync, and mic release on unmount.
 
 ## Notes
 
-(Empty until the task is done.)
+**Shipped.** `/interviews/:id/room` branches on `room.mode` — one page, one shell, no second room.
+
+**`useVoiceSession(interviewId, { enabled, onResync })`** (`src/lib/use-voice-session.ts`):
+- Mints via `mintVoiceSession` (V02), opens `WebSocket(wssOrigin)`, sends the token in a
+  `conversation_initiation_client_data` frame. **Token is not in the URL** — a query string lands in
+  proxy access logs and it is a session credential (K6).
+- `BEAT_BY_FRAME` maps agent frames → local beat: `agent_response`/`audio` → `speaking`,
+  `agent_response_end`/`interruption` → `listening`, `user_transcript` → `acknowledging`. Unlisted
+  frames (`ping`, audio chunks) leave the beat alone.
+- Status `connecting|connected|reconnecting|lost`. **Derived, not stored:** socket reports are
+  tagged with the `attempt` they belong to, and a report from an older attempt reads as
+  `connecting`/`reconnecting`. That is what lets a new attempt start without a synchronous
+  `setState` in the effect body — `react-hooks/set-state-in-effect` is an **error** under the
+  pre-commit config (stricter than root `npm run lint`, which passes it). No `closed` state: it was
+  unreachable (the controls unmount with the mode), so it and its copy are gone.
+- `closing` flag distinguishes our teardown from a drop, so unmount never renders as a lost session.
+- Mint refusal (`VOICE_UNAVAILABLE`) → `lost` + `onResync()`. **V03 already downgraded server-side**
+  — the client does not call `voiceDowngrade` here (that is W09's pre-join-denial path only).
+- `reconnect()` bumps an `attempt` counter → re-mint + reopen; `onResync()` fires on reopen because
+  a reconnect may straddle a server advance (V05).
+- No send path for answers: V02 receives them over the ElevenLabs webhooks, server-side.
+
+**Deviations from the task file — both deliberate:**
+- **`createActiveSpeaker`/`resolveActiveSpeaker` (V05) are NOT used.** They derive the active tile
+  from round state, which is a *client* re-derivation of what `persona.id` already says from the
+  server (K11). The page uses `room.persona.id`, as W06 does. The `round` param in the sketch's
+  signature went with it.
+- **No self-camera** despite the STATE row's title. W09 established mic-only (never asks for
+  camera); adding one here would re-open the permission surface it closed.
+
+**Reused, not forked:** `PersonaTiles`, `Transcript`, `QuestionPanel`, `AvatarPreload`,
+`resolveAvatarState`, `useInterviewState`, `useInterviewEvents`, `room.module.css`.
+Three small extensions rather than copies: `useMicPermission` gained `muted`/`toggleMute` (disables
+the track, never drops it), `Transcript` gained `live` (→ `aria-live="polite"`), `QuestionPanel`
+gained `instant` (voice must not type out a question the agent is speaking).
+Also deleted `useMicPermission`'s `requestSeqRef` — declared in W09, never read, and fatal under
+the pre-commit `--max-warnings=0`.
+
+**Avatar (§3.8) in voice:** `voice.beat ?? resolveAvatarState('settled', persona.avatarState)` — the
+beat drives between refetches, the server value is still the sync. `beat: null` falls through to the
+server value, not to `idle`.
+
+**New test helper:** `src/test/websocket-mock.ts` — `installWebSocketMock` (jsdom has no WebSocket)
+and `installMediaDevicesMock` (stoppable tracks, so mic-release is an assertion on `stop`).
+
+**For W11:** nothing here is shared. For a future voice task: the WSS frame vocabulary is a guess
+pending EXECUTE.md open blocker 2 (ElevenLabs provisioning) — `BEAT_BY_FRAME` is the one place to
+correct it, and the init-frame auth shape is the other.
 
 ## Design
 

@@ -11,8 +11,12 @@ export interface TranscriptTurn {
   roundType: 'hr' | 'tech';
 }
 
-/** The answered turns so far, straight off room-state. Read-only — W07 reuses it as-is. */
-export function Transcript({ turns }: { turns: TranscriptTurn[] }) {
+/**
+ * The answered turns so far, straight off room-state. Read-only — W07 reuses it as-is.
+ * `live` announces new turns as they land: in voice (W10) the transcript is the only place
+ * the answer appears at all, so it has to reach a screen reader without a focus move.
+ */
+export function Transcript({ turns, live = false }: { turns: TranscriptTurn[]; live?: boolean }) {
   const t = useTranslations('room');
 
   return (
@@ -21,7 +25,7 @@ export function Transcript({ turns }: { turns: TranscriptTurn[] }) {
       {turns.length === 0 ? (
         <p className={styles.transcriptEmpty}>{t('transcriptEmpty')}</p>
       ) : (
-        <ol className={styles.transcriptList}>
+        <ol className={styles.transcriptList} aria-live={live ? 'polite' : undefined}>
           {turns.map((turn) => (
             <li key={turn.questionId} className={styles.turn}>
               {/* Speaker-labelled: who asked, then who answered. Room-state carries no

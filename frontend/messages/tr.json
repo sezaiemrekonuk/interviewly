@@ -206,7 +206,19 @@
     "paused": "Bu mülakat duraklatıldı.",
     "resume": "Devam et",
     "transcriptTitle": "Verdiğin cevaplar",
-    "transcriptEmpty": "Henüz cevap yok."
+    "transcriptEmpty": "Henüz cevap yok.",
+    "voice": {
+      "mute": "Sesi kapat",
+      "unmute": "Sesi aç",
+      "lost": "Ses bağlantısı koptu. Görüşmeniz güvende — devam etmek için yeniden bağlanın.",
+      "reconnect": "Yeniden bağlan",
+      "status": {
+        "connecting": "Bağlanıyor",
+        "connected": "Canlı",
+        "reconnecting": "Yeniden bağlanıyor",
+        "lost": "Bağlantı kesildi"
+      }
+    }
   },
   "report": {
     "title": "Raporun",
