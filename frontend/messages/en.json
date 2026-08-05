@@ -194,5 +194,29 @@
     "CV_TRUNCATED": "Your CV was truncated before processing.",
     "PROFILE_DOB_STRIPPED": "Date of birth was removed from the extracted profile.",
     "UNKNOWN": "An unexpected error occurred."
+  },
+  "dashboard": {
+    "title": "Your interviews",
+    "loading": "Loading your interviews…",
+    "loadMore": "Load more",
+    "delete": "Delete",
+    "deleteLabel": "Delete this interview",
+    "startedOn": "Started {date}",
+    "noOccupation": "Untitled interview",
+    "empty": {
+      "title": "No interviews yet",
+      "body": "Set one up and it will show here with its report.",
+      "cta": "Start an interview"
+    },
+    "outcome": {
+      "completed": "Completed",
+      "cut_short": "Cut short",
+      "budget_exhausted": "Budget reached",
+      "time_exhausted": "Time reached",
+      "abandoned": "Abandoned",
+      "error": "Ended with an error",
+      "evaluating": "Being evaluated",
+      "inProgress": "In progress"
+    }
   }
 }

@@ -1,7 +1,16 @@
 # Frontend — State
 
 Last updated: 2026-08-05
-Last session ended: **W07 done — the demo path is closed** (land → … → room → **report**).
+Last session ended: **W08 done — `/dashboard` lists, paginates and soft-deletes.**
+`GET /me/interviews` carries **no score** (`my-interviews.ts` → id/state/mode/occupation/
+endedReason/createdAt/startedAt/endedAt), so a row is **occupation + outcome + date**; the score
+stays on the report — the task's "score summary" is an endpoint gap, logged in `## Open blockers`.
+Outcome key = `endedReason ?? (state==='evaluating' ? 'evaluating' : 'inProgress')`. Delete is
+**not** optimistic: `useDeleteInterview` invalidates the `['me','interviews']` prefix, the refetch
+drops the row. `useInterviewList(enabled)` mirrors `useProfile(enabled)` — gated on
+`useRequireAuth`. Ring: frontend 177, root 287.
+
+Previous: **W07 done — the demo path is closed** (land → … → room → **report**).
 `/interviews/:id` reads **two** endpoints (ADR-W08): `GET /interviews/:id` is thin
 (`{interviewId,state,report}`), so `transcript` + `endedReason` come from room-state — `get.ts` was
 not patched, it is another ledger's file. **`useInterviewEvents` now invalidates the
@@ -33,9 +42,8 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**W08 (`<- W02, N01`)** is next — history/dashboard, screen 13 (sonnet-tier). W09/W11 are also
-eligible (deps `done`); § 4 order picks the lowest ID. W08 links straight to `/interviews/:id`; the
-room already `router.replace`s there on `evaluating|completed|failed|abandoned`.
+**W09 (`<- W06, V02`)** is next — pre-join device check, screen 10 (sonnet-tier). W11 is also
+eligible (`<- W02, N01, N02`, all `done`); § 4 order picks the lowest ID. W10 still waits on W09.
 
 ## Environment
 
@@ -81,6 +89,12 @@ npx playwright test                               # smokes against `docker compo
 
 ## Open blockers / decisions for the user
 
+- **`GET /me/interviews` returns no score**, so W08's rows cannot show the "score summary" the
+  frontend spec's screen 13 asks for. `my-interviews.ts` deliberately withholds cost/token figures
+  (ADR-N02) but drops the score with them; the report's `overall_score` lives on `reports`, one
+  join away. W08 ships occupation + outcome + date and links to the report for the number.
+  **Owner: Fatih (admin ledger, N01).** Blocks no task — a display gap, not a broken screen.
+
 - **`GET /interviews/:id` exists but is thin — resolved for W07, still a gap for the spec.** R01
   shipped `backend/modules/interview/get.ts` returning `{ interviewId, state, report }`, not the
   spec's `{ interview, transcript, report? }` (backend spec line 107). W07 reads `transcript` +
@@ -115,7 +129,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | W05 | Setup (screen 9) + 390px mobile: listing textarea, chips, option cards, detected-summary edit, pre-questions/skip | | done | W02, I03, I04, I11 |
 | W06 | Interview room text mode (screen 11) + widgets + 390px: two tiles, banner, avatar state machine, typed animation, guarded submit, handover, report-wait | | done | W02, I03, I06, I07 |
 | W07 | Report + transcript (screen 12): report-wait (SSE + bounded poll) → render `ReportPayload` read-only | | done | W02, R01 |
-| W08 | History / dashboard (screen 13): list, Continue, optimistic Delete | | todo | W02, N01 |
+| W08 | History / dashboard (screen 13): list, Continue, optimistic Delete | | done | W02, N01 |
 | W09 | Pre-join device check (screen 10, voice): camera off-by-default, mic level bar, continue-in-text | | todo | W06, V02 |
 | W10 | Voice room surface (screen 11-voice): live ASR transcript, mic level, self-camera, amplitude avatar driver | | todo | W09, V02, V05 |
 | W11 | Admin list + stats (screen 14): tables + Recharts bound to `/admin/stats` as-returned | | todo | W02, N01, N02 |

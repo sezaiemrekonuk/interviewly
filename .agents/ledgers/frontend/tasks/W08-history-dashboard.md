@@ -1,5 +1,5 @@
 # W08 — History / dashboard (screen 13): the interview list, empty state, and soft-delete
-REPO: (this repo) · Depends: W02, N01 · Status: todo
+REPO: (this repo) · Depends: W02, N01 · Status: done
 Read first: STATE.md, REFERENCE.md, then this.
 **Model: claude-sonnet-4.6** — a cursor-paginated list with an empty state and a delete action over
 a settled endpoint. No state machine, no trust boundary the client owns.
@@ -61,13 +61,13 @@ Build the dashboard route `/dashboard` over `GET /me/interviews` (N01) and `DELE
   optimistically drop the deleted row before the `204`; invalidate and let the refetch remove it.
 
 ## Steps
-- [ ] **1. `useInterviewList()` + `DELETE` mutation** in `query.ts` (cursor pages, no delete retry).
-- [ ] **2. `interview-row.tsx`** — outcome, score, report link, delete affordance.
-- [ ] **3. `empty-state.tsx`** — `shrug` mascot + `--primary` setup CTA.
-- [ ] **4. `dashboard/page.tsx`** — list + load-more + empty branch; flat `--bg`; guard auth.
-- [ ] **5. `dashboard.*` copy** in both files.
-- [ ] **6. `page.test.tsx`** — rows+links, load-more via cursor, empty state, delete→refetch.
-- [ ] **7. Run the `## Verification` command.**
+- [x] **1. `useInterviewList()` + `DELETE` mutation** in `query.ts` (cursor pages, no delete retry).
+- [x] **2. `interview-row.tsx`** — outcome, score, report link, delete affordance.
+- [x] **3. `empty-state.tsx`** — `shrug` mascot + `--primary` setup CTA.
+- [x] **4. `dashboard/page.tsx`** — list + load-more + empty branch; flat `--bg`; guard auth.
+- [x] **5. `dashboard.*` copy** in both files.
+- [x] **6. `page.test.tsx`** — rows+links, load-more via cursor, empty state, delete→refetch.
+- [x] **7. Run the `## Verification` command.**
 
 ## Definition of done
 - `/dashboard` lists the user's interviews from `GET /me/interviews`, each row linking to its
@@ -86,4 +86,32 @@ shows the `shrug` mascot + setup CTA, and delete removes the row after the refet
 
 ## Notes
 
-(Empty until the task is done.)
+**Shipped.** `/dashboard` — 7 tests, `src/app/dashboard/page.test.tsx`. Ring: frontend 177, root 287.
+
+**`GET /me/interviews` has no score.** `backend/modules/interview/my-interviews.ts` returns
+`{id,state,mode,occupation,endedReason,createdAt,startedAt,endedAt}`. The step-2 "score" is not
+available; a row is **occupation + outcome + started-date**, and the score is one click away on
+the report. Logged in `STATE.md` → `## Open blockers` (owner Fatih, N01). `InterviewListItem` in
+`query.ts` is that shape verbatim — do not re-add `overallScore`.
+
+**Outcome copy.** `outcomeKey()` in `interview-row.tsx`: `endedReason ?? (state === 'evaluating'
+? 'evaluating' : 'inProgress')`. `dashboard.outcome.*` carries all six `EndedReason` values plus
+those two. A still-running or evaluating row links to `/interviews/:id` anyway — W07 renders the
+wait beat at that URL, no branch here.
+
+**Delete.** `apiDelete()` (new, `api.ts`) → `useDeleteInterview()`. Not retried (global
+`mutations.retry:false`), **not optimistic**: `onSuccess` invalidates the `['me','interviews']`
+prefix and the refetch removes the row. The infinite query is stored under
+`queryKeys.meInterviews()` = `['me','interviews',{cursor:null}]`, which that prefix covers.
+
+**`useInterviewList(enabled = true)`** — pass `!authLoading && user !== null`, same shape as
+`useProfile(enabled)`. Without it the list fires before `/me` resolves and eats a 401.
+
+**Styling.** `src/app/dashboard/dashboard.module.css`, shared by the page and both components.
+Flat `--bg`, `--shadow-hairline`, no gradient. W01's `ui-checks/tokens.test.ts` rejects raw hex
+and non-multiple-of-4 px — `#fff` and `padding: 8px 14px` both tripped it; use `var(--surface)`
+and 4-multiples.
+
+**For W09/W11:** `apiDelete` and the cursor-page pattern (`initialPageParam: null`,
+`getNextPageParam: (p) => p.nextCursor`) are reusable as-is. `useFormatter().dateTime` is the
+locale-safe date render — no `toLocaleDateString`.
