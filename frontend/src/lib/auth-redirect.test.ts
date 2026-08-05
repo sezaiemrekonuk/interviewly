@@ -3,9 +3,15 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_LANDING_PATH, safeReturnPath, signInPathFor } from './auth-redirect';
 
 describe('safeReturnPath', () => {
+  // The landing path is the authed home at `/`; a `/dashboard` route has never existed, and
+  // pointing here sent every sign-in to a 404.
+  it('falls back to the authed landing surface', () => {
+    expect(DEFAULT_LANDING_PATH).toBe('/');
+  });
+
   it('keeps a same-origin path', () => {
     expect(safeReturnPath('/interviews/abc')).toBe('/interviews/abc');
-    expect(safeReturnPath('/dashboard?tab=reports')).toBe('/dashboard?tab=reports');
+    expect(safeReturnPath('/interviews?tab=reports')).toBe('/interviews?tab=reports');
   });
 
   it('falls back when nothing was requested', () => {

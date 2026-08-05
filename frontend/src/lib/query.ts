@@ -6,8 +6,8 @@ import {
   useMutation,
   useQuery,
   useQueryClient,
-  type InfiniteData,
   type UseInfiniteQueryResult,
+  type InfiniteData,
   type UseMutationResult,
   type UseQueryResult,
 } from '@tanstack/react-query';
@@ -116,6 +116,59 @@ export function useSaveProfileCard(): UseMutationResult<
       return result.data as { profile: AccountProfile };
     },
     onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.meProfile() }),
+  });
+}
+
+/** One row of `GET /me/interviews` (N01 `my-interviews.ts`) — no cost or token figures. */
+export interface MyInterview {
+  id: string;
+  state: string;
+  mode: 'text' | 'voice';
+  occupation: string | null;
+  endedReason: string | null;
+  createdAt: string;
+  startedAt: string | null;
+  endedAt: string | null;
+}
+
+export interface MyInterviewsPage {
+  items: MyInterview[];
+  nextCursor: string | null;
+}
+
+/**
+ * W08 — cursor pages, never offset. One key for the whole list (`{cursor: null}`) because
+ * `useInfiniteQuery` holds the pages: a per-cursor key would make the delete invalidation
+ * chase every page it had ever fetched.
+ */
+export function useMyInterviews(
+  enabled = true,
+): UseInfiniteQueryResult<InfiniteData<MyInterviewsPage>, ApiError> {
+  return useInfiniteQuery({
+    queryKey: queryKeys.meInterviews(),
+    queryFn: ({ pageParam }) =>
+      fetchJson<MyInterviewsPage>(
+        pageParam ? `/me/interviews?cursor=${encodeURIComponent(pageParam)}` : '/me/interviews',
+      ),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
+    enabled,
+  });
+}
+
+/**
+ * W08 — soft delete. Not retried (W02 policy: a repeated DELETE is a second write) and not
+ * optimistic: the row goes on the refetch, so a refusal never resurrects a row the list
+ * already dropped.
+ */
+export function useDeleteInterview(): UseMutationResult<void, ApiError, string> {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const result = await apiDelete(`/interviews/${id}`);
+      if (!result.ok) throw new ApiError(result.code ?? 'UNKNOWN');
+    },
+    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.meInterviews() }),
   });
 }
 

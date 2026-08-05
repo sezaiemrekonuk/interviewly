@@ -1,16 +1,19 @@
-/* Room surface: flat --bg, hairline shadow only, no gradient, no mascot (ui §4.2). */
+/* Room surface: flat --bg, --shadow-hairline only, no gradient, no mascot, near-zero motion
+   (ui §4.2, DESIGN §5 room brief). The one authored motion moment is the question typing. */
 
 .room {
-  min-height: 100dvh;
-  background: var(--bg);
-  color: var(--text);
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding: 24px 16px 0;
   max-width: 880px;
+  min-height: 100dvh;
   margin: 0 auto;
+  padding: 24px 16px 0;
+  color: var(--text);
+  background: var(--bg);
 }
+
+/* --------------------------------------------------------------------- tiles */
 
 .tiles {
   display: grid;
@@ -20,15 +23,15 @@
 
 .tile {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  padding: 16px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-hairline);
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
 }
 
 /* The only use of --live in the app: the active speaker's ring and badge. An outline, not a
@@ -42,34 +45,124 @@
   position: absolute;
   top: 8px;
   right: 8px;
-  background: var(--live);
-  color: var(--surface);
-  border-radius: var(--radius-button);
-  font-size: 13px;
   padding: 4px 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--surface);
+  background: var(--live);
+  border-radius: var(--radius-button);
+}
+
+.tileAvatar {
+  border-radius: var(--radius-card);
+}
+
+.tileText {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+  min-width: 0;
+  text-align: center;
 }
 
 .tileName {
+  margin: 0;
   font-size: 16px;
   font-weight: 600;
 }
 
-.tileRole,
-.progress,
-.waiting,
-.transcriptEmpty {
-  font-size: 14px;
+.tileRole {
+  margin: 0;
+  font-size: 13px;
   color: var(--text-muted);
 }
 
+/* Active speaker is never colour-only (ui §4.4): the lit label rides with the ring and the
+   badge, so losing the hue loses nothing. */
+.tileNameLive,
+.tileRoleLive {
+  color: var(--live);
+}
+
+/* ---------------------------------------------------------- question + progress */
+
+.stage {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.progressRow {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.progress {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+/* Determinate track, not a ring: --accent because --primary is the CTA and --live is the
+   speaker state. Decorative — the label above carries the number. */
+.track {
+  height: 4px;
+  overflow: hidden;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-button);
+}
+
+.trackFill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: var(--radius-button);
+}
+
 .question {
+  min-height: 96px;
+  padding: 20px;
+  font-size: 20px;
+  line-height: 1.45;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-panel);
   box-shadow: var(--shadow-hairline);
-  padding: 20px;
-  font-size: 20px;
-  min-height: 96px;
+}
+
+/* The waiting beat is a composed state at the panel's own height, not a bare sentence:
+   two static skeleton lines where the question will land, plus the honest label. The
+   avatar's `thinking` state carries the rest. Nothing animates — room rule. */
+.questionWaiting {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  justify-content: center;
+}
+
+.waitingLines {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.waitingLine {
+  height: 12px;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-button);
+}
+
+.waitingLineShort {
+  width: 60%;
+}
+
+.waitingText {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-muted);
 }
 
 .srOnly {
@@ -77,99 +170,144 @@
   width: 1px;
   height: 1px;
   overflow: hidden;
-  clip: rect(0 0 0 0);
   white-space: nowrap;
+  clip: rect(0 0 0 0);
 }
 
-.composer {
-  position: sticky;
-  bottom: 0;
-  background: var(--bg);
-  padding: 12px 0 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.composerLabel {
-  font-size: 14px;
-  color: var(--text-muted);
-}
-
-.composerInput {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-input);
-  padding: 12px;
-  font: inherit;
-  font-size: 16px; /* < 16px makes iOS Safari zoom the room on focus */
-  resize: vertical;
-}
-
-.submit,
-.resume {
-  background: var(--primary);
-  color: var(--surface);
-  border: none;
-  border-radius: var(--radius-button);
-  padding: 12px 20px;
-  font-size: 16px;
-  cursor: pointer;
-  transition: opacity var(--duration-default) var(--easing-default);
-}
-
-.submit:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.error {
-  color: var(--danger);
-  font-size: 14px;
-}
+/* -------------------------------------------------------------------- paused */
 
 .paused {
   display: flex;
+  gap: 16px;
   align-items: center;
-  gap: 12px;
-  background: var(--surface-sunken);
-  border-radius: var(--radius-card);
+  justify-content: space-between;
   padding: 12px 16px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
 }
+
+.pausedText {
+  margin: 0;
+  font-size: 14px;
+}
+
+/* ---------------------------------------------------------------- transcript */
 
 .transcript {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
 
 .transcriptTitle {
+  margin: 0;
   font-size: 16px;
+  font-weight: 600;
+}
+
+.transcriptEmpty {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-muted);
 }
 
 .transcriptList {
-  list-style: none;
   display: flex;
   flex-direction: column;
   gap: 12px;
   padding: 0;
   margin: 0;
+  list-style: none;
 }
 
 .turn {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 16px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-hairline);
-  padding: 12px 16px;
+}
+
+.turnPart {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.turnSpeaker {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
 }
 
 .turnQuestion {
+  max-width: 70ch;
+  margin: 0;
   font-size: 14px;
   color: var(--text-muted);
 }
 
 .turnAnswer {
+  max-width: 70ch;
+  margin: 0;
   font-size: 16px;
+}
+
+/* ------------------------------------------------------------------ composer */
+
+/* `margin-top: auto` puts it at the foot of a short room; `sticky` keeps it there once the
+   transcript grows past the viewport. */
+.composer {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  margin-top: auto;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 0;
+  background: var(--bg);
+  /* logical, not the physical shorthand — the token lint reads a hairline edge out of it */
+  border-block-start: 1px solid var(--border);
+}
+
+.composerInput {
+  min-height: 96px;
+}
+
+.composerActions {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+/* Why the send button is off, said in words rather than left to a grey pill. */
+.composerHint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* --------------------------------------------------------------------- misc */
+
+.errorCard {
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-hairline);
+}
+
+.error {
+  max-width: 70ch;
+  margin: 0;
+  font-size: 14px;
+  color: var(--danger);
 }
 
 .skeleton {
@@ -177,16 +315,30 @@
   background: var(--bg);
 }
 
+/* 390px: the tiles stay side by side and go compact rather than stacking, so the question
+   and the composer are still above the fold on a phone. */
 @media (max-width: 480px) {
   .room {
     padding: 16px 12px 0;
   }
 
-  .tiles {
-    grid-template-columns: 1fr;
+  .tile {
+    gap: 4px;
+    padding: 12px;
+  }
+
+  /* max-* clamps the avatar box without fighting the inline width the component sets. */
+  .tileAvatar {
+    max-width: 48px;
+    max-height: 48px;
   }
 
   .question {
     font-size: 16px;
+  }
+
+  .composerActions {
+    flex-direction: column;
+    align-items: stretch;
   }
 }

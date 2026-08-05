@@ -1,14 +1,14 @@
 # Frontend — State
 
 Last updated: 2026-08-05
-Last session ended: **W08 done — `/dashboard` lists, paginates and soft-deletes.**
-`GET /me/interviews` carries **no score** (`my-interviews.ts` → id/state/mode/occupation/
-endedReason/createdAt/startedAt/endedAt), so a row is **occupation + outcome + date**; the score
-stays on the report — the task's "score summary" is an endpoint gap, logged in `## Open blockers`.
-Outcome key = `endedReason ?? (state==='evaluating' ? 'evaluating' : 'inProgress')`. Delete is
-**not** optimistic: `useDeleteInterview` invalidates the `['me','interviews']` prefix, the refetch
-drops the row. `useInterviewList(enabled)` mirrors `useProfile(enabled)` — gated on
-`useRequireAuth`. Ring: frontend 177, root 287.
+Last session ended: **W08 done — history lives on `/`, not `/dashboard`** (owner-directed; no
+`/dashboard` route exists). `home-switch.tsx` probes `GET /me` with plain `apiGet` (the
+`header-nav.tsx` pattern) and `React.lazy`s in `authed-home.tsx`, so the anonymous landing keeps
+its zero-React-Query budget (asserted in `src/app/page.test.tsx`). `/` is in the closed
+`ENTRY_ROUTES` → entry ground + `--shadow-soft`, **not** the task file's flat `--bg`. Delete is
+**not** optimistic (task file's Non-negotiables beat this file's old row title): invalidate
+`['me','interviews']`, row goes on the refetch. `useMyInterviews`/`useDeleteInterview` + `apiDelete`
+now live in `lib/query.ts`/`lib/api.ts` — W09/W11 reuse them. Ring: frontend 216.
 
 Previous: **W07 done — the demo path is closed** (land → … → room → **report**).
 `/interviews/:id` reads **two** endpoints (ADR-W08): `GET /interviews/:id` is thin
@@ -20,7 +20,7 @@ unaffected and its `queryKey` param sketch was dropped. `ReportPayload` is **sna
 fallback = `useReport(id, poll)` 5 s, off at `<ReportWait onTimeout>`'s 60 s ceiling.
 Ring: frontend 170, root 280.
 
-Previous: **W06 done.** `/interviews/:id/room` renders text mode off `['interview',id,'state']`
+Earlier: **W06 done.** `/interviews/:id/room` renders text mode off `['interview',id,'state']`
 only; SSE is a nudge. **Room-state was extended to make that possible (ADR-W06):** `persona.id`,
 `personas[]` (both tiles, each with `avatarSet`) and `transcript[]` ship from
 `backend/modules/interview/state.ts` — W09/W10 read them, do not re-derive. `<Avatar>` takes the
@@ -42,8 +42,8 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**W09 (`<- W06, V02`)** is next — pre-join device check, screen 10 (sonnet-tier). W11 is also
-eligible (`<- W02, N01, N02`, all `done`); § 4 order picks the lowest ID. W10 still waits on W09.
+**W09 (`<- W06, V02`)** is next — pre-join device check, screen 10 (see DESIGN §5 for the brief).
+W11 is also eligible (deps `done`); § 4 order picks the lowest ID. W10 still waits on W09.
 
 ## Environment
 
@@ -89,11 +89,11 @@ npx playwright test                               # smokes against `docker compo
 
 ## Open blockers / decisions for the user
 
-- **`GET /me/interviews` returns no score**, so W08's rows cannot show the "score summary" the
-  frontend spec's screen 13 asks for. `my-interviews.ts` deliberately withholds cost/token figures
-  (ADR-N02) but drops the score with them; the report's `overall_score` lives on `reports`, one
-  join away. W08 ships occupation + outcome + date and links to the report for the number.
-  **Owner: Fatih (admin ledger, N01).** Blocks no task — a display gap, not a broken screen.
+- **`GET /me/interviews` returns no score.** `backend/modules/interview/my-interviews.ts` ships
+  `state/mode/occupation/endedReason/{created,started,ended}At` only, so W08's rows show state +
+  date, not the "outcome and score" the frontend spec's screen 13 asks for. Adding
+  `reports.payload.overall_score` to that projection is N01/interview-core work, not a frontend
+  fix. **Owner: Fatih (admin ledger).** Blocks nothing; the row already links to the full report.
 
 - **`GET /interviews/:id` exists but is thin — resolved for W07, still a gap for the spec.** R01
   shipped `backend/modules/interview/get.ts` returning `{ interviewId, state, report }`, not the
@@ -129,7 +129,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | W05 | Setup (screen 9) + 390px mobile: listing textarea, chips, option cards, detected-summary edit, pre-questions/skip | | done | W02, I03, I04, I11 |
 | W06 | Interview room text mode (screen 11) + widgets + 390px: two tiles, banner, avatar state machine, typed animation, guarded submit, handover, report-wait | | done | W02, I03, I06, I07 |
 | W07 | Report + transcript (screen 12): report-wait (SSE + bounded poll) → render `ReportPayload` read-only | | done | W02, R01 |
-| W08 | History / dashboard (screen 13): list, Continue, optimistic Delete | | done | W02, N01 |
+| W08 | History (screen 13) as the signed-in `/`: list, Continue, confirm-then-Delete | | done | W02, N01 |
 | W09 | Pre-join device check (screen 10, voice): camera off-by-default, mic level bar, continue-in-text | | todo | W06, V02 |
 | W10 | Voice room surface (screen 11-voice): live ASR transcript, mic level, self-camera, amplitude avatar driver | | todo | W09, V02, V05 |
 | W11 | Admin list + stats (screen 14): tables + Recharts bound to `/admin/stats` as-returned | | todo | W02, N01, N02 |

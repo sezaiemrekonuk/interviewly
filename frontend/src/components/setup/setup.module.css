@@ -1,0 +1,53 @@
+/* The listing block — setup's centrepiece. Entry surface, so --shadow-soft is permitted;
+   the glow below is decoration and never stands in for the focus ring (ui §4.4). */
+
+.listing {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* At-rest glow: a static warm halo behind the input, present before focus and unaffected by
+   reduced motion because it never animates. The control keeps its own outline on focus. */
+.glow {
+  position: relative;
+}
+
+.glow::before {
+  position: absolute;
+  inset: -12px;
+  z-index: 0;
+  content: '';
+  background: radial-gradient(120% 130% at 50% 0%, var(--primary-soft) 0%, transparent 72%);
+  border-radius: var(--radius-panel);
+  pointer-events: none;
+}
+
+.glow > * {
+  position: relative;
+  z-index: 1;
+}
+
+.textarea {
+  min-height: 168px; /* ~7 rows at 16px — the listing is the screen's subject, not a slot */
+}
+
+/* The PDF is an alternative to the paste, so it is separated by a rule and a word, never
+   docked against the textarea. */
+.alt {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.rule {
+  height: 1px;
+  background: var(--border);
+  border: 0;
+}
+
+.error {
+  margin: 0;
+  font-size: 14px;
+  color: var(--danger);
+}

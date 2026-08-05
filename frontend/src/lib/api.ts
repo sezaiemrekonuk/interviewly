@@ -103,9 +103,9 @@ export function apiPatch<T>(path: string, body: unknown): Promise<ApiResult<T>> 
   });
 }
 
-/** `204` carries no body; `apiSend`'s tolerant parse leaves `data` null on success. */
-export function apiDelete(path: string): Promise<ApiResult<never>> {
-  return apiSend<never>(path, { method: 'DELETE' });
+/** `DELETE /interviews/:id` answers `204` with no body; `apiSend` already tolerates that. */
+export function apiDelete<T>(path: string): Promise<ApiResult<T>> {
+  return apiSend<T>(path, { method: 'DELETE' });
 }
 
 /** Multipart upload (`POST /uploads`) — no JSON content-type, the browser sets the boundary. */

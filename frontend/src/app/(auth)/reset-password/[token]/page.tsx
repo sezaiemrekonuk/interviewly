@@ -9,6 +9,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 import styles from '../../../../components/auth/auth.module.css';
+import { Button, Field, Input } from '../../../../components/ui';
 import { apiPost } from '../../../../lib/api';
 import { useErrorMessage } from '../../../../lib/use-error-message';
 
@@ -90,44 +91,35 @@ export default function ResetPasswordPage() {
       )}
 
       <form className={styles.form} onSubmit={handleSubmit(onSubmit)} noValidate>
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="password">
-            {t('newPasswordLabel')}
-          </label>
-          <input
-            id="password"
-            type="password"
-            autoComplete="new-password"
-            className={styles.input}
-            aria-invalid={errors.password ? 'true' : undefined}
-            {...register('password')}
-          />
-          <p className={styles.subtitle}>{t('passwordHint')}</p>
-          {errors.password?.message && (
-            <p className={styles.fieldError}>{fieldMessage(errors.password.message)}</p>
+        <Field
+          label={t('newPasswordLabel')}
+          id="password"
+          hint={t('passwordHint')}
+          error={errors.password?.message && fieldMessage(errors.password.message)}
+        >
+          {(control) => (
+            <Input {...control} type="password" autoComplete="new-password" {...register('password')} />
           )}
-        </div>
+        </Field>
 
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="confirmPassword">
-            {t('confirmPasswordLabel')}
-          </label>
-          <input
-            id="confirmPassword"
-            type="password"
-            autoComplete="new-password"
-            className={styles.input}
-            aria-invalid={errors.confirmPassword ? 'true' : undefined}
-            {...register('confirmPassword')}
-          />
-          {errors.confirmPassword?.message && (
-            <p className={styles.fieldError}>{fieldMessage(errors.confirmPassword.message)}</p>
+        <Field
+          label={t('confirmPasswordLabel')}
+          id="confirmPassword"
+          error={errors.confirmPassword?.message && fieldMessage(errors.confirmPassword.message)}
+        >
+          {(control) => (
+            <Input
+              {...control}
+              type="password"
+              autoComplete="new-password"
+              {...register('confirmPassword')}
+            />
           )}
-        </div>
+        </Field>
 
-        <button className={styles.submit} type="submit" disabled={isSubmitting}>
-          {isSubmitting ? t('submitting') : t('resetSubmit')}
-        </button>
+        <Button className={styles.submit} type="submit" size="lg" loading={isSubmitting}>
+          {t('resetSubmit')}
+        </Button>
       </form>
 
       <p className={styles.footer}>

@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 
 import styles from '../../../components/auth/auth.module.css';
+import { Button } from '../../../components/ui';
 import { apiPost } from '../../../lib/api';
 import { useErrorMessage } from '../../../lib/use-error-message';
 import { useRequireAuth } from '../../../lib/use-require-auth';
@@ -70,7 +71,7 @@ export default function VerifyEmailPage() {
         <h1 className={styles.title}>{t('verifyConfirmedTitle')}</h1>
         <p className={styles.subtitle}>{t('verifyConfirmedBody')}</p>
         <p className={styles.footer}>
-          <Link className={styles.footerLink} href="/dashboard">
+          <Link className={styles.footerLink} href="/">
             {t('goToDashboard')}
           </Link>
         </p>
@@ -91,17 +92,18 @@ export default function VerifyEmailPage() {
       )}
       {sent && <p className={styles.subtitle}>{t('resendSent')}</p>}
 
-      <button
+      <Button
         className={styles.submit}
-        type="button"
+        size="lg"
+        loading={busy}
+        disabled={remaining > 0}
         onClick={resend}
-        disabled={busy || remaining > 0}
       >
         {remaining > 0 ? t('resendIn', { seconds: remaining }) : t('resend')}
-      </button>
+      </Button>
 
       <p className={styles.footer}>
-        <Link className={styles.footerLink} href="/dashboard">
+        <Link className={styles.footerLink} href="/">
           {t('continueWithoutVerifying')}
         </Link>
       </p>

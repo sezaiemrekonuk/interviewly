@@ -21,8 +21,10 @@ describe('gradient route-list (ui AC-4a)', () => {
     );
   });
 
-  it('excludes room, report, dashboard and admin', () => {
-    for (const route of ['/interviews/[id]/room', '/interviews/[id]', '/dashboard', '/admin']) {
+  // `/dashboard` is absent by non-existence, not by exclusion: the authed landing lives on
+  // `/`, which is an entry route above. Asserting it here would pin a route that never was.
+  it('excludes room, report and admin', () => {
+    for (const route of ['/interviews/[id]/room', '/interviews/[id]', '/admin']) {
       expect(ENTRY_ROUTES).not.toContain(route);
     }
   });

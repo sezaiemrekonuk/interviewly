@@ -2,31 +2,20 @@
 
 .ground {
   min-height: 100vh;
-  padding: 24px 16px 64px;
+  padding: 0 0 64px;
   background: var(--gradient-entry);
   background-attachment: fixed;
 }
 
-.bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  max-width: 72rem;
-  margin: 0 auto;
-}
-
-.wordmark {
-  font-family: var(--font-heading), sans-serif;
-  font-size: 20px;
-  font-weight: 600;
-}
-
+/* Each band carries the same 72rem × 24px gutter the chrome header uses, so the wordmark,
+   the hero and the value props share one left edge at every width. */
 .hero {
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: 32px;
+  gap: 40px;
   align-items: center;
   max-width: 72rem;
+  padding: 0 24px;
   margin: 64px auto 0;
 }
 
@@ -55,6 +44,9 @@
 }
 
 .cta {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   padding: 16px 28px;
   font-size: 16px;
   font-weight: 600;
@@ -69,6 +61,12 @@
   opacity: 0.92;
 }
 
+.cta:focus-visible,
+.closingCta:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .secondary {
   font-size: 14px;
   color: var(--text-muted);
@@ -81,11 +79,121 @@
   color: var(--text-muted);
 }
 
+/* --------------------------------------------------------- hero right: mascot + vignette */
+
+.showcase {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: center;
+  width: 340px;
+}
+
+/*
+ * The surface's one authored motion moment: the mascot arrives, once, and nothing on this
+ * page moves again. `both` holds the from-state until the first frame so there is no flash
+ * of the finished position.
+ */
+.mascotSlot {
+  animation: arrive var(--duration-default) var(--easing-default) both;
+}
+
+@keyframes arrive {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mascotSlot {
+    animation: none;
+  }
+}
+
+/* The product in four lines: two personas ask, one answer, one score. */
+.preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-soft);
+}
+
+.previewLabel {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.turn {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.persona {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  align-self: flex-start;
+  padding: 4px 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface-sunken);
+  border-radius: var(--radius-button);
+}
+
+.personaDot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-button);
+}
+
+/* Informational only — the two interviewers are told apart by the dot and by their label. */
+.personaHr .personaDot {
+  background: var(--accent);
+}
+
+.personaTech .personaDot {
+  background: var(--text);
+}
+
+.question {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.answer {
+  padding-inline-start: 12px;
+  font-size: 14px;
+  color: var(--text-muted);
+  border-inline-start: 1px solid var(--border);
+}
+
+.scoreTag {
+  align-self: flex-start;
+  padding: 4px 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--primary-soft);
+  border-radius: var(--radius-button);
+}
+
+/* ------------------------------------------------------------------ value props */
+
+/* One tall lead promise beside two supporting ones — not three clones of one card. */
 .props {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: 1.4fr 1fr;
   gap: 16px;
   max-width: 72rem;
+  padding: 0 24px;
   margin: 64px auto 0;
   list-style: none;
 }
@@ -96,6 +204,53 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-soft);
+}
+
+.propLead {
+  display: flex;
+  flex-direction: column;
+  grid-row: span 2;
+  padding: 32px;
+}
+
+/*
+ * The two-row span buys height the two lines of copy cannot spend, so the remainder carries
+ * the promise instead of nothing: a redacted job listing, the thing you paste. Decorative and
+ * wordless on purpose — a pseudo-element, so there is no DOM, no copy and nothing for a screen
+ * reader to read. `flex: 1` means it absorbs exactly the leftover, whatever the right column
+ * makes the row.
+ */
+.propLead::after {
+  flex: 1;
+  min-height: 104px;
+  margin-top: 24px;
+  content: '';
+  background-color: var(--surface-sunken);
+  background-image:
+    linear-gradient(var(--border) 0 0),
+    linear-gradient(var(--border) 0 0),
+    linear-gradient(var(--border) 0 0),
+    linear-gradient(var(--primary-soft) 0 0);
+  background-repeat: no-repeat;
+  background-position: 16px 22%, 16px 40%, 16px 58%, 16px 84%;
+  background-size: 64% 8px, 84% 8px, 46% 8px, 30% 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+}
+
+.propLeadTitle {
+  font-family: var(--font-heading), sans-serif;
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+
+.propLeadBody {
+  max-width: 40ch;
+  margin-top: 12px;
+  font-size: 16px;
+  color: var(--text-muted);
 }
 
 .propTitle {
@@ -110,6 +265,47 @@
   color: var(--text-muted);
 }
 
+/* ------------------------------------------------------------------ closing band */
+
+.closing {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 72rem;
+  padding: 0 24px;
+  margin: 64px auto 0;
+}
+
+.closingLine {
+  max-width: 40ch;
+  font-family: var(--font-heading), sans-serif;
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.closingCta {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 12px 20px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-button);
+  box-shadow: var(--shadow-soft);
+  transition: background-color var(--duration-default) var(--easing-default);
+}
+
+.closingCta:hover {
+  background: var(--surface-sunken);
+}
+
 /* 390 px is the mobile reference width (ui §4.3). */
 @media (width <= 48rem) {
   .hero {
@@ -121,8 +317,35 @@
     font-size: 40px;
   }
 
+  .showcase {
+    width: 100%;
+  }
+
   .props {
     grid-template-columns: 1fr;
     margin-top: 32px;
+  }
+
+  .propLead {
+    grid-row: auto;
+    padding: 24px;
+  }
+
+  /* Single column: the card is already content-height, so the filler has no gap to fill
+     and would only cost a screen of scroll. */
+  .propLead::after {
+    display: none;
+  }
+
+  .propLeadTitle {
+    font-size: 20px;
+  }
+
+  .closing {
+    margin-top: 32px;
+  }
+
+  .closingLine {
+    font-size: 20px;
   }
 }

@@ -39,38 +39,49 @@ export function ReportView({
       ) : null}
 
       <header className={styles.header}>
-        <h1>{t('title')}</h1>
-        <p className={styles.score} data-testid="report-score">
+        <h1 className={styles.title}>{t('title')}</h1>
+        <div className={styles.score} data-testid="report-score">
           <span className={styles.scoreLabel}>{t('scoreLabel')}</span>
-          {t('scoreValue', { score: payload.overall_score })}
-        </p>
+          <p className={styles.scoreFigure}>
+            <span className={styles.scoreNumber}>{payload.overall_score}</span>
+            <span className={styles.scoreMax}>{t('scoreMax')}</span>
+          </p>
+        </div>
         <p className={styles.impression}>{payload.overall_impression}</p>
       </header>
 
-      <h2 className={styles.sectionTitle}>{t('roundsTitle')}</h2>
-      <ul className={styles.rounds}>
-        {payload.rounds.map((round, idx) => (
-          <li key={`${round.type}-${idx}`} className={styles.round}>
-            <h3>{t(round.type === 'hr' ? 'roundHr' : 'roundTech')}</h3>
-            <p className={styles.roundScore}>{t('scoreValue', { score: round.score })}</p>
-            <p>{round.summary}</p>
-            {round.note ? <p className={styles.note}>{round.note}</p> : null}
-          </li>
-        ))}
-      </ul>
+      <section className={styles.section}>
+        <h2 className={styles.sectionTitle}>{t('roundsTitle')}</h2>
+        <ul className={styles.rounds}>
+          {payload.rounds.map((round, idx) => (
+            <li key={`${round.type}-${idx}`} className={styles.round}>
+              <div className={styles.roundHead}>
+                <h3 className={styles.roundTitle}>
+                  {t(round.type === 'hr' ? 'roundHr' : 'roundTech')}
+                </h3>
+                <span className={styles.scoreChip}>{t('scoreValue', { score: round.score })}</span>
+              </div>
+              <p className={styles.body}>{round.summary}</p>
+              {round.note ? <p className={styles.note}>{round.note}</p> : null}
+            </li>
+          ))}
+        </ul>
+      </section>
 
+      {/* Tinted, not colour-coded walls: what worked reads success-tinted, what to work on
+          reads primary-tinted, and both stay ordinary body text. */}
       <div className={styles.narrative}>
-        <section>
+        <section className={`${styles.block} ${styles.blockStrengths}`}>
           <h2 className={styles.sectionTitle}>{t('strengths')}</h2>
-          <ul>
+          <ul className={styles.blockList}>
             {payload.strengths.map((item) => (
               <li key={item}>{item}</li>
             ))}
           </ul>
         </section>
-        <section>
+        <section className={`${styles.block} ${styles.blockImprovements}`}>
           <h2 className={styles.sectionTitle}>{t('improvements')}</h2>
-          <ul>
+          <ul className={styles.blockList}>
             {payload.improvements.map((item) => (
               <li key={item}>{item}</li>
             ))}
@@ -78,23 +89,27 @@ export function ReportView({
         </section>
       </div>
 
-      <h2 className={styles.sectionTitle}>{t('questionsTitle')}</h2>
-      <ul className={styles.questions} data-testid="report-questions">
-        {payload.questions
-          .filter((question) => questionText.has(question.question_id))
-          .map((question) => (
-            <li key={question.question_id} className={styles.question}>
-              <p className={styles.questionText}>{questionText.get(question.question_id)}</p>
-              <p className={styles.questionScore}>
-                {t('scoreValue', { score: question.score })}
-                <span className={styles.star}>
+      <section className={styles.section}>
+        <h2 className={styles.sectionTitle}>{t('questionsTitle')}</h2>
+        <ul className={styles.questions} data-testid="report-questions">
+          {payload.questions
+            .filter((question) => questionText.has(question.question_id))
+            .map((question) => (
+              <li key={question.question_id} className={styles.question}>
+                <div className={styles.questionHead}>
+                  <p className={styles.questionText}>{questionText.get(question.question_id)}</p>
+                  <span className={styles.scoreChip}>
+                    {t('scoreValue', { score: question.score })}
+                  </span>
+                </div>
+                <p className={styles.body}>{question.reason}</p>
+                <p className={styles.star}>
                   {t('star', { percent: Math.round(question.star_adherence * 100) })}
-                </span>
-              </p>
-              <p>{question.reason}</p>
-            </li>
-          ))}
-      </ul>
+                </p>
+              </li>
+            ))}
+        </ul>
+      </section>
     </section>
   );
 }

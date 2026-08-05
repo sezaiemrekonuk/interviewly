@@ -9,6 +9,7 @@ import { AnswerComposer } from '../../../../components/room/answer-composer';
 import { PersonaTiles } from '../../../../components/room/persona-tiles';
 import { QuestionPanel } from '../../../../components/room/question-panel';
 import { Transcript } from '../../../../components/room/transcript';
+import { Button } from '../../../../components/ui';
 import { routeForError } from '../../../../lib/error-routing';
 import { ApiError, useInterviewState, useResumeInterview, useSubmitAnswer } from '../../../../lib/query';
 import { resolveAvatarState, roomPhase } from '../../../../lib/room-avatar';
@@ -59,9 +60,11 @@ export default function InterviewRoomPage() {
   if (queryErrorCode) {
     return (
       <main className={styles.room}>
-        <p role="alert" className={styles.error}>
-          {errorMessage(queryErrorCode)}
-        </p>
+        <div className={styles.errorCard}>
+          <p role="alert" className={styles.error}>
+            {errorMessage(queryErrorCode)}
+          </p>
+        </div>
       </main>
     );
   }
@@ -75,6 +78,9 @@ export default function InterviewRoomPage() {
     submitting: submit.isPending,
   });
   const avatarState = resolveAvatarState(phase, room.persona?.avatarState ?? 'idle');
+  const progressPercent = room.targetQuestionCount
+    ? Math.round((Math.min(room.currentIndex, room.targetQuestionCount) / room.targetQuestionCount) * 100)
+    : 0;
 
   async function handleSubmit(transcript: string): Promise<boolean> {
     if (!room?.currentQuestion) return false;
@@ -111,39 +117,49 @@ export default function InterviewRoomPage() {
         <AvatarPreload sets={room.personas.map((persona) => persona.avatarSet)} />
       )}
 
-      <p className={styles.progress}>
-        {t('progress', {
-          index: Math.min(room.currentIndex, room.targetQuestionCount),
-          total: room.targetQuestionCount,
-        })}
-      </p>
+      <section className={styles.stage}>
+        <div className={styles.progressRow}>
+          <p className={styles.progress}>
+            {t('progress', {
+              index: Math.min(room.currentIndex, room.targetQuestionCount),
+              total: room.targetQuestionCount,
+            })}
+          </p>
+          {/* Decorative: the line above is the accessible truth (ui §4.4). */}
+          <div className={styles.track} aria-hidden="true">
+            <div className={styles.trackFill} style={{ width: `${progressPercent}%` }} />
+          </div>
+        </div>
 
-      {/* One question, one instance: the panel's typed state resets by remount, not by effect. */}
-      <QuestionPanel
-        key={room.currentQuestion?.id ?? 'waiting'}
-        question={room.currentQuestion}
-        onTyped={setTypedFor}
-      />
+        {/* One question, one instance: the panel's typed state resets by remount, not by effect. */}
+        <QuestionPanel
+          key={room.currentQuestion?.id ?? 'waiting'}
+          question={room.currentQuestion}
+          onTyped={setTypedFor}
+        />
+      </section>
 
       {room.state === 'paused' ? (
         <div className={styles.paused}>
-          <p>{t('paused')}</p>
-          <button
+          <p className={styles.pausedText}>{t('paused')}</p>
+          <Button
             type="button"
-            className={styles.resume}
+            variant="secondary"
             onClick={() => resume.mutate()}
-            disabled={resume.isPending}
+            loading={resume.isPending}
           >
             {t('resume')}
-          </button>
+          </Button>
         </div>
       ) : null}
 
+      <Transcript turns={room.transcript} />
+
+      {/* Last in the DOM as well as on screen: a sticky composer above the transcript would
+          pin itself to the middle of the page. */}
       {room.currentQuestion && room.state !== 'paused' ? (
         <AnswerComposer onSubmit={handleSubmit} pending={submit.isPending} error={submitError} />
       ) : null}
-
-      <Transcript turns={room.transcript} />
     </main>
   );
 }

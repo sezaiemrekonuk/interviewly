@@ -90,3 +90,15 @@ recovery, a text interview redirects without a prompt, and the track is released
 ## Notes
 
 (Empty until the task is done.)
+
+## Design
+
+Read `frontend/DESIGN.md` before writing CSS — §3 (composition patterns), §5 W09 brief, §6 (quality floor).
+Non-negotiables for this surface: **entry mode** — gradient ground (`ENTRY_ROUTES`), one centred
+`--surface` panel at `--radius-panel` + `--shadow-soft`, max-width 480px, padding 32/24.
+The **level meter fill is `--accent`** on a `--surface-sunken` track with `transition: none` — never
+`--live` (room-only), never `--primary` (reserved for the single Enter CTA). The meter is
+`aria-hidden`; a 14px `--text-muted` sibling line carries the "we can hear you" truth (never
+colour-or-motion-only). Denied/unavailable renders as a designed inline block (`--surface-sunken`
+bed, 1px `--danger`, problem + numbered recovery), not a raw error string. Mascot: none by default;
+`shrug` only inside the denied/unavailable block. One authored motion moment: the CTA enabling.

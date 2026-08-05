@@ -1,9 +1,11 @@
-import { act, screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor, type RenderResult } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Suspense } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { messages, renderWithProviders } from '../../../../test/render';
+
+import { passedSteps } from './session-steps';
 
 // One object, not a fresh one per call: `useRequireAuth` and the page both key effects on
 // the router identity, and a new object every render refetches `/me` forever.
@@ -67,20 +69,25 @@ function stubFetch(options: {
 
 // `params` is a promise the page unwraps with `use()`, so the first render suspends —
 // the act() wrapper is what lets React resume before any assertion runs.
-async function renderStep(step: '1' | '2' | '3') {
+async function renderStep(step: '1' | '2' | '3'): Promise<RenderResult> {
+  let result!: RenderResult;
   await act(async () => {
-    renderWithProviders(
+    result = renderWithProviders(
       <Suspense fallback={null}>
         <OnboardingStepPage params={Promise.resolve({ step })} />
       </Suspense>,
     );
   });
+  return result;
 }
 
 describe('onboarding step page', () => {
   beforeEach(() => {
     nav.push.mockReset();
     nav.replace.mockReset();
+    // The session ledger is module state (it has to survive the remount a step change
+    // causes), so each test starts as a cold page load would.
+    passedSteps.clear();
   });
 
   afterEach(() => {
@@ -111,7 +118,9 @@ describe('onboarding step page', () => {
     await user.type(await screen.findByLabelText(messages.onboarding.fullNameLabel), 'Ada');
     await user.click(screen.getByRole('button', { name: messages.onboarding.continueButton }));
 
-    expect(await screen.findByText(messages.errors.VALIDATION_ERROR)).toBeInTheDocument();
+    const banner = await screen.findByRole('alert');
+    expect(banner).toHaveTextContent(messages.onboarding.saveFailed);
+    expect(banner).toHaveTextContent(messages.errors.VALIDATION_ERROR);
     expect(screen.queryByText(/VALIDATION_ERROR/)).toBeNull();
     expect(nav.push).not.toHaveBeenCalled();
     expect(screen.getByLabelText(messages.onboarding.fullNameLabel)).toHaveValue('Ada');
@@ -129,6 +138,48 @@ describe('onboarding step page', () => {
 
     await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/interviews/new'));
     expect(calls.some((call) => call.url === '/api/me/profile/complete')).toBe(true);
+  });
+
+  // The bug this covers: `firstUnfilledStep` answers 2 for as long as education is empty,
+  // so re-deriving it on arrival at step 3 used to replace the user straight back to 2 —
+  // Skip could never advance, and step 2 was a dead end for anyone without a degree.
+  it('skips step 2 with an empty education card and stays on step 3', async () => {
+    stubFetch({ profile: { fullName: 'Ada' } });
+    const onStepTwo = await renderStep('2');
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: messages.onboarding.skipForNow }));
+    expect(nav.push).toHaveBeenCalledWith('/onboarding/3');
+
+    // What the push does in the browser: the segment remounts on the new param.
+    onStepTwo.unmount();
+    await renderStep('3');
+
+    expect(await screen.findByLabelText(messages.onboarding.interestsLabel)).toBeInTheDocument();
+    expect(nav.replace).not.toHaveBeenCalled();
+  });
+
+  // Continue on an untouched card is a Skip: `{ education: [] }` merges nothing, so it is
+  // never sent, and the visitor advances instead of bouncing.
+  it('treats Continue on an empty education card as a skip', async () => {
+    const calls = stubFetch({ profile: { fullName: 'Ada' } });
+    await renderStep('2');
+
+    const user = userEvent.setup();
+    await user.click(
+      await screen.findByRole('button', { name: messages.onboarding.continueButton }),
+    );
+
+    await waitFor(() => expect(nav.push).toHaveBeenCalledWith('/onboarding/3'));
+    expect(calls.some((call) => call.method === 'PATCH')).toBe(false);
+  });
+
+  it('resumes a cold deep-link to step 3 back to the first unfilled card', async () => {
+    stubFetch({ profile: { fullName: 'Ada' } });
+    await renderStep('3');
+
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/onboarding/2'));
+    expect(screen.queryByLabelText(messages.onboarding.interestsLabel)).toBeNull();
   });
 
   it('redirects an already-completed account off step 1', async () => {

@@ -15,6 +15,10 @@ export default getRequestConfig(async ({ requestLocale }) => {
   if (!locales.includes(locale)) notFound();
   return {
     locale,
+    // A global `now` is what `format.relativeTime` reads when no explicit one is passed;
+    // without it next-intl falls back to the environment clock and logs ENVIRONMENT_FALLBACK.
+    // Call sites that must keep ticking pair this with `useNow({ updateInterval })`.
+    now: new Date(),
     messages: (await import(`../messages/${locale}.json`)).default,
   };
 });

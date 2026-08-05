@@ -1,15 +1,16 @@
-/* Report surface: flat --bg, hairline shadow only, no gradient, no mascot (ui §4.2). */
+/* Report surface: flat --bg, --shadow-hairline only, no gradient, no mascot (ui §4.2).
+   A result surface, so the hierarchy does the work: 40 figure / 28 title / 20 section / 16 body. */
 
 .page {
-  min-height: 100dvh;
-  background: var(--bg);
-  color: var(--text);
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding: 24px 16px 32px;
+  /* The chrome shell already fills the viewport; a second 100dvh here just adds a scrollbar. */
   max-width: 880px;
   margin: 0 auto;
+  padding: 24px 16px 32px;
+  color: var(--text);
+  background: var(--bg);
 }
 
 .skeleton {
@@ -17,112 +18,230 @@
   background: var(--bg);
 }
 
-.wait,
-.waitTimedOut {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-panel);
-  box-shadow: var(--shadow-hairline);
-  padding: 32px 20px;
-  text-align: center;
-  font-size: 16px;
-}
+/* ---------------------------------------------------------------- wait state */
 
-.waitTimedOut {
-  color: var(--text-muted);
-}
-
-.report {
+/* Not a spinner: the panel holds the height the report will take, states honestly how long
+   it should be, and the 60s ceiling replaces it in place with a recovery. */
+.wait {
   display: flex;
   flex-direction: column;
   gap: 16px;
-}
-
-.header {
+  padding: 32px 20px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-panel);
   box-shadow: var(--shadow-hairline);
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
 }
 
-.header h1 {
-  font-size: 20px;
-}
-
-/* --accent keys section headers only; it is never a CTA on this screen. */
-.sectionTitle {
-  font-size: 16px;
-  color: var(--accent);
-}
-
-.earlyEnd {
-  background: var(--primary-soft);
-  border-radius: var(--radius-card);
-  padding: 12px 16px;
-  font-size: 14px;
-}
-
-.score {
-  font-size: 40px;
-  font-weight: 600;
-  display: flex;
-  flex-direction: column;
-}
-
-.scoreLabel {
-  font-size: 14px;
-  font-weight: 400;
-  color: var(--text-muted);
-}
-
-.impression {
-  font-size: 16px;
-}
-
-.rounds,
-.questions,
-.narrative ul {
-  list-style: none;
-  padding: 0;
-  margin: 0;
+.waitLines {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
-.round,
-.question {
+.waitLine {
+  height: 12px;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-button);
+}
+
+.waitLineShort {
+  width: 48%;
+}
+
+.waitTitle {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.waitHint {
+  max-width: 65ch;
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.waitTimedOut {
+  padding: 20px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+}
+
+.waitTimedOutText {
+  max-width: 65ch;
+  margin: 0;
+  font-size: 16px;
+}
+
+/* -------------------------------------------------------------------- report */
+
+.report {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px 20px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius-card);
+  border-radius: var(--radius-panel);
   box-shadow: var(--shadow-hairline);
-  padding: 12px 16px;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-heading), sans-serif;
+  font-size: 28px;
+  font-weight: 600;
+}
+
+/* The score is a designed figure, not a number in a sentence: big Outfit numeral, its
+   denominator beside it, the label above, and the verdict directly under. */
+.score {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
-.round h3 {
-  font-size: 16px;
-}
-
-.roundScore,
-.questionScore {
-  font-size: 14px;
-  font-weight: 600;
-  display: flex;
-  gap: 8px;
-}
-
-.star,
-.note {
-  font-weight: 400;
+.scoreLabel {
+  font-size: 13px;
+  font-weight: 500;
   color: var(--text-muted);
 }
+
+.scoreFigure {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  margin: 0;
+}
+
+/* Size and weight carry the figure, not colour: the report has no primary action, so it has
+   no orange (DESIGN §2 rule 1). */
+.scoreNumber {
+  font-family: var(--font-heading), sans-serif;
+  font-size: 40px;
+  font-weight: 600;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.scoreMax {
+  font-size: 20px;
+  color: var(--text-muted);
+}
+
+.impression {
+  max-width: 65ch;
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.4;
+}
+
+.earlyEnd {
+  max-width: 70ch;
+  margin: 0;
+  padding: 12px 16px;
+  font-size: 14px;
+  background: var(--primary-soft);
+  border-radius: var(--radius-card);
+}
+
+/* -------------------------------------------------------------------- sections */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* --accent keys the section, never a button on this screen (ui §4.2 hard rule 2). */
+.sectionTitle {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin: 0;
+  font-family: var(--font-heading), sans-serif;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.sectionTitle::before {
+  align-self: stretch;
+  width: 3px;
+  content: '';
+  background: var(--accent);
+  border-radius: var(--radius-button);
+}
+
+.rounds,
+.questions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.round,
+.question {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-hairline);
+}
+
+.roundHead {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.roundTitle {
+  margin: 0;
+  font-family: var(--font-heading), sans-serif;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+/* A score reads as a fact, so it sits in a sunken chip rather than borrowing a status hue. */
+.scoreChip {
+  flex: none;
+  padding: 4px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-button);
+  font-variant-numeric: tabular-nums;
+}
+
+.body {
+  max-width: 70ch;
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.note {
+  max-width: 70ch;
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+/* ------------------------------------------------------------------ narrative */
 
 .narrative {
   display: grid;
@@ -130,18 +249,69 @@
   gap: 16px;
 }
 
-.narrative li {
-  font-size: 14px;
+/* Two tints, not two walls of colour: what went well is success-tinted, what to work on is
+   primary-tinted. Both stay legible body text on a near-white bed. */
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+}
+
+.blockStrengths {
+  background: color-mix(in srgb, var(--success) 10%, var(--surface));
+  border-color: color-mix(in srgb, var(--success) 28%, var(--border));
+}
+
+.blockImprovements {
+  background: var(--primary-soft);
+  border-color: color-mix(in srgb, var(--primary) 16%, var(--border));
+}
+
+.blockList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 0 0 20px;
+  margin: 0;
+}
+
+.blockList li {
+  max-width: 70ch;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+/* ------------------------------------------------------------------ questions */
+
+.questionHead {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  justify-content: space-between;
 }
 
 .questionText {
-  font-size: 14px;
+  max-width: 70ch;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.star {
+  font-size: 13px;
+  font-weight: 500;
   color: var(--text-muted);
 }
 
 .error {
-  color: var(--danger);
+  max-width: 70ch;
+  margin: 0;
   font-size: 14px;
+  color: var(--danger);
 }
 
 @media (max-width: 480px) {
@@ -151,5 +321,9 @@
 
   .narrative {
     grid-template-columns: 1fr;
+  }
+
+  .impression {
+    font-size: 16px;
   }
 }

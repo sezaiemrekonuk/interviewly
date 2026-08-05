@@ -16,10 +16,10 @@ describe('routeForError', () => {
     expect(r.replace).toHaveBeenCalledWith('/sign-in?returnPath=%2Finterviews%2Fabc%2Froom');
   });
 
-  it('sends FORBIDDEN to the dashboard, but renders in place on an admin route', () => {
+  it('sends FORBIDDEN to the landing page, but renders in place on an admin route', () => {
     const r = router();
-    expect(routeForError('FORBIDDEN', r, { pathname: '/dashboard' })).toBe('navigated');
-    expect(r.replace).toHaveBeenCalledWith('/dashboard');
+    expect(routeForError('FORBIDDEN', r, { pathname: '/interviews/abc' })).toBe('navigated');
+    expect(r.replace).toHaveBeenCalledWith('/');
 
     const admin = router();
     expect(routeForError('FORBIDDEN', admin, { pathname: '/admin' })).toBe('not-authorized');
@@ -54,7 +54,7 @@ describe('routeForError', () => {
   it('navigates nowhere for inline-only and unknown codes', () => {
     for (const code of ['RATE_LIMITED', 'DAILY_INTERVIEW_LIMIT', 'EMAIL_RESEND_COOLDOWN', 'NOPE']) {
       const r = router();
-      expect(routeForError(code, r, { pathname: '/dashboard' })).toBe('inline');
+      expect(routeForError(code, r, { pathname: '/' })).toBe('inline');
       expect(r.replace).not.toHaveBeenCalled();
       expect(r.push).not.toHaveBeenCalled();
     }

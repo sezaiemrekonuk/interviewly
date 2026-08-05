@@ -6,6 +6,7 @@ import { useState } from 'react';
 
 import { Mascot } from '../../../components/mascot';
 import { ListingUpload } from '../../../components/setup/listing-upload';
+import { Button, Field, Input, Select } from '../../../components/ui';
 import { useCreateInterview } from '../../../lib/query';
 import { useErrorMessage } from '../../../lib/use-error-message';
 import { useRequireAuth } from '../../../lib/use-require-auth';
@@ -27,6 +28,7 @@ export default function InterviewSetupPage() {
   const { user, loading } = useRequireAuth();
   const router = useRouter();
   const t = useTranslations('setup');
+  const tc = useTranslations('common');
   const errorMessage = useErrorMessage();
   const create = useCreateInterview();
 
@@ -76,70 +78,86 @@ export default function InterviewSetupPage() {
   return (
     <main className={styles.ground}>
       <section className={styles.card}>
-        <Mascot pose="point" size={96} alt="" className={styles.mascot} />
-        <h1 className={styles.title}>{t('title')}</h1>
+        <header className={styles.intro}>
+          <div className={styles.introText}>
+            <h1 className={styles.title}>{t('title')}</h1>
+            <p className={styles.subtitle}>{t('subtitle')}</p>
+          </div>
+          <Mascot pose="point" size={96} alt="" className={styles.mascot} />
+        </header>
 
         <form onSubmit={handleSubmit} className={styles.form}>
-          {/* Client-side only. `POST /interviews` takes neither field: I03 classifies the
-              occupation from the listing text and reads the language off the session. */}
-          <label className={styles.field}>
-            {t('occupation')}
-            <input
-              value={occupation}
-              onChange={(e) => setOccupation(e.target.value)}
-              disabled={create.isPending}
-            />
-          </label>
-
-          <label className={styles.field}>
-            {t('language')}
-            <select
-              value={language}
-              onChange={(e) => setLanguage(e.target.value)}
-              disabled={create.isPending}
-            >
-              <option value="en">EN</option>
-              <option value="tr">TR</option>
-            </select>
-          </label>
-
-          <p className={styles.pending}>{t('choiceNotSent')}</p>
-
-          <label className={styles.field}>
-            {t('mode')}
-            <select
-              value={mode}
-              onChange={(e) => setMode(e.target.value as 'text' | 'voice')}
-              disabled={create.isPending}
-            >
-              <option value="text">{t('modeText')}</option>
-              <option value="voice">{t('modeVoice')}</option>
-            </select>
-          </label>
-
-          <label className={styles.field}>
-            {t('roundShape')}
-            <select
-              value={targetQuestionCount}
-              onChange={(e) => setTargetQuestionCount(Number(e.target.value))}
-              disabled={create.isPending}
-            >
-              {ROUND_SHAPES.map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <p className={styles.split}>{t('roundSplit', { hrCount, techCount })}</p>
-          <p className={styles.pending}>{t('detectedSummaryPending')}</p>
-
+          {/* The listing is the subject of this screen, so it leads the form. */}
           <ListingUpload
             onJobText={setJobText}
             onUploaded={setUploadId}
             disabled={create.isPending}
           />
+
+          {/* Client-side only. `POST /interviews` takes neither field: I03 classifies the
+              occupation from the listing text and reads the language off the session. */}
+          <div className={styles.row}>
+            <Field label={t('occupation')}>
+              {(control) => (
+                <Input
+                  {...control}
+                  value={occupation}
+                  onChange={(e) => setOccupation(e.target.value)}
+                  disabled={create.isPending}
+                />
+              )}
+            </Field>
+
+            <Field label={t('language')}>
+              {(control) => (
+                <Select
+                  {...control}
+                  value={language}
+                  onChange={(e) => setLanguage(e.target.value)}
+                  disabled={create.isPending}
+                >
+                  <option value="en">{tc('localeEnglish')}</option>
+                  <option value="tr">{tc('localeTurkish')}</option>
+                </Select>
+              )}
+            </Field>
+          </div>
+
+          <p className={styles.note}>{t('choiceNotSent')}</p>
+
+          <div className={styles.row}>
+            <Field label={t('mode')}>
+              {(control) => (
+                <Select
+                  {...control}
+                  value={mode}
+                  onChange={(e) => setMode(e.target.value as 'text' | 'voice')}
+                  disabled={create.isPending}
+                >
+                  <option value="text">{t('modeText')}</option>
+                  <option value="voice">{t('modeVoice')}</option>
+                </Select>
+              )}
+            </Field>
+
+            {/* The split is the hint on the control that decides it, not a loose line. */}
+            <Field label={t('roundShape')} hint={t('roundSplit', { hrCount, techCount })}>
+              {(control) => (
+                <Select
+                  {...control}
+                  value={targetQuestionCount}
+                  onChange={(e) => setTargetQuestionCount(Number(e.target.value))}
+                  disabled={create.isPending}
+                >
+                  {ROUND_SHAPES.map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+          </div>
 
           {formError ? (
             <p role="alert" className={styles.error}>
@@ -147,9 +165,9 @@ export default function InterviewSetupPage() {
             </p>
           ) : null}
 
-          <button type="submit" className={styles.cta} disabled={create.isPending}>
-            {create.isPending ? t('starting') : t('start')}
-          </button>
+          <Button type="submit" size="lg" className={styles.cta} loading={create.isPending}>
+            {t('start')}
+          </Button>
         </form>
       </section>
     </main>

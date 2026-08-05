@@ -55,7 +55,7 @@ describe('register page', () => {
   });
 
   // A06 (K8.7): a brand-new account has never completed onboarding, so registration always
-  // lands there — the dashboard is unreachable from here by construction.
+  // lands there — the landing surface is unreachable from here by construction.
   it('sends the credentials to the register endpoint and lands on onboarding', async () => {
     const fetchSpy = stubFetch(201, {
       user: { id: 'u1', email: 'someone@example.com', onboardingCompletedAt: null, interviewCount: 0 },
