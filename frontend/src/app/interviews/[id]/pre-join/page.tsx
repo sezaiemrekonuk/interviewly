@@ -87,7 +87,6 @@ export default function PreJoinPage() {
               className={styles.cta}
               size="lg"
               disabled={mic !== 'granted'}
-              aria-disabled={mic !== 'granted'}
               onClick={() => router.push(room)}
             >
               {t('enter')}
