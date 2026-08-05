@@ -316,5 +316,57 @@
     "CV_TRUNCATED": "Özgeçmişin uzun olduğu için kısaltıldı.",
     "PROFILE_DOB_STRIPPED": "Doğum tarihi profilden kaldırıldı.",
     "UNKNOWN": "Beklenmedik bir hata oluştu. Tekrar dene."
+  },
+  "admin": {
+    "title": "Yönetim",
+    "subtitle": "Platformdaki tüm mülakatlar, silinenler dahil.",
+    "loading": "Yönetim paneli yükleniyor",
+    "forbidden": {
+      "title": "Yetkin yok",
+      "body": "Bu alan yalnızca platform yöneticilerine açık.",
+      "back": "Panele dön"
+    },
+    "interviews": {
+      "heading": "Tüm mülakatlar",
+      "caption": "Platformdaki tüm mülakatlar, en yeniden eskiye, silinen satırlar dahil.",
+      "empty": "Henüz mülakat yok.",
+      "loadMore": "Daha fazla yükle",
+      "deletedPill": "Silindi",
+      "livePill": "Aktif",
+      "noOccupation": "Belirlenmedi",
+      "col": {
+        "occupation": "Meslek",
+        "state": "Durum",
+        "tokens": "Token",
+        "cost": "Maliyet (USD)",
+        "flags": "Durum etiketi"
+      }
+    },
+    "stats": {
+      "heading": "Platform istatistikleri",
+      "averageDuration": "Ortalama süre",
+      "totalTokens": "Toplam token",
+      "duration": "{minutes}dk {seconds}sn",
+      "splitTitle": "Sonuç dağılımı",
+      "occupationTitle": "Mesleğe göre mülakat",
+      "occupationCount": "Mülakat",
+      "weakestTitle": "En zayıf sorular",
+      "weakestScore": "Puan",
+      "empty": "Henüz veri yok",
+      "completed": "Tamamlandı",
+      "cutShort": "Yarıda kesildi",
+      "unfinished": "Bitmedi"
+    },
+    "state": {
+      "created": "Oluşturuldu",
+      "profiling": "Profil çıkarılıyor",
+      "hr_round": "İK turu",
+      "tech_round": "Teknik tur",
+      "paused": "Duraklatıldı",
+      "evaluating": "Değerlendiriliyor",
+      "completed": "Tamamlandı",
+      "abandoned": "Yarıda bırakıldı",
+      "failed": "Başarısız"
+    }
   }
 }

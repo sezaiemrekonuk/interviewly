@@ -309,5 +309,57 @@
       "evaluating": "Being evaluated",
       "inProgress": "In progress"
     }
+  },
+  "admin": {
+    "title": "Admin",
+    "subtitle": "Every interview on the platform, deleted ones included.",
+    "loading": "Loading the admin panel",
+    "forbidden": {
+      "title": "Not authorized",
+      "body": "This area is limited to platform administrators.",
+      "back": "Back to dashboard"
+    },
+    "interviews": {
+      "heading": "All interviews",
+      "caption": "Every interview on the platform, newest first, deleted rows included.",
+      "empty": "No interviews yet.",
+      "loadMore": "Load more",
+      "deletedPill": "Deleted",
+      "livePill": "Live",
+      "noOccupation": "Not detected",
+      "col": {
+        "occupation": "Occupation",
+        "state": "State",
+        "tokens": "Tokens",
+        "cost": "Cost (USD)",
+        "flags": "Flags"
+      }
+    },
+    "stats": {
+      "heading": "Platform stats",
+      "averageDuration": "Average duration",
+      "totalTokens": "Total tokens",
+      "duration": "{minutes}m {seconds}s",
+      "splitTitle": "Outcome split",
+      "occupationTitle": "Interviews per occupation",
+      "occupationCount": "Interviews",
+      "weakestTitle": "Weakest questions",
+      "weakestScore": "Score",
+      "empty": "No data yet",
+      "completed": "Completed",
+      "cutShort": "Cut short",
+      "unfinished": "Unfinished"
+    },
+    "state": {
+      "created": "Created",
+      "profiling": "Profiling",
+      "hr_round": "HR round",
+      "tech_round": "Technical round",
+      "paused": "Paused",
+      "evaluating": "Being evaluated",
+      "completed": "Completed",
+      "abandoned": "Abandoned",
+      "failed": "Failed"
+    }
   }
 }
