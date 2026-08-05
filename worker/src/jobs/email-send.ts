@@ -30,9 +30,10 @@ function transport(): Transporter {
   return (transporter ??= createTransport({
     host: config.SMTP_HOST,
     port: config.SMTP_PORT,
-    // Mailpit and most dev sinks speak plaintext on 1025; STARTTLS is negotiated when the
-    // server offers it. `secure: true` here would fail against the sink the whole demo runs on.
-    secure: false,
+    // Port decides the TLS mode. 465 is implicit TLS (Resend's documented port, and the
+    // convention everywhere else); 1025/587 open plaintext and negotiate STARTTLS when the
+    // server offers it — a hardcoded `true` would fail against the Mailpit sink dev runs on.
+    secure: config.SMTP_PORT === 465,
     auth: config.SMTP_USER ? { user: config.SMTP_USER, pass: config.SMTP_PASSWORD } : undefined,
   }));
 }
