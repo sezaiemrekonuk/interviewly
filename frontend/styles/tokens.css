@@ -11,7 +11,7 @@
   --live:            #12873D;   /* darkened from spec #16A34A — see F01 Notes: contrast floor */
   --success:         #10B981;
   --warning:         #F59E0B;
-  --danger:          #EF4444;
+  --danger:          #C62A20;   /* darkened from spec #EF4444 — 3.6:1 on --bg failed the AA floor */
   --border:          #E8E4DE;
 
   /* Entry-surface gradient (ui §4.2 — closed route list) */

@@ -88,7 +88,7 @@ describe('verify-email pending page', () => {
     const link = await screen.findByRole('link', {
       name: messages.auth.continueWithoutVerifying,
     });
-    expect(link).toHaveAttribute('href', '/dashboard');
+    expect(link).toHaveAttribute('href', '/');
   });
 
   it('says nothing is pending when the account is already verified', async () => {

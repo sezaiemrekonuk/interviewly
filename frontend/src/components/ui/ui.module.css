@@ -1,0 +1,343 @@
+/*
+ * Shared styles for the ui/ primitives. Every colour, radius, shadow and duration comes
+ * from the token registry (ui §4.2); type sizes are on the 13/14/16/20/28/40/56 scale and
+ * every spacing value is a multiple of 4.
+ */
+
+/* ------------------------------------------------------------------ button */
+
+.button {
+  position: relative;
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-body), sans-serif;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+  cursor: pointer;
+  border: 1px solid transparent;
+  border-radius: var(--radius-button);
+  transition:
+    background-color var(--duration-default) var(--easing-default),
+    border-color var(--duration-default) var(--easing-default),
+    filter var(--duration-default) var(--easing-default),
+    transform var(--duration-default) var(--easing-default);
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* Busy is not disabled-looking: the label stays legible, the spinner carries the state. */
+.button[aria-busy='true'] {
+  cursor: progress;
+  opacity: 1;
+}
+
+.md {
+  min-height: 44px;
+  padding: 8px 20px;
+  font-size: 14px;
+}
+
+.lg {
+  min-height: 48px;
+  padding: 12px 28px;
+  font-size: 16px;
+}
+
+.primary {
+  color: var(--surface);
+  background: var(--primary);
+}
+
+.primary:hover:not(:disabled) {
+  filter: brightness(0.9);
+}
+
+.primary:active:not(:disabled) {
+  filter: brightness(0.84);
+  transform: translateY(1px);
+}
+
+.secondary {
+  color: var(--text);
+  background: var(--surface);
+  border-color: var(--border);
+  box-shadow: var(--shadow-hairline);
+}
+
+.secondary:hover:not(:disabled) {
+  background: var(--surface-sunken);
+}
+
+.secondary:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.ghost {
+  color: var(--primary);
+  background: transparent;
+}
+
+.ghost:hover:not(:disabled) {
+  background: var(--primary-soft);
+}
+
+.ghost:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+/* Hidden rather than unmounted so the button keeps its resting width while loading. */
+.buttonLabel {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.button[aria-busy='true'] .buttonLabel {
+  visibility: hidden;
+}
+
+.spinner {
+  position: absolute;
+  inset: 0;
+  width: 16px;
+  height: 16px;
+  margin: auto;
+  border: 2px solid currentcolor;
+  border-right-color: transparent;
+  border-radius: var(--radius-button);
+  animation: spin 700ms linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* The spinner is the only feedback that work is in flight, so it slows rather than stops. */
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 2400ms;
+  }
+}
+
+/* ------------------------------------------------------------------- field */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.required {
+  margin-left: 4px;
+  color: var(--primary);
+}
+
+.hint {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* --danger is darkened in the registry to clear AA at this size (5.3:1 on --bg). */
+.error {
+  font-size: 13px;
+  color: var(--danger);
+}
+
+/* ------------------------------------------------------- input / textarea */
+
+.control {
+  width: 100%;
+  padding: 12px 16px;
+  font: inherit;
+  font-size: 16px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-input);
+  transition:
+    border-color var(--duration-default) var(--easing-default),
+    background-color var(--duration-default) var(--easing-default);
+}
+
+.control::placeholder {
+  color: var(--text-muted);
+}
+
+.control:hover:not(:disabled):not(:focus) {
+  border-color: var(--text-muted);
+}
+
+.control:focus-visible {
+  border-color: var(--primary);
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.control:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+  background: var(--surface-sunken);
+}
+
+.control[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
+.textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+/* ------------------------------------------------------------------ select */
+
+.selectWrap {
+  position: relative;
+  display: block;
+}
+
+/* Native <select>, never a JS dropdown — the platform already ships the hard parts. */
+.select {
+  appearance: none;
+  padding-right: 44px;
+}
+
+.chevron {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 16px;
+  width: 16px;
+  height: 16px;
+  margin-block: auto;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+/* -------------------------------------------------------------- file input */
+
+.fileTarget {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  padding: 16px;
+  background: var(--surface-sunken);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-input);
+  transition:
+    border-color var(--duration-default) var(--easing-default),
+    background-color var(--duration-default) var(--easing-default);
+}
+
+/* The real <input type=file> is the only focusable child, so :focus-within is the ring. */
+.fileTarget:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Invalid is excluded so the --danger border survives the pointer passing over it. */
+.fileTarget:hover:not(.fileDisabled):not(.fileInvalid) {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+}
+
+.fileDisabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* Matches .control[aria-invalid] — the border carries it, the field's error line says why. */
+.fileInvalid {
+  border-color: var(--danger);
+}
+
+.fileLabel {
+  display: flex;
+  flex: 1;
+  gap: 16px;
+  align-items: center;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.fileDisabled .fileLabel {
+  cursor: not-allowed;
+}
+
+/* Visually hidden, still focusable and still reachable by the label click. */
+.fileInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.fileGlyph {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  color: var(--primary);
+}
+
+.fileText {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.fileAction {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.fileName {
+  overflow: hidden;
+  font-size: 13px;
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fileClear {
+  flex: none;
+  padding: 4px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-button);
+  transition: color var(--duration-default) var(--easing-default);
+}
+
+.fileClear:hover {
+  color: var(--text);
+}
+
+.fileClear:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

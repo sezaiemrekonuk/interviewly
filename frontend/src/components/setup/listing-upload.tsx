@@ -3,12 +3,17 @@
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 
+import { Field, FileInput, Textarea } from '../ui';
 import { apiUpload } from '../../lib/api';
 import { useErrorMessage } from '../../lib/use-error-message';
 
-// I11: kind=listing, magic-byte/size checked server-side — client only filters accept types.
-const ACCEPT = 'application/pdf';
+import styles from './setup.module.css';
 
+/**
+ * The listing is the setup screen's subject: a labelled textarea in its own glowing block,
+ * with the PDF offered underneath as a clearly separate alternative — never docked against
+ * the input as a bare "Choose File".
+ */
 export function ListingUpload({
   onUploaded,
   onJobText,
@@ -24,9 +29,14 @@ export function ListingUpload({
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleFile(file: File) {
-    setUploading(true);
+  async function handleFile(file: File | null) {
     setError(null);
+    if (!file) {
+      onUploaded(null);
+      return;
+    }
+    setUploading(true);
+    // I11: kind=listing, magic-byte/size checked server-side — the client never parses the PDF.
     const result = await apiUpload<{ uploadId: string }>('listing', file);
     setUploading(false);
     if (!result.ok) {
@@ -37,27 +47,45 @@ export function ListingUpload({
     onUploaded(result.data!.uploadId);
   }
 
+  const locked = uploading || disabled;
+
   return (
-    <div>
-      <textarea
-        aria-label={t('listingPaste')}
-        style={{ font: 'inherit' }}
-        onChange={(e) => onJobText(e.target.value)}
-        disabled={uploading || disabled}
-      />
-      <input
-        type="file"
-        accept={ACCEPT}
-        aria-label={t('listingUpload')}
-        disabled={uploading || disabled}
-        onChange={(e) => {
-          const input = e.currentTarget;
-          const file = input.files?.[0];
-          input.value = '';
-          if (file) void handleFile(file);
-        }}
-      />
-      {error ? <p role="alert">{error}</p> : null}
+    <div className={styles.listing}>
+      <div className={styles.glow}>
+        {/* No `required` asterisk: the hint says what the text is for and the submit guard
+            names the miss (`LISTING_REQUIRED`) where the failure happens. */}
+        <Field label={t('listingPaste')} hint={t('listingHint')}>
+          {(control) => (
+            <Textarea
+              {...control}
+              className={styles.textarea}
+              rows={7}
+              disabled={locked}
+              onChange={(event) => onJobText(event.target.value)}
+            />
+          )}
+        </Field>
+      </div>
+
+      <div className={styles.alt}>
+        <hr className={styles.rule} />
+        <Field id="listing-pdf" label={t('listingUpload')} hint={t('listingUploadHint')}>
+          {(control) => (
+            <FileInput
+              id={control.id}
+              aria-describedby={control['aria-describedby']}
+              disabled={locked}
+              invalid={error !== null}
+              onFile={handleFile}
+            />
+          )}
+        </Field>
+        {error ? (
+          <p role="alert" className={styles.error}>
+            {error}
+          </p>
+        ) : null}
+      </div>
     </div>
   );
 }

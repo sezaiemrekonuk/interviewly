@@ -1,10 +1,10 @@
-/* ui §4.2 — same gradient ground as the (auth) group; onboarding is still pre-app-shell. */
+/* DESIGN §3.1 — same gradient ground as the (auth) group; onboarding is still pre-app-shell. */
 .ground {
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 100vh;
-  padding: 2rem 1rem;
+  padding: 32px 16px;
   background: var(--gradient-entry);
   background-attachment: fixed;
 }

@@ -4,8 +4,8 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { use, useEffect, useState } from 'react';
 
-import authStyles from '../../../../components/auth/auth.module.css';
 import { Mascot } from '../../../../components/mascot';
+import { Button, Field, FileInput, Input, Textarea } from '../../../../components/ui';
 import { apiPost, apiUpload } from '../../../../lib/api';
 import {
   useProfile,
@@ -17,6 +17,7 @@ import { useErrorMessage } from '../../../../lib/use-error-message';
 import { useRequireAuth } from '../../../../lib/use-require-auth';
 
 import styles from './onboarding.module.css';
+import { passedSteps } from './session-steps';
 
 const STEP_POSE = { 1: 'point', 2: 'think', 3: 'cheer' } as const;
 
@@ -43,6 +44,13 @@ function firstUnfilledStep(profile: AccountProfile): 1 | 2 | 3 | null {
   if (!profile.education || profile.education.length === 0) return 2;
   if (!profile.hobbies?.length && !profile.interestsText) return 3;
   return null;
+}
+
+/** Nothing to merge: no value, and no row that carries one. A save here is a no-op PATCH. */
+function isEmptyCard(card: ProfileCard): boolean {
+  return Object.values(card.fields).every((value) =>
+    Array.isArray(value) ? value.length === 0 : !value,
+  );
 }
 
 export default function OnboardingStepPage({ params }: { params: Promise<{ step: string }> }) {
@@ -77,6 +85,12 @@ export default function OnboardingStepPage({ params }: { params: Promise<{ step:
       ? profile.education.map((row) => ({ ...row, graduationYear: String(row.graduationYear) }))
       : [EMPTY_ROW]);
 
+  // Where the server says this account should resume — and whether that is still binding.
+  // It is a deep-link guard: once the visitor has explicitly left that card behind in this
+  // session, re-deriving it must not drag them back, or Skip can never advance at all.
+  const resumeStep = data ? firstUnfilledStep(data.profile) : null;
+  const mustResume = resumeStep !== null && resumeStep < step && !passedSteps.has(resumeStep);
+
   function editEducation(update: (rows: EducationDraft[]) => EducationDraft[]) {
     setDraft((current) => ({ ...current, education: update(current.education ?? education) }));
   }
@@ -90,11 +104,8 @@ export default function OnboardingStepPage({ params }: { params: Promise<{ step:
       return;
     }
 
-    // Deep-linking straight to a later step is only honoured once the earlier ones are
-    // actually filled — the server, not the URL, decides where resume lands.
-    const resumeStep = firstUnfilledStep(data.profile);
-    if (resumeStep !== null && resumeStep < step) router.replace(`/onboarding/${resumeStep}`);
-  }, [data, step, router]);
+    if (mustResume) router.replace(`/onboarding/${resumeStep}`);
+  }, [data, mustResume, resumeStep, router]);
 
   async function uploadCv(file: File) {
     setCvUploading(true);
@@ -133,10 +144,25 @@ export default function OnboardingStepPage({ params }: { params: Promise<{ step:
     router.replace('/interviews/new');
   }
 
+  /** Leave this card behind for the rest of the session, then move on. */
+  function advance() {
+    passedSteps.add(step);
+    router.push(`/onboarding/${step + 1}`);
+  }
+
   async function saveAndContinue() {
     setSaveError(null);
+    const card = cardFor();
+
+    // An untouched card is a Skip with extra steps: PATCHing `{ education: [] }` saves
+    // nothing and only gives the request a way to fail.
+    if (isEmptyCard(card)) {
+      await skip();
+      return;
+    }
+
     try {
-      await saveCard.mutateAsync(cardFor());
+      await saveCard.mutateAsync(card);
     } catch (err) {
       // A refused save keeps the draft on screen and does not advance (screen table).
       setSaveError(err instanceof Error ? err.message : 'UNKNOWN');
@@ -146,7 +172,7 @@ export default function OnboardingStepPage({ params }: { params: Promise<{ step:
       await complete();
       return;
     }
-    router.push(`/onboarding/${step + 1}`);
+    advance();
   }
 
   async function skip() {
@@ -154,171 +180,183 @@ export default function OnboardingStepPage({ params }: { params: Promise<{ step:
       await complete();
       return;
     }
-    router.push(`/onboarding/${step + 1}`);
+    advance();
   }
 
   // A redirect from the effect above is a navigation, not a render: a completed account or
   // a too-far deep-link must never flash the card on its way out.
-  const resumeStep = data ? firstUnfilledStep(data.profile) : null;
-  const leaving = Boolean(data?.onboardingCompletedAt) || (resumeStep !== null && resumeStep < step);
+  const leaving = Boolean(data?.onboardingCompletedAt) || mustResume;
   if (authLoading || isPending || !data || leaving) return null;
 
   return (
-    <section className={authStyles.card}>
-      <Mascot pose={STEP_POSE[step]} size={96} className={styles.mascot} />
+    <section className={styles.card}>
+      <div className={styles.mascotSlot}>
+        <Mascot pose={STEP_POSE[step]} size={112} />
+      </div>
       <p className={styles.progress}>{t('progress', { step, total: 3 })}</p>
-      <h1 className={authStyles.title}>{t(`step${step}Title`)}</h1>
-      <p className={authStyles.subtitle}>{t(`step${step}Subtitle`)}</p>
+      <h1 className={styles.title}>{t(`step${step}Title`)}</h1>
+      <p className={styles.subtitle}>{t(`step${step}Subtitle`)}</p>
 
       {step === 1 && (
-        <div className={authStyles.form}>
-          <div className={authStyles.field}>
-            <label className={authStyles.label} htmlFor="fullName">
-              {t('fullNameLabel')}
-            </label>
-            <input
-              id="fullName"
-              className={authStyles.input}
-              value={fullName}
-              onChange={(event) => setDraft((d) => ({ ...d, fullName: event.target.value }))}
-            />
-          </div>
-          <div className={authStyles.field}>
-            <label className={authStyles.label} htmlFor="jobTitle">
-              {t('jobTitleLabel')}
-            </label>
-            <input
-              id="jobTitle"
-              className={authStyles.input}
-              value={jobTitle}
-              onChange={(event) => setDraft((d) => ({ ...d, jobTitle: event.target.value }))}
-            />
-          </div>
+        <div className={styles.form}>
+          <Field label={t('fullNameLabel')} id="fullName">
+            {(control) => (
+              <Input
+                {...control}
+                autoComplete="name"
+                value={fullName}
+                onChange={(event) => setDraft((d) => ({ ...d, fullName: event.target.value }))}
+              />
+            )}
+          </Field>
+          <Field label={t('jobTitleLabel')} id="jobTitle">
+            {(control) => (
+              <Input
+                {...control}
+                autoComplete="organization-title"
+                value={jobTitle}
+                onChange={(event) => setDraft((d) => ({ ...d, jobTitle: event.target.value }))}
+              />
+            )}
+          </Field>
           {/* K8.7 non-negotiable: say what we do with the date of birth we collect. Not
               collected on this minimal build — see task Notes. */}
         </div>
       )}
 
       {step === 2 && (
-        <div className={authStyles.form}>
+        <div className={styles.form}>
           {education.map((row, index) => (
             <div key={index} className={styles.educationRow}>
-              <input
-                className={authStyles.input}
-                placeholder={t('schoolLabel')}
-                value={row.school}
-                onChange={(event) =>
-                  editEducation((rows) =>
-                    rows.map((r, i) => (i === index ? { ...r, school: event.target.value } : r)),
-                  )
-                }
-              />
-              <input
-                className={authStyles.input}
-                placeholder={t('degreeLabel')}
-                value={row.degree}
-                onChange={(event) =>
-                  editEducation((rows) =>
-                    rows.map((r, i) => (i === index ? { ...r, degree: event.target.value } : r)),
-                  )
-                }
-              />
-              <input
-                className={authStyles.input}
-                placeholder={t('fieldLabel')}
-                value={row.field}
-                onChange={(event) =>
-                  editEducation((rows) =>
-                    rows.map((r, i) => (i === index ? { ...r, field: event.target.value } : r)),
-                  )
-                }
-              />
-              <input
-                className={authStyles.input}
-                placeholder={t('graduationYearLabel')}
-                value={row.graduationYear}
-                onChange={(event) =>
-                  editEducation((rows) =>
-                    rows.map((r, i) =>
-                      i === index ? { ...r, graduationYear: event.target.value } : r,
-                    ),
-                  )
-                }
-              />
+              <Field label={t('schoolLabel')}>
+                {(control) => (
+                  <Input
+                    {...control}
+                    value={row.school}
+                    onChange={(event) =>
+                      editEducation((rows) =>
+                        rows.map((r, i) =>
+                          i === index ? { ...r, school: event.target.value } : r,
+                        ),
+                      )
+                    }
+                  />
+                )}
+              </Field>
+              <Field label={t('degreeLabel')}>
+                {(control) => (
+                  <Input
+                    {...control}
+                    value={row.degree}
+                    onChange={(event) =>
+                      editEducation((rows) =>
+                        rows.map((r, i) =>
+                          i === index ? { ...r, degree: event.target.value } : r,
+                        ),
+                      )
+                    }
+                  />
+                )}
+              </Field>
+              <Field label={t('fieldLabel')}>
+                {(control) => (
+                  <Input
+                    {...control}
+                    value={row.field}
+                    onChange={(event) =>
+                      editEducation((rows) =>
+                        rows.map((r, i) => (i === index ? { ...r, field: event.target.value } : r)),
+                      )
+                    }
+                  />
+                )}
+              </Field>
+              <Field label={t('graduationYearLabel')}>
+                {(control) => (
+                  <Input
+                    {...control}
+                    inputMode="numeric"
+                    value={row.graduationYear}
+                    onChange={(event) =>
+                      editEducation((rows) =>
+                        rows.map((r, i) =>
+                          i === index ? { ...r, graduationYear: event.target.value } : r,
+                        ),
+                      )
+                    }
+                  />
+                )}
+              </Field>
             </div>
           ))}
           {education.length < 5 && (
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="lg"
               className={styles.addRow}
               onClick={() => editEducation((rows) => [...rows, EMPTY_ROW])}
             >
               {t('addEducationRow')}
-            </button>
+            </Button>
           )}
 
           {/* A06's `kind='cv'` upload — optional, and stored on the user row rather than in
               `users.profile`, so it never travels through the step-2 PATCH body. */}
-          <div className={authStyles.field}>
-            <label className={authStyles.label} htmlFor="cvFile">
-              {t('cvLabel')}
-            </label>
-            <input
-              id="cvFile"
-              type="file"
-              accept="application/pdf"
-              disabled={cvUploading}
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) void uploadCv(file);
-              }}
-            />
-            {cvUploading && <p className={styles.progress}>{t('cvUploading')}</p>}
-            {cvUploadId && !cvUploading && <p className={styles.progress}>{t('cvUploaded')}</p>}
-            {cvError && <p className={authStyles.fieldError}>{errorMessage(cvError)}</p>}
-          </div>
+          <Field
+            label={t('cvLabel')}
+            id="cvFile"
+            hint={cvUploading ? t('cvUploading') : cvUploadId ? t('cvUploaded') : undefined}
+            error={cvError ? `${t('cvFailed')} ${errorMessage(cvError)}` : undefined}
+          >
+            {({ id, 'aria-describedby': describedBy }) => (
+              <FileInput
+                id={id}
+                aria-describedby={describedBy}
+                accept="application/pdf"
+                disabled={cvUploading}
+                invalid={Boolean(cvError)}
+                onFile={(file) => {
+                  if (file) void uploadCv(file);
+                  else setUploadedCvId(null);
+                }}
+              />
+            )}
+          </Field>
         </div>
       )}
 
       {step === 3 && (
-        <div className={authStyles.form}>
-          <div className={authStyles.field}>
-            <label className={authStyles.label} htmlFor="interestsText">
-              {t('interestsLabel')}
-            </label>
-            <textarea
-              id="interestsText"
-              className={authStyles.input}
-              value={interestsText}
-              onChange={(event) => setDraft((d) => ({ ...d, interestsText: event.target.value }))}
-            />
-          </div>
+        <div className={styles.form}>
+          <Field label={t('interestsLabel')} id="interestsText">
+            {(control) => (
+              <Textarea
+                {...control}
+                value={interestsText}
+                onChange={(event) => setDraft((d) => ({ ...d, interestsText: event.target.value }))}
+              />
+            )}
+          </Field>
         </div>
       )}
 
-      {saveError && <p className={authStyles.fieldError}>{errorMessage(saveError)}</p>}
+      {saveError && (
+        <p className={styles.banner} role="alert">
+          {t('saveFailed')} {errorMessage(saveError)}
+        </p>
+      )}
 
       <div className={styles.actions}>
         {step > 1 && (
-          <button
-            type="button"
-            className={styles.backButton}
-            onClick={() => router.push(`/onboarding/${step - 1}`)}
-          >
+          <Button variant="ghost" size="lg" onClick={() => router.push(`/onboarding/${step - 1}`)}>
             {t('back')}
-          </button>
+          </Button>
         )}
-        <button type="button" className={styles.skipButton} onClick={skip}>
+        <Button variant="ghost" size="lg" className={styles.skip} onClick={skip}>
           {t('skipForNow')}
-        </button>
-        <button
-          type="button"
-          className={authStyles.submit}
-          disabled={saveCard.isPending}
-          onClick={saveAndContinue}
-        >
+        </Button>
+        <Button size="lg" loading={saveCard.isPending} onClick={saveAndContinue}>
           {step === 3 ? t('finish') : t('continueButton')}
-        </button>
+        </Button>
       </div>
     </section>
   );

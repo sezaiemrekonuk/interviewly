@@ -1,5 +1,5 @@
 import type { MascotPose } from '@interviewly/types';
-import { screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { messages, renderWithIntl } from '../test/render';
@@ -51,4 +51,61 @@ describe('<Mascot>', () => {
     const { container } = renderWithIntl(<Mascot pose="shrug" alt="" />);
     expect(container.querySelector('img')).toHaveAttribute('alt', '');
   });
+});
+
+/**
+ * The seeded WebPs are 34-byte 1×1 placeholders — they *load*, so `onError` alone never
+ * fires and every slot paints a stretched empty block. The width check is what catches it.
+ */
+describe('<Mascot> fallback (ui §4.2.1 graceful degradation)', () => {
+  function decode(img: HTMLImageElement, naturalWidth: number) {
+    Object.defineProperty(img, 'naturalWidth', { value: naturalWidth, configurable: true });
+    fireEvent.load(img);
+  }
+
+  it('draws the inline character when the key resolves to a placeholder', () => {
+    const { container } = renderWithIntl(<Mascot pose="wave" alt="waving" />);
+    decode(container.querySelector('img')!, 1);
+
+    expect(container.querySelector('img')).toBeNull();
+    expect(screen.getByRole('img', { name: 'waving' })).toHaveAttribute(
+      'data-mascot-pose',
+      'wave',
+    );
+  });
+
+  it('draws the inline character when the image errors outright', () => {
+    const { container } = renderWithIntl(<Mascot pose="think" />);
+    fireEvent.error(container.querySelector('img')!);
+
+    expect(screen.getByTestId('mascot-drawing')).toHaveAccessibleName(messages.mascot.think);
+  });
+
+  it('keeps the image once real artwork decodes', () => {
+    const { container } = renderWithIntl(<Mascot pose="cheer" alt="cheering" />);
+    decode(container.querySelector('img')!, 320);
+
+    expect(container.querySelector('img')).toHaveAttribute('src', mascotUrl('cheer'));
+    expect(screen.queryByTestId('mascot-drawing')).not.toBeInTheDocument();
+  });
+
+  it('keeps the drawn fallback decorative when alt is empty', () => {
+    const { container } = renderWithIntl(<Mascot pose="shrug" alt="" size={160} />);
+    decode(container.querySelector('img')!, 1);
+
+    const svg = screen.getByTestId('mascot-drawing');
+    expect(svg).toHaveAttribute('aria-hidden', 'true');
+    // Same box as the image it replaced — a decorative fallback must not shift the layout.
+    expect(svg).toHaveAttribute('width', '160');
+    expect(svg).toHaveAttribute('height', '160');
+    expect(container.querySelector('img')).toBeNull();
+  });
+
+  for (const pose of POSES) {
+    it(`draws a ${pose} variant`, () => {
+      const { container } = renderWithIntl(<Mascot pose={pose} alt="" />);
+      decode(container.querySelector('img')!, 1);
+      expect(screen.getByTestId('mascot-drawing')).toHaveAttribute('data-mascot-pose', pose);
+    });
+  }
 });

@@ -109,3 +109,15 @@ server advance, reconnect re-sync, and mic release on unmount.
 ## Notes
 
 (Empty until the task is done.)
+
+## Design
+
+Read `frontend/DESIGN.md` before writing CSS — §3 (composition patterns), §5 W10 brief, §6 (quality floor).
+Non-negotiables for this surface: **room mode** — flat `--bg`, `--shadow-hairline` only, no gradient,
+no mascot, near-zero motion. Reuse `room.module.css`; add controls, not a second stylesheet.
+`--live` on exactly one tile or none, always paired with the lit name/role label. Voice controls are
+a sticky bottom bar mirroring `.composer`: ≥44px icon buttons, mic level as an `--accent` fill on a
+`--surface-sunken` track, session status as a **text** chip (never a coloured dot alone). Session-lost
+banner carries the surface's single `--primary` (the Reconnect button). Transcript pane is
+`aria-live="polite"` and scrolls in its own container. One authored motion moment: the `--live`
+ring crossfading between tiles — static under `prefers-reduced-motion`.

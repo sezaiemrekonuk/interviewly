@@ -69,7 +69,7 @@ describe('sign-in page', () => {
     expect((fetchSpy.mock.calls[0] as unknown as [string])[0]).toBe('/api/auth/login');
   });
 
-  it('lands a returning user on the dashboard', async () => {
+  it('lands a returning user on the authed home at /', async () => {
     stubFetch(200, {
       user: {
         id: 'u1',
@@ -82,7 +82,7 @@ describe('sign-in page', () => {
 
     await fillAndSubmit('someone@example.com', 'correct-horse');
 
-    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/dashboard'));
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/'));
   });
 
   // A02 redirects the two K8 refusals to `/sign-in?error=<CODE>`; the browser arrives with
@@ -119,7 +119,7 @@ describe('sign-in page', () => {
 
       await fillAndSubmit('someone@example.com', 'correct-horse');
 
-      await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/dashboard'));
+      await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/'));
     },
   );
 

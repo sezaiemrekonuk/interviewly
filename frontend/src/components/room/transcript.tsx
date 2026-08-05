@@ -24,8 +24,18 @@ export function Transcript({ turns }: { turns: TranscriptTurn[] }) {
         <ol className={styles.transcriptList}>
           {turns.map((turn) => (
             <li key={turn.questionId} className={styles.turn}>
-              <p className={styles.turnQuestion}>{turn.question}</p>
-              <p className={styles.turnAnswer}>{turn.answer}</p>
+              {/* Speaker-labelled: who asked, then who answered. Room-state carries no
+                  timestamps, so none are shown rather than invented. */}
+              <div className={styles.turnPart}>
+                <p className={styles.turnSpeaker}>
+                  {turn.roundType === 'hr' ? t('roleHr') : t('roleTech')}
+                </p>
+                <p className={styles.turnQuestion}>{turn.question}</p>
+              </div>
+              <div className={styles.turnPart}>
+                <p className={styles.turnSpeaker}>{t('speakerYou')}</p>
+                <p className={styles.turnAnswer}>{turn.answer}</p>
+              </div>
             </li>
           ))}
         </ol>

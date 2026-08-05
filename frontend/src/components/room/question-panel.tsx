@@ -55,11 +55,21 @@ export function QuestionPanel({
   }, [id, text, onTyped]);
 
   if (!question) {
-    // `currentQuestion: null` inside a live round is the waiting beat, not a blank panel.
+    // `currentQuestion: null` inside a live round is the waiting beat, not a blank panel and
+    // not a bare sentence: the panel keeps its height and shows where the question will land.
+    // Static — the room's one authored motion moment is the typing below.
     return (
-      <p className={styles.waiting} data-testid="question-waiting">
-        {t('waiting')}
-      </p>
+      <div
+        className={`${styles.question} ${styles.questionWaiting}`}
+        data-testid="question-waiting"
+        aria-live="polite"
+      >
+        <div className={styles.waitingLines} aria-hidden="true">
+          <span className={styles.waitingLine} />
+          <span className={`${styles.waitingLine} ${styles.waitingLineShort}`} />
+        </div>
+        <p className={styles.waitingText}>{t('waiting')}</p>
+      </div>
     );
   }
 

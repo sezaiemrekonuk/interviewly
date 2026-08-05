@@ -194,18 +194,15 @@ describe('interview setup page (W05)', () => {
     expect(screen.getByText('3 HR + 5 technical questions')).toBeInTheDocument();
   });
 
-  it('marks the detected summary as pending, not populated', async () => {
+  it('claims no detected summary at all — the response carries none', async () => {
     stubFetch();
     const user = userEvent.setup();
     await renderSetup();
 
-    expect(screen.getByText(messages.setup.detectedSummaryPending)).toBeInTheDocument();
-
-    // The occupation the user types is never echoed back as a *detected* one: `POST
-    // /interviews` returns no occupation, so nothing may claim to have detected it.
+    // I03 returns `{ interviewId, hrCount, techCount }` and nothing else, so the screen shows
+    // no detected-summary affordance — not even a placeholder for one. The occupation the
+    // user types is never echoed back as a *detected* value either.
     await user.type(screen.getByLabelText(messages.setup.occupation), 'Data Scientist');
-    for (const node of screen.queryAllByText(/detected/i)) {
-      expect(node).not.toHaveTextContent('Data Scientist');
-    }
+    expect(screen.queryAllByText(/detected/i)).toHaveLength(0);
   });
 });

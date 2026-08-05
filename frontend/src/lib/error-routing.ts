@@ -40,7 +40,7 @@ export function routeForError(
       return 'navigated';
 
     case 'FORBIDDEN':
-      // An admin route renders not-authorized in place: bouncing to /dashboard would tell
+      // An admin route renders not-authorized in place: bouncing to the landing page would tell
       // a non-admin that the route exists and that they were bounced off it.
       if (ctx.pathname.startsWith('/admin')) return 'not-authorized';
       router.replace(DEFAULT_LANDING_PATH);

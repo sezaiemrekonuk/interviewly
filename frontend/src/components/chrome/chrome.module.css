@@ -1,0 +1,109 @@
+/*
+ * App chrome. The header is transparent over whatever ground the route already paints —
+ * gradient on entry surfaces, flat --bg elsewhere — so it never introduces a second
+ * background or a seam. Not sticky: nothing here is worth pinning over a live page.
+ */
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 72rem;
+  padding: 24px;
+  margin: 0 auto;
+}
+
+.wordmark {
+  font-family: var(--font-heading), sans-serif;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
+  border-radius: var(--radius-input);
+}
+
+.wordmark:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.nav {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.navLink {
+  padding: 4px 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  border-radius: var(--radius-button);
+  transition: color var(--duration-default) var(--easing-default);
+}
+
+.navLink:hover {
+  color: var(--primary);
+}
+
+.navLink:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------------ footer */
+
+.footer {
+  width: 100%;
+  max-width: 72rem;
+  padding: 0 24px;
+  margin: 64px auto 0;
+}
+
+/* The rule sits on the inner line, not the padded box, so it starts on the same left edge
+   as the wordmark above it. */
+.line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: baseline;
+  padding: 32px 0;
+  font-size: 13px;
+  color: var(--text-muted);
+  border-block-start: 1px solid var(--border);
+}
+
+.footerMark {
+  font-family: var(--font-heading), sans-serif;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* --------------------------------------------------------- route shells */
+
+/*
+ * The setup route paints `--gradient-entry` on its own <main> with
+ * `background-attachment: fixed`. Repeating it here with the same attachment keeps the two
+ * boxes sampling the *viewport*, so the chrome sits on one continuous ground with no seam.
+ */
+.entryShell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: var(--gradient-entry);
+  background-attachment: fixed;
+}
+
+/* Flat `--bg` shell for the non-entry surfaces the chrome wraps (ui §4.2, closed list). */
+.flatShell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: var(--bg);
+}
+
+.shellBody {
+  flex: 1;
+}

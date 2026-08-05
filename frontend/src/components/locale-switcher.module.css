@@ -1,0 +1,42 @@
+/* A quiet segmented pill, not two native buttons. Token values only (ui §4.2). */
+
+.track {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-button);
+  box-shadow: var(--shadow-hairline);
+}
+
+.segment {
+  padding: 4px 12px;
+  font-family: var(--font-body), sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-button);
+  transition:
+    color var(--duration-default) var(--easing-default),
+    background-color var(--duration-default) var(--easing-default);
+}
+
+.segment:hover {
+  color: var(--text);
+}
+
+.segment:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* The lit segment is a raised surface on the sunken track — never colour alone. */
+.segmentActive {
+  color: var(--text);
+  cursor: default;
+  background: var(--surface);
+  box-shadow: var(--shadow-hairline);
+}

@@ -1,8 +1,8 @@
 import { act, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { MockEventSource, installEventSourceMock } from '../../../test/event-source-mock';
-import { messages, renderWithProviders } from '../../../test/render';
+import { MockEventSource, installEventSourceMock } from '../../../../test/event-source-mock';
+import { messages, renderWithProviders } from '../../../../test/render';
 
 const nav = vi.hoisted(() => ({
   push: vi.fn(),

@@ -1,0 +1,334 @@
+# Interviewly — design system and execution principles
+
+Canonical. If a screen and this document disagree, this document is the defect report.
+Sources: `.agents/specs/2026-07-29-ui.md` (the spec), `frontend/styles/tokens.css` (the shipped
+values — this document quotes **shipped**, not spec, values), and the surfaces already built
+under `frontend/src/app` and `frontend/src/components`.
+
+Enforced mechanically by `frontend/src/ui-checks/{tokens,contrast,grounds,assets}.test.ts`.
+Passing those tests is the floor, not the standard.
+
+---
+
+## 1. Identity
+
+**A warm coach studio.** Interviewly is a calm, warm, face-first practice room: deep navy voice
+on warm cream, never black on white; one unmistakable burnt orange that means *do this now* and
+means nothing else; generous air on the entry path so a nervous user is not crowded; a
+hand-drawn-feeling mascot that appears on entry surfaces only and disappears the moment the
+work starts. Inside the room the design gets out of the way — flat ground, hairline edges,
+near-zero motion, the interviewer's face is the subject. In admin the same family tightens into
+a dense, confident data surface. One family, two densities, no third voice.
+
+**No UI library, no Tailwind.** Three reasons, all binding:
+
+- **CSP is `default-src 'self'`** (`infra` §7.4). No external CSS, font or icon origin exists to
+  load a component library's assets from, and fonts are self-hosted through `next/font/local`.
+- **The token lint** (`ui-checks/tokens.test.ts`) scans every `.ts/.tsx/.css` under `src/` for
+  stray hex, off-scale `font-size`, non-multiple-of-4 spacing and raw `box-shadow`. A library's
+  compiled utility classes or a Tailwind arbitrary value defeats the check that keeps the system
+  honest.
+- **Single home for values.** Every value lives once, in `styles/tokens.css`, and is read by name.
+  A theme mapping layer would give each value two homes and one of them would drift.
+
+Styling layer: **CSS Modules**, one `*.module.css` per surface family, importing nothing but
+token names. This settles ui spec Open question 1.
+
+---
+
+## 2. Tokens
+
+`frontend/styles/tokens.css` is the only place a value is written. Everything else reads
+`var(--name)`. A literal outside that file is a defect, not a shortcut.
+
+### Colour (shipped)
+
+| Token | Shipped | Spec | Role |
+|---|---|---|---|
+| `--bg` | `#FBF9F6` | same | warm off-white page ground — never pure white |
+| `--surface` | `#FFFFFF` | same | raised surface (cards, panels, tiles, table shell) |
+| `--surface-sunken` | `#F4F2EE` | same | inset: meter tracks, status chips, paused/banner beds |
+| `--text` | `#111436` | same | deep navy body text — never black |
+| `--text-muted` | `#646884` | `#6B6F8D` | secondary text — never neutral grey. **Darkened for AA** |
+| `--primary` | `#C94D00` | `#FF6100` | the single action colour. **Darkened for AA on white label** |
+| `--primary-soft` | `#FFF1E8` | same | primary tint: hovers, informational beds (report early-end) |
+| `--accent` | `#6F76F1` | same | informational only — section keys, chart series. **Never a CTA** |
+| `--live` | `#12873D` | `#16A34A` | **interview room only**: `LIVE` badge + active-speaker ring. **Darkened for AA** |
+| `--success` | `#10B981` | same | success |
+| `--warning` | `#F59E0B` | same | warning |
+| `--danger` | `#C62A20` | `#EF4444` | error / destructive. **Darkened for AA** (13px error copy on `--bg`, `--surface` and `--surface-sunken`) |
+| `--border` | `#E8E4DE` | same | hairline borders (1px, always) |
+| `--grad-lavender` | `#EFE9FF` | same | gradient stop 1 |
+| `--grad-cream` | `#FBF9F6` | same | gradient stop 2 (= `--bg`) |
+| `--grad-peach` | `#FFE8D6` | same | gradient stop 3 |
+| `--gradient-entry` | `linear-gradient(160deg, lavender 0%, cream 52%, peach 100%)` | same | entry page ground |
+
+Four spec deltas (`--text-muted`, `--primary`, `--live`, `--danger`) exist because the spec literals fail the
+AA floor the same spec sets. Shipped wins; `ui-checks/contrast.test.ts` reads the shipped file, so
+reverting any of them fails CI. Do not "restore" the brighter orange.
+
+### Non-colour (shipped)
+
+| Token | Value | Use |
+|---|---|---|
+| `--radius-panel` | `24px` | full-width panels: entry panel, question panel, report header |
+| `--radius-card` | `16px` | cards, tiles, transcript turns, table shell |
+| `--radius-input` | `12px` | inputs, textareas, banners |
+| `--radius-button` | `999px` | buttons, pills, badges, meter fills |
+| `--shadow-hairline` | `0 1px 2px rgba(17,20,54,.06)` | everything non-entry; **the only shadow in the room** |
+| `--shadow-soft` | `0 8px 24px -12px rgba(17,20,54,.12)` | entry panels/cards only |
+| `--duration-default` | `200ms` (→ `0ms` under `prefers-reduced-motion`) | every transition |
+| `--easing-default` | `ease-out` | every transition |
+| `--font-heading` | Outfit 500–700, `next/font/local`, `display: swap` | headings, wordmark, numerals-as-display |
+| `--font-body` | Inter 400–600, `next/font/local`, `display: swap` | body, UI, labels, data |
+
+Font delta: the spec says `next/font/google`; shipped is `next/font/local` over
+`public/fonts/*.woff2`. Same outcome (self-hosted, no external origin), stricter under CSP.
+
+### Hard rules
+
+1. **`--primary` is the only CTA colour.** One primary action per surface — the eye must not
+   choose. Secondary actions are text buttons in `--text-muted`, or bordered `--surface` buttons.
+2. **`--accent` is never a CTA.** Section keys, chart series, informational emphasis. That is all.
+3. **`--live` is room-only** — the `LIVE` badge and the active-speaker ring on exactly one tile,
+   or none. Never a success state, never a CTA, never on pre-join, report, dashboard or admin.
+4. **Gradient route list is closed** (`src/lib/entry-routes.ts` — import it, never re-decide):
+   `/`, `/register`, `/sign-in`, `/verify-email`, `/forgot-password`, `/reset-password`,
+   `/onboarding`, `/interviews/new`, `/interviews/[id]/pre-join`. Everything else is flat `--bg`.
+   The gradient grounds the **page**; a card on it is `--surface`. Gradient on a card is a defect.
+5. **Shadow follows the surface**, per `SURFACE_SHADOW` in `entry-routes.ts`:
+   entry → `soft`; room, report, dashboard, admin → `hairline`. No third shadow exists.
+6. **Type scale is exactly `13 / 14 / 16 / 20 / 28 / 40 / 56` px.** 13 = meta/labels/badges,
+   14 = secondary + dense data, 16 = body and controls, 20 = section/question, 28 = page title,
+   40 = big figure, 56 = landing/onboarding hero only. Inputs are never below 16px (iOS zooms).
+7. **Spacing is multiples of 4.** 4 / 8 / 12 / 16 / 20 / 24 / 32 / 40 / 64.
+8. **Author px, not rem.** The lint only sees `px`; rem values slip past it silently. Older modules
+   (`auth.module.css`, `setup.module.css`, `onboarding.module.css`) still carry rem — legacy, do
+   not copy. New CSS is px so the lint can hold it.
+9. **Motion is 150–250ms `ease-out`**, always via `var(--duration-default) var(--easing-default)`
+   so reduced-motion zeroes it in one place. Near-zero inside the room. One authored motion moment
+   per surface; the rest is state change, not animation.
+
+---
+
+## 3. Composition patterns
+
+These are the patterns already shipped. Reuse them by shape, not by copy-paste of values.
+
+### 3.1 Entry panel (gradient surfaces)
+
+```
+.ground   min-height 100vh; padding 24px 16px 64px;
+          background: var(--gradient-entry); background-attachment: fixed;
+.panel    max-width 480–640px; margin 0 auto; padding 32px (24px ≤480px);
+          background: var(--surface); border-radius: var(--radius-panel);
+          box-shadow: var(--shadow-soft);
+```
+
+Reference: `src/app/interviews/new/setup.module.css`, `src/app/(auth)/layout.module.css`.
+Auth cards run narrower (`max-width: 26rem`, `--radius-card`) because a credentials form is a
+short single column; wider forms (setup, pre-join) use `--radius-panel` at 480–640px.
+`background-attachment: fixed` keeps the gradient from re-scaling as content grows.
+
+### 3.2 Form field stack
+
+```
+.form    display flex; flex-direction column; gap 16px
+.field   display flex; flex-direction column; gap 4px
+.label   13px / 500 / var(--text)            (14px acceptable on airy surfaces)
+.input   16px; padding 12px; border 1px var(--border); border-radius var(--radius-input);
+         background var(--surface)
+:focus-visible  outline 2px solid var(--accent); outline-offset 2px
+[aria-invalid]  border-color var(--danger)
+.fieldError     13px var(--danger), directly under the field, id-linked by aria-describedby
+```
+
+Reference: `src/components/auth/auth.module.css`. Single column at every width — the form never
+becomes a grid, so 390px needs no branch.
+
+### 3.3 Buttons
+
+| Kind | Shape |
+|---|---|
+| Primary | `--primary` bg, `--surface` label, 600, `--radius-button`, padding 12px 20px (16px 28px hero); `:disabled` → `opacity .5–.6`, cursor `progress` when it means "working" |
+| Secondary | `--surface` bg, 1px `--border`, `--text` label, 500, `--radius-button`; hover → `--surface-sunken` |
+| Tertiary / text | no bg, no border, 14px, `--text-muted` (or `--primary` when it is a real action link) |
+| Badge / pill | 13px, `--radius-button`, padding 4px 8px |
+
+Minimum hit target 44×44 including padding. `transition: opacity var(--duration-default) var(--easing-default)` — never a transform bounce.
+
+### 3.4 Content surfaces (flat ground: room, report, dashboard, admin)
+
+```
+.page   min-height 100dvh; background var(--bg); max-width 880px; margin 0 auto;
+        padding 24px 16px 32px (16px 12px ≤480px); display flex; column; gap 16px
+.card   background var(--surface); border 1px var(--border);
+        border-radius var(--radius-card); box-shadow var(--shadow-hairline); padding 12–20px
+```
+
+Reference: `src/components/room/room.module.css`, `src/components/report/report.module.css`.
+880px is the reading/room measure; admin may run to 1120px because a table needs columns.
+Prose blocks (narratives, recovery copy, empty-state explanations) cap at **65–75ch** regardless
+of container width.
+
+### 3.5 Chrome
+
+Header: wordmark in `--font-heading` 20/600, actions right, `max-width` matching the page measure,
+no shadow, no border unless the page scrolls under it. Footer on entry surfaces only: 14px
+`--text-muted`, centred, links `--primary` 600.
+
+### 3.6 Do / don't
+
+| Do | Don't |
+|---|---|
+| One `--primary` element per surface | Two orange buttons competing in one viewport |
+| `--accent` for a chart series or a section key | `--accent` on a button that submits something |
+| `outline: 2px solid var(--accent); outline-offset: 2px` for focus | A `--primary` ring, or removing the outline because the border already changed |
+| `--surface-sunken` for a meter track or status chip | A new grey invented at the call site |
+| `box-shadow: var(--shadow-hairline)` in the room | A second shadow layer to fake elevation |
+| `gap` on a flex/grid parent | Margins stacked on children to fake a gap |
+| `font-size: 14px` | `font-size: 0.9375rem` (15px — off scale, invisible to the lint) |
+| Gradient on `.ground` | Gradient on a card, a header, or a button |
+| Empty state as a designed block inside the card | A bare `<p>No data</p>` at the top-left of a blank page |
+| `min-width: 0` + `overflow-x: auto` on a wide table | A page body that scrolls sideways at 390px |
+
+---
+
+## 4. Voice and copy
+
+Copy lives in `frontend/messages/{en,tr}.json`. Both files ship every key, always, in the same
+commit. No English fallback rendered to a Turkish user.
+
+Rules:
+
+- **Sentence case everywhere.** Buttons, headings, labels, table headers. No Title Case, no CAPS
+  (the `LIVE` badge is a proper noun of the product, and is the one exception).
+- **Verbs name the action, and the confirmation names the result.** `Create account` → `Account
+  created`. `Send reset link` → `Sent. Check your inbox.` Never `Submit`, never `OK`, never `Done!`.
+- **Errors state the problem and the recovery, in that order, in one or two sentences.** No error
+  code shown to the user, no "Oops", no "Something went wrong" when we know what went wrong.
+- **No filler.** Cut "please", "simply", "just", "in order to", exclamation marks, and any sentence
+  that only reassures. Cut the second sentence if the first one did the job.
+- **Numbers are numbers.** "Resend in 30s", not "Please wait a little while".
+- **Turkish is a native voice, not a translation.** Turkish carries the same warmth with fewer
+  words; do not transliterate English syntax. **TR is informal *sen* everywhere** — marketing,
+  instructions, states, errors alike. One register, no *siz* mixing; the product talks to one
+  person, not an audience. The single exception is quoted interviewer dialogue
+  (`landing.preview.hrQuestion`, `techQuestion`): a Turkish interviewer says *siz* to a candidate,
+  and that line is the character speaking, not the product.
+- **One term per concept, both languages.** interview → *mülakat* (never *görüşme*), report →
+  *rapor*, job listing → *ilan*, round → *tur*, answer → *cevap* (never *yanıt*), HR → *İK*.
+
+| Situation | EN | TR |
+|---|---|---|
+| Hero | Practise the interview before it counts | Gerçeğinden önce mülakata hazırlan |
+| Action → result | Send reset link → Sent. Check your inbox. | Bağlantıyı yeniden gönder → Gönderdik. Gelen kutuna bak. |
+| Problem + recovery | That link is no longer valid. Request a new one. | Bu bağlantı artık geçerli değil. Yeni bir bağlantı iste. |
+
+Three tests before a string ships: does it name a thing the user can do; would you say it out loud
+to someone sitting next to you; is the Turkish shorter than the English (it usually should be).
+
+---
+
+## 5. Per-surface briefs
+
+### W09 — Pre-join device check (`/interviews/[id]/pre-join`)
+
+**Mode: entry.** Pre-join **is** in `ENTRY_ROUTES` — gradient ground, `--shadow-soft`, `--radius-panel`.
+It is the last calm breath before the room, and it should feel like the setup screen, not the room.
+
+| Element | Spec |
+|---|---|
+| Ground | `.ground` per §3.1; single centred panel, `max-width 480px`, padding 32px (24px ≤480px) |
+| Title | 28px `--font-heading` 600; subtitle 16px `--text-muted`, ≤65ch |
+| Device row | label 13/500, `<select>` styled per §3.2 at 16px, full width — never a native unstyled select |
+| Level meter | track: height 8px, `--surface-sunken`, 1px `--border`, `--radius-button`. fill: `--accent`, width driven by the analyser, **`transition: none`** (a 200ms ease on a realtime signal reads as lag). Never `--live` (room-only), never `--primary` (reserved for the CTA) |
+| Level status | the meter is `aria-hidden`; a sibling 14px `--text-muted` line carries the truth: "We can hear you" / "We're not picking anything up — say something". Level is never colour-or-motion-only |
+| Enter CTA | the one `--primary` button, full width, 16/600, disabled until `granted`; disabled = `opacity .5`, `aria-disabled`, and a 13px `--text-muted` line saying why |
+| Denied | inline block inside the panel: `--surface-sunken` bed, 1px `--danger`, `--radius-input`, padding 12–16px; 14px problem sentence + numbered recovery steps + a secondary "Try again" button. The Enter CTA stays visible and disabled — do not swap the layout out from under the user |
+| Unavailable (no device) | same block, no retry button, and the CTA is gone rather than disabled |
+| Mascot | none in the default/granted state (no pose is assigned to pre-join). `shrug` only inside the denied/unavailable block, 96px, above the message — preload that pose only, and only when rendered |
+| Loading | skeleton of the panel at its final height (panel + two grey `--surface-sunken` bars), so granting does not jump the layout |
+| Motion | one authored moment: the CTA enabling — `opacity`/`background` over `--duration-default`. Nothing else animates |
+| 390px | already single column; the panel goes edge-padded at 16px and the CTA stays above the fold |
+
+### W10 — Voice room (`/interviews/[id]/room`, `mode: 'voice'`)
+
+**Mode: room.** Flat `--bg`, `--shadow-hairline` only, no gradient, no mascot, near-zero motion.
+Reuse `room.module.css` and W06's tiles/transcript/avatar — voice adds controls, not a second room.
+
+| Element | Spec |
+|---|---|
+| Shell | `.room` unchanged: 880px, gap 16px, `100dvh`, tiles 1fr/1fr → single column ≤480px |
+| Tiles | `.tile` / `.tileLive` unchanged. `--live` appears on **exactly one tile or none**: 2px outline + the `LIVE` badge, always paired with the lit name/role label so it survives colour blindness |
+| Question panel | `.question`: `--radius-panel`, `--shadow-hairline`, 20px text (16px ≤480px), min-height 96px so the panel does not resize per question |
+| Transcript pane | reuse `Transcript`: `--radius-card` turns, question 14px `--text-muted` above answer 16px `--text`, gap 12px. In voice it is **live** — `aria-live="polite"` on the list, and it scrolls within its own container rather than growing the page. Empty = `transcriptEmpty` line, not a spinner |
+| Voice controls | sticky bottom bar on `--bg` (mirrors `.composer`): mic mute toggle, speaker toggle, session status chip. Icon buttons ≥44px, `--radius-button`, `--surface` bg + 1px `--border`; muted state = `--surface-sunken` fill + a text label, never a red icon |
+| Mic level | the same meter shape as W09 (`--surface-sunken` track, `--accent` fill), 4px tall inside the control bar. Not `--live` |
+| Session status | 13px chip, `--surface-sunken` bed, `--text-muted` label: connecting / live / reconnecting. Text, always — the status is never conveyed by a coloured dot alone |
+| Session lost | inline banner above the control bar: `--surface-sunken`, 1px `--danger`, `--radius-input`, 14px; problem + a `--primary` "Reconnect" button. This is the surface's single `--primary` (voice has no submit button) |
+| Waiting beat | `currentQuestion: null` → 14px `--text-muted` line in the question panel's place, same min-height |
+| Motion | one authored moment: the `--live` ring/badge crossfading between tiles at `--duration-default`. No pulsing ring, no waveform animation, no typing animation in voice. Static under reduced motion |
+| Forbidden | mascot, gradient, `--shadow-soft`, `--live` anywhere but the active tile, any second shadow layer |
+
+### W11 — Admin list + stats (`/admin`)
+
+**Mode: admin, compact (Jotform) density.** Flat `--bg`, `--shadow-hairline`, no gradient, no
+mascot, no `--live`. Density tightens: 13/14px type, 8–12px cell padding, hairline row rules.
+
+| Element | Spec |
+|---|---|
+| Page | `max-width 1120px`, padding 24px 16px 32px, gap 24px between the stats panel and the table |
+| Figures row | `averageDurationMs` and `totalTokens` as two `--surface` cards: label 13px `--text-muted`, value 40px `--font-heading` 600, `font-variant-numeric: tabular-nums`. Grid `repeat(auto-fit, minmax(240px, 1fr))` → stacks at 390px |
+| Table shell | `--surface`, 1px `--border`, `--radius-card`, `--shadow-hairline`, `overflow: hidden`; the `<table>` sits in an inner `overflow-x: auto` wrapper so the page body never scrolls sideways |
+| Header row | 13px/600 `--text-muted`, sentence case, `border-bottom: 1px var(--border)`, sticky, padding 12px 16px. No uppercase, no letter-spacing tricks |
+| Data rows | 14px `--text`, padding 12px 16px, `border-bottom: 1px var(--border)` (no zebra fill). Numeric columns right-aligned with `tabular-nums`. Rows are **not** links (drill-down backlogged) — no hover-pointer, no chevron |
+| `deleted` flag | 13px pill, `--surface-sunken` bed, `--text-muted` label, `--radius-button`. Not `--danger` — a soft-deleted row is a fact, not an error |
+| Load more | secondary button (bordered `--surface`) centred under the table, shown only while `nextCursor` exists. Not the page's `--primary` |
+| Primary action | at most one on the whole surface; if none exists, the surface has no orange. Do not promote "Load more" to fill the slot |
+| Charts (recharts) | series colours from the informational family only: `--accent` (completed / primary series), `--warning` (cut short), `--text-muted` (unfinished / baseline). **Never `--primary`**. Read them via `getComputedStyle` or a small token→string map — no hex literals in TSX (the lint scans `.tsx`) |
+| Chart chrome | `isAnimationActive={false}` (satisfies room-quiet *and* reduced motion in one flag); no drop shadows, no gradients, no 3D; at most one axis of gridlines in `--border`; axis/tick text 13px `--text-muted` inheriting `--font-body`; custom tooltip styled as a `--surface` / `--radius-card` / `--shadow-hairline` card with 13px text — never the recharts default |
+| Legibility | every series carries a text label or a legend entry; a chart is never readable by colour alone. The split chart also states its three numbers as text under the graphic |
+| `weakestQuestions` | a list, not a chart: `--surface` card, question text 14px, score 14/600 right-aligned, hairline rules between rows |
+| Empty platform | zeroed charts (axes drawn, series at 0) plus a 14px `--text-muted` line "No interviews yet" inside the table card. Never a spinner, never a blank region |
+| Loading | table skeleton: header row plus 5 rows of `--surface-sunken` bars at final row height; chart areas hold their final height |
+| `FORBIDDEN` | a centred `--surface` card on flat `--bg`: 20px title, 14px `--text-muted` explanation, one secondary link back to the dashboard. No mascot (admin exclusion), no table shell behind it |
+| 390px | figures stack; the table scrolls inside its wrapper; charts drop to `width: 100%` with a fixed height, legends below |
+
+---
+
+## 6. Quality floor — check before you call a screen done
+
+- [ ] **Contrast AA (≥4.5:1)** on every text/background pair used, including text over each
+      gradient stop individually. `ui-checks/contrast.test.ts` covers the token pairs; any new
+      pairing you invent is on you to verify.
+- [ ] **`:focus-visible` ring on everything interactive** — buttons, links, inputs, selects, icon
+      buttons, table controls. **One recipe, app-wide: `outline: 2px solid var(--accent);
+      outline-offset: 2px`.** `--accent` is the informational hue and is the only ring that stays
+      visible both on a `--primary` orange fill and on `--surface`/`--bg`; a `--primary` ring
+      disappears into the primary button it is supposed to mark. This is the one place `--accent`
+      touches a CTA and it is not a fill, so §2 rule 2 still holds. Never `outline: none` without a
+      replacement ring in the same rule. A component may add to the ring (e.g. FileInput draws it on
+      the wrapper via `:focus-within`) but never change its colour, width or offset.
+- [ ] **Keyboard reachable, in visual order.** Tab through the whole screen. Nothing focusable is
+      hidden; nothing visible is unreachable; no focus trap outside a real modal.
+- [ ] **Four states designed, not defaulted**: loading (skeleton at final dimensions, not a
+      spinner where content will be), empty (a composed block with a sentence that says what to do
+      next), error (problem + recovery, inline where the failure happened), success/idle. A raw
+      string dumped at the page's top-left is a defect in every one of these.
+- [ ] **No native unstyled controls.** Every `input`, `select`, `textarea`, `button`, `checkbox`
+      and `radio` goes through `components/ui` (built in the parallel primitives wave) or the
+      §3.2/§3.3 patterns. A browser-default select in a card is visible from across the room.
+- [ ] **No literal values outside `styles/tokens.css`** — no hex, no raw `box-shadow`, no
+      off-scale `font-size`, no spacing that is not a multiple of 4. Author px so the lint sees it.
+- [ ] **390px composes**: single column, no horizontal page scroll, wide content scrolls inside its
+      own `overflow-x: auto` container, tap targets ≥44px, inputs ≥16px, primary CTA above the fold.
+- [ ] **One authored motion moment** per surface, 150–250ms `ease-out` via the tokens, and it is
+      gone under `prefers-reduced-motion`. Content animations resolve instantly, not faster.
+- [ ] **Every image has developer-authored `alt`**; decorative meters/dots are `aria-hidden` with a
+      text sibling carrying the meaning.
+- [ ] **Both locales ship**, every key, same commit; nothing renders an untranslated key or an
+      English fallback in Turkish.
+- [ ] **Surface rules honoured**: ground from `ENTRY_ROUTES`, shadow from `SURFACE_SHADOW`, one
+      `--primary` per surface, `--accent` never a CTA, `--live` only in the room, mascot never in
+      room / report / admin.

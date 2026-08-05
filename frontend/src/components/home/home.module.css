@@ -1,0 +1,301 @@
+/*
+ * W08 — the signed-in half of `/`. `/` is in the closed ENTRY_ROUTES list, so the ground is
+ * the page's gradient and the cards carry --shadow-soft; nothing here paints a second ground.
+ */
+
+.home {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  max-width: 72rem;
+  padding: 0 24px;
+  margin: 64px auto 0;
+}
+
+.greetingBlock {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.greeting {
+  font-family: var(--font-heading), sans-serif;
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.primaryCta,
+.emptyCta {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 12px 20px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--surface);
+  background: var(--primary);
+  border-radius: var(--radius-button);
+  transition: opacity var(--duration-default) var(--easing-default);
+}
+
+.primaryCta:hover,
+.emptyCta:hover {
+  opacity: 0.92;
+}
+
+.primaryCta:focus-visible,
+.emptyCta:focus-visible,
+.rowLink:focus-visible,
+.textAction:focus-visible,
+.confirmAction:focus-visible,
+.loadMore:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------------ history */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-soft);
+}
+
+.panelTitle {
+  font-family: var(--font-heading), sans-serif;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 0;
+  border-block-start: 1px solid var(--border);
+}
+
+.list > .row:first-child {
+  border-block-start: none;
+  padding-block-start: 0;
+}
+
+.rowMain {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.occupation {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* The bed is the quiet one; the family lives in the dot beside a label that always spells
+   the state, so nothing is readable by colour alone. */
+.chip {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  padding: 4px 8px;
+  font-size: 13px;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-button);
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-button);
+}
+
+.chipDone {
+  color: var(--text);
+}
+
+.chipDone .dot {
+  background: var(--success);
+}
+
+.chipActive {
+  color: var(--text);
+}
+
+.chipActive .dot {
+  background: var(--accent);
+}
+
+/* Abandoned/failed: a fact, not an error — never --danger. */
+.chipQuiet {
+  color: var(--text-muted);
+}
+
+.chipQuiet .dot {
+  background: var(--text-muted);
+}
+
+.rowActions,
+.confirm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.rowLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-button);
+  transition: background-color var(--duration-default) var(--easing-default);
+}
+
+.rowLink:hover {
+  background: var(--surface-sunken);
+}
+
+.textAction,
+.confirmAction,
+.loadMore {
+  min-height: 44px;
+  padding: 8px 12px;
+  font-family: var(--font-body), sans-serif;
+  font-size: 14px;
+  color: var(--text-muted);
+  cursor: pointer;
+  background: none;
+  border: none;
+  border-radius: var(--radius-button);
+}
+
+.textAction:hover,
+.confirmAction:hover {
+  color: var(--text);
+}
+
+/* Destructive by the word, not by a colour that fails the AA floor at 13–14px. */
+.confirmAction {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.confirmAction:disabled {
+  cursor: progress;
+  opacity: 0.5;
+}
+
+.confirmQuestion {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.rowError,
+.error {
+  font-size: 13px;
+  color: var(--danger);
+}
+
+.loadMore {
+  align-self: center;
+  padding: 12px 20px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.loadMore:hover:not(:disabled) {
+  background: var(--surface-sunken);
+}
+
+.loadMore:disabled {
+  cursor: progress;
+  opacity: 0.5;
+}
+
+/* ------------------------------------------------------------------ empty + loading */
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+  padding: 32px 16px;
+  text-align: center;
+}
+
+.emptyTitle {
+  font-family: var(--font-heading), sans-serif;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.emptyBody {
+  max-width: 48ch;
+  font-size: 16px;
+  color: var(--text-muted);
+}
+
+.emptyCta {
+  margin-block-start: 4px;
+}
+
+/* Skeleton at the real row height so resolving the list does not jump the panel. */
+.skeletonRow {
+  height: 64px;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-card);
+  margin-block-end: 8px;
+}
+
+@media (width <= 48rem) {
+  .home {
+    gap: 24px;
+    margin-top: 32px;
+  }
+
+  .greeting {
+    font-size: 28px;
+  }
+
+  .panel {
+    padding: 20px 16px;
+  }
+
+  .row {
+    align-items: flex-start;
+  }
+}

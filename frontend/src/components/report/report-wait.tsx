@@ -28,15 +28,22 @@ export function ReportWait({ onTimeout }: { onTimeout: () => void }) {
 
   if (timedOut) {
     return (
-      <p role="alert" className={styles.waitTimedOut} data-testid="report-wait-timeout">
-        {t('waitTimedOut')}
-      </p>
+      <div role="alert" className={styles.waitTimedOut} data-testid="report-wait-timeout">
+        <p className={styles.waitTimedOutText}>{t('waitTimedOut')}</p>
+      </div>
     );
   }
 
+  // The panel holds the report's height with two static bars, so resolving does not jump the
+  // layout, and the copy says how long this should take instead of just spinning.
   return (
     <div className={styles.wait} role="status" data-testid="report-wait">
-      <p>{t('waitGenerating')}</p>
+      <p className={styles.waitTitle}>{t('waitGenerating')}</p>
+      <p className={styles.waitHint}>{t('waitHint')}</p>
+      <div className={styles.waitLines} aria-hidden="true">
+        <span className={styles.waitLine} />
+        <span className={`${styles.waitLine} ${styles.waitLineShort}`} />
+      </div>
     </div>
   );
 }

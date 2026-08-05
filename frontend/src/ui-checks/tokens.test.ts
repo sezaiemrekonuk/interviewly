@@ -23,7 +23,7 @@ const SHIPPED_TOKENS: Record<string, string> = {
   '--live': '#12873D',
   '--success': '#10B981',
   '--warning': '#F59E0B',
-  '--danger': '#EF4444',
+  '--danger': '#C62A20',
   '--border': '#E8E4DE',
   '--grad-lavender': '#EFE9FF',
   '--grad-cream': '#FBF9F6',

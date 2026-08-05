@@ -1,88 +1,101 @@
-/* Entry surface (§ui): gradient ground + one soft-shadow card, W01 token constants. */
+/* Entry surface (ui §4.1/§4.2): gradient ground + one soft-shadow panel, W01 token constants.
+   Authored in px so the token lint can see every value (DESIGN §2 rule 8). */
+
+/* No `min-height: 100vh` here: the chrome shell already fills the viewport, so repeating it
+   inside `.shellBody` only guarantees a scrollbar the content did not ask for. */
 .ground {
-  min-height: 100vh;
   padding: 24px 16px 64px;
   background: var(--gradient-entry);
   background-attachment: fixed;
 }
 
 .card {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
   max-width: 640px;
   margin: 0 auto;
-  padding: 24px;
+  padding: 32px;
   background: var(--surface);
-  border-radius: var(--radius-card);
+  border-radius: var(--radius-panel);
   box-shadow: var(--shadow-soft);
 }
 
-.mascot {
-  display: block;
-  margin: 0 auto 0.5rem;
+/* The `point` pose sits beside the heading, directly above the listing input it points at
+   (ui §4.2.1 — setup's assigned placement). */
+.intro {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.introText {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
 }
 
 .title {
-  margin: 0 0 1.25rem;
-  font-size: 1.5rem;
-  text-align: center;
+  margin: 0;
+  font-family: var(--font-heading), sans-serif;
+  font-size: 28px;
+  font-weight: 600;
 }
 
-/* Single column at every width — the form never becomes a grid, so ≤375px needs no
-   separate branch and the CTA stays above the fold on a 390px viewport. */
+.subtitle {
+  max-width: 65ch;
+  margin: 0;
+  font-size: 16px;
+  color: var(--text-muted);
+}
+
+.mascot {
+  flex: none;
+}
+
+/* Single column at every width; only the two paired rows split, and they collapse at 480px. */
 .form {
   display: flex;
   flex-direction: column;
-  gap: 0.875rem;
+  gap: 20px;
 }
 
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  font-size: 0.875rem;
-  font-weight: 600;
+.row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
 }
 
-.field input,
-.field select {
-  font: inherit;
-  font-weight: 400;
-  padding: 0.5rem 0.625rem;
-  color: var(--text);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-input);
-}
-
-.split {
+.note {
+  max-width: 65ch;
   margin: 0;
-  font-size: 0.875rem;
-  font-weight: 600;
-}
-
-.pending {
-  margin: 0;
-  font-size: 0.8125rem;
+  font-size: 13px;
   color: var(--text-muted);
 }
 
 .error {
   margin: 0;
-  font-size: 0.875rem;
+  font-size: 14px;
   color: var(--danger);
 }
 
 .cta {
-  padding: 0.75rem 1rem;
-  font: inherit;
-  font-weight: 600;
-  color: var(--surface);
-  cursor: pointer;
-  background: var(--primary);
-  border: none;
-  border-radius: var(--radius-button);
+  width: 100%;
 }
 
-.cta:disabled {
-  cursor: progress;
-  opacity: 0.6;
+@media (max-width: 480px) {
+  .card {
+    padding: 24px;
+  }
+
+  .row {
+    grid-template-columns: 1fr;
+  }
+
+  /* max-* clamps the mascot box without fighting its inline width attribute. */
+  .mascot {
+    max-width: 64px;
+    max-height: 64px;
+  }
 }

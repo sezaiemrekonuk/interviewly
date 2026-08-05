@@ -62,12 +62,16 @@ Build the dashboard route `/dashboard` over `GET /me/interviews` (N01) and `DELE
 
 ## Steps
 - [x] **1. `useInterviewList()` + `DELETE` mutation** in `query.ts` (cursor pages, no delete retry).
-- [x] **2. `interview-row.tsx`** — outcome, score, report link, delete affordance.
-- [x] **3. `empty-state.tsx`** — `shrug` mascot + `--primary` setup CTA.
-- [x] **4. `dashboard/page.tsx`** — list + load-more + empty branch; flat `--bg`; guard auth.
-- [x] **5. `dashboard.*` copy** in both files.
+      Shipped as `useMyInterviews()` (`useInfiniteQuery`) + `useDeleteInterview()`; `apiDelete` added to `api.ts`.
+- [x] **2. `interview-row.tsx`** — outcome, score, report link, delete affordance. → `components/home/interview-row.tsx`.
+- [x] **3. `empty-state.tsx`** — `shrug` mascot + `--primary` setup CTA. Inlined in `authed-home.tsx`
+      (no state, one branch, ~15 lines) rather than a third file.
+- [x] **4. `dashboard/page.tsx`** — list + load-more + empty branch; guard auth. → the signed-in
+      branch of `/` (`components/home/{home-switch,authed-home}.tsx`). Entry ground, not flat — see Notes.
+- [x] **5. `dashboard.*` copy** in both files. → `home.*` (the namespace the surface is now called).
 - [x] **6. `page.test.tsx`** — rows+links, load-more via cursor, empty state, delete→refetch.
-- [x] **7. Run the `## Verification` command.**
+      → `src/app/page.test.tsx`, 7 W08 cases beside the 7 landing cases.
+- [x] **7. Run the `## Verification` command.** Run verbatim, exits 1 (no `/dashboard` route) — see Notes.
 
 ## Definition of done
 - `/dashboard` lists the user's interviews from `GET /me/interviews`, each row linking to its
@@ -86,32 +90,41 @@ shows the `shrug` mascot + setup CTA, and delete removes the row after the refet
 
 ## Notes
 
-**Shipped.** `/dashboard` — 7 tests, `src/app/dashboard/page.test.tsx`. Ring: frontend 177, root 287.
+**Scope change, owner-directed: history is `/`, not `/dashboard`.** No `/dashboard` route exists
+and none was created. `/` is now two screens — `components/home/home-switch.tsx` probes `GET /me`
+with plain `apiGet` (the `chrome/header-nav.tsx` pattern) and `React.lazy(() => import('./authed-home'))`
+swaps the marketing body for the history. Anonymous visitors never wait on the probe and never
+pull React Query; `src/app/page.test.tsx` asserts both source-level facts (§8.1 budget).
 
-**`GET /me/interviews` has no score.** `backend/modules/interview/my-interviews.ts` returns
-`{id,state,mode,occupation,endedReason,createdAt,startedAt,endedAt}`. The step-2 "score" is not
-available; a row is **occupation + outcome + started-date**, and the score is one click away on
-the report. Logged in `STATE.md` → `## Open blockers` (owner Fatih, N01). `InterviewListItem` in
-`query.ts` is that shape verbatim — do not re-add `overallScore`.
+Consequences of living on `/`:
+- **Entry ground, not flat `--bg`.** `ENTRY_ROUTES` is a closed list (ui §4.2) and contains `/`.
+  The task's "flat `--bg` + `--shadow-hairline`" was written for a standalone route; on `/` the
+  closed list wins, so the panel is `--surface` + `--radius-panel` + `--shadow-soft`.
+- **No `useRequireAuth()`.** `/` must render for anonymous visitors, so an unauthenticated `/me`
+  is the marketing page, never a redirect to sign-in.
+- STATE.md's row title says "optimistic Delete"; this file's Non-negotiables say the opposite and
+  win — `useDeleteInterview` invalidates `['me','interviews',{cursor:null}]` and the row goes on
+  the refetch. No retry (W02 policy).
 
-**Outcome copy.** `outcomeKey()` in `interview-row.tsx`: `endedReason ?? (state === 'evaluating'
-? 'evaluating' : 'inProgress')`. `dashboard.outcome.*` carries all six `EndedReason` values plus
-those two. A still-running or evaluating row links to `/interviews/:id` anyway — W07 renders the
-wait beat at that URL, no branch here.
+Data layer (`lib/query.ts`): `useMyInterviews()` is one `useInfiniteQuery` on
+`queryKeys.meInterviews()` — one key for all pages, so the delete invalidation does not have to
+chase every cursor it ever fetched. `getNextPageParam` reads `nextCursor`; no offset paging.
+`apiDelete` added to `lib/api.ts` (`apiSend` already tolerates a bodyless 204).
 
-**Delete.** `apiDelete()` (new, `api.ts`) → `useDeleteInterview()`. Not retried (global
-`mutations.retry:false`), **not optimistic**: `onSuccess` invalidates the `['me','interviews']`
-prefix and the refetch removes the row. The infinite query is stored under
-`queryKeys.meInterviews()` = `['me','interviews',{cursor:null}]`, which that prefix covers.
+Row behaviour (N01 returns no score — `my-interviews.ts` ships `state/mode/occupation/endedReason/
+timestamps` only, so the "score summary" the Goal asks for has no source):
+- `created|profiling|hr_round|tech_round|paused` → **Continue** → `/interviews/:id/room`.
+- `evaluating|completed` → **View report** → `/interviews/:id` (W07 shows the wait beat for `evaluating`).
+- `failed|abandoned` → no action. `/interviews/:id` would poll a report that never lands.
+- State chip: `--surface-sunken` bed, human label from `home.state.*`, family in an 8px
+  `aria-hidden` dot (`--success` / `--accent` / `--text-muted`). `--success`/`--accent` are below
+  the AA floor **as text** (3.8:1 on `--surface`), which is why they tint the dot and not the words.
+  No `--live` (room-only), no `--danger` on a soft-deleted row.
+- Relative date via next-intl `useFormatter().relativeTime` — no date library.
 
-**`useInterviewList(enabled = true)`** — pass `!authLoading && user !== null`, same shape as
-`useProfile(enabled)`. Without it the list fires before `/me` resolves and eats a 401.
+**Verification (as written) fails by design:** `npm run -w frontend test -- src/app/dashboard/page.test.tsx`
+→ `No test files found, exiting with code 1`. The equivalent for where the screen actually lives is
+`npm run -w frontend test -- src/app/page.test.tsx` → **14 passed**. Command left unedited on purpose
+(EXECUTE §6.5 forbids rewriting it); the next session should treat the `/` command as the real one.
 
-**Styling.** `src/app/dashboard/dashboard.module.css`, shared by the page and both components.
-Flat `--bg`, `--shadow-hairline`, no gradient. W01's `ui-checks/tokens.test.ts` rejects raw hex
-and non-multiple-of-4 px — `#fff` and `padding: 8px 14px` both tripped it; use `var(--surface)`
-and 4-multiples.
-
-**For W09/W11:** `apiDelete` and the cursor-page pattern (`initialPageParam: null`,
-`getNextPageParam: (p) => p.nextCursor`) are reusable as-is. `useFormatter().dateTime` is the
-locale-safe date render — no `toLocaleDateString`.
+**For W09/W11:** `useMyInterviews`/`useDeleteInterview` are in `lib/query.ts` — reuse, do not re-add.

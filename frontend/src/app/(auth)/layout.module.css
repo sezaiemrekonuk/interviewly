@@ -1,10 +1,32 @@
-/* ui §4.2 — the entry surfaces sit on the gradient ground, not the flat app background. */
+/* DESIGN §3.1 — the entry surfaces sit on the gradient ground, not the flat app background. */
 .ground {
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 100vh;
-  padding: 2rem 1rem;
+  padding: 32px 16px;
   background: var(--gradient-entry);
   background-attachment: fixed;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  width: 100%;
+}
+
+.wordmark {
+  padding: 4px 8px;
+  font-family: var(--font-heading), sans-serif;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
+  border-radius: var(--radius-input);
+}
+
+.wordmark:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }

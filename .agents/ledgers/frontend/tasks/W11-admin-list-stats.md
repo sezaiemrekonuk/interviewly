@@ -98,3 +98,15 @@ fixed shape, cursor load-more, and the empty-platform state.
 ## Notes
 
 (Empty until the task is done.)
+
+## Design
+
+Read `frontend/DESIGN.md` before writing CSS — §3 (composition patterns), §5 W11 brief, §6 (quality floor).
+Non-negotiables for this surface: **admin compact density** — flat `--bg`, `--shadow-hairline`, no
+gradient, no mascot, no `--live`. 13px/600 `--text-muted` header row, 14px data rows, 12/16px cell
+padding, hairline rules (no zebra), numeric columns right-aligned with `tabular-nums`; the table
+lives in an inner `overflow-x: auto` wrapper so the page never scrolls sideways at 390px. `deleted`
+is a `--surface-sunken` pill, not `--danger`. Recharts series come from `--accent` / `--warning` /
+`--text-muted` only — **never `--primary`** — read as token vars, not hex literals (the lint scans
+`.tsx`); `isAnimationActive={false}`, custom token-styled tooltip, every series text-labelled.
+Empty platform = zeroed charts + a designed empty line in the table card, never a spinner.

@@ -24,6 +24,10 @@ export function PersonaTiles({
 }) {
   const t = useTranslations('room');
 
+  // No roster, no empty grid: an interview with no personas resolved yet shows the question
+  // panel alone rather than a pair of blank boxes.
+  if (personas.length === 0) return null;
+
   return (
     <div className={styles.tiles} data-testid="persona-tiles">
       {personas.map((persona) => {
@@ -39,12 +43,18 @@ export function PersonaTiles({
               personaId={persona.id}
               state={live ? activeState : 'idle'}
               avatarSet={persona.avatarSet}
+              name={persona.name}
               size={72}
+              className={styles.tileAvatar}
             />
-            <p className={styles.tileName}>{persona.name}</p>
-            <p className={styles.tileRole}>
-              {persona.roundType === 'hr' ? t('roleHr') : t('roleTech')}
-            </p>
+            <div className={styles.tileText}>
+              <p className={live ? `${styles.tileName} ${styles.tileNameLive}` : styles.tileName}>
+                {persona.name}
+              </p>
+              <p className={live ? `${styles.tileRole} ${styles.tileRoleLive}` : styles.tileRole}>
+                {persona.roundType === 'hr' ? t('roleHr') : t('roleTech')}
+              </p>
+            </div>
             {live ? <span className={styles.liveBadge}>{t('live')}</span> : null}
           </div>
         );

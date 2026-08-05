@@ -33,6 +33,7 @@ const AA_FLOOR = 4.5;
 const text = token('--text');
 const textMuted = token('--text-muted');
 const primary = token('--primary');
+const danger = token('--danger');
 const live = token('--live');
 const bg = token('--bg');
 const surface = token('--surface');
@@ -57,6 +58,11 @@ const pairs: Array<[string, string, string]> = [
   ['--text-muted over --grad-peach', textMuted, gradPeach],
   ['white on --primary', white, primary],
   ['white on --live', white, live],
+  // Error copy is 13px and lands on all three grounds — the card, the page and the
+  // sunken bed a banner sits on. The spec's #EF4444 cleared none of them.
+  ['--danger over --bg', danger, bg],
+  ['--danger over --surface', danger, surface],
+  ['--danger over --surface-sunken', danger, sunken],
 ];
 
 describe('AA contrast floor (ui AC-2, ≥ 4.5:1)', () => {

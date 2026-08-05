@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { apiPost } from '../../lib/api';
 import type { SessionUser } from '../../lib/use-require-auth';
 import { useErrorMessage } from '../../lib/use-error-message';
+import { Button, Field, Input } from '../ui';
 
 import styles from './auth.module.css';
 
@@ -94,43 +95,32 @@ export function CredentialsForm({
       )}
 
       <form className={styles.form} onSubmit={handleSubmit(onSubmit)} noValidate>
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="email">
-            {t('emailLabel')}
-          </label>
-          <input
-            id="email"
-            type="email"
-            autoComplete="email"
-            className={styles.input}
-            aria-invalid={errors.email ? 'true' : undefined}
-            {...register('email')}
-          />
-          {errors.email?.message && (
-            <p className={styles.fieldError}>{messageFor(errors.email.message)}</p>
-          )}
-        </div>
+        <Field
+          label={t('emailLabel')}
+          id="email"
+          error={errors.email?.message && messageFor(errors.email.message)}
+        >
+          {(control) => <Input {...control} type="email" autoComplete="email" {...register('email')} />}
+        </Field>
 
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="password">
-            {t('passwordLabel')}
-          </label>
-          <input
-            id="password"
-            type="password"
-            autoComplete={endpoint === '/auth/register' ? 'new-password' : 'current-password'}
-            className={styles.input}
-            aria-invalid={errors.password ? 'true' : undefined}
-            {...register('password')}
-          />
-          {errors.password?.message && (
-            <p className={styles.fieldError}>{messageFor(errors.password.message)}</p>
+        <Field
+          label={t('passwordLabel')}
+          id="password"
+          error={errors.password?.message && messageFor(errors.password.message)}
+        >
+          {(control) => (
+            <Input
+              {...control}
+              type="password"
+              autoComplete={endpoint === '/auth/register' ? 'new-password' : 'current-password'}
+              {...register('password')}
+            />
           )}
-        </div>
+        </Field>
 
-        <button className={styles.submit} type="submit" disabled={isSubmitting}>
-          {isSubmitting ? t('submitting') : submitLabel}
-        </button>
+        <Button className={styles.submit} type="submit" size="lg" loading={isSubmitting}>
+          {submitLabel}
+        </Button>
       </form>
     </>
   );

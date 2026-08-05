@@ -3,16 +3,16 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
-import { ReportView } from '../../../components/report/report-view';
-import { ReportWait } from '../../../components/report/report-wait';
-import { Transcript } from '../../../components/room/transcript';
-import { routeForError } from '../../../lib/error-routing';
-import { useInterviewState, useReport } from '../../../lib/query';
-import { useErrorMessage } from '../../../lib/use-error-message';
-import { useInterviewEvents } from '../../../lib/use-interview-events';
-import { useRequireAuth } from '../../../lib/use-require-auth';
+import { ReportView } from '../../../../components/report/report-view';
+import { ReportWait } from '../../../../components/report/report-wait';
+import { Transcript } from '../../../../components/room/transcript';
+import { routeForError } from '../../../../lib/error-routing';
+import { useInterviewState, useReport } from '../../../../lib/query';
+import { useErrorMessage } from '../../../../lib/use-error-message';
+import { useInterviewEvents } from '../../../../lib/use-interview-events';
+import { useRequireAuth } from '../../../../lib/use-require-auth';
 
-import styles from '../../../components/report/report.module.css';
+import styles from '../../../../components/report/report.module.css';
 
 /**
  * Screen 12 — closes the demo path (land → onboard → set up → room → **report**).

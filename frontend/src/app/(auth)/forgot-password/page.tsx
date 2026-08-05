@@ -8,6 +8,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 import styles from '../../../components/auth/auth.module.css';
+import { Button, Field, Input } from '../../../components/ui';
 import { apiPost } from '../../../lib/api';
 import { useErrorMessage } from '../../../lib/use-error-message';
 
@@ -72,26 +73,17 @@ export default function ForgotPasswordPage() {
       )}
 
       <form className={styles.form} onSubmit={handleSubmit(onSubmit)} noValidate>
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="email">
-            {t('emailLabel')}
-          </label>
-          <input
-            id="email"
-            type="email"
-            autoComplete="email"
-            className={styles.input}
-            aria-invalid={errors.email ? 'true' : undefined}
-            {...register('email')}
-          />
-          {errors.email?.message && (
-            <p className={styles.fieldError}>{messageFor(errors.email.message)}</p>
-          )}
-        </div>
+        <Field
+          label={t('emailLabel')}
+          id="email"
+          error={errors.email?.message && messageFor(errors.email.message)}
+        >
+          {(control) => <Input {...control} type="email" autoComplete="email" {...register('email')} />}
+        </Field>
 
-        <button className={styles.submit} type="submit" disabled={isSubmitting}>
-          {isSubmitting ? t('submitting') : t('sendResetLink')}
-        </button>
+        <Button className={styles.submit} type="submit" size="lg" loading={isSubmitting}>
+          {t('sendResetLink')}
+        </Button>
       </form>
 
       <p className={styles.footer}>
