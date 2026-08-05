@@ -155,6 +155,24 @@ jobs in one process does not mean co-locating them in one ledger.
 reference; leaving it unwritten means `unfinished` interviews accrue forever and the admin split is
 permanently wrong. It needs a numbered, verifiable owner, not a backlog line.
 
+---
+
+## ADR-R06 — 2026-08-04 — `report_questions` stays I09's; R02's finalise owns only the PDF artifact
+
+**Context:** R02 was specced to denormalise `payload.questions[]` into `report_questions`. By the
+time it ran, I09's `runReport` already did — in the transaction that creates the `reports` row
+(`report-run.ts:159-178`), over a list pre-filtered to `question_id`s that exist
+(`report-run.ts:144-153`, `REPORT_QUESTION_ID_UNKNOWN`), which is the FK trap R02's task file warns
+about. Options: (A) finalise leaves the table to I09; (B) finalise delete-then-reinserts it.
+
+**Decision:** (A). `finalizeReport` renders, `storage.put`s and writes `pdf_key`. The DoD invariant
+(one row per payload question, no duplicates on re-run) is asserted in
+`worker/src/consumer.integration.test.ts` rather than re-implemented.
+
+**Why not (B):** two owners of one table, and a second copy of the known-id filter. If the copies
+drift, a model-invented `question_id` throws an FK error inside the worker, which R03 then retries —
+turning a content problem into a job that fails three times and dead-letters a valid report.
+
 **Consequences:** R04 must **add the `→ abandoned` edges to `machine.ts`** — they do not exist today
 (`TRANSITIONS` has no path to `abandoned` from any state) — from exactly `profiling`, `hr_round` and
 `paused`, and drive the transition through `applyTransition` (I07's sole guarded `interviews.state`

@@ -1,13 +1,13 @@
 # Report — State
 
 Last updated: 2026-08-04
-Last session ended: **R01 done.** Worker dequeues the real `report` job and calls `runReport`;
-`enqueueReport` is a real `Queue.add` with `jobId = interviewId`. Three things the next session
-should know: `runReport` creates the `reports` row already `ready`, so there is no `generating`
-window (see R01 `## Notes`); `worker` reaches backend only through the new
-`backend/src/worker-exports.ts` barrel (`@interviewly/backend`, built `dist`, not source);
-and `reportQueue`'s eager connection must be closed in any new test teardown or the run hangs
-after its summary. R02 and R03 are both unblocked — R02 also needs I12.
+Last session ended: **R02 done.** `processReportJob` now calls `finalizeReport` after
+`runReport`: `renderReportPdf` → `storage.put('reports/<interviewId>.pdf')` → `reports.pdf_key`.
+Three things the next session should know: finalise does **not** write `report_questions` —
+I09 already does, with the known-`question_id` filter (ADR-R06); `renderReportPdf` takes a
+`{ interviewId, createdAt }` meta and returns a `Promise<Buffer>`, not a bare `Buffer`; and
+`runReport` throws on a second run (its `→ completed` transition is the CAS), so a retry never
+reaches finalise — see R02 `## Notes` "For R03". R03 and R04 are unblocked.
 
 ## Execution protocol (follow exactly)
 
@@ -24,12 +24,11 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-R01 is `done`. Next up is **R02** (PDF render + `pdf_key`) or **R03** (retry/dead-letter) —
-independent of each other, either order. R02 additionally needs I12 (`storage.ts`) green; check
-`.agents/ledgers/interview-core/STATE.md` before picking it, and take R03 if I12 is not there
-yet. R04 (24 h `abandoned` sweeper) is also unblocked. Both R02 and R03 attach at the
-`processReportJob` seam in `worker/src/consumer.ts` — read R01's `## Notes` first, it names the
-line each one hooks and the `runReport` behaviour R03's transient-vs-schema branch depends on.
+R01 and R02 are `done`. Next up is **R03** (retry/backoff/dead-letter) or **R04** (24 h
+`abandoned` sweeper) — independent of each other, either order, both opus-tier per `MODELS.md`.
+R03 attaches at the `new Worker(REPORT_QUEUE, …)` options in `worker/src/index.ts` and the
+existing `reportWorker.on('failed', …)` handler; read R02's `## Notes` "For R03" first — it names
+the retry hazard the `runReport` CAS creates for the now-two-step success path.
 
 ## Environment
 
@@ -82,7 +81,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | ID | Title | Repo | Status | Depends on |
 |----|-------|------|--------|------------|
 | R01 | Worker service + BullMQ report consumer: real producer into I07's hook, dequeue → `runReport`, `reports.status` lifecycle | | done | F01, F02, F03, I01, I02, I06, I07, I09 |
-| R02 | Render `ReportPayload` to PDF, write `reports.pdf_key` via I12 storage, denormalise `report_questions` | | todo | R01, I12 |
+| R02 | Render `ReportPayload` to PDF, write `reports.pdf_key` via I12 storage, denormalise `report_questions` | | done | R01, I12 |
 | R03 | Retry, backoff, dead-letter `→ failed`; idempotent; transient vs schema-gate branch | | todo | R01 |
 | R04 | 24 h `abandoned` sweeper: repeatable job ends interviews stale in `profiling`/`hr_round`/`paused` past 24 h → `abandoned` via `applyTransition` (adds the `→ abandoned` edges), idempotent, no AI | | todo | R01 |
 

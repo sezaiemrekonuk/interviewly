@@ -26,11 +26,32 @@ import { randomUUID } from 'node:crypto';
 import { Queue, QueueEvents, Worker } from 'bullmq';
 import { afterAll, describe, expect, it } from 'vitest';
 
-import { prisma, REPORT_QUEUE } from '@interviewly/backend';
+import type { AiClient, ReportPayload } from '@interviewly/ai';
+import { prisma, REPORT_QUEUE, runReport, setStorage } from '@interviewly/backend';
 
+import { finalizeReport, pdfKeyFor } from './finalize';
 import { processReportJob, type ReportJobData } from './consumer';
 
 const connection = { url: process.env.REDIS_URL! };
+
+// The object store is in-memory here, unlike Postgres and Redis: the CI `acceptance` job that
+// runs this ring stands up neither MinIO nor S3 credentials, and I12's own
+// `object_storage.feature` @AC-6 is where the real signed-URL delivery is proven. What R02 owns
+// and this asserts is that the bytes land under the key `pdf_key` names.
+const objects = new Map<string, Buffer>();
+setStorage({
+  async put(key, bytes) {
+    objects.set(key, bytes);
+  },
+  async get(key) {
+    const bytes = objects.get(key);
+    if (!bytes) throw new Error(`no object at ${key}`);
+    return bytes;
+  },
+  async signedUrl(key) {
+    return `memory://${key}`;
+  },
+});
 
 async function seedEvaluatingInterview(): Promise<string> {
   const user = await prisma.user.create({
@@ -92,5 +113,134 @@ describe('report queue consumer', () => {
     expect((await queue.getJob(interviewId))?.id).toBe(interviewId);
 
     await first.waitUntilFinished(queueEvents, 20_000);
+  }, 25_000);
+
+  it('stores the rendered PDF and points reports.pdf_key at it', async () => {
+    const interviewId = await seedEvaluatingInterview();
+
+    const job = await queue.add(REPORT_QUEUE, { interviewId }, { jobId: interviewId });
+    await job.waitUntilFinished(queueEvents, 20_000);
+
+    const report = await prisma.report.findFirstOrThrow({ where: { interview_id: interviewId } });
+    expect(report.pdf_key).toBe(pdfKeyFor(interviewId));
+    // K12: a private key, never under the public `/assets` prefix `S3_PUBLIC_PREFIX` names.
+    expect(report.pdf_key).not.toContain('assets');
+
+    const stored = objects.get(report.pdf_key!);
+    expect(stored?.subarray(0, 5).toString('latin1')).toBe('%PDF-');
+  }, 25_000);
+});
+
+/**
+ * `StubAiClient.generateReport` returns `questions: []`, so the queue-driven tests above can
+ * never produce a `report_questions` row. These drive `runReport` with a client that scores the
+ * interview's real questions — the only way to see the denormalisation R02's DoD is about.
+ */
+describe('report artifact over a payload with per-question scores', () => {
+  async function seedAnsweredInterview(): Promise<{ interviewId: string; questionIds: string[] }> {
+    const interviewId = await seedEvaluatingInterview();
+    const persona = await prisma.persona.create({
+      data: {
+        role: 'hr',
+        name: `R02 persona ${randomUUID()}`,
+        voice_id: 'stub-voice',
+        avatar_set: {},
+        system_prompt: 'stub',
+      },
+    });
+    const round = await prisma.interviewRound.create({
+      data: { interview_id: interviewId, type: 'hr', persona_id: persona.id },
+    });
+
+    const questionIds: string[] = [];
+    for (const order_index of [1, 2]) {
+      const question = await prisma.question.create({
+        data: {
+          round_id: round.id,
+          order_index,
+          text: `Stub question ${order_index}`,
+          kind: 'behavioral',
+          difficulty: 'medium',
+          topic: 'stub-topic',
+        },
+      });
+      await prisma.answer.create({
+        data: {
+          question_id: question.id,
+          transcript: `Stub answer ${order_index}`,
+          input_mode: 'text',
+          answered_at: new Date(),
+        },
+      });
+      questionIds.push(question.id);
+    }
+    return { interviewId, questionIds };
+  }
+
+  function payloadFor(questionIds: string[]): ReportPayload {
+    return {
+      overall_impression: 'Stub impression for the R02 artifact path.',
+      overall_score: 4,
+      strengths: ['Stayed on topic', 'Consistent structure'],
+      improvements: ['Add metrics', 'State the outcome'],
+      rounds: [{ type: 'hr', score: 4, summary: 'Stub HR round.' }],
+      questions: questionIds.map((question_id, i) => ({
+        question_id,
+        score: 3 + i,
+        reason: `Stub reason ${i + 1}`,
+        star_adherence: 0.5 + i / 10,
+      })),
+      language: 'en',
+    };
+  }
+
+  /** `runReport` calls exactly one method on its client; a full fake would be noise. */
+  const clientReturning = (payload: ReportPayload): AiClient =>
+    ({ generateReport: async () => payload }) as unknown as AiClient;
+
+  it('denormalises one report_questions row per payload question and stores the PDF', async () => {
+    const { interviewId, questionIds } = await seedAnsweredInterview();
+    const payload = payloadFor(questionIds);
+
+    await runReport(interviewId, { traceId: 'r02-test', client: clientReturning(payload) });
+    await finalizeReport(interviewId);
+
+    const report = await prisma.report.findFirstOrThrow({
+      where: { interview_id: interviewId },
+      include: { report_questions: true },
+    });
+    expect(report.pdf_key).toBe(pdfKeyFor(interviewId));
+    expect((objects.get(report.pdf_key!))?.subarray(0, 5).toString('latin1')).toBe('%PDF-');
+
+    expect(
+      report.report_questions
+        .map((row) => ({
+          question_id: row.question_id,
+          score: row.score,
+          reason: row.reason,
+          star_adherence: Number(row.star_adherence),
+        }))
+        .sort((a, b) => a.score - b.score),
+    ).toEqual(payload.questions);
+  }, 25_000);
+
+  it('re-finalising leaves one object, one pdf_key and no duplicate report_questions', async () => {
+    const { interviewId, questionIds } = await seedAnsweredInterview();
+    const payload = payloadFor(questionIds);
+
+    await runReport(interviewId, { traceId: 'r02-test', client: clientReturning(payload) });
+    await finalizeReport(interviewId);
+    const first = objects.get(pdfKeyFor(interviewId));
+    await finalizeReport(interviewId);
+
+    const reports = await prisma.report.findMany({
+      where: { interview_id: interviewId },
+      include: { report_questions: true },
+    });
+    expect(reports).toHaveLength(1);
+    expect(reports[0].pdf_key).toBe(pdfKeyFor(interviewId));
+    expect(reports[0].report_questions).toHaveLength(questionIds.length);
+    // Same key, and `renderReportPdf` is deterministic, so the second write is byte-identical.
+    expect((objects.get(pdfKeyFor(interviewId)))?.equals(first!)).toBe(true);
   }, 25_000);
 });
