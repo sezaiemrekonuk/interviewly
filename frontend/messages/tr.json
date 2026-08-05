@@ -170,6 +170,28 @@
     "roundSplit": "{hrCount} İK + {techCount} teknik soru",
     "start": "Başla"
   },
+  "preJoin": {
+    "title": "Mikrofon kontrolü",
+    "subtitle": "Mikrofona izin verin ve girişinizi doğrulayın. Bu ekranda hiçbir kayıt alınmaz.",
+    "deviceLabel": "Mikrofon",
+    "deviceFallback": "Mikrofon {n}",
+    "prompt": "Mikrofon izni bekleniyor…",
+    "hearYou": "Sizi duyabiliyoruz",
+    "quiet": "Ses algılanmıyor — bir şeyler söyleyin",
+    "enter": "Odaya gir",
+    "enterHint": "Odaya girmek için mikrofona izin verin",
+    "denied": {
+      "title": "Mikrofon erişimi engellendi",
+      "step1": "Tarayıcınızın adres çubuğundan site ayarlarını açın",
+      "step2": "Bu site için mikrofona izin verin",
+      "step3": "Buraya dönüp tekrar deneyin",
+      "retry": "Tekrar dene"
+    },
+    "unavailable": {
+      "title": "Mikrofon bulunamadı",
+      "body": "Bir mikrofon bağlayıp sayfayı yenileyin veya metin modunda mülakat başlatın."
+    }
+  },
   "room": {
     "live": "CANLI",
     "roleHr": "İK mülakatçısı",

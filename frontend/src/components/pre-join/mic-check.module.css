@@ -1,0 +1,68 @@
+/* W09 (DESIGN §5) — the meter is `--accent` on a sunken track, never `--live` (room-only) and
+   never `--primary` (the Enter CTA owns that). Authored in px so the token lint sees every value. */
+
+.check {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.meter {
+  height: 8px;
+  overflow: hidden;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-button);
+}
+
+/* A 200ms ease on a realtime signal reads as lag, so the fill is deliberately untransitioned. */
+.meterFill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: var(--radius-button);
+  transition: none;
+}
+
+.status {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.recovery {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 16px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-input);
+}
+
+.recoveryMascot {
+  align-self: center;
+}
+
+.recoveryTitle {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.recoveryBody {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.steps {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.steps li + li {
+  margin-top: 4px;
+}

@@ -170,6 +170,28 @@
     "roundSplit": "{hrCount} HR + {techCount} technical questions",
     "start": "Start"
   },
+  "preJoin": {
+    "title": "Microphone check",
+    "subtitle": "Grant the microphone and confirm your input. Nothing is recorded on this screen.",
+    "deviceLabel": "Microphone",
+    "deviceFallback": "Microphone {n}",
+    "prompt": "Waiting for microphone permission…",
+    "hearYou": "We can hear you",
+    "quiet": "We're not picking anything up — say something",
+    "enter": "Enter room",
+    "enterHint": "Grant the microphone to enter the room",
+    "denied": {
+      "title": "Microphone access is blocked",
+      "step1": "Open the site settings from your browser's address bar",
+      "step2": "Allow the microphone for this site",
+      "step3": "Come back here and try again",
+      "retry": "Try again"
+    },
+    "unavailable": {
+      "title": "No microphone found",
+      "body": "Connect a microphone and reload this page, or start a text interview instead."
+    }
+  },
   "room": {
     "live": "LIVE",
     "roleHr": "HR interviewer",
