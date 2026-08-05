@@ -8,7 +8,7 @@ import type { ReportPayload } from '../../lib/query';
 import styles from './report.module.css';
 
 /** `interviews.ended_reason` values that mean the run did not reach its last question. */
-const EARLY_END_REASONS = new Set(['cut_short', 'budget_exhausted', 'time_exhausted', 'abandoned']);
+const EARLY_END_REASONS = new Set(['cut_short', 'budget_exhausted', 'time_exhausted', 'abandoned', 'error']);
 
 /**
  * The scored read-back: nothing here is computed, every number is `reports.payload` as the
