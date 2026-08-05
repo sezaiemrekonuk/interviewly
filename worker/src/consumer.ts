@@ -23,7 +23,12 @@ export async function processReportJob(job: Job<ReportJobData>): Promise<void> {
   const traceId = `worker-${job.id}`;
 
   logger.info({ interviewId, jobId: job.id }, 'REPORT_JOB_STARTED');
-  await runReport(interviewId, { traceId });
+  try {
+    await runReport(interviewId, { traceId });
+  } catch (err) {
+    // `runReport` uses `applyTransition` as a CAS; retries/duplicate jobs can see `evaluating` already gone.
+    if ((err as any)?.code !== 'INVALID_STATE_TRANSITION') throw err;
+  }
   await finalizeReport(interviewId);
   logger.info({ interviewId, jobId: job.id }, 'REPORT_JOB_COMPLETED');
 }
