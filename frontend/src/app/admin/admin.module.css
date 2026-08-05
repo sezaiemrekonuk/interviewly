@@ -1,0 +1,143 @@
+/* Not an entry surface: flat --bg, hairline shadow, no gradient, no mascot, no --live. */
+
+.ground {
+  min-height: 100vh;
+  padding: 24px 16px 32px;
+  background: var(--bg);
+}
+
+.inner {
+  max-width: 1120px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-heading), system-ui, sans-serif;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.subtitle {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.error {
+  margin: 0;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  font-size: 14px;
+  color: var(--text);
+}
+
+/* Not-authorized: a card on flat --bg. No table shell behind it, no mascot (admin excludes it). */
+.forbidden {
+  max-width: 420px;
+  margin: 96px auto 0;
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-hairline);
+  text-align: center;
+}
+
+.forbiddenTitle {
+  margin: 0 0 8px;
+  font-family: var(--font-heading), system-ui, sans-serif;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.forbiddenBody {
+  margin: 0 0 20px;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+/* Secondary: a refusal screen has nothing to promote. */
+.forbiddenBack {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-button);
+  font-size: 14px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.forbiddenBack:hover {
+  background: var(--surface-sunken);
+}
+
+.forbiddenBack:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.skeletonFigures {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.skeletonCard {
+  height: 108px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+}
+
+.skeletonTable {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-hairline);
+  overflow: hidden;
+}
+
+.skeletonHead,
+.skeletonRow {
+  height: 45px;
+  border-block-end: 1px solid var(--border);
+}
+
+.skeletonHead {
+  background: var(--surface-sunken);
+}
+
+.skeletonRow:last-child {
+  border-block-end: none;
+}
+
+.skeletonRow::after {
+  content: '';
+  display: block;
+  height: 13px;
+  margin: 16px;
+  border-radius: var(--radius-input);
+  background: var(--surface-sunken);
+}

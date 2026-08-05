@@ -1,5 +1,5 @@
 # W11 — Admin list + stats (screen 14): the interview table and the aggregate charts
-REPO: (this repo) · Depends: W02, N01, N02 · Status: todo
+REPO: (this repo) · Depends: W02, N01, N02 · Status: done
 Read first: STATE.md, REFERENCE.md, then this.
 **Model: claude-sonnet-4.6** — an admin-gated table plus a charts panel over two settled read
 endpoints. No state machine; the trust boundary (admin-only) is the backend's, reflected by the
@@ -69,15 +69,15 @@ STATE — it needs `GET /admin/interviews/:id` numbered by the admin owner first
   the list read-only until the drill-down endpoint is numbered.
 
 ## Steps
-- [ ] **1. Add `recharts`** to `frontend/package.json`; `npm install` at root.
-- [ ] **2. `useAdminInterviews()` + `useAdminStats()`** in `query.ts`.
-- [ ] **3. `interview-table.tsx`** — outcome/cost/tokens/`deleted` flag, cursor load-more, rows not
+- [x] **1. Add `recharts`** to `frontend/package.json`; `npm install` at root.
+- [x] **2. `useAdminInterviews()` + `useAdminStats()`** in `query.ts`.
+- [x] **3. `interview-table.tsx`** — outcome/cost/tokens/`deleted` flag, cursor load-more, rows not
   linked.
-- [ ] **4. `stats-panel.tsx`** — the `recharts` split + per-occupation + weakest-questions + the
+- [x] **4. `stats-panel.tsx`** — the `recharts` split + per-occupation + weakest-questions + the
   duration/token figures.
-- [ ] **5. `admin/page.tsx`** — `FORBIDDEN` guard, compose table + stats; flat `--bg`, no mascot.
-- [ ] **6. `admin.*` copy** in both files.
-- [ ] **7. `page.test.tsx`** — non-admin not-authorized, admin rows+charts, cursor load-more, empty
+- [x] **5. `admin/page.tsx`** — `FORBIDDEN` guard, compose table + stats; flat `--bg`, no mascot.
+- [x] **6. `admin.*` copy** in both files.
+- [x] **7. `page.test.tsx`** — non-admin not-authorized, admin rows+charts, cursor load-more, empty
   platform. Run the `## Verification` command.
 
 ## Definition of done
@@ -97,7 +97,33 @@ fixed shape, cursor load-more, and the empty-platform state.
 
 ## Notes
 
-(Empty until the task is done.)
+**Shipped.** `/admin` = `StatsPanel` + `InterviewTable` under one `useRequireAuth` gate.
+
+- `query.ts`: `useAdminInterviews(enabled)` (infinite, `?cursor=`) + `useAdminStats(enabled)`.
+  `enabled` is `role === 'admin'` — a non-admin fires **no** `/admin/*` request at all (asserted).
+  Types match `admin/REFERENCE.md` §item-shape / §stats-shape verbatim.
+- Backend stays the gate: `FORBIDDEN` from either read renders the same not-authorized card, no
+  redirect (`error-routing.ts` `not-authorized`, `/admin` branch).
+- `costUsd` printed as the six-decimal string it arrives as. `totalTokens`/counts/scores go through
+  `useFormatter().number` (grouping only). No metric is derived client-side.
+- **Recharts colour is CSS, not props.** Recharts writes `fill` as a *presentation attribute*, which
+  any stylesheet rule outranks — so `.seriesAccent/.seriesWarning/.seriesMuted` in
+  `stats-panel.module.css` own the hues. Keeps `--primary` out and hex literals out of `.tsx`.
+  Charts are `aria-hidden`; the readable copy is the legend list beside each one.
+- Zeroed platform: the split ring gets `value: 1` per slice so the shape still draws while the
+  legend prints the real `0`s. Bar chart + weakest list fall back to the `stats.empty` line.
+- `src/test/setup.ts` gained a **no-op `ResizeObserver`** — jsdom has none and recharts'
+  `ResponsiveContainer` constructs one on mount. Global on purpose: any later chart needs it.
+- CSS uses `border-block-end/start` (not `border-bottom/top`) — `ui-checks/tokens.test.ts`'s
+  spacing regex matches the substring `bottom: 1px` and flags the shorthand. Codebase-wide habit
+  already; follow it.
+- `admin.state.*` maps all 9 `InterviewState` values, `t.has` fallback to the raw string.
+
+**Gaps, deliberate:** no admin link anywhere in `components/chrome` — an admin reaches `/admin`
+by URL. Backlogged, not built: the nav is F01/W02 surface and no task numbers it.
+
+**For the next session:** rows carry `id`/`userId` already, so the drill-down only needs the
+`<tr>` wrapped in a `Link` once `GET /admin/interviews/:id` is numbered (flag Fatih).
 
 ## Design
 

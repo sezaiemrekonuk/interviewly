@@ -1,0 +1,126 @@
+/* Admin compact density (DESIGN §5 W11): flat surface, hairline rules, no zebra, no gradient. */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-hairline);
+  overflow: hidden;
+}
+
+.heading {
+  margin: 0;
+  padding: 16px 16px 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* The table scrolls inside its own box so the page body never scrolls sideways at 390px. */
+.scroller {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  color: var(--text);
+}
+
+/* Read by screen readers; the visible heading carries the same meaning. */
+.caption {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface);
+  padding: 12px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-align: start;
+  white-space: nowrap;
+  border-block-end: 1px solid var(--border);
+}
+
+.table td {
+  padding: 12px 16px;
+  border-block-end: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.table tbody tr:last-child td {
+  border-block-end: none;
+}
+
+.occupation {
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A soft delete is a fact, not an error — --surface-sunken, never --danger. */
+.deletedPill {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: var(--radius-button);
+  background: var(--surface-sunken);
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.empty {
+  margin: 0;
+  padding: 24px 16px 32px;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.footer {
+  display: flex;
+  justify-content: center;
+  padding: 16px;
+  border-block-start: 1px solid var(--border);
+}
+
+/* Secondary, deliberately: this surface's one primary slot is not spent on a pager. */
+.loadMore {
+  min-height: 44px;
+  padding: 0 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-button);
+  background: var(--surface);
+  font: inherit;
+  font-size: 14px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.loadMore:hover:not(:disabled) {
+  background: var(--surface-sunken);
+}
+
+.loadMore:disabled {
+  color: var(--text-muted);
+  cursor: default;
+}
+
+.loadMore:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

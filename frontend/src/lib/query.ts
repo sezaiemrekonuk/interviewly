@@ -57,6 +57,60 @@ export function createQueryClient(): QueryClient {
   });
 }
 
+/** `GET /admin/interviews` row (N01 audit projection — bypasses `userInterviews`, deleted included). */
+export interface AdminInterviewRow {
+  id: string;
+  userId: string;
+  state: string;
+  deleted: boolean;
+  occupation: string | null;
+  occupationCluster: string | null;
+  totalTokens: number;
+  costUsd: string;
+}
+export interface AdminInterviewsPage {
+  items: AdminInterviewRow[];
+  nextCursor: string | null;
+}
+
+/** `enabled=false` while `useRequireAuth` resolves — a 401/403 fired at an unknown viewer is noise. */
+export function useAdminInterviews(enabled = true): UseInfiniteQueryResult<
+  InfiniteData<AdminInterviewsPage>,
+  ApiError
+> {
+  return useInfiniteQuery({
+    queryKey: queryKeys.adminInterviews(),
+    queryFn: ({ pageParam }) =>
+      fetchJson<AdminInterviewsPage>(
+        pageParam
+          ? `/admin/interviews?cursor=${encodeURIComponent(pageParam)}`
+          : '/admin/interviews',
+      ),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
+    enabled,
+  });
+}
+
+/** `GET /admin/stats` (N02, fixed shape — render as returned, never recomputed). */
+export interface AdminStatsResponse {
+  averageDurationMs: number;
+  completed: number;
+  cutShort: number;
+  unfinished: number;
+  totalTokens: number;
+  perOccupation: { cluster: string; label: string; count: number }[];
+  weakestQuestions: { questionId: string; score: number }[];
+}
+
+export function useAdminStats(enabled = true): UseQueryResult<AdminStatsResponse, ApiError> {
+  return useQuery({
+    queryKey: queryKeys.adminStats(),
+    queryFn: () => fetchJson<AdminStatsResponse>('/admin/stats'),
+    enabled,
+  });
+}
+
 export function useMe(): UseQueryResult<{ user: SessionUser }, ApiError> {
   return useQuery({ queryKey: queryKeys.me(), queryFn: () => fetchJson<{ user: SessionUser }>('/me') });
 }

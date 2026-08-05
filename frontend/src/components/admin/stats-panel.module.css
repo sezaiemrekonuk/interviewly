@@ -1,0 +1,184 @@
+/* Admin compact density (DESIGN §5 W11). Informational hues only — --primary never appears. */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.figures,
+.charts {
+  display: grid;
+  gap: 16px;
+}
+
+.figures {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.charts {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.card {
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-hairline);
+}
+
+.figureLabel {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.figure {
+  margin: 0;
+  font-family: var(--font-heading), system-ui, sans-serif;
+  font-size: 40px;
+  font-weight: 600;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.title {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.chart {
+  width: 100%;
+}
+
+/* Recharts sets `fill` as a presentation attribute; a stylesheet rule outranks it, which is
+   how the series stay on the tokens with no hex literal in the .tsx. */
+.seriesAccent,
+.seriesAccent path,
+.seriesAccent :global(.recharts-rectangle) {
+  fill: var(--accent);
+}
+
+.seriesWarning,
+.seriesWarning path {
+  fill: var(--warning);
+}
+
+.seriesMuted,
+.seriesMuted path {
+  fill: var(--text-muted);
+}
+
+.chart :global(.recharts-cartesian-axis-tick-value) {
+  font-size: 13px;
+  fill: var(--text-muted);
+}
+
+.legend {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+}
+
+.legendRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  font-size: 14px;
+  border-block-end: 1px solid var(--border);
+}
+
+.legendRow:last-child {
+  border-block-end: none;
+}
+
+/* A swatch is never the meaning — the label beside it is. */
+.swatch {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  border-radius: 4px;
+}
+
+.swatch.seriesAccent {
+  background: var(--accent);
+}
+
+.swatch.seriesWarning {
+  background: var(--warning);
+}
+
+.swatch.seriesMuted {
+  background: var(--text-muted);
+}
+
+.legendLabel {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.legendValue {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.weakList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.weakRow {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 12px 0;
+  border-block-end: 1px solid var(--border);
+}
+
+.weakRow:last-child {
+  border-block-end: none;
+}
+
+.weakId {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.weakScore {
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.empty {
+  margin: 0;
+  padding: 24px 0;
+  font-size: 14px;
+  color: var(--text-muted);
+}

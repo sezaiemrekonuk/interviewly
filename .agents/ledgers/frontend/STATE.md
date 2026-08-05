@@ -1,7 +1,16 @@
 # Frontend — State
 
 Last updated: 2026-08-05
-Last session ended: **W10 done — voice is a branch in `room/page.tsx` on `room.mode`, not a second
+Last session ended: **W11 done — the frontend ledger is green (W01–W11).** `/admin` renders
+`StatsPanel` + `InterviewTable`; `useAdminInterviews(enabled)`/`useAdminStats(enabled)` gate on
+`role === 'admin'` so a non-admin issues **no** `/admin/*` request, and a `FORBIDDEN` from either
+read still renders the same not-authorized card in place (never a redirect). Recharts series colour
+lives in `stats-panel.module.css`, not in props — presentation attributes lose to stylesheet rules,
+which keeps `--primary` and hex literals out of the `.tsx`. Charts are `aria-hidden`; the legend
+lists carry every number as text. `src/test/setup.ts` gained a no-op `ResizeObserver` (jsdom has
+none; `ResponsiveContainer` needs one). Ring: frontend 238, root 359.
+
+Previous: **W10 done — voice is a branch in `room/page.tsx` on `room.mode`, not a second
 room.** `useVoiceSession` (`src/lib/use-voice-session.ts`) mints via V02, opens `WebSocket(wssOrigin)`
 and sends the token in the **init frame, never the URL** (K6: query strings reach proxy logs). It
 emits a local `beat` only — `BEAT_BY_FRAME` maps agent frames to `speaking|listening|acknowledging`,
@@ -14,7 +23,7 @@ client-side is the same K11 violation one layer down. **No self-camera** despite
 dropped), `Transcript` a `live` prop, `QuestionPanel` an `instant` prop. New shared helper
 `src/test/websocket-mock.ts`. Ring: frontend 231, root 352.
 
-Previous: **W09 done — `/interviews/:id/pre-join` is mic-only.** No camera preview (task
+Earlier: **W09 done — `/interviews/:id/pre-join` is mic-only.** No camera preview (task
 security boundary; "camera off-by-default" is satisfied by never asking). `useMicPermission`
 (`src/lib/use-mic-permission.ts`) owns `idle|prompt|granted|denied|unavailable` + RMS level +
 device list; `NotFoundError`/`OverconstrainedError` → `unavailable` (no retry, CTA removed), else
@@ -64,8 +73,8 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**W11 (`<- W02, N01, N02`)** is next and is the ledger's last row — admin list + stats
-(sonnet-tier, DESIGN §5). Deps are all `done`.
+**None — every row W01–W11 is `done`.** The ledger is green. New frontend work needs a numbered
+task first (`update-initiative`); the Backlog below is where the candidates sit.
 
 ## Environment
 
@@ -154,7 +163,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | W08 | History (screen 13) as the signed-in `/`: list, Continue, confirm-then-Delete | | done | W02, N01 |
 | W09 | Pre-join device check (screen 10, voice): camera off-by-default, mic level bar, continue-in-text | | done | W06, V02 |
 | W10 | Voice room surface (screen 11-voice): live ASR transcript, mic level, self-camera, amplitude avatar driver | | done | W09, V02, V05 |
-| W11 | Admin list + stats (screen 14): tables + Recharts bound to `/admin/stats` as-returned | | todo | W02, N01, N02 |
+| W11 | Admin list + stats (screen 14): tables + Recharts bound to `/admin/stats` as-returned | | done | W02, N01, N02 |
 
 ## Critical path (the demo path)
 
@@ -197,6 +206,9 @@ None. The frontend is the consuming edge — no other ledger waits on a `W` task
   `GET /admin/interviews/:id` in the admin ledger**; once it is a numbered task, promote this to
   `W12` depending on it. Do not build the UI against a phantom route.
 - **Rich admin filters** beyond cluster/state/user list columns — promote when a filter spec exists.
+- **Admin nav affordance** — W11 shipped `/admin` with no link to it from `components/chrome`; an
+  admin types the URL. The nav is W02 surface and no task numbers the entry. Promote with the
+  drill-down work, or sooner if a demo needs it clickable.
 - **Adaptive candidate-analysis view** (`adaptive/PLAN.md:118`) — adaptive ledger, not this one.
 - **Real illustrated avatar/mascot artwork** — the F02-seeded placeholders satisfy W01's
   completeness/budget checks; swapping bytes at content-addressed keys needs no task.
