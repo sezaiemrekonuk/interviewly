@@ -2,14 +2,16 @@
 
 import {
   QueryClient,
+  useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
+  type UseInfiniteQueryResult,
   type UseMutationResult,
   type UseQueryResult,
 } from '@tanstack/react-query';
 
-import { apiGet, apiPatch, apiPost } from './api';
+import { apiDelete, apiGet, apiPatch, apiPost } from './api';
 import { SILENT_REFETCH_CODES } from './error-routing';
 import type { SessionUser } from './use-require-auth';
 
@@ -286,5 +288,61 @@ export function useResumeInterview(
       return result.data;
     },
     onSettled: () => client.invalidateQueries({ queryKey: queryKeys.interviewState(interviewId) }),
+  });
+}
+
+/**
+ * `GET /me/interviews` row (N01 `my-interviews.ts`). No score and no cost: the candidate
+ * list is deliberately thinner than the admin audit, so the score lives on the report.
+ */
+export interface InterviewListItem {
+  id: string;
+  state: string;
+  mode: string;
+  occupation: string | null;
+  endedReason: string | null;
+  createdAt: string;
+  startedAt: string | null;
+  endedAt: string | null;
+}
+
+export interface InterviewListPage {
+  items: InterviewListItem[];
+  nextCursor: string | null;
+}
+
+/**
+ * Cursor pagination (K11 — no offset paging); one page per opaque `nextCursor`.
+ * `enabled=false` while `useRequireAuth` resolves — an anonymous 401 here is noise.
+ */
+export function useInterviewList(enabled = true): UseInfiniteQueryResult<
+  { pages: InterviewListPage[] },
+  ApiError
+> {
+  return useInfiniteQuery({
+    enabled,
+    queryKey: queryKeys.meInterviews(),
+    queryFn: ({ pageParam }: { pageParam: string | null }) =>
+      fetchJson<InterviewListPage>(
+        `/me/interviews${pageParam ? `?cursor=${encodeURIComponent(pageParam)}` : ''}`,
+      ),
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage: InterviewListPage) => lastPage.nextCursor,
+  });
+}
+
+/**
+ * Soft delete (`204`). No optimistic removal: invalidate and let the refetch drop the row,
+ * so a refused delete cannot resurrect a row the user watched disappear.
+ */
+export function useDeleteInterview(): UseMutationResult<void, ApiError, string> {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (interviewId: string) => {
+      const result = await apiDelete(`/interviews/${interviewId}`);
+      if (!result.ok) throw new ApiError(result.code ?? 'UNKNOWN');
+    },
+    // Prefix key: the infinite query is stored under `['me','interviews',{cursor:null}]`.
+    onSuccess: () => client.invalidateQueries({ queryKey: ['me', 'interviews'] }),
   });
 }

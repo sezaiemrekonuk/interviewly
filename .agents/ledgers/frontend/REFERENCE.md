@@ -89,7 +89,7 @@ if a shape is not yet built, the task's `Depends on` names it and the task stops
 | `POST /interviews/:id/resume` | `paused` → round | I07 |
 | `GET /interviews/:id/events` | SSE `{ type }` events — **the real path** | I07 |
 | `GET /interviews/:id` | `{ interviewId, state, report }` — thin; `transcript`/`endedReason` come from `/state` (ADR-W08) | R01 |
-| `GET /me/interviews` | `{ items, nextCursor }` (deleted excluded) | N01 |
+| `GET /me/interviews` | `{ items, nextCursor }`, deleted excluded; item = `{id,state,mode,occupation,endedReason,createdAt,startedAt,endedAt}` — **no score, no cost** | N01 |
 | `DELETE /interviews/:id` | `204` (soft delete) | N01 |
 | `GET /admin/interviews` | `{ items, nextCursor }` (deleted included, `deleted` flag, `totalTokens`, `costUsd`) | N01 |
 | `GET /admin/stats` | `{ averageDurationMs, completed, cutShort, unfinished, totalTokens, perOccupation[], weakestQuestions[] }` | N02 |

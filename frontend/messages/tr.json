@@ -194,5 +194,29 @@
     "CV_TRUNCATED": "Özgeçmişiniz işlenmeden önce kısaltıldı.",
     "PROFILE_DOB_STRIPPED": "Doğum tarihi çıkarılan profilden kaldırıldı.",
     "UNKNOWN": "Beklenmeyen bir hata oluştu."
+  },
+  "dashboard": {
+    "title": "Mülakatlarınız",
+    "loading": "Mülakatlarınız yükleniyor…",
+    "loadMore": "Daha fazla yükle",
+    "delete": "Sil",
+    "deleteLabel": "Bu mülakatı sil",
+    "startedOn": "{date} tarihinde başladı",
+    "noOccupation": "Başlıksız mülakat",
+    "empty": {
+      "title": "Henüz mülakat yok",
+      "body": "Bir mülakat oluşturun; raporuyla birlikte burada görünecek.",
+      "cta": "Mülakat başlat"
+    },
+    "outcome": {
+      "completed": "Tamamlandı",
+      "cut_short": "Yarıda kesildi",
+      "budget_exhausted": "Bütçe doldu",
+      "time_exhausted": "Süre doldu",
+      "abandoned": "Terk edildi",
+      "error": "Hatayla sonlandı",
+      "evaluating": "Değerlendiriliyor",
+      "inProgress": "Devam ediyor"
+    }
   }
 }
