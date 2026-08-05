@@ -38,6 +38,7 @@ export function useMicPermission(): UseMicPermission {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const rafRef = useRef<number | null>(null);
   const liveRef = useRef(true);
+  const requestSeqRef = useRef(0);
 
   const release = useCallback(() => {
     if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
