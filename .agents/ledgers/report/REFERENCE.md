@@ -96,7 +96,7 @@ rest exist once their cross-ledger task lands.
 | `worker/src/index.ts` | **R01, create** | Bootstrap the `Worker(REPORT_QUEUE)`, graceful shutdown (SIGTERM), `SERVER_STARTED`-style boot log |
 | `worker/src/consumer.ts` | **R01, create** | The processor: status `generating` → `runReport(id)` → hand to finalise (R02) → status `ready` |
 | `worker/src/render-pdf.ts` | **R02, create** | `renderReportPdf(payload: ReportPayload): Buffer` — pure, no I/O |
-| `worker/src/finalize.ts` | **R02, create** | `storage.put` the PDF → `reports.pdf_key`; denormalise `payload.questions[]` → `report_questions` |
+| `worker/src/finalize.ts` | **R02, create** | `storage.put` the PDF under `reports/<interviewId>.pdf` → `reports.pdf_key`. Not `report_questions` — I09 writes those (ADR-R06) |
 | `worker/src/failure.ts` | **R03, create** | Retry/backoff config + dead-letter handler → `applyTransition(evaluating → failed)` + `reports.status = failed` |
 | `worker/tests/**` | **R01, create** | vitest suite; BullMQ against local Redis, `StubAiClient` for `runReport`'s AI calls |
 
@@ -142,9 +142,9 @@ or any PII/secret (K6, §7.2). `REPORT_JOB_ENQUEUED` is emitted on the `api` sid
 **Idempotency.** `jobId = interviewId` dedupes the producer; every consumer path must be safe to
 run twice, because a retry re-runs the processor from scratch. `runReport` re-runs from
 `evaluating` and `applyTransition` is guarded, so a double-run does not double-transition. R02's
-finalise is an upsert (`reports.pdf_key` set idempotently; `report_questions` cleared-and-
-reinserted or upserted by `(report_id, question_id)`), never a blind insert that duplicates rows
-on retry.
+finalise is idempotent by construction (the PDF key is derived from `interviewId`, so a re-run
+overwrites one object and rewrites one column).
+`report_questions` is I09's, written once inside its report-row transaction (ADR-R06).
 
 **Transient vs permanent failure** (ADR-R04). A **thrown** error from `runReport` is transient →
 retried by BullMQ (3 attempts, exponential backoff base 1000 ms) → dead-letter `→ failed`. A

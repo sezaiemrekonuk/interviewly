@@ -68,23 +68,24 @@ export is a §12 bonus (K15), so this task is separable — if the deadline sque
   the interview's actual `questions` rows.
 
 ## Steps
-- [ ] **1. Add `pdfkit`** to `worker/package.json` deps; `npm install` at the repo root.
-- [ ] **2. Write `render-pdf.ts`** — `renderReportPdf(payload): Buffer`, the deterministic
+- [x] **1. Add `pdfkit`** to `worker/package.json` deps; `npm install` at the repo root.
+- [x] **2. Write `render-pdf.ts`** — `renderReportPdf(payload): Buffer`, the deterministic
   `pdfkit` layout above. Unit-assert it returns a non-empty `Buffer` whose first bytes are the
   `%PDF` magic for a valid `ReportPayload` sample.
-- [ ] **3. Write `finalize.ts`** — load payload, render, `storage.put`, write `pdf_key`,
+- [x] **3. Write `finalize.ts`** — load payload, render, `storage.put`, write `pdf_key`,
   denormalise `report_questions` (delete-then-insert for idempotency), log `REPORT_PDF_RENDERED`.
-- [ ] **4. Call `finalizeReport` from `consumer.ts`** on the success path, before
+  *(Denormalisation dropped — I09 already owns it; ADR-R06 and `## Notes`.)*
+- [x] **4. Call `finalizeReport` from `consumer.ts`** on the success path, before
   `reports.status = 'ready'`.
-- [ ] **5. Wire the worker test** — enqueue a job for a seeded `evaluating` interview whose
+- [x] **5. Wire the worker test** — enqueue a job for a seeded `evaluating` interview whose
   `runReport` (stubbed AI) yields a valid payload; assert after the job: `reports.pdf_key` is
   set, `storage.get(pdf_key)` returns the PDF bytes, `report_questions` has one row per
   `payload.questions[]` with matching `question_id`/`score`/`star_adherence`, and a second run of
   the same job leaves exactly one `report_questions` row per question (idempotency).
-- [ ] **6. Confirm end-to-end delivery via I12** — using I12's `storage.signedUrl(pdf_key, 300)`
+- [x] **6. Confirm end-to-end delivery via I12** — using I12's `storage.signedUrl(pdf_key, 300)`
   (or the `GET /interviews/:id/report/download` endpoint), the rendered object is retrievable and
   the URL expires ≤ 300 s ahead. (This reuses I12's wrapper — assert, don't rebuild.)
-- [ ] **7. Run the `## Verification` command.**
+- [x] **7. Run the `## Verification` command.**
 
 ## Definition of done
 - After a successful report job, `reports.pdf_key` points at a stored `application/pdf` object
@@ -111,8 +112,49 @@ docker compose logs worker | grep -E "%PDF|overall_impression|strengths"
 
 ## Notes
 
-(Empty until the task is done. Fill with: what actually happened, the `pdfkit` layout decisions,
-the worker-suite output verbatim, the private key scheme used for `storage.put`, how idempotency
-of `report_questions` was enforced, any FK gotcha with `question_id`, whether I12's `signedUrl`
-was exercised directly or via the download endpoint, and a "For R03" note if finalise touches any
-state R03's dead-letter path must also unwind.)
+**Deviation — `finalize.ts` does not denormalise `report_questions` (ADR-R06).** I09 already
+does, inside the same transaction that creates the `reports` row (`report-run.ts:159-178`), and
+it filters `payload.questions[]` down to ids that exist in `questions` first
+(`report-run.ts:144-153`, logs `REPORT_QUESTION_ID_UNKNOWN`) — the FK trap this task's Context
+warns about is already closed there. A delete-then-insert in finalise would be a second owner of
+one table plus a second copy of that filter; drift means a model-invented id crashes the job into
+a retry loop. Finalise is render + `storage.put` + `pdf_key` only. The DoD invariant is still
+asserted, in `consumer.integration.test.ts`.
+
+**Deviations — signatures.** `renderReportPdf(payload, meta): Promise<Buffer>`, not
+`(payload): Buffer`. Async because `pdfkit` is a stream (bytes arrive on `data`, complete on
+`end`). `meta = { interviewId, createdAt }` because the header needs the interview id and
+`ReportPayload` has no date; `createdAt` is `reports.created_at`, passed in so the render stays
+pure and byte-deterministic — `pdfkit` otherwise stamps `info.CreationDate` from wall time and a
+retry would write different bytes under the same key.
+
+**Key scheme.** `reports/<interviewId>.pdf` (`pdfKeyFor`, exported for the tests). Private —
+never `config.S3_PUBLIC_PREFIX` (`/assets`). Idempotent by construction: derived from the id, so a
+re-run overwrites one object and rewrites one column. No `pdf_key` upsert-by-`interview_id` is
+possible — `reports` has no unique on `interview_id`; finalise updates by the row `id` it read
+(latest by `created_at`, same selection `download.ts` uses).
+
+**Order matters.** `storage.put` before the `pdf_key` update. Reversed, a crash between them
+leaves `pdf_key` naming an object that does not exist and I12 signs a URL to nothing.
+
+**No-op branches.** No `reports` row, or a row with `payload: null` → finalise returns silently.
+That is the I09 schema-gate branch (interview `failed`, no row at all), not an error.
+
+**`worker-exports.ts` grew** `storage`, `setStorage`, `Storage`, `MAX_TTL_SECONDS` — subpath
+imports of `backend` are not resolvable from the worker's built package.
+
+**Verification (2026-08-04).** `npm run -w worker test` 4 files / 18 tests. `npm run
+test:integration` 5/5 (needs published ports; a host-native Postgres owns `localhost:5432`, so
+`db` must be republished — `15432`/`16380` per R01's note). `npm test` 40 files / 286 tests.
+`lint`, `typecheck`, `npm run -w worker build` (after `-w @interviewly/ai` + `-w backend build` —
+worker resolves backend's `dist`) clean. `npm run test:acceptance` 79/79.
+`docker compose logs worker | grep -E "%PDF|overall_impression|strengths"` printed nothing.
+Step 6 against real MinIO: requested TTL 600 → signed 300, fetch 200, bytes identical, key not
+under `/assets/`.
+
+**For R03.** Finalise adds no state to unwind: it writes one column and one object, both derived
+from `interviewId`, both overwrite-safe. The real retry hazard is upstream — `runReport` throws on
+a second run (its `applyTransition(→ completed)` is the CAS), so a crash *between* `runReport` and
+`finalizeReport` means the retry dies before finalise ever runs and `pdf_key` stays null. If R03
+wants that recovered, its transient branch must reach finalise directly rather than re-running the
+whole processor.

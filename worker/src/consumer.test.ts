@@ -15,12 +15,17 @@ import { runReport } from '@interviewly/backend';
 
 import { logger } from './lib/logger';
 
+import { finalizeReport } from './finalize';
 import { processReportJob, type ReportJobData } from './consumer';
 
 vi.mock('@interviewly/backend', () => ({ runReport: vi.fn() }));
 vi.mock('./lib/logger', () => ({ logger: { info: vi.fn() } }));
+// R02's own coverage is `finalize.test.ts`; here it is a seam, and mocking it keeps this file
+// free of the `prisma`/`storage` its real import pulls in.
+vi.mock('./finalize', () => ({ finalizeReport: vi.fn() }));
 
 const runReportMock = vi.mocked(runReport);
+const finalizeMock = vi.mocked(finalizeReport);
 const infoMock = vi.mocked(logger.info);
 
 /** Only the two fields the processor reads; BullMQ's `Job` is far too wide to build here. */
@@ -64,5 +69,23 @@ describe('processReportJob', () => {
     // The COMPLETED line is the signal R01 emits for a report that actually landed; a failed
     // run must not produce one.
     expect(loggedEvents()).toEqual(['REPORT_JOB_STARTED']);
+    expect(finalizeMock).not.toHaveBeenCalled();
+  });
+
+  it('finalises the artifact after runReport and before COMPLETED (R02)', async () => {
+    const order: string[] = [];
+    runReportMock.mockImplementationOnce(async () => void order.push('runReport'));
+    finalizeMock.mockImplementationOnce(async () => void order.push('finalize'));
+    infoMock.mockImplementation((_fields, event) => void order.push(String(event)));
+
+    await processReportJob(fakeJob('int-1'));
+
+    expect(order).toEqual([
+      'REPORT_JOB_STARTED',
+      'runReport',
+      'finalize',
+      'REPORT_JOB_COMPLETED',
+    ]);
+    expect(finalizeMock).toHaveBeenCalledExactlyOnceWith('int-1');
   });
 });
