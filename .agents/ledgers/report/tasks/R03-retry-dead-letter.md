@@ -65,15 +65,15 @@ schema-`failed` path is already I09's; this task only routes the *transient* fai
   rejected output and fail anyway. Assert both branches separately in the tests.
 
 ## Steps
-- [ ] **1. Write `failure.ts`** — the job-options export and `handleDeadLetter(interviewId,
+- [x] **1. Write `failure.ts`** — the job-options export and `handleDeadLetter(interviewId,
   cause)` using `applyTransition(→ failed)` + `reports.status = 'failed'` + the two log events.
-- [ ] **2. Apply `attempts`/`backoff`** to the producer in `queue.ts` (or as queue defaults),
+- [x] **2. Apply `attempts`/`backoff`** to the producer in `queue.ts` (or as queue defaults),
   preserving `jobId = interviewId`.
-- [ ] **3. Attach the dead-letter listener** in `index.ts` — on the final failed attempt, call
+- [x] **3. Attach the dead-letter listener** in `index.ts` — on the final failed attempt, call
   `handleDeadLetter`. Make it idempotent: if `applyTransition` rejects (already terminal), no-op.
-- [ ] **4. Confirm the consumer's throw/return contract** — a transient throw propagates to
+- [x] **4. Confirm the consumer's throw/return contract** — a transient throw propagates to
   BullMQ (retryable); the schema-`failed` return does not throw (no retry).
-- [ ] **5. Wire the worker tests** — three cases:
+- [x] **5. Wire the worker tests** — three cases:
   - **Transient, recovers:** a `runReport` stub that throws on attempts 1–2 and succeeds on 3 →
     the job ends `completed`, `reports.status = ready`, exactly one `→ completed` transition.
   - **Transient, exhausts:** a stub that always throws → after 3 attempts the interview is
@@ -81,9 +81,9 @@ schema-`failed` path is already I09's; this task only routes the *transient* fai
   - **Schema-gate failure:** a stub whose payload fails the `ReportPayload` gate (e.g.
     `overall_score 7`) → `runReport` sets `failed` with **no throw**; the job is **not** retried
     (`attemptsMade === 1`), `AI_OUTPUT_SCHEMA_INVALID` logged, no `report_questions`, no `pdf_key`.
-- [ ] **6. Assert idempotency** — a retry that runs after a partial transient write leaves exactly
+- [x] **6. Assert idempotency** — a retry that runs after a partial transient write leaves exactly
   one terminal transition (no double `→ failed`/`→ completed`); `applyTransition` guards it.
-- [ ] **7. Run the `## Verification` command.**
+- [x] **7. Run the `## Verification` command.**
 
 ## Definition of done
 - A transient report-job failure retries 3× with exponential backoff, then dead-letters:
@@ -106,9 +106,54 @@ first attempt with no retry — and the idempotency assertion holds.
 
 ## Notes
 
-(Empty until the task is done. Fill with: what actually happened, the worker-suite output
-verbatim, exactly how the transient-throw vs schema-return branch was detected (`attemptsMade`,
-the thrown code), how the dead-letter listener was made idempotent against a racing retry, any
-BullMQ version quirk in `attemptsMade`/`opts.attempts`, and a note on whether `runReport`'s
-no-throw schema contract held as I09 documented — if it threw instead, flag it back to
-interview-core rather than catching it here.)
+**Deviation — job options live in `backend/src/lib/queue.ts`, not `failure.ts`.** The Context said
+`failure.ts` exports them and the producer applies them; the producer is in `backend`, and
+`backend` cannot import `worker` (the dependency runs one way). `REPORT_JOB_OPTIONS = { attempts:
+3, backoff: { type: 'exponential', delay: 1000 } }` is therefore the `reportQueue`
+`defaultJobOptions` — queue defaults, not per-`add`, so no future producer can enqueue an
+unretried report job — and `failure.ts` imports it back through `worker-exports.ts` to recognise
+the final attempt. `jobId = interviewId` is unchanged (per-`add` opts win over defaults).
+
+**Branch detection is the throw, not the state.** `runReport`'s no-throw schema contract held as
+I09 documents it: `failure.integration.test.ts` drives a gate-rejected payload through a real
+queue and the processor is entered exactly once (`attempts === 1`), interview `failed`, no
+`reports` row, no object. Nothing in `failure.ts` runs on that path — only a thrown error reaches
+the `failed` listener at all.
+
+**BullMQ 6 `attemptsMade`.** Incremented inside `moveToFailed` *before* the `failed` event fires
+(`job.js:513`, `worker.js:638`), so on the exhausting attempt `attemptsMade === opts.attempts`
+exactly. `attemptsMade < attempts` → `REPORT_JOB_RETRY`; `>=` → `handleDeadLetter`. Verified
+against real Redis, not stubs — retry delays observed 1 s then 2 s.
+
+**Idempotency = `applyTransition`'s guard, and the order matters.** Transition first, then
+`reports.status`. If a racing retry already finished the interview (`completed`) or another
+dead-letter beat this one (`failed`), the edge is illegal → `INVALID_STATE_TRANSITION` →
+`REPORT_DEAD_LETTER_NOOP`, and the `reports` write is skipped, so the `ready` row the winning run
+wrote is never clobbered. Any other error from `applyTransition` propagates.
+
+**`reports.status = failed` usually updates 0 rows.** I09 creates the row already `ready` inside
+its own transaction (R01's "no `generating` status" deviation), so the ordinary dead-letter — a
+throw *inside* `runReport` — has no row to mark; the interview state is the durable signal.
+`updateMany({ where: { interview_id, status: { not: 'ready' } } })` covers the case where one
+exists without touching a landed report.
+
+**`handleReportJobFailed` never rejects.** An unhandled rejection from an event listener kills the
+process and takes `email.send` and `voice.reconcile` down with the report queue; a failed
+dead-letter is `REPORT_DEAD_LETTER_FAILED` + an interview stuck in `evaluating` instead.
+
+**R02's "a retry never reaches finalise" is stale.** `consumer.ts:28-31` already swallows
+`INVALID_STATE_TRANSITION` from `runReport`, so a retry after a partial run does reach
+`finalizeReport` and `pdf_key` is recovered. Also fixed the `any` on that line — `npm run lint`
+was **red on `master`** before this task (`no-explicit-any`, `worker/src/consumer.ts:30`).
+
+**Verification (2026-08-05).** `npm run -w worker test` 5 files / 29 tests. `npm run
+test:integration` 2 files / 9 tests — needs published ports (`localhost:15432` / `16380`) **and
+`docker compose stop worker`**: the container consumes the same `report` queue off the shared
+Redis and stole R01/R02's jobs, failing them against live providers. R03's own ring is immune (one
+throwaway queue name per test). `lint`, `typecheck`, `npm test` 43/309, `npm run test:acceptance`
+79/79 (export the two host URLs — `.env`'s `db:5432` hangs cucumber), `npm run -w worker build`
+all clean.
+
+**For R04.** `applyTransition` is now exported from `worker-exports.ts`; the `→ abandoned` edges
+R04 adds to `machine.ts` are reachable from the worker without a second export. `failure.ts` is
+report-queue-specific — the sweeper needs no part of it.
