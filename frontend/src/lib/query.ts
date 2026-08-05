@@ -384,19 +384,3 @@ export function useInterviewList(enabled = true): UseInfiniteQueryResult<
     getNextPageParam: (lastPage: InterviewListPage) => lastPage.nextCursor,
   });
 }
-
-/**
- * Soft delete (`204`). No optimistic removal: invalidate and let the refetch drop the row,
- * so a refused delete cannot resurrect a row the user watched disappear.
- */
-export function useDeleteInterview(): UseMutationResult<void, ApiError, string> {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: async (interviewId: string) => {
-      const result = await apiDelete(`/interviews/${interviewId}`);
-      if (!result.ok) throw new ApiError(result.code ?? 'UNKNOWN');
-    },
-    // Infinite query key is `queryKeys.meInterviews()`.
-    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.meInterviews() }),
-  });
-}

@@ -1,0 +1,78 @@
+/* Entry surface (ui §4.1/§4.2, DESIGN §5 W09): gradient ground + one soft-shadow panel.
+   The shell already fills the viewport, so no `min-height: 100vh` here. */
+
+.ground {
+  padding: 24px 16px 64px;
+  background: var(--gradient-entry);
+  background-attachment: fixed;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 32px;
+  background: var(--surface);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-soft);
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-heading), sans-serif;
+  font-size: 28px;
+  font-weight: 600;
+}
+
+.subtitle {
+  max-width: 65ch;
+  margin: 4px 0 0;
+  font-size: 16px;
+  color: var(--text-muted);
+}
+
+/* The one authored motion moment: the CTA enabling. */
+.cta {
+  width: 100%;
+  transition:
+    opacity var(--duration-default) var(--easing-default),
+    background-color var(--duration-default) var(--easing-default);
+}
+
+.cta:disabled {
+  opacity: 0.5;
+}
+
+.ctaHint {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* Skeleton at the panel's final height so granting does not jump the layout. */
+.bar {
+  background: var(--surface-sunken);
+  border-radius: var(--radius-input);
+}
+
+.barTitle {
+  height: 32px;
+  max-width: 240px;
+}
+
+.barBody {
+  height: 96px;
+}
+
+.barCta {
+  height: 44px;
+}
+
+@media (max-width: 480px) {
+  .panel {
+    padding: 24px;
+  }
+}
