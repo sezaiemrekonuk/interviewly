@@ -206,7 +206,19 @@
     "paused": "This interview is paused.",
     "resume": "Resume",
     "transcriptTitle": "Answers so far",
-    "transcriptEmpty": "No answers yet."
+    "transcriptEmpty": "No answers yet.",
+    "voice": {
+      "mute": "Mute",
+      "unmute": "Unmute",
+      "lost": "The voice connection dropped. Your interview is safe — reconnect to keep going.",
+      "reconnect": "Reconnect",
+      "status": {
+        "connecting": "Connecting",
+        "connected": "Live",
+        "reconnecting": "Reconnecting",
+        "lost": "Disconnected"
+      }
+    }
   },
   "report": {
     "title": "Your report",

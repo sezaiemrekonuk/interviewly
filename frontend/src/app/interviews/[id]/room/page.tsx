@@ -2,13 +2,14 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { AvatarPreload } from '../../../../components/avatar';
 import { AnswerComposer } from '../../../../components/room/answer-composer';
 import { PersonaTiles } from '../../../../components/room/persona-tiles';
 import { QuestionPanel } from '../../../../components/room/question-panel';
 import { Transcript } from '../../../../components/room/transcript';
+import { VoiceControls } from '../../../../components/room/voice-controls';
 import { Button } from '../../../../components/ui';
 import { routeForError } from '../../../../lib/error-routing';
 import { ApiError, useInterviewState, useResumeInterview, useSubmitAnswer } from '../../../../lib/query';
@@ -16,6 +17,7 @@ import { resolveAvatarState, roomPhase } from '../../../../lib/room-avatar';
 import { useErrorMessage } from '../../../../lib/use-error-message';
 import { useInterviewEvents } from '../../../../lib/use-interview-events';
 import { useRequireAuth } from '../../../../lib/use-require-auth';
+import { useVoiceSession } from '../../../../lib/use-voice-session';
 
 import styles from '../../../../components/room/room.module.css';
 
@@ -43,6 +45,18 @@ export default function InterviewRoomPage() {
   const pathname = `/interviews/${id}/room`;
   const queryErrorCode = stateQuery.error?.code ?? null;
   const roomState = room?.state ?? null;
+
+  // `mode` is the server's, so a fatal voice error (V03 downgrade) lands here as a plain
+  // refetch and the room becomes the text room — there is no client-side mode flag to unset.
+  const voiceMode = room?.mode === 'voice';
+  const { refetch } = stateQuery;
+  const voice = useVoiceSession(id, {
+    enabled: voiceMode,
+    // K11 — the only thing a session event may do to room state is ask for it again.
+    onResync: useCallback(() => {
+      void refetch();
+    }, [refetch]),
+  });
 
   // Navigation belongs in an effect: routing during render is what makes a redirect fire twice.
   useEffect(() => {
@@ -77,7 +91,13 @@ export default function InterviewRoomPage() {
     typedFor,
     submitting: submit.isPending,
   });
-  const avatarState = resolveAvatarState(phase, room.persona?.avatarState ?? 'idle');
+  const serverAvatarState = room.persona?.avatarState ?? 'idle';
+  // §3.8 holds in both modes — the server value is the sync on every refetch, something local
+  // drives it in between. Text uses the typing/submit lifecycle; voice uses the audio beat,
+  // which is why `beat: null` falls back to the same `settled` resolution and not to `idle`.
+  const avatarState = voiceMode
+    ? (voice.beat ?? resolveAvatarState('settled', serverAvatarState))
+    : resolveAvatarState(phase, serverAvatarState);
   const progressPercent = room.targetQuestionCount
     ? Math.round((Math.min(room.currentIndex, room.targetQuestionCount) / room.targetQuestionCount) * 100)
     : 0;
@@ -136,6 +156,7 @@ export default function InterviewRoomPage() {
           key={room.currentQuestion?.id ?? 'waiting'}
           question={room.currentQuestion}
           onTyped={setTypedFor}
+          instant={voiceMode}
         />
       </section>
 
@@ -153,11 +174,15 @@ export default function InterviewRoomPage() {
         </div>
       ) : null}
 
-      <Transcript turns={room.transcript} />
+      {/* Voice fills this pane with no other visible record of the answer, so it announces. */}
+      <Transcript turns={room.transcript} live={voiceMode} />
 
       {/* Last in the DOM as well as on screen: a sticky composer above the transcript would
-          pin itself to the middle of the page. */}
-      {room.currentQuestion && room.state !== 'paused' ? (
+          pin itself to the middle of the page. Voice swaps the composer for the controls —
+          the same slot, not a second room. */}
+      {voiceMode ? (
+        room.state !== 'paused' ? <VoiceControls session={voice} /> : null
+      ) : room.currentQuestion && room.state !== 'paused' ? (
         <AnswerComposer onSubmit={handleSubmit} pending={submit.isPending} error={submitError} />
       ) : null}
     </main>

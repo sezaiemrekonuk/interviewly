@@ -24,19 +24,22 @@ const prefersReducedMotion = () =>
 export function QuestionPanel({
   question,
   onTyped,
+  instant = false,
 }: {
   question: { id: string; text: string } | null;
   onTyped: (questionId: string) => void;
+  /** Voice mode (W10): the agent speaks the question, so typing it out races the audio. */
+  instant?: boolean;
 }) {
   const t = useTranslations('room');
   const id = question?.id ?? null;
   const text = question?.text ?? '';
-  const [shown, setShown] = useState(() => (prefersReducedMotion() ? text.length : 0));
+  const [shown, setShown] = useState(() => (instant || prefersReducedMotion() ? text.length : 0));
 
   useEffect(() => {
     if (!id) return;
 
-    if (prefersReducedMotion() || text.length === 0) {
+    if (instant || prefersReducedMotion() || text.length === 0) {
       onTyped(id);
       return;
     }
@@ -52,7 +55,7 @@ export function QuestionPanel({
     }, 1000 / CHARS_PER_SEC);
 
     return () => clearInterval(timer);
-  }, [id, text, onTyped]);
+  }, [id, text, onTyped, instant]);
 
   if (!question) {
     // `currentQuestion: null` inside a live round is the waiting beat, not a blank panel and

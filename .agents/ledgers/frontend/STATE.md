@@ -1,16 +1,29 @@
 # Frontend — State
 
 Last updated: 2026-08-05
-Last session ended: **W09 done — `/interviews/:id/pre-join` is mic-only.** No camera preview (task
+Last session ended: **W10 done — voice is a branch in `room/page.tsx` on `room.mode`, not a second
+room.** `useVoiceSession` (`src/lib/use-voice-session.ts`) mints via V02, opens `WebSocket(wssOrigin)`
+and sends the token in the **init frame, never the URL** (K6: query strings reach proxy logs). It
+emits a local `beat` only — `BEAT_BY_FRAME` maps agent frames to `speaking|listening|acknowledging`,
+and the test proves a `user_transcript` frame moves the avatar while index/transcript stay put until
+`/state` is refetched (K11). Mint refusal → `lost` + resync; **V03 already downgraded server-side**,
+so the client never calls `voiceDowngrade` here. **V05's `createActiveSpeaker` is deliberately
+unused** — the active tile is `persona.id` from the server, and deriving it from round state
+client-side is the same K11 violation one layer down. **No self-camera** despite this row's title
+(W09 established mic-only). `useMicPermission` gained `muted`/`toggleMute` (track disabled, not
+dropped), `Transcript` a `live` prop, `QuestionPanel` an `instant` prop. New shared helper
+`src/test/websocket-mock.ts`. Ring: frontend 231, root 352.
+
+Previous: **W09 done — `/interviews/:id/pre-join` is mic-only.** No camera preview (task
 security boundary; "camera off-by-default" is satisfied by never asking). `useMicPermission`
 (`src/lib/use-mic-permission.ts`) owns `idle|prompt|granted|denied|unavailable` + RMS level +
 device list; `NotFoundError`/`OverconstrainedError` → `unavailable` (no retry, CTA removed), else
 `denied` (retry + numbered recovery). Track release on unmount asserted in both suites.
 `mode !== 'voice'` → `router.replace(room)` **before** any `getUserMedia`. **Fixed en route:**
 `lib/query.ts` had a duplicate `useDeleteInterview` export (committed at 483797b) that broke every
-rolldown import of the module — second copy deleted. W10 reuses this hook for the room mic meter.
+rolldown import of the module — second copy deleted.
 
-Previous: **W08 done — history lives on `/`, not `/dashboard`** (owner-directed; no
+Earlier: **W08 done — history lives on `/`, not `/dashboard`** (owner-directed; no
 `/dashboard` route exists). `home-switch.tsx` probes `GET /me` with plain `apiGet` (the
 `header-nav.tsx` pattern) and `React.lazy`s in `authed-home.tsx`, so the anonymous landing keeps
 its zero-React-Query budget (asserted in `src/app/page.test.tsx`). `/` is in the closed
@@ -19,7 +32,7 @@ its zero-React-Query budget (asserted in `src/app/page.test.tsx`). `/` is in the
 `['me','interviews']`, row goes on the refetch. `useMyInterviews`/`useDeleteInterview` + `apiDelete`
 now live in `lib/query.ts`/`lib/api.ts` — W09/W11 reuse them. Ring: frontend 216.
 
-Earlier: **W07 done — the demo path is closed** (land → … → room → **report**).
+Before that: **W07 done — the demo path is closed** (land → … → room → **report**).
 `/interviews/:id` reads **two** endpoints (ADR-W08): `GET /interviews/:id` is thin
 (`{interviewId,state,report}`), so `transcript` + `endedReason` come from room-state — `get.ts` was
 not patched, it is another ledger's file. **`useInterviewEvents` now invalidates the
@@ -29,7 +42,7 @@ unaffected and its `queryKey` param sketch was dropped. `ReportPayload` is **sna
 fallback = `useReport(id, poll)` 5 s, off at `<ReportWait onTimeout>`'s 60 s ceiling.
 Ring: frontend 170, root 280.
 
-Before that: **W06 done.** `/interviews/:id/room` renders text mode off `['interview',id,'state']`
+And before: **W06 done.** `/interviews/:id/room` renders text mode off `['interview',id,'state']`
 only; SSE is a nudge. **Room-state was extended to make that possible (ADR-W06):** `persona.id`,
 `personas[]` (both tiles, each with `avatarSet`) and `transcript[]` ship from
 `backend/modules/interview/state.ts` — W09/W10 read them, do not re-derive. `<Avatar>` takes the
@@ -51,8 +64,8 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**W10 (`<- W09, V02, V05`)** is next — the voice room surface (opus-tier, DESIGN §5). W11 is also
-eligible (deps `done`); § 4 order picks the lowest ID.
+**W11 (`<- W02, N01, N02`)** is next and is the ledger's last row — admin list + stats
+(sonnet-tier, DESIGN §5). Deps are all `done`.
 
 ## Environment
 
@@ -140,7 +153,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | W07 | Report + transcript (screen 12): report-wait (SSE + bounded poll) → render `ReportPayload` read-only | | done | W02, R01 |
 | W08 | History (screen 13) as the signed-in `/`: list, Continue, confirm-then-Delete | | done | W02, N01 |
 | W09 | Pre-join device check (screen 10, voice): camera off-by-default, mic level bar, continue-in-text | | done | W06, V02 |
-| W10 | Voice room surface (screen 11-voice): live ASR transcript, mic level, self-camera, amplitude avatar driver | | todo | W09, V02, V05 |
+| W10 | Voice room surface (screen 11-voice): live ASR transcript, mic level, self-camera, amplitude avatar driver | | done | W09, V02, V05 |
 | W11 | Admin list + stats (screen 14): tables + Recharts bound to `/admin/stats` as-returned | | todo | W02, N01, N02 |
 
 ## Critical path (the demo path)

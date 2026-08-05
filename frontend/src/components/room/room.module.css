@@ -293,6 +293,97 @@
   color: var(--text-muted);
 }
 
+/* -------------------------------------------------------------- voice (W10) */
+
+/* Same footing as `.composer` — voice swaps the textarea for controls, not the layout. */
+.voiceBar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  margin-top: auto;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 0;
+  background: var(--bg);
+  border-block-start: 1px solid var(--border);
+}
+
+.voiceRow {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+/* 44px min on both axes: this is the one control the candidate hits mid-sentence. */
+.voiceButton {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-button);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+/* Muted reads as a sunken well plus the button's own label — never a red icon alone. */
+.voiceButton[data-muted='true'] {
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+}
+
+.micMeter {
+  flex: 1;
+}
+
+.micTrack {
+  overflow: hidden;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+}
+
+/* --accent, not --live: this is the candidate's own level, not the active speaker. */
+.micFill {
+  height: 100%;
+  background: var(--accent);
+  transition: width var(--duration-default) var(--easing-default);
+}
+
+.voiceStatus {
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.sessionLost {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-input);
+  background: var(--surface-sunken);
+}
+
+.sessionLostText {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .micFill {
+    transition: none;
+  }
+}
+
 /* --------------------------------------------------------------------- misc */
 
 .errorCard {
@@ -335,6 +426,17 @@
 
   .question {
     font-size: 16px;
+  }
+
+  /* The status chip wraps under the button+meter rather than squeezing the 44px target. */
+  .voiceRow {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .sessionLost {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .composerActions {

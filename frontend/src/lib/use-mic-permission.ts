@@ -22,6 +22,9 @@ export interface UseMicPermission {
   request: (deviceId?: string) => void;
   /** Switch input: re-requests against the chosen device and releases the old track. */
   select: (deviceId: string) => void;
+  muted: boolean;
+  /** Mute by disabling the track, not by dropping it — re-acquiring re-prompts on some browsers. */
+  toggleMute: () => void;
 }
 
 // `NotFoundError` is "this machine has no microphone" — a different screen from "you said no",
@@ -33,12 +36,12 @@ export function useMicPermission(): UseMicPermission {
   const [level, setLevel] = useState(0);
   const [devices, setDevices] = useState<MicDevice[]>([]);
   const [deviceId, setDeviceId] = useState<string | null>(null);
+  const [muted, setMuted] = useState(false);
 
   const streamRef = useRef<MediaStream | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const rafRef = useRef<number | null>(null);
   const liveRef = useRef(true);
-  const requestSeqRef = useRef(0);
 
   const release = useCallback(() => {
     if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
@@ -116,6 +119,19 @@ export function useMicPermission(): UseMicPermission {
     [request],
   );
 
+  const toggleMute = useCallback(() => {
+    setMuted((was) => {
+      const next = !was;
+      streamRef.current?.getAudioTracks().forEach((track) => {
+        track.enabled = !next;
+      });
+      // The analyser keeps reading a disabled track as silence, but pinning it to 0 keeps the
+      // meter from lagging a frame behind the button.
+      if (next) setLevel(0);
+      return next;
+    });
+  }, []);
+
   // The non-negotiable: no hot mic after the user leaves.
   useEffect(() => {
     liveRef.current = true;
@@ -125,5 +141,5 @@ export function useMicPermission(): UseMicPermission {
     };
   }, [release]);
 
-  return { state, level, devices, deviceId, request, select };
+  return { state, level, devices, deviceId, request, select, muted, toggleMute };
 }
