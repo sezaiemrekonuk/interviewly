@@ -81,16 +81,6 @@ npx playwright test                               # smokes against `docker compo
 
 ## Open blockers / decisions for the user
 
-- **The edge cannot serve bucket objects, so every avatar/mascot `<img>` 404s in the composed
-  stack** (found in W03). Two gaps, both infra, neither in a frontend task's scope: (1)
-  `Caddyfile` uses `handle /assets/*` → `bucket:9000`, so MinIO receives `/assets/mascot/…` and
-  reads `assets` as the bucket name — it needs the `interviewly` bucket segment (`handle_path` +
-  rewrite, or a bucket named `assets`); (2) `seed.ts` PUTs the objects with a public-read cache
-  header but never sets an anonymous-read bucket policy. Frontend resolves the key correctly
-  (`mascotUrl`), so this is one Caddy route + one policy call away. **Chase in foundations
-  (F03/F02, Sezai) as its own task — do not patch the Caddyfile from a `W` task.** Blocks
-  nothing at test time; blocks the demo looking right.
-
 - **`GET /interviews/:id` exists but is thin — resolved for W07, still a gap for the spec.** R01
   shipped `backend/modules/interview/get.ts` returning `{ interviewId, state, report }`, not the
   spec's `{ interview, transcript, report? }` (backend spec line 107). W07 reads `transcript` +

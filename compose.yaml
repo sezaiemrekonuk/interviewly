@@ -115,6 +115,10 @@ services:
     image: caddy:2-alpine
     ports:
       - "80:80"
+    # Only the bucket name, not `env_file: [.env]` — the edge has no business holding the
+    # S3 credentials it would inherit from the shared env file.
+    environment:
+      S3_BUCKET: ${S3_BUCKET:-interviewly}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
     depends_on:

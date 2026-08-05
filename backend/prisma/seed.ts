@@ -16,7 +16,12 @@ import { join } from 'node:path';
 import { PrismaClient } from '@prisma/client';
 import type { AvatarState, MascotPose, Prisma } from '@prisma/client';
 import { hash } from '@node-rs/argon2';
-import { CreateBucketCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  CreateBucketCommand,
+  PutBucketPolicyCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 
 const prisma = new PrismaClient();
 
@@ -63,6 +68,36 @@ async function ensureBucket() {
     const name = (err as { name?: string }).name;
     if (name !== 'BucketAlreadyOwnedByYou' && name !== 'BucketAlreadyExists') throw err;
   }
+}
+
+/**
+ * Anonymous `GetObject` on the two content-addressed asset prefixes, and nothing else. The
+ * cache header on each object was never enough on its own: MinIO denies an unsigned GET
+ * until a bucket policy allows it, so every avatar and mascot 403'd behind the edge.
+ *
+ * Prefix-scoped, never bucket-wide: `uploads/*` in this same bucket holds candidate CVs and
+ * job listings, which are served by signed URL only (I12) and must stay unreadable anonymously.
+ */
+async function publishAssetPrefixes() {
+  await s3.send(
+    new PutBucketPolicyCommand({
+      Bucket: S3_BUCKET,
+      Policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Principal: { AWS: ['*'] },
+            Action: ['s3:GetObject'],
+            Resource: [
+              `arn:aws:s3:::${S3_BUCKET}/mascot/*`,
+              `arn:aws:s3:::${S3_BUCKET}/personas/*`,
+            ],
+          },
+        ],
+      }),
+    })
+  );
 }
 
 /** PUTs the placeholder image at `key` with the public-read cache header (infra §K12). */
@@ -484,6 +519,7 @@ async function seedSampleInterview(userId: string) {
 async function main() {
   console.log(`Seeding ${S3_BUCKET} @ ${S3_ENDPOINT} and the database...`);
   await ensureBucket();
+  await publishAssetPrefixes();
   await seedClusters();
   await seedMascotSet();
   await seedPersonas();

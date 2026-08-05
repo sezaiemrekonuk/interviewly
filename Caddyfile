@@ -10,7 +10,11 @@ http://localhost {
     handle /webhooks/* {
         reverse_proxy api:4000
     }
-    handle /assets/* {
+    # S3 puts the bucket in the path, so `/assets/mascot/x.webp` has to reach the bucket as
+    # `/interviewly/mascot/x.webp`. Proxying the URL unchanged made MinIO read "assets" as the
+    # bucket name and 404 every avatar and mascot.
+    handle_path /assets/* {
+        rewrite * /{$S3_BUCKET:interviewly}{uri}
         reverse_proxy bucket:9000
     }
     handle {

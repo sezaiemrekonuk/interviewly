@@ -120,7 +120,7 @@ None at ledger-write time. The two open questions in the `ui` spec (styling laye
 optional second `speaking` avatar) are decided or deferred in ADR-F01 and F01's task
 steps. The `voice` CSP open question does not block foundations.
 
-## Task ledger (F01–F04)
+## Task ledger (F01–F05)
 
 Statuses: todo → in_progress → done → (blocked if waiting on user).
 `Repo`: blank = this repo.
@@ -131,6 +131,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | F02 | Creating full Prisma schema, migrations, seed, and soft-delete repo helpers | | done | F03 |
 | F03 | Creating npm workspaces root, compose.yaml, Caddyfile, logger, env schema, and CI workflow | | done | — |
 | F04 | Local pre-commit hooks (husky + lint-staged) for backend, frontend, packages | | done | F03 |
+| F05 | Edge `/assets/*` bucket-path rewrite + MinIO anonymous-read policy scoped to `mascot/*`+`personas/*` | | done | F02, F03 |
 
 ## Critical path
 
