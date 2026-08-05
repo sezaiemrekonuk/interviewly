@@ -49,8 +49,8 @@ export function ReportView({
 
       <h2 className={styles.sectionTitle}>{t('roundsTitle')}</h2>
       <ul className={styles.rounds}>
-        {payload.rounds.map((round) => (
-          <li key={round.type} className={styles.round}>
+        {payload.rounds.map((round, idx) => (
+          <li key={`${round.type}-${idx}`} className={styles.round}>
             <h3>{t(round.type === 'hr' ? 'roundHr' : 'roundTech')}</h3>
             <p className={styles.roundScore}>{t('scoreValue', { score: round.score })}</p>
             <p>{round.summary}</p>
