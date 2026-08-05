@@ -1,13 +1,14 @@
 # Report — State
 
-Last updated: 2026-08-04
-Last session ended: **R02 done.** `processReportJob` now calls `finalizeReport` after
-`runReport`: `renderReportPdf` → `storage.put('reports/<interviewId>.pdf')` → `reports.pdf_key`.
-Three things the next session should know: finalise does **not** write `report_questions` —
-I09 already does, with the known-`question_id` filter (ADR-R06); `renderReportPdf` takes a
-`{ interviewId, createdAt }` meta and returns a `Promise<Buffer>`, not a bare `Buffer`; and
-`runReport` throws on a second run (its `→ completed` transition is the CAS), so a retry never
-reaches finalise — see R02 `## Notes` "For R03". R03 and R04 are unblocked.
+Last updated: 2026-08-05
+Last session ended: **R03 done.** `REPORT_JOB_OPTIONS` (`attempts: 3`, exponential backoff 1 s)
+are `reportQueue` defaults in `backend/src/lib/queue.ts` — not `failure.ts`, which cannot be
+imported from `backend`. New `worker/src/failure.ts`: `handleReportJobFailed` (dead-letters only
+when `attemptsMade >= opts.attempts`, never rejects) + `handleDeadLetter` (`applyTransition
+→ failed`, then `reports.status`; an illegal edge means the whole handler no-ops). `worker-
+exports.ts` gained `applyTransition` + `REPORT_JOB_OPTIONS`. Two things for R04: `lint` was red
+on `master` before this session (fixed, `consumer.ts:30`), and the integration ring needs
+`docker compose stop worker` or the container steals the jobs. R04 is the last report task.
 
 ## Execution protocol (follow exactly)
 
@@ -24,11 +25,10 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-R01 and R02 are `done`. Next up is **R03** (retry/backoff/dead-letter) or **R04** (24 h
-`abandoned` sweeper) — independent of each other, either order, both opus-tier per `MODELS.md`.
-R03 attaches at the `new Worker(REPORT_QUEUE, …)` options in `worker/src/index.ts` and the
-existing `reportWorker.on('failed', …)` handler; read R02's `## Notes` "For R03" first — it names
-the retry hazard the `runReport` CAS creates for the now-two-step success path.
+R01–R03 are `done`. Next and last is **R04** (24 h `abandoned` sweeper), opus-tier per
+`MODELS.md`. It adds the `→ abandoned` edges to `machine.ts` (I07's guarded writer, already
+exported to the worker by R03) and one repeatable BullMQ job beside the report consumer in
+`worker/src/index.ts`. It shares no file with R03's `failure.ts`.
 
 ## Environment
 
@@ -82,7 +82,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 |----|-------|------|--------|------------|
 | R01 | Worker service + BullMQ report consumer: real producer into I07's hook, dequeue → `runReport`, `reports.status` lifecycle | | done | F01, F02, F03, I01, I02, I06, I07, I09 |
 | R02 | Render `ReportPayload` to PDF, write `reports.pdf_key` via I12 storage, denormalise `report_questions` | | done | R01, I12 |
-| R03 | Retry, backoff, dead-letter `→ failed`; idempotent; transient vs schema-gate branch | | todo | R01 |
+| R03 | Retry, backoff, dead-letter `→ failed`; idempotent; transient vs schema-gate branch | | done | R01 |
 | R04 | 24 h `abandoned` sweeper: repeatable job ends interviews stale in `profiling`/`hr_round`/`paused` past 24 h → `abandoned` via `applyTransition` (adds the `→ abandoned` edges), idempotent, no AI | | todo | R01 |
 
 ## Critical path

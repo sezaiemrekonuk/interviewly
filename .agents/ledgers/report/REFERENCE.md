@@ -135,8 +135,10 @@ of its own. `runReport`'s `AI_OUTPUT_INVALID`/`AI_OUTPUT_SCHEMA_INVALID` and I12
 
 **Log shape** (K6): `logger.info({ interviewId, traceId, jobId }, "REPORT_JOB_STARTED")` —
 structured object first, SCREAMING_SNAKE event second. Events this ledger emits:
-`REPORT_JOB_STARTED`, `REPORT_PDF_RENDERED`, `REPORT_JOB_COMPLETED`, `REPORT_JOB_FAILED`,
-`REPORT_DEAD_LETTERED`. Never log the `payload`, the PDF bytes, the signed URL, the transcript,
+`REPORT_JOB_STARTED`, `REPORT_PDF_RENDERED`, `REPORT_JOB_COMPLETED`, `REPORT_JOB_RETRY` (R03, a
+failed attempt with attempts left), `REPORT_JOB_FAILED` (R03, the attempt that exhausted them),
+`REPORT_DEAD_LETTERED`, `REPORT_DEAD_LETTER_NOOP` (already terminal / interview gone),
+`REPORT_DEAD_LETTER_FAILED`. Never log the `payload`, the PDF bytes, the signed URL, the transcript,
 or any PII/secret (K6, §7.2). `REPORT_JOB_ENQUEUED` is emitted on the `api` side by I07's hook.
 
 **Idempotency.** `jobId = interviewId` dedupes the producer; every consumer path must be safe to

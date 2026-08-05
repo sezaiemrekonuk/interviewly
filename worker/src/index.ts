@@ -2,6 +2,7 @@ import { REPORT_QUEUE, VOICE_RECONCILE_QUEUE, type VoiceReconcileJob } from '@in
 import { Worker } from 'bullmq';
 
 import { processReportJob, type ReportJobData } from './consumer';
+import { handleReportJobFailed } from './failure';
 import { sendEmail, type EmailJob } from './jobs/email-send';
 import { processVoiceReconcileJob } from './jobs/voice-reconcile';
 import { config } from './lib/env';
@@ -45,12 +46,11 @@ const reportWorker = new Worker<ReportJobData>(
   { connection: { url: config.REDIS_URL }, concurrency: REPORT_CONCURRENCY },
 );
 
-// R03 adds retry/dead-letter policy; here a failed job just needs to be loud, same as email's.
+// R03. `attempts`/`backoff` ride on the job (queue defaults in `backend/src/lib/queue.ts`), so
+// this side only has to recognise the attempt that exhausted them and dead-letter it.
+// `handleReportJobFailed` never rejects — see its note.
 reportWorker.on('failed', (job, err) => {
-  logger.warn(
-    { queue: REPORT_QUEUE, interviewId: job?.data?.interviewId, reason: err.message },
-    'REPORT_JOB_FAILED',
-  );
+  void handleReportJobFailed(job, err);
 });
 
 const voiceReconcileWorker = new Worker<VoiceReconcileJob>(

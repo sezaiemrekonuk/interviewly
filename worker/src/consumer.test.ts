@@ -72,6 +72,17 @@ describe('processReportJob', () => {
     expect(finalizeMock).not.toHaveBeenCalled();
   });
 
+  // R03/ADR-R04: the schema gate is I09's and it does not throw — it transitions the interview
+  // `failed` and returns. The job therefore completes on attempt 1 and BullMQ never retries it,
+  // which is what keeps a rejected payload from costing three provider calls.
+  it('completes the job when runReport took the schema-gate branch (never retried)', async () => {
+    // The branch's observable shape here: `runReport` resolves, and finalise finds no row.
+    finalizeMock.mockResolvedValueOnce(undefined);
+
+    await expect(processReportJob(fakeJob('int-1'))).resolves.toBeUndefined();
+    expect(loggedEvents()).toEqual(['REPORT_JOB_STARTED', 'REPORT_JOB_COMPLETED']);
+  });
+
   it('finalises the artifact after runReport and before COMPLETED (R02)', async () => {
     const order: string[] = [];
     runReportMock.mockImplementationOnce(async () => void order.push('runReport'));
