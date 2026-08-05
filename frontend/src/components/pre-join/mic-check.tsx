@@ -83,7 +83,7 @@ export function MicCheck({ onStateChange }: MicCheckProps) {
           style={{ width: `${Math.round(level * 100)}%` }}
         />
       </div>
-      <p className={styles.status}>
+      <p className={styles.status} aria-live="polite">
         {state !== 'granted' ? t('prompt') : level >= SPEAKING ? t('hearYou') : t('quiet')}
       </p>
     </div>
