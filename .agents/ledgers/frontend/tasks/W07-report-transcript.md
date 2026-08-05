@@ -1,5 +1,5 @@
 # W07 — Report + transcript (screen 12): the report-wait beat and the scored read-back — CLOSES THE DEMO PATH
-REPO: (this repo) · Depends: W02, R01 · Status: todo
+REPO: (this repo) · Depends: W02, R01 · Status: done
 Read first: STATE.md, REFERENCE.md, then this.
 **Model: claude-opus-4.8** — the screen that closes the loop and the one with the trickiest async
 seam: the `evaluating`→ready wait (SSE-primary with a bounded poll fallback, < 60 s budget) and the
@@ -75,16 +75,16 @@ path** (land → register → onboard → setup → room → **report** → hist
   first, poll only if silent.
 
 ## Steps
-- [ ] **1. Confirm `GET /interviews/:id` resolves** (R01). If not, stop and flag R01 in STATE.
-- [ ] **2. `useReport(id)`** on `['interview',id]` (+ gated `refetchInterval` for the fallback).
-- [ ] **3. `report-wait.tsx`** — SSE-primary via `useInterviewEvents` invalidating `['interview',id]`,
+- [x] **1. Confirm `GET /interviews/:id` resolves** (R01). If not, stop and flag R01 in STATE.
+- [x] **2. `useReport(id)`** on `['interview',id]` (+ gated `refetchInterval` for the fallback).
+- [x] **3. `report-wait.tsx`** — SSE-primary via `useInterviewEvents` invalidating `['interview',id]`,
   bounded poll fallback, < 60 s ceiling.
-- [ ] **4. `report-view.tsx`** — score, per-dimension, narrative from `report.payload`; cut-short
+- [x] **4. `report-view.tsx`** — score, per-dimension, narrative from `report.payload`; cut-short
   header on an early `endedReason`.
-- [ ] **5. `[id]/page.tsx`** — branch wait vs. report; reuse `<Transcript>`; flat `--bg`, no mascot;
+- [x] **5. `[id]/page.tsx`** — branch wait vs. report; reuse `<Transcript>`; flat `--bg`, no mascot;
   guard auth; route errors.
-- [ ] **6. `report.*` copy** in both files.
-- [ ] **7. `page.test.tsx`** — ready-report render, evaluating→SSE→report, cut-short header, poll
+- [x] **6. `report.*` copy** in both files.
+- [x] **7. `page.test.tsx`** — ready-report render, evaluating→SSE→report, cut-short header, poll
   fallback. Run the `## Verification` command.
 
 ## Definition of done
@@ -107,4 +107,36 @@ event body), the cut-short header, and the bounded poll fallback.
 
 ## Notes
 
-(Empty until the task is done.)
+**Done.** `/interviews/:id` renders the report + the reused read-only `<Transcript>`.
+
+**The read is two calls, not one (ADR-W08).** `GET /interviews/:id` (`backend/modules/interview/
+get.ts`) resolves but is thin — `{ interviewId, state, report }`, no `transcript`, no
+`endedReason`. Both come from `GET /interviews/:id/state`, which already derives them (ADR-W06).
+`get.ts` was NOT patched: it is another ledger's file, and re-deriving the transcript there would
+duplicate `state.ts`'s hr→tech ordering. If R01 ever thickens `get.ts`, delete the state read here.
+
+**`useInterviewEvents` changed contract (breaking, one call site):** it now invalidates
+`queryKeys.interview(id)` — the *prefix* of both `['interview',id]` and `['interview',id,'state']`
+— instead of the state key. One nudge refreshes a screen that mounts both reads. The room is
+unaffected (prefix match still hits its key); `use-interview-events.test.ts` was updated to assert
+the prefix. The sketch's `queryKey` parameter was dropped — it was missing from the effect deps and
+a caller passing a fresh array per render would have re-opened the stream.
+
+**`ReportPayload` is snake_case, verbatim `reports.payload`** — `overall_impression`,
+`overall_score`, `strengths[]`, `improvements[]`, `rounds[]{type,score,summary,note?}`,
+`questions[]{question_id,score,reason,star_adherence}`, `language`. Gated by `ReportPayloadSchema`
+(`packages/ai/src/schemas.ts`); every score is an **integer 0..5** (copy renders `{score} / 5`).
+The sketch's camelCase `dimensions`/`gaps` stub was wrong and is gone.
+
+**Poll fallback:** `useReport(id, poll)` — `refetchInterval` 5 s, off unless `poll` and no report
+yet. `<ReportWait onTimeout>` owns the 60 s ceiling (§8.1) and switches `poll` off at it; SSE still
+resolves the screen after the ceiling.
+
+**Per-question rows join `payload.questions` to the transcript by `question_id`** and drop ids the
+transcript does not know — a model-invented id renders nothing, never an unattached scored row.
+
+**For W08:** the room already `router.replace`s here on `evaluating|completed|failed|abandoned`
+(`room/page.tsx:22`), so history only needs to link `/interviews/:id`.
+
+**Still open (not W07):** the Download-PDF slot is unbuilt — R02/I12 own the rendered PDF (STATE
+Backlog).

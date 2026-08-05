@@ -179,3 +179,20 @@ exists to prevent, and a wrong sha is a broken tile in the one screen that must 
 **Consequences:** interview-core REFERENCE room-state shape updated. W07 can reuse `transcript`
 until R01's `GET /interviews/:id` grows its own. The whole transcript ships on every refetch —
 `ponytail:` comment in `state.ts` names the paging upgrade if turn counts grow.
+
+## ADR-W08 — 2026-08-05 — the report screen reads two endpoints, and the SSE nudge invalidates the `['interview',id]` prefix
+
+**Context:** `GET /interviews/:id` shipped (R01, `backend/modules/interview/get.ts`) but returns
+`{ interviewId, state, report }` only — no `transcript`, no `endedReason`, both required by W07's
+DoD (transcript render, cut-short header). Options: (A) extend `get.ts` from this ledger; (B) read
+transcript/`endedReason` from room-state, which already derives both (ADR-W06); (C) block W07.
+
+**Decision:** (B). `/interviews/:id` for the payload, `/interviews/:id/state` for
+transcript + `endedReason`. (A) is another ledger's file and would put a second copy of `state.ts`'s
+hr→tech ordering in it; (C) stalls the screen that closes the demo path for a gap already covered.
+Consequence: `useInterviewEvents` now invalidates `queryKeys.interview(id)` — the **prefix** of both
+`['interview',id]` and `['interview',id,'state']` — instead of the state key, so one nudge refreshes
+a screen that mounts both. Supersedes ADR-W02's key, not its nudge-then-refetch rule.
+
+**Consequences:** two reads per report render (both cached, both nudged together). If `get.ts` ever
+grows `transcript`/`endedReason`, drop the state read here — not the reverse.

@@ -1,23 +1,22 @@
 # Frontend — State
 
-Last updated: 2026-08-04
-Last session ended: **W06 done.** `/interviews/:id/room` renders text mode off
-`['interview',id,'state']` only; SSE is a nudge (proven in `page.test.tsx`). **Room-state was
-extended to make that possible (ADR-W06):** `persona.id`, `personas[]` (both tiles, each with
-`avatarSet`) and `transcript[]` now ship from `backend/modules/interview/state.ts` — W07/W09/W10
-read them, do not re-derive. `<Avatar>` takes the `avatarSet` keys, never a client-guessed sha.
-Silent-refetch codes live once in `error-routing.ts` (`SILENT_REFETCH_CODES`), reused by
-`useSubmitAnswer`. Ring: frontend 165, root 275.
+Last updated: 2026-08-05
+Last session ended: **W07 done — the demo path is closed** (land → … → room → **report**).
+`/interviews/:id` reads **two** endpoints (ADR-W08): `GET /interviews/:id` is thin
+(`{interviewId,state,report}`), so `transcript` + `endedReason` come from room-state — `get.ts` was
+not patched, it is another ledger's file. **`useInterviewEvents` now invalidates the
+`['interview',id]` prefix**, not the state key, so one nudge covers both reads; the room is
+unaffected and its `queryKey` param sketch was dropped. `ReportPayload` is **snake_case verbatim**
+(`overall_score` int 0..5, `improvements` not "gaps") per `packages/ai/src/schemas.ts`. Poll
+fallback = `useReport(id, poll)` 5 s, off at `<ReportWait onTimeout>`'s 60 s ceiling.
+Ring: frontend 170, root 280.
 
-Previous: **W05 done.** `/interviews/new` posts one `POST /interviews` and routes to
-`/room` (text) or `/pre-join` (voice) — never before the create resolves. **Two verified API facts
-W06+ must not re-derive:** the create body carries **no occupation/language** (I03 classifies from
-`jobText`, language from `req.user.locale`), so both selects are client-side only; and **`uploadId`
-without `jobText` is `VALIDATION_ERROR`** (`setup.ts:55`), so the form requires pasted text even
-after a clean PDF upload — drop that guard when I11 returns extracted text. The round split is a
-**client preview mirroring I03's `max(2, round(target*0.4))`** because setup navigates away before
-the 201 can render — duplicated server logic, flagged in the task Notes. `useCreateInterview()` in
-`lib/query.ts` (retry off); reuse its types. Ring: frontend 150, root 258.
+Previous: **W06 done.** `/interviews/:id/room` renders text mode off `['interview',id,'state']`
+only; SSE is a nudge. **Room-state was extended to make that possible (ADR-W06):** `persona.id`,
+`personas[]` (both tiles, each with `avatarSet`) and `transcript[]` ship from
+`backend/modules/interview/state.ts` — W09/W10 read them, do not re-derive. `<Avatar>` takes the
+`avatarSet` keys, never a client-guessed sha. Silent-refetch codes live once in `error-routing.ts`
+(`SILENT_REFETCH_CODES`), reused by `useSubmitAnswer`.
 
 ## Execution protocol (follow exactly)
 
@@ -34,9 +33,9 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**W07 (`<- W02, R01`)** is next — report + transcript, screen 12 (opus-tier). W08/W09/W11 are
-also eligible (deps `done`); § 4 order picks the lowest ID. W07 can reuse `<Transcript>` and
-room-state's `transcript[]` (ADR-W06) while `GET /interviews/:id` stays thin (see blockers).
+**W08 (`<- W02, N01`)** is next — history/dashboard, screen 13 (sonnet-tier). W09/W11 are also
+eligible (deps `done`); § 4 order picks the lowest ID. W08 links straight to `/interviews/:id`; the
+room already `router.replace`s there on `evaluating|completed|failed|abandoned`.
 
 ## Environment
 
@@ -92,13 +91,12 @@ npx playwright test                               # smokes against `docker compo
   (F03/F02, Sezai) as its own task — do not patch the Caddyfile from a `W` task.** Blocks
   nothing at test time; blocks the demo looking right.
 
-- **`GET /interviews/:id` (report+transcript read) is owned by no task.** The backend spec
-  defines it (line 107, `{ interview, transcript, report? }`) and report **R01**'s DoD assumes
-  it (`report/tasks/R01-...md:127`), but no task adds the handler — the interview router has no
-  `GET /:id` route. **W07 depends on R01** and is buildable against the documented shape (mocked
-  API), but before anyone claims the demo path closed, confirm the handler exists in the running
-  stack. Chase it in the report or interview-core ledger; do not add it from this ledger.
-  (ADR-W07)
+- **`GET /interviews/:id` exists but is thin — resolved for W07, still a gap for the spec.** R01
+  shipped `backend/modules/interview/get.ts` returning `{ interviewId, state, report }`, not the
+  spec's `{ interview, transcript, report? }` (backend spec line 107). W07 reads `transcript` +
+  `endedReason` from room-state instead (ADR-W08) and needs nothing more. **Not a frontend fix** —
+  if the documented shape matters to another consumer, it is R01/interview-core work.
+
 - **A `kind='cv'` upload is never linked to the account.** W04 posts the PDF to `POST /uploads`
   and gets an `uploadId`, but nothing writes `users.cv_upload_id` or `profile.cv_text`:
   `uploads.ts` only creates the row, and `patchMyProfile`'s Zod cards strip an unknown
@@ -126,7 +124,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | W04 | Onboarding host (screens 6–8): 3 cards, per-card PATCH, CV upload, skip/complete, server-derived resume | | done | W02, A06 |
 | W05 | Setup (screen 9) + 390px mobile: listing textarea, chips, option cards, detected-summary edit, pre-questions/skip | | done | W02, I03, I04, I11 |
 | W06 | Interview room text mode (screen 11) + widgets + 390px: two tiles, banner, avatar state machine, typed animation, guarded submit, handover, report-wait | | done | W02, I03, I06, I07 |
-| W07 | Report + transcript (screen 12): report-wait (SSE + bounded poll) → render `ReportPayload` read-only | | todo | W02, R01 |
+| W07 | Report + transcript (screen 12): report-wait (SSE + bounded poll) → render `ReportPayload` read-only | | done | W02, R01 |
 | W08 | History / dashboard (screen 13): list, Continue, optimistic Delete | | todo | W02, N01 |
 | W09 | Pre-join device check (screen 10, voice): camera off-by-default, mic level bar, continue-in-text | | todo | W06, V02 |
 | W10 | Voice room surface (screen 11-voice): live ASR transcript, mic level, self-camera, amplitude avatar driver | | todo | W09, V02, V05 |
