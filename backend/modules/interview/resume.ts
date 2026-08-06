@@ -30,7 +30,7 @@ export const resumeInterview: RequestHandler = async (req, res) => {
   // update is what makes two concurrent resumes into one generation and one 409, and a state
   // change published while the batch is still being written costs nothing here — the mutation's
   // own refetch runs on this response, which lands after the questions exist.
-  const state = await applyTransition(interview, 'hr_round', { traceId: req.traceId! });
+  let state = await applyTransition(interview, 'hr_round', { traceId: req.traceId! });
 
   // Which batch went missing depends on which generation gave out. ADR-I22 hangs the technical
   // one off an HR answer, so `current_index` — already advanced past the HR round by the answer
@@ -43,6 +43,12 @@ export const resumeInterview: RequestHandler = async (req, res) => {
   // Deliberately not caught: a provider still down re-pauses through the same `hr_round → paused`
   // edge, which puts the Resume button back rather than consuming the one recovery the room has.
   await generateRound(interview, roundType, { traceId: req.traceId! });
+
+  // If the index is already in the technical round, return the interview to `tech_round` so the
+  // room's active persona matches the question being served.
+  if (roundType === 'tech') {
+    state = await applyTransition(interview, 'tech_round', { traceId: req.traceId! });
+  }
 
   res.status(200).json({ state });
 };
