@@ -271,32 +271,12 @@ describe('signed-in home — history (W08)', () => {
     expect(screen.getByTestId('history-empty')).toBeInTheDocument();
   });
 
-  // ------------------------------------------------- account erasure (issue 009)
-
-  it('erases the account behind a confirm and reloads onto the anonymous landing', async () => {
-    const calls = stubSignedIn();
-    const assign = vi.fn();
-    vi.stubGlobal('location', { ...window.location, assign });
+  // Erasure moved to `/profile`, where the rest of the account lives — the signed-in home is
+  // a place to start an interview. Covered by `app/profile/page.test.tsx`.
+  it('does not offer account erasure on the signed-in home', async () => {
+    stubSignedIn();
     await renderSignedIn();
 
-    await act(async () => {
-      await userEvent.click(
-        screen.getByRole('button', { name: messages.home.deleteAccountAction }),
-      );
-    });
-    // Confirm first: one click never destroys an account.
-    expect(calls.every((c) => !(c.method === 'DELETE' && c.url === '/api/me'))).toBe(true);
-
-    await act(async () => {
-      await userEvent.click(
-        screen.getByRole('button', { name: messages.home.deleteAccountConfirmAction }),
-      );
-    });
-
-    await waitFor(() =>
-      expect(calls.some((c) => c.method === 'DELETE' && c.url === '/api/me')).toBe(true),
-    );
-    // A full navigation, not a client-side one: HomeSwitch probes `/me` once, on mount.
-    await waitFor(() => expect(assign).toHaveBeenCalledWith('/'));
+    expect(screen.queryByTestId('delete-account')).toBeNull();
   });
 });

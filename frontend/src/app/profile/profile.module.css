@@ -1,0 +1,416 @@
+/*
+ * `/profile` (issue 75). Flat `--bg` content surface: 880px measure, `--radius-card`,
+ * `--shadow-hairline`, no gradient and no mascot (DESIGN §3.4). Authored in px so the token
+ * lint can see every value.
+ */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 880px;
+  padding: 24px 16px 32px;
+  margin: 0 auto;
+}
+
+/* ---------------------------------------------------------------- identity card */
+
+.identity {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  padding: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-hairline);
+}
+
+/* A monogram, not an avatar: nothing on this account holds a picture, and a grey silhouette
+   is a placeholder pretending to be data. */
+.monogram {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  font-family: var(--font-heading), sans-serif;
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-button);
+}
+
+.identityText {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.name {
+  font-family: var(--font-heading), sans-serif;
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* Same size, quieter colour: an empty name is still the page's heading. */
+.namePlaceholder {
+  font-family: var(--font-heading), sans-serif;
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.jobTitle {
+  font-size: 16px;
+  color: var(--text-muted);
+}
+
+.email {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+}
+
+.emailAddress {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text-muted);
+}
+
+.verified {
+  padding: 4px 8px;
+  color: var(--text-muted);
+  background: var(--surface-sunken);
+  border-radius: var(--radius-button);
+}
+
+/* --danger is darkened in the registry to clear AA at 13px on --surface-sunken. */
+.unverified {
+  padding: 4px 8px;
+  color: var(--danger);
+  background: var(--surface-sunken);
+  border-radius: var(--radius-button);
+}
+
+.verifyLink {
+  font-weight: 600;
+  color: var(--primary);
+  border-radius: var(--radius-button);
+}
+
+.verifyLink:hover {
+  text-decoration: underline;
+}
+
+.verifyLink:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* The meter is `aria-hidden`; `.meterLabel` beside it carries the number, so the state is
+   never width-or-colour-only. `--accent` because it is informational — the surface's one
+   `--primary` is the visible panel's Save. */
+.completeness {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 8px;
+  width: 200px;
+}
+
+.meterTrack {
+  display: block;
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-button);
+}
+
+.meterFill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: var(--radius-button);
+  transition: width var(--duration-default) var(--easing-default);
+}
+
+.meterLabel {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.subtitle {
+  max-width: 65ch;
+  font-size: 16px;
+  color: var(--text-muted);
+}
+
+/* ------------------------------------------------------------------ rail + panel */
+
+.body {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/*
+ * The rail is the checklist. Each tab carries its own state in words underneath the label, so
+ * "what is still missing" is answerable without opening all four — and it is text, not a
+ * coloured dot, so it survives a colour-blind reader and a screen reader alike.
+ */
+.tab {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+  min-height: 44px;
+  padding: 12px 16px;
+  text-align: start;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-input);
+  transition:
+    background-color var(--duration-default) var(--easing-default),
+    border-color var(--duration-default) var(--easing-default);
+}
+
+.tab:hover {
+  background: var(--surface-sunken);
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.tabActive {
+  background: var(--surface);
+  border-color: var(--border);
+  box-shadow: var(--shadow-hairline);
+}
+
+.tabActive:hover {
+  background: var(--surface);
+}
+
+.tabLabel {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.tabActive .tabLabel {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.tabStatus {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-hairline);
+  /* The surface's one authored motion moment: the panel arrives when a tab is chosen. */
+  animation: panelIn var(--duration-default) var(--easing-default);
+}
+
+.panel:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@keyframes panelIn {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel {
+    animation: none;
+  }
+}
+
+.panelHead {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.panelTitle {
+  font-family: var(--font-heading), sans-serif;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.panelBody {
+  max-width: 65ch;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+/* ------------------------------------------------------------------- read-only */
+
+.readOnly {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-input);
+}
+
+.readOnlyTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.readOnlyValue {
+  font-size: 16px;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.readOnlyNote {
+  max-width: 65ch;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* --------------------------------------------------------------------- actions */
+
+.error {
+  padding: 12px;
+  font-size: 14px;
+  color: var(--danger);
+  background: var(--surface-sunken);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-input);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: flex-end;
+  padding-block-start: 16px;
+  border-block-start: 1px solid var(--border);
+}
+
+.outcome {
+  margin-inline-end: auto;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* -------------------------------------------------------------------- loading */
+
+.skeletonLines {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.skeletonLine,
+.skeletonLineShort,
+.skeletonBlock,
+.skeletonTab {
+  display: block;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-input);
+}
+
+.skeletonLine {
+  width: 60%;
+  height: 28px;
+}
+
+.skeletonLineShort {
+  width: 35%;
+  height: 16px;
+}
+
+.skeletonBlock {
+  width: 100%;
+  height: 240px;
+}
+
+.skeletonTab {
+  height: 56px;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------ responsive */
+
+@media (width <= 880px) {
+  .body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* The rail lies down and scrolls in its own box, so the page body never scrolls sideways. */
+  .rail {
+    flex-direction: row;
+    overflow-x: auto;
+  }
+
+  .tab {
+    flex: none;
+  }
+
+  .completeness {
+    width: 100%;
+  }
+}
+
+@media (width <= 480px) {
+  .page {
+    padding: 16px 12px 32px;
+  }
+
+  .panel,
+  .identity {
+    padding: 16px;
+  }
+}

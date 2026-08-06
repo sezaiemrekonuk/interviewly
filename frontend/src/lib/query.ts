@@ -134,27 +134,52 @@ export function useMe(): UseQueryResult<{ user: SessionUser }, ApiError> {
   return useQuery({ queryKey: queryKeys.me(), queryFn: () => fetchJson<{ user: SessionUser }>('/me') });
 }
 
+/**
+ * One education entry. School is the only required field; everything else is what the entry
+ * form offers and the entry card shows when it is there.
+ *
+ * `graduationYear` is the older shape, still sitting in profiles saved before the entry form
+ * existed. It is read as `endYear` and never written again.
+ */
 export interface EducationRow {
   school: string;
-  degree: string;
-  field: string;
-  graduationYear: number;
+  degree?: string;
+  field?: string;
+  startYear?: number;
+  endYear?: number;
+  grade?: string;
+  description?: string;
+  /** @deprecated read-only compatibility with profiles saved before `endYear`. */
+  graduationYear?: number;
 }
 
 /** `users.profile` (A06 §3.3 layer 1). Every field optional — a fresh account has `{}`. */
 export interface AccountProfile {
   fullName?: string;
   jobTitle?: string;
+  /** Contact detail for the account. Stripped before the interview snapshot, like the DOB. */
+  phone?: string;
   dateOfBirth?: string;
   education?: EducationRow[];
   hobbies?: string[];
   interestsText?: string;
 }
 
+/** The CV currently on the account (`users.cv_upload_id`), or null. */
+export interface CvUpload {
+  id: string;
+  /** The uploader's own filename, sanitised. Null for CVs stored before it was recorded. */
+  filename: string | null;
+  mime: string;
+  sizeBytes: number;
+  uploadedAt: string;
+}
+
 export interface ProfileResponse {
   profile: AccountProfile;
   onboardingCompletedAt: string | null;
   cvUploadId: string | null;
+  cv: CvUpload | null;
 }
 
 /** `enabled=false` while `useRequireAuth` is still resolving — an anonymous 401 here is noise. */
@@ -167,7 +192,7 @@ export function useProfile(enabled = true): UseQueryResult<ProfileResponse, ApiE
 }
 
 export type ProfileCard =
-  | { step: 1; fields: Pick<AccountProfile, 'fullName' | 'jobTitle' | 'dateOfBirth'> }
+  | { step: 1; fields: Pick<AccountProfile, 'fullName' | 'jobTitle' | 'phone' | 'dateOfBirth'> }
   | { step: 2; fields: { education: EducationRow[] } }
   | { step: 3; fields: Pick<AccountProfile, 'hobbies' | 'interestsText'> };
 

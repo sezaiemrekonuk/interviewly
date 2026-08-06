@@ -55,25 +55,6 @@
   margin-top: 24px;
 }
 
-/*
- * `minmax(0, 1fr)`, not `1fr`: an `auto` floor is the input's intrinsic width (the browser
- * default `size` plus padding), which is wider than half this card — that is what pushed
- * the right-hand column past the card's padding.
- */
-.educationRow {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-}
-
-/* Left edge flush with the field labels above it — the button's own side padding would
-   indent the one control in the column that is not a field. */
-.addRow {
-  align-self: flex-start;
-  padding-right: 0;
-  padding-left: 0;
-}
-
 .banner {
   padding: 12px;
   margin-top: 20px;
@@ -102,10 +83,6 @@
 @media (width <= 480px) {
   .card {
     padding: 24px;
-  }
-
-  .educationRow {
-    grid-template-columns: minmax(0, 1fr);
   }
 
   /* Continue keeps its own row at the bottom rather than shrinking to fit beside two

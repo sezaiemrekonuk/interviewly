@@ -38,6 +38,24 @@ const MULTIPART_SLACK = 4096;
 
 const kindSchema = z.enum(['listing', 'cv']);
 
+const MAX_FILENAME_CHARS = 120;
+
+/**
+ * The uploader's filename, made safe to store and show. It is attacker-controlled and it is
+ * never used to address anything — `storage_key` is `uploads/<sha256>.pdf` — so this is about
+ * what lands in a database column and on a screen, not about path traversal.
+ *
+ * Directory parts are dropped (browsers send a bare name, a scripted client need not),
+ * control characters go because they wreck a log line and a table cell alike, and the whole
+ * thing is capped. An empty result is `null`: no name is honest, `""` is not.
+ */
+function safeFilename(raw: string | undefined): string | null {
+  if (!raw) return null;
+  const base = raw.split(/[\\/]/).pop() ?? '';
+  const cleaned = base.replace(/[\u0000-\u001f\u007f]/g, '').trim();
+  return cleaned ? cleaned.slice(0, MAX_FILENAME_CHARS) : null;
+}
+
 // Only `kind` (a short enum) and one `file` part are ever legitimate here, so both are
 // capped tightly — an untrusted multipart body otherwise gets unbounded fields/parts for free
 // even with fileSize/files already bounded. `parts` is 1 field + 1 file + 1 slack: busboy's
@@ -115,6 +133,8 @@ export const createUpload: RequestHandler = async (req, res, next) => {
     if (!file) throw new ApiError('VALIDATION_ERROR');
     if (file.size > MAX_BYTES) throw new ApiError('UPLOAD_TOO_LARGE');
 
+    const filename = safeFilename(file.originalname);
+
     const sha256 = createHash('sha256').update(file.buffer).digest('hex');
     // `uploads.sha256` is globally `@unique` (F02, K12): the dedup key is the bytes, not
     // (bytes, kind) or (bytes, user). The same PDF sent twice is one object; whoever
@@ -127,6 +147,7 @@ export const createUpload: RequestHandler = async (req, res, next) => {
     // the same bytes.
     const existing = isCv ? null : await prisma.upload.findUnique({ where: { sha256 } });
     if (existing) {
+      logger.info({ userId: req.user!.id, traceId: req.traceId, uploadId: existing.id }, 'UPLOAD_DEDUP');
       res.status(201).json({ uploadId: existing.id });
       return;
     }
@@ -141,6 +162,7 @@ export const createUpload: RequestHandler = async (req, res, next) => {
     // rewrapped view-only — no copy — before the file is ever handed to it.
     const bytes = new Uint8Array(file.buffer.buffer, file.buffer.byteOffset, file.buffer.byteLength);
     const pdf = await getDocumentProxy(bytes).catch(() => {
+      logger.info({ userId: req.user!.id, traceId: req.traceId }, 'UPLOAD_INVALID_FORMAT');
       throw new ApiError('UNSUPPORTED_MEDIA_TYPE');
     });
     if (pdf.numPages > MAX_PAGES) throw new ApiError('UPLOAD_TOO_MANY_PAGES');
@@ -160,7 +182,11 @@ export const createUpload: RequestHandler = async (req, res, next) => {
       // It is also the whole dedup path for a `cv`, which never consulted the findUnique.
       const upload = await tx.upload.upsert({
         where: { sha256 },
-        update: {},
+        update: {
+          // Re-uploading the same bytes under a new name renames what the profile shows.
+          // The row is still one object — only the label the owner recognises it by moves.
+          ...(filename ? { filename } : {}),
+        },
         create: {
           user_id: req.user!.id,
           kind: kind.data,
@@ -168,12 +194,27 @@ export const createUpload: RequestHandler = async (req, res, next) => {
           mime: file.mimetype,
           size_bytes: file.size,
           sha256,
+          filename,
         },
       });
 
       if (isCv) await attachCv(tx, req.user!.id, upload.id, text, req.traceId);
       return upload;
     });
+
+    // The only line this endpoint emitted before was the rare CV_TRUNCATED, so a successful
+    // upload left no trace at all and "did my CV go through?" had no answer in the logs.
+    // Sizes and kind only — never the extracted text (A06 non-negotiable).
+    logger.info(
+      {
+        userId: req.user!.id,
+        traceId: req.traceId,
+        uploadId: row.id,
+        kind: kind.data,
+        bytes: file.size,
+      },
+      'UPLOAD_STORED',
+    );
 
     res.status(201).json({ uploadId: row.id });
   } catch (err) {

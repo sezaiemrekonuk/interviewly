@@ -72,6 +72,14 @@ function stubFetch(options: {
         profile: options.profile ?? {},
         onboardingCompletedAt: options.onboardingCompletedAt ?? null,
         cvUploadId,
+        cv: cvUploadId
+          ? {
+              id: cvUploadId,
+              mime: 'application/pdf',
+              sizeBytes: 12_800,
+              uploadedAt: '2026-08-01T09:00:00.000Z',
+            }
+          : null,
       });
     }
     if (url === '/api/me/profile') {
@@ -118,8 +126,8 @@ describe('onboarding step page', () => {
     await renderStep('1');
 
     const user = userEvent.setup();
-    await user.type(await screen.findByLabelText(messages.onboarding.fullNameLabel), 'Ada');
-    await user.type(screen.getByLabelText(messages.onboarding.jobTitleLabel), 'Engineer');
+    await user.type(await screen.findByLabelText(messages.fields.fullNameLabel), 'Ada');
+    await user.type(screen.getByLabelText(messages.fields.jobTitleLabel), 'Engineer');
     await user.click(screen.getByRole('button', { name: messages.onboarding.continueButton }));
 
     await waitFor(() => expect(nav.push).toHaveBeenCalledWith('/onboarding/2'));
@@ -132,7 +140,7 @@ describe('onboarding step page', () => {
     await renderStep('1');
 
     const user = userEvent.setup();
-    await user.type(await screen.findByLabelText(messages.onboarding.fullNameLabel), 'Ada');
+    await user.type(await screen.findByLabelText(messages.fields.fullNameLabel), 'Ada');
     await user.click(screen.getByRole('button', { name: messages.onboarding.continueButton }));
 
     const banner = await screen.findByRole('alert');
@@ -140,7 +148,7 @@ describe('onboarding step page', () => {
     expect(banner).toHaveTextContent(messages.errors.VALIDATION_ERROR);
     expect(screen.queryByText(/VALIDATION_ERROR/)).toBeNull();
     expect(nav.push).not.toHaveBeenCalled();
-    expect(screen.getByLabelText(messages.onboarding.fullNameLabel)).toHaveValue('Ada');
+    expect(screen.getByLabelText(messages.fields.fullNameLabel)).toHaveValue('Ada');
   });
 
   it('completes from step 3 and routes to setup', async () => {
@@ -150,7 +158,7 @@ describe('onboarding step page', () => {
     await renderStep('3');
 
     const user = userEvent.setup();
-    await user.type(await screen.findByLabelText(messages.onboarding.interestsLabel), 'Chess');
+    await user.type(await screen.findByLabelText(messages.fields.interestsLabel), 'Chess');
     await user.click(screen.getByRole('button', { name: messages.onboarding.finish }));
 
     await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/interviews/new'));
@@ -172,7 +180,7 @@ describe('onboarding step page', () => {
     onStepTwo.unmount();
     await renderStep('3');
 
-    expect(await screen.findByLabelText(messages.onboarding.interestsLabel)).toBeInTheDocument();
+    expect(await screen.findByLabelText(messages.fields.interestsLabel)).toBeInTheDocument();
     expect(nav.replace).not.toHaveBeenCalled();
   });
 
@@ -193,16 +201,18 @@ describe('onboarding step page', () => {
 
   // Issue 62: the confirmation used to be a local echo of the upload's own answer, so it
   // said "CV received" whether or not anything had been attached and vanished on reload.
-  // It is now the profile's `cvUploadId`, which is why the refetch has to happen.
+  // It is now the profile's own CV record, which is why the refetch has to happen.
   it('shows the CV confirmation from the refetched profile, not from the upload answer', async () => {
     const calls = stubFetch({ profile: { fullName: 'Ada' } });
     await renderStep('2');
 
     const user = userEvent.setup();
-    const input = await screen.findByLabelText(messages.onboarding.cvLabel);
+    const input = await screen.findByLabelText(messages.fields.cvLabel);
     await user.upload(input, new File(['%PDF-1.4 cv'], 'cv.pdf', { type: 'application/pdf' }));
 
-    expect(await screen.findByText(messages.onboarding.cvUploaded)).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByTestId('cv-state')).not.toHaveTextContent(messages.fields.cvNone),
+    );
     expect(calls.some((call) => call.url === '/api/uploads' && call.method === 'POST')).toBe(true);
     const profileGets = calls.filter(
       (call) => call.url === '/api/me/profile' && call.method === 'GET',
@@ -219,11 +229,11 @@ describe('onboarding step page', () => {
     await renderStep('2');
 
     const user = userEvent.setup();
-    const input = await screen.findByLabelText(messages.onboarding.cvLabel);
+    const input = await screen.findByLabelText(messages.fields.cvLabel);
     await user.upload(input, new File(['not a pdf'], 'cv.pdf', { type: 'application/pdf' }));
 
-    expect(await screen.findByText(new RegExp(messages.onboarding.cvFailed))).toBeInTheDocument();
-    expect(screen.queryByText(messages.onboarding.cvUploaded)).toBeNull();
+    expect(await screen.findByText(new RegExp(messages.fields.cvFailed))).toBeInTheDocument();
+    expect(screen.getByTestId('cv-state')).toHaveTextContent(messages.fields.cvNone);
   });
 
   it('resumes a cold deep-link to step 3 back to the first unfilled card', async () => {
@@ -231,7 +241,7 @@ describe('onboarding step page', () => {
     await renderStep('3');
 
     await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/onboarding/2'));
-    expect(screen.queryByLabelText(messages.onboarding.interestsLabel)).toBeNull();
+    expect(screen.queryByLabelText(messages.fields.interestsLabel)).toBeNull();
   });
 
   it('redirects an already-completed account off step 1', async () => {
@@ -239,6 +249,6 @@ describe('onboarding step page', () => {
     await renderStep('1');
 
     await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/interviews/new'));
-    expect(screen.queryByLabelText(messages.onboarding.fullNameLabel)).toBeNull();
+    expect(screen.queryByLabelText(messages.fields.fullNameLabel)).toBeNull();
   });
 });

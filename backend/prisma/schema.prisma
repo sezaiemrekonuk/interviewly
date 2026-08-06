@@ -386,6 +386,11 @@ model Upload {
   mime        String
   size_bytes  Int
   sha256      String     @unique // K12 — dedup key is the bytes, not the kind
+  // The name the file had on the uploader's machine, sanitised. Display only — never a path
+  // and never the storage key, which stays content-addressed. Nullable: every row written
+  // before this column existed has none, and a deduped upload keeps whatever it was first
+  // stored under.
+  filename    String?
   created_at  DateTime   @default(now())
 
   user       User        @relation("UploadOwner", fields: [user_id], references: [id], onDelete: Restrict)

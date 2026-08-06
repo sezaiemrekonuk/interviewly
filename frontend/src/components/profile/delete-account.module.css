@@ -1,0 +1,95 @@
+/*
+ * The foot of `/profile`. A hairline rule and quieter type than the cards above it — this is
+ * the end of the page, not another card competing with them. Width comes from the page.
+ */
+
+.dangerZone {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding-block-start: 24px;
+  margin-block-start: 16px;
+  border-block-start: 1px solid var(--border);
+}
+
+.dangerTitle {
+  font-family: var(--font-heading), sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.dangerBody {
+  max-width: 65ch;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.dangerError {
+  font-size: 13px;
+  color: var(--danger);
+}
+
+/* Bordered, never filled: --primary means "do this now", and this is the opposite. */
+.dangerAction {
+  min-height: 44px;
+  padding: 8px 16px;
+  margin-block-start: 8px;
+  font-family: var(--font-body), sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--danger);
+  cursor: pointer;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-button);
+  transition: background var(--duration-default) var(--easing-default);
+}
+
+.dangerAction:hover:not(:disabled) {
+  background: var(--surface-sunken);
+}
+
+.dangerAction:disabled {
+  cursor: progress;
+  opacity: 0.55;
+}
+
+.dangerAction:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.confirm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.confirmQuestion {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.quiet {
+  padding: 4px 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-button);
+  transition: color var(--duration-default) var(--easing-default);
+}
+
+.quiet:hover {
+  color: var(--text);
+}
+
+.quiet:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

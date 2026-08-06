@@ -5,7 +5,21 @@ import { useTranslations } from 'next-intl';
 import { use, useEffect, useState } from 'react';
 
 import { Mascot } from '../../../../components/mascot';
-import { Button, Field, FileInput, Input, Textarea } from '../../../../components/ui';
+import {
+  cardProblem,
+  toDrafts,
+  toRows,
+  type EducationDraft,
+} from '../../../../components/profile/education-draft';
+import {
+  CvField,
+  EducationFields,
+  IdentityFields,
+  InterestsFields,
+  type IdentityValues,
+  type InterestsValues,
+} from '../../../../components/profile/profile-fields';
+import { Button } from '../../../../components/ui';
 import { apiPost } from '../../../../lib/api';
 import {
   useProfile,
@@ -22,21 +36,10 @@ import { passedSteps } from './session-steps';
 
 const STEP_POSE = { 1: 'point', 2: 'think', 3: 'cheer' } as const;
 
-/** The form's rows: `graduationYear` is a string until it is saved (an empty input is ''). */
-interface EducationDraft {
-  school: string;
-  degree: string;
-  field: string;
-  graduationYear: string;
-}
-
-const EMPTY_ROW: EducationDraft = { school: '', degree: '', field: '', graduationYear: '' };
-
 interface Draft {
-  fullName?: string;
-  jobTitle?: string;
+  identity?: IdentityValues;
   education?: EducationDraft[];
-  interestsText?: string;
+  interests?: InterestsValues;
 }
 
 /** Which step a saved profile is missing, i.e. where server-driven resume lands. */
@@ -59,6 +62,7 @@ export default function OnboardingStepPage({ params }: { params: Promise<{ step:
   const stepNumber = Number(stepParam);
   const step: 1 | 2 | 3 = stepNumber === 1 || stepNumber === 2 || stepNumber === 3 ? stepNumber : 1;
   const t = useTranslations('onboarding');
+  const tFields = useTranslations('fields');
   const errorMessage = useErrorMessage();
   const router = useRouter();
   const { user, loading: authLoading } = useRequireAuth();
@@ -75,28 +79,24 @@ export default function OnboardingStepPage({ params }: { params: Promise<{ step:
   const [cvError, setCvError] = useState<string | null>(null);
 
   const profile = data?.profile;
-  const fullName = draft.fullName ?? profile?.fullName ?? '';
-  const jobTitle = draft.jobTitle ?? profile?.jobTitle ?? '';
-  const interestsText = draft.interestsText ?? profile?.interestsText ?? '';
+  const identity: IdentityValues = {
+    fullName: draft.identity?.fullName ?? profile?.fullName ?? '',
+    jobTitle: draft.identity?.jobTitle ?? profile?.jobTitle ?? '',
+  };
+  const interests: InterestsValues = {
+    interestsText: draft.interests?.interestsText ?? profile?.interestsText ?? '',
+  };
+  const education = draft.education ?? toDrafts(profile?.education);
   // The server's copy, never a local echo of the last upload: `POST /uploads` writes
-  // `users.cv_upload_id` itself, so the hint below survives a reload because it is reading
+  // `users.cv_upload_id` itself, so the state below survives a reload because it is reading
   // the same thing a reload would read (issue 62).
-  const cvUploadId = data?.cvUploadId ?? null;
-  const education =
-    draft.education ??
-    (profile?.education?.length
-      ? profile.education.map((row) => ({ ...row, graduationYear: String(row.graduationYear) }))
-      : [EMPTY_ROW]);
+  const cv = data?.cv ?? null;
 
   // Where the server says this account should resume — and whether that is still binding.
   // It is a deep-link guard: once the visitor has explicitly left that card behind in this
   // session, re-deriving it must not drag them back, or Skip can never advance at all.
   const resumeStep = data ? firstUnfilledStep(data.profile) : null;
   const mustResume = resumeStep !== null && resumeStep < step && !passedSteps.has(resumeStep);
-
-  function editEducation(update: (rows: EducationDraft[]) => EducationDraft[]) {
-    setDraft((current) => ({ ...current, education: update(current.education ?? education) }));
-  }
 
   useEffect(() => {
     if (!data) return;
@@ -121,18 +121,9 @@ export default function OnboardingStepPage({ params }: { params: Promise<{ step:
   }
 
   function cardFor(): ProfileCard {
-    if (step === 1) return { step: 1, fields: { fullName, jobTitle } };
-    if (step === 2) {
-      return {
-        step: 2,
-        fields: {
-          education: education
-            .filter((row) => row.school || row.degree || row.field || row.graduationYear)
-            .map((row) => ({ ...row, graduationYear: Number(row.graduationYear) })),
-        },
-      };
-    }
-    return { step: 3, fields: { interestsText } };
+    if (step === 1) return { step: 1, fields: identity };
+    if (step === 2) return { step: 2, fields: { education: toRows(education) } };
+    return { step: 3, fields: interests };
   }
 
   async function complete() {
@@ -153,6 +144,17 @@ export default function OnboardingStepPage({ params }: { params: Promise<{ step:
 
   async function saveAndContinue() {
     setSaveError(null);
+
+    // A half-typed education row is refused whole by the server, which would read here as a
+    // bare "this step was not saved". Answer it in the card, where the row is.
+    if (step === 2) {
+      const problem = cardProblem(education);
+      if (problem) {
+        setSaveError(problem === 'year' ? 'educationYear' : 'educationIncomplete');
+        return;
+      }
+    }
+
     const card = cardFor();
 
     // An untouched card is a Skip with extra steps: PATCHing `{ education: [] }` saves
@@ -189,6 +191,14 @@ export default function OnboardingStepPage({ params }: { params: Promise<{ step:
   const leaving = Boolean(data?.onboardingCompletedAt) || mustResume;
   if (authLoading || isPending || !data || leaving) return null;
 
+  // The two card-local problems carry their own sentence; an API code is looked up instead.
+  const saveMessage =
+    saveError === 'educationIncomplete' || saveError === 'educationYear'
+      ? tFields(saveError)
+      : saveError
+        ? `${t('saveFailed')} ${errorMessage(saveError)}`
+        : null;
+
   return (
     <section className={styles.card}>
       <div className={styles.mascotSlot}>
@@ -198,159 +208,47 @@ export default function OnboardingStepPage({ params }: { params: Promise<{ step:
       <h1 className={styles.title}>{t(`step${step}Title`)}</h1>
       <p className={styles.subtitle}>{t(`step${step}Subtitle`)}</p>
 
-      {step === 1 && (
-        <div className={styles.form}>
-          <Field label={t('fullNameLabel')} id="fullName">
-            {(control) => (
-              <Input
-                {...control}
-                autoComplete="name"
-                value={fullName}
-                onChange={(event) => setDraft((d) => ({ ...d, fullName: event.target.value }))}
-              />
-            )}
-          </Field>
-          <Field label={t('jobTitleLabel')} id="jobTitle">
-            {(control) => (
-              <Input
-                {...control}
-                autoComplete="organization-title"
-                value={jobTitle}
-                onChange={(event) => setDraft((d) => ({ ...d, jobTitle: event.target.value }))}
-              />
-            )}
-          </Field>
-          {/* K8.7 non-negotiable: say what we do with the date of birth we collect. Not
-              collected on this minimal build — see task Notes. */}
-        </div>
-      )}
-
-      {step === 2 && (
-        <div className={styles.form}>
-          {education.map((row, index) => (
-            <div key={index} className={styles.educationRow}>
-              <Field label={t('schoolLabel')}>
-                {(control) => (
-                  <Input
-                    {...control}
-                    value={row.school}
-                    onChange={(event) =>
-                      editEducation((rows) =>
-                        rows.map((r, i) =>
-                          i === index ? { ...r, school: event.target.value } : r,
-                        ),
-                      )
-                    }
-                  />
-                )}
-              </Field>
-              <Field label={t('degreeLabel')}>
-                {(control) => (
-                  <Input
-                    {...control}
-                    value={row.degree}
-                    onChange={(event) =>
-                      editEducation((rows) =>
-                        rows.map((r, i) =>
-                          i === index ? { ...r, degree: event.target.value } : r,
-                        ),
-                      )
-                    }
-                  />
-                )}
-              </Field>
-              <Field label={t('fieldLabel')}>
-                {(control) => (
-                  <Input
-                    {...control}
-                    value={row.field}
-                    onChange={(event) =>
-                      editEducation((rows) =>
-                        rows.map((r, i) => (i === index ? { ...r, field: event.target.value } : r)),
-                      )
-                    }
-                  />
-                )}
-              </Field>
-              <Field label={t('graduationYearLabel')}>
-                {(control) => (
-                  <Input
-                    {...control}
-                    inputMode="numeric"
-                    value={row.graduationYear}
-                    onChange={(event) =>
-                      editEducation((rows) =>
-                        rows.map((r, i) =>
-                          i === index ? { ...r, graduationYear: event.target.value } : r,
-                        ),
-                      )
-                    }
-                  />
-                )}
-              </Field>
-            </div>
-          ))}
-          {education.length < 5 && (
-            <Button
-              variant="ghost"
-              size="lg"
-              className={styles.addRow}
-              onClick={() => editEducation((rows) => [...rows, EMPTY_ROW])}
-            >
-              {t('addEducationRow')}
-            </Button>
-          )}
-
-          {/* A06's `kind='cv'` upload — optional, and attached by `POST /uploads` itself
-              (the pointer on the user row, the text on `users.profile`), so it never travels
-              through the step-2 PATCH body and needs no Continue to persist. */}
-          <Field
-            label={t('cvLabel')}
-            id="cvFile"
-            hint={
-              uploadCvMutation.isPending
-                ? t('cvUploading')
-                : cvUploadId
-                  ? t('cvUploaded')
-                  : undefined
+      <div className={styles.form}>
+        {step === 1 && (
+          <IdentityFields
+            values={identity}
+            onChange={(patch) =>
+              setDraft((d) => ({ ...d, identity: { ...identity, ...patch } }))
             }
-            error={cvError ? `${t('cvFailed')} ${errorMessage(cvError)}` : undefined}
-          >
-            {({ id, 'aria-describedby': describedBy }) => (
-              <FileInput
-                id={id}
-                aria-describedby={describedBy}
-                accept="application/pdf"
-                disabled={uploadCvMutation.isPending}
-                invalid={Boolean(cvError)}
-                onFile={(file) => {
-                  // Clearing the picker is not a detach: the CV is already on the account,
-                  // and there is no endpoint that would take it back off.
-                  if (file) void uploadCv(file);
-                }}
-              />
-            )}
-          </Field>
-        </div>
-      )}
+          />
+        )}
 
-      {step === 3 && (
-        <div className={styles.form}>
-          <Field label={t('interestsLabel')} id="interestsText">
-            {(control) => (
-              <Textarea
-                {...control}
-                value={interestsText}
-                onChange={(event) => setDraft((d) => ({ ...d, interestsText: event.target.value }))}
-              />
-            )}
-          </Field>
-        </div>
-      )}
+        {step === 2 && (
+          <>
+            <EducationFields
+              rows={education}
+              onChange={(rows) => setDraft((d) => ({ ...d, education: rows }))}
+            />
+            {/* A06's `kind='cv'` upload — optional, and attached by `POST /uploads` itself
+                (the pointer on the user row, the text on `users.profile`), so it never travels
+                through the step-2 PATCH body and needs no Continue to persist. */}
+            <CvField
+              cv={cv}
+              uploading={uploadCvMutation.isPending}
+              error={cvError ? `${tFields('cvFailed')} ${errorMessage(cvError)}` : null}
+              onFile={(file) => void uploadCv(file)}
+            />
+          </>
+        )}
 
-      {saveError && (
+        {step === 3 && (
+          <InterestsFields
+            values={interests}
+            onChange={(patch) =>
+              setDraft((d) => ({ ...d, interests: { ...interests, ...patch } }))
+            }
+          />
+        )}
+      </div>
+
+      {saveMessage && (
         <p className={styles.banner} role="alert">
-          {t('saveFailed')} {errorMessage(saveError)}
+          {saveMessage}
         </p>
       )}
 

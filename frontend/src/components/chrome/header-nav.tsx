@@ -32,11 +32,17 @@ export function HeaderNav() {
 
   if (!signedIn) return null;
 
-  // History lives on `/` (W08), which the wordmark already goes to; the nav keeps the one
-  // thing the wordmark cannot say.
+  // History lives on `/` (W08), which the wordmark already goes to; the nav keeps the two
+  // things the wordmark cannot say. `/profile` is here because it is the only door to it —
+  // onboarding redirects away once it is complete (issue 75).
   return (
-    <Link href="/interviews/new" className={styles.navLink}>
-      {t('newInterview')}
-    </Link>
+    <>
+      <Link href="/interviews/new" className={styles.navLink}>
+        {t('newInterview')}
+      </Link>
+      <Link href="/profile" className={styles.navLink}>
+        {t('profile')}
+      </Link>
+    </>
   );
 }

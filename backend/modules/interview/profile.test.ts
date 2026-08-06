@@ -21,6 +21,12 @@ describe('mergeProfile', () => {
     }
   });
 
+  it('drops the phone number — contact detail, not evidence', () => {
+    const merged = mergeProfile({ fullName: 'Deniz', phone: '+90 532 000 00 00' }, undefined);
+    expect(JSON.stringify(merged)).not.toContain('532');
+    expect(merged).toEqual({ account: { fullName: 'Deniz' } });
+  });
+
   it('lifts the cv text out of the account layer in either casing', () => {
     for (const key of ['cvText', 'cv_text']) {
       expect(mergeProfile({ fullName: 'Cem', [key]: 'Five years of Spring.' }, undefined)).toEqual({

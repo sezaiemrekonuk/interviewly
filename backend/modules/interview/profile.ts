@@ -35,10 +35,15 @@ const bodySchema = z.union([
  * in the output (§3.3, §7.2). `PromptBuilder` strips it again and raises `PROFILE_DOB_STRIPPED`
  * if it ever sees one, but that alarm firing because of *this* path would be a bug here.
  *
+ * `phone` is barred on the same principle: the profile screen collects it as contact detail for
+ * the account, and a contact number has no bearing on an answer's quality. Nothing downstream
+ * should have to be trusted not to quote it.
+ *
  * `cv_text` is not dropped, it is lifted: it leaves as `cvText`, a sibling of `account`, so it
  * reaches the model in its own `<candidate_cv>` block instead of buried in the profile object.
  */
 const DOB_KEYS = ['dateOfBirth', 'date_of_birth'];
+const CONTACT_KEYS = ['phone'];
 const CV_KEYS = ['cvText', 'cv_text'];
 
 function accountLayer(profile: unknown): {
@@ -54,7 +59,7 @@ function accountLayer(profile: unknown): {
 
   const account: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(source)) {
-    if (DOB_KEYS.includes(key) || CV_KEYS.includes(key)) continue;
+    if (DOB_KEYS.includes(key) || CONTACT_KEYS.includes(key) || CV_KEYS.includes(key)) continue;
     account[key] = value;
   }
 

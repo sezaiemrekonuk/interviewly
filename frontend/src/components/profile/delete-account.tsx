@@ -6,20 +6,25 @@ import { useState } from 'react';
 import { useDeleteAccount } from '../../lib/query';
 import { useErrorMessage } from '../../lib/use-error-message';
 
-import styles from './home.module.css';
+import styles from './delete-account.module.css';
 
 /**
- * KVKK Art. 7 / GDPR Art. 17, from the UI (issue 009). Quiet on purpose: it is a right, not
- * a feature, so it sits below the history in `--text-muted` and never competes with the
- * surface's one `--primary`. Two clicks, like the per-interview delete beside it — one click
- * never destroys an account.
+ * KVKK Art. 7 / GDPR Art. 17, from the UI (issue 009). It lives at the foot of `/profile`,
+ * where the rest of the account already is — the signed-in home is a place to start an
+ * interview, not the place anyone looks to close their account.
+ *
+ * Below the tabs rather than inside one: the tab rail is arrow-key navigable and every other
+ * panel ends in a Save, and erasure must not sit one keystroke from one of them.
+ *
+ * Quiet on purpose: it is a right, not a feature, so it never competes with the surface's one
+ * `--primary`. Two clicks, like the per-interview delete — one click never destroys an account.
  *
  * On success the browser is sent through a full navigation rather than a client-side one:
  * `HomeSwitch` probes `/me` exactly once on mount, so only a real reload can flip `/` back
  * to the anonymous landing.
  */
 export function DeleteAccount() {
-  const t = useTranslations('home');
+  const t = useTranslations('profile');
   const errorMessage = useErrorMessage();
   const erase = useDeleteAccount();
   const [confirming, setConfirming] = useState(false);
@@ -30,7 +35,7 @@ export function DeleteAccount() {
       <p className={styles.dangerBody}>{t('deleteAccountBody')}</p>
 
       {erase.error ? (
-        <p role="alert" className={styles.rowError}>
+        <p role="alert" className={styles.dangerError}>
           {errorMessage(erase.error.code)}
         </p>
       ) : null}
@@ -40,24 +45,18 @@ export function DeleteAccount() {
           <span className={styles.confirmQuestion}>{t('deleteAccountConfirm')}</span>
           <button
             type="button"
-            className={styles.confirmAction}
+            className={styles.dangerAction}
             disabled={erase.isPending}
-            onClick={() =>
-              erase.mutate(undefined, { onSuccess: () => window.location.assign('/') })
-            }
+            onClick={() => erase.mutate(undefined, { onSuccess: () => window.location.assign('/') })}
           >
             {t('deleteAccountConfirmAction')}
           </button>
-          <button type="button" className={styles.textAction} onClick={() => setConfirming(false)}>
+          <button type="button" className={styles.quiet} onClick={() => setConfirming(false)}>
             {t('cancel')}
           </button>
         </div>
       ) : (
-        <button
-          type="button"
-          className={styles.dangerAction}
-          onClick={() => setConfirming(true)}
-        >
+        <button type="button" className={styles.dangerAction} onClick={() => setConfirming(true)}>
           {t('deleteAccountAction')}
         </button>
       )}

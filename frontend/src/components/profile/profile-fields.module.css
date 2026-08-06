@@ -1,0 +1,242 @@
+/*
+ * The shared card bodies (DESIGN §3.2 form stack). Nothing here paints a surface or a shadow —
+ * the caller owns the container, so the same fields sit in onboarding's entry card and in the
+ * profile screen's flat panel without either one restyling the other.
+ */
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ------------------------------------------------------------------ education */
+
+/*
+ * Saved entries read as a list, not as a permanently-open form: education is a list, and one
+ * open form at a time is what makes five entries legible instead of twenty live inputs.
+ */
+.entryList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  list-style: none;
+}
+
+.entryCard {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 16px;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-input);
+}
+
+.entryText {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.entrySchool {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.entryMeta {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.entryYears {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.entryDescription {
+  max-width: 65ch;
+  margin-block-start: 4px;
+  font-size: 13px;
+  color: var(--text-muted);
+  white-space: pre-line;
+}
+
+.entryTools,
+.entryConfirm {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.entryConfirmQuestion {
+  font-size: 13px;
+  color: var(--text);
+}
+
+/* Quiet by design: editing one entry of five is not an action worth an orange button. */
+.entryQuiet,
+.entryDanger {
+  padding: 4px 0;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-button);
+  transition: color var(--duration-default) var(--easing-default);
+}
+
+.entryQuiet {
+  color: var(--text-muted);
+}
+
+.entryQuiet:hover {
+  color: var(--text);
+}
+
+.entryDanger {
+  color: var(--danger);
+}
+
+.entryDanger:hover {
+  text-decoration: underline;
+}
+
+.entryQuiet:focus-visible,
+.entryDanger:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* -------------------------------------------------------------- entry form */
+
+.entryForm {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+/*
+ * `minmax(0, 1fr)`, not `1fr`: an `auto` floor is the input's intrinsic width (the browser
+ * default `size` plus padding), which is wider than half a 480px card — that is what pushed
+ * the right-hand column past the card's padding.
+ */
+.entryGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.activities {
+  min-height: 80px;
+}
+
+.entryActions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.formError {
+  font-size: 13px;
+  color: var(--danger);
+}
+
+/* Left edge flush with the field labels above it — the button's own side padding would
+   indent the one control in the column that is not a field. */
+.addRow {
+  align-self: flex-start;
+  padding-right: 0;
+  padding-left: 0;
+}
+
+.note {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* ------------------------------------------------------------------- hobbies */
+
+.hobbies {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.chipRow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  list-style: none;
+}
+
+/*
+ * The whole chip is the remove control, not a 24px × inside it: a glyph that small cannot
+ * carry a 44px touch target, and a pill you can only dismiss by hitting its corner is worse
+ * on a phone than one extra tap to re-add.
+ */
+.chip {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 16px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-button);
+  transition:
+    color var(--duration-default) var(--easing-default),
+    border-color var(--duration-default) var(--easing-default);
+}
+
+.chip:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.chipGlyph {
+  color: var(--text-muted);
+}
+
+/* ------------------------------------------------------------------------ cv */
+
+/* The filename leads — it is what the owner recognises the file by. Long names wrap rather
+   than push the card sideways. */
+.cvName {
+  margin-block-end: 4px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+@media (width <= 480px) {
+  .entryGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
