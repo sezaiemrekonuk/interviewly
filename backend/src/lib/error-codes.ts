@@ -53,6 +53,8 @@ export const ERROR_CODES = {
   EMAIL_TOKEN_INVALID:             { kind: 'api' as ErrorKind, http: 400, owner: 'backend' },
   EMAIL_TOKEN_EXPIRED:             { kind: 'api' as ErrorKind, http: 400, owner: 'backend' },
   EMAIL_RESEND_COOLDOWN:           { kind: 'api' as ErrorKind, http: 429, owner: 'backend' },
+  // --- Consent (KVKK / GDPR, issue 009) ---
+  CONSENT_REQUIRED:                { kind: 'api' as ErrorKind, http: 422, owner: 'backend' },
   // --- Profile / CV (K8.7, §3.3) ---
   CV_TRUNCATED:                    { kind: 'log' as ErrorKind, http: undefined, owner: 'backend' },
   PROFILE_DOB_STRIPPED:            { kind: 'log' as ErrorKind, http: undefined, owner: 'ai' },

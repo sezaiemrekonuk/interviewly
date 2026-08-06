@@ -121,3 +121,61 @@
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+/* ------------------------------------------------- consent (issue 009) */
+
+/* Sits inside the form, directly above the submit, so it is read before it is answered.
+   px, not rem: the rest of this file is legacy (DESIGN §2 hard rule 8). */
+.consent {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.consentLabel {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+/* 20px and flush with the first line of the label; `accent-color` tints the native control
+   so no custom checkbox has to be re-implemented (and re-made accessible). */
+.consentBox {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  accent-color: var(--primary);
+}
+
+.consentBox:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.consentLink {
+  font-weight: 600;
+  color: var(--primary);
+  text-decoration: underline;
+}
+
+.consentLink:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.consentHint {
+  padding-inline-start: 32px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* Not `disabled` — an <a> has no such attribute. The anchor keeps its href (so the target is
+   still inspectable) but stops being clickable or focusable until consent is given. */
+.googleDisabled {
+  color: var(--text-muted);
+  pointer-events: none;
+  opacity: 0.5;
+}

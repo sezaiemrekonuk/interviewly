@@ -244,6 +244,22 @@ export function useDeleteInterview(): UseMutationResult<void, ApiError, string> 
   });
 }
 
+/**
+ * `DELETE /me` — KVKK/GDPR erasure (issue 009). The whole cache is dropped rather than
+ * invalidated: every key in it belongs to an account that no longer exists, and a refetch
+ * of `/me` would only answer 401.
+ */
+export function useDeleteAccount(): UseMutationResult<void, ApiError, void> {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const result = await apiDelete('/me');
+      if (!result.ok) throw new ApiError(result.code ?? 'UNKNOWN');
+    },
+    onSuccess: () => client.clear(),
+  });
+}
+
 /** One tile's identity. `avatarSet` carries the content-addressed keys (`personas.avatar_set`). */
 export interface RoomPersona {
   id: string;

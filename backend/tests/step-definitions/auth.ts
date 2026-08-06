@@ -51,7 +51,9 @@ When(
 When(
   'I register with email {string} and password {string}',
   async function (this: AuthWorld, email: string, password: string) {
-    await this.request('POST', '/auth/register', { body: { email, password } });
+    // Consent is part of a normal registration (issue 009); the refusal path has its own
+    // step in `account-erasure.ts`, which omits the field on purpose.
+    await this.request('POST', '/auth/register', { body: { email, password, consent: true } });
   },
 );
 

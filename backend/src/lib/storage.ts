@@ -1,6 +1,11 @@
 // I12 owns this file and extends it with `get` and `signedUrl(key, ttl)`. I11 added the
 // minimal `put` it needed, so I12 grows the interface rather than reworking it.
-import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 import { clock } from './clock';
@@ -16,6 +21,8 @@ export interface Storage {
   put(key: string, bytes: Buffer, mime: string): Promise<void>;
   get(key: string): Promise<Buffer>;
   signedUrl(key: string, ttlSeconds: number): Promise<string>;
+  /** Erasure (issue 009). Idempotent on both S3 and MinIO — a missing key is not an error. */
+  remove(key: string): Promise<void>;
 }
 
 // forcePathStyle: MinIO serves path-style only. Same client shape as prisma/seed.ts.
@@ -38,6 +45,9 @@ export let storage: Storage = {
     const obj = await s3.send(new GetObjectCommand({ Bucket: config.S3_BUCKET, Key: key }));
     if (!obj.Body) throw new Error(`S3 object body missing for key ${key}`);
     return Buffer.from(await obj.Body.transformToByteArray());
+  },
+  async remove(key) {
+    await s3.send(new DeleteObjectCommand({ Bucket: config.S3_BUCKET, Key: key }));
   },
   // `signingDate` from the Clock seam, not wall time: the expiry the presigned URL carries is
   // what @AC-6 measures against the fixed clock.

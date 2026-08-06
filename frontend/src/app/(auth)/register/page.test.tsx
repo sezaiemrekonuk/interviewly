@@ -26,10 +26,12 @@ function stubFetch(status: number, body: unknown) {
   return spy;
 }
 
-async function fillAndSubmit(email: string, password: string) {
+/** Consent is part of a normal registration (issue 009), so the happy path ticks the box. */
+async function fillAndSubmit(email: string, password: string, consent = true) {
   const user = userEvent.setup();
   await user.type(screen.getByLabelText(messages.auth.emailLabel), email);
   await user.type(screen.getByLabelText(messages.auth.passwordLabel), password);
+  if (consent) await user.click(screen.getByRole('checkbox'));
   await user.click(screen.getByRole('button', { name: messages.auth.register }));
 }
 
@@ -72,6 +74,7 @@ describe('register page', () => {
     expect(JSON.parse(init.body as string)).toEqual({
       email: 'someone@example.com',
       password: 'correct-horse',
+      consent: true,
     });
   });
 
@@ -96,10 +99,49 @@ describe('register page', () => {
     expect(screen.queryByText(/SOMETHING_NEW/)).toBeNull();
   });
 
-  it('points the Google button at the API redirect chain rather than fetching it', () => {
+  it('points the Google button at the API redirect chain rather than fetching it', async () => {
+    const user = userEvent.setup();
     renderWithIntl(<RegisterPage />);
+    await user.click(screen.getByRole('checkbox'));
 
     const google = screen.getByRole('link', { name: messages.auth.googleButton });
     expect(google).toHaveAttribute('href', '/api/auth/google');
+    expect(google).not.toHaveAttribute('aria-disabled');
+  });
+
+  // --------------------------------------------------------------- consent (issue 009)
+
+  it('refuses to submit until the policies are accepted, and calls nothing', async () => {
+    const fetchSpy = stubFetch(201, {});
+    renderWithIntl(<RegisterPage />);
+
+    await fillAndSubmit('someone@example.com', 'correct-horse', false);
+
+    expect(await screen.findByText(messages.errors.CONSENT_REQUIRED)).toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(nav.replace).not.toHaveBeenCalled();
+  });
+
+  // The Google redirect creates an account too, so it cannot sit outside the consent gate.
+  it('holds the Google route shut until the box is ticked', async () => {
+    const user = userEvent.setup();
+    renderWithIntl(<RegisterPage />);
+
+    expect(screen.getByRole('link', { name: messages.auth.googleButton })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+
+    await user.click(screen.getByRole('checkbox'));
+    expect(screen.getByRole('link', { name: messages.auth.googleButton })).not.toHaveAttribute(
+      'aria-disabled',
+    );
+  });
+
+  it('links both policies from the consent line', () => {
+    renderWithIntl(<RegisterPage />);
+
+    expect(screen.getByRole('link', { name: 'Privacy Notice' })).toHaveAttribute('href', '/privacy');
+    expect(screen.getByRole('link', { name: 'Terms of Service' })).toHaveAttribute('href', '/terms');
   });
 });

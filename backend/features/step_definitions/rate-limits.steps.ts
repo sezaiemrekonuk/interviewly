@@ -89,6 +89,7 @@ const ACTIONS: Record<
       await world.httpPost('/auth/register', {
         email: `limit-${randomUUID()}@example.com`,
         password: PASSWORD,
+        consent: true,
       });
     },
   },
@@ -96,7 +97,7 @@ const ACTIONS: Record<
     windowMs: 60_000,
     arrange: async (world, count) => {
       signedInEmail = `signin-${randomUUID()}@example.com`;
-      await world.httpPost('/auth/register', { email: signedInEmail, password: PASSWORD });
+      await world.httpPost('/auth/register', { email: signedInEmail, password: PASSWORD, consent: true });
       assert.equal(world.lastStatus, 201, `register: ${JSON.stringify(world.lastBody)}`);
       for (let i = 0; i < count; i += 1) {
         await ACTIONS['sign-in'].perform(world);
@@ -136,7 +137,7 @@ Given(
     // Only interview-start needs a session; the other two rows are public endpoints.
     if (name === 'interview-start') {
       const email = `starter-${randomUUID()}@example.com`;
-      await this.httpPost('/auth/register', { email, password: PASSWORD });
+      await this.httpPost('/auth/register', { email, password: PASSWORD, consent: true });
       assert.equal(this.lastStatus, 201, `register: ${JSON.stringify(this.lastBody)}`);
       this.candidateId = (this.lastBody?.user as { id: string }).id;
     }

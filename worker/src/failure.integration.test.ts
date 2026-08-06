@@ -38,6 +38,9 @@ setStorage({
   async signedUrl(key) {
     return `memory://${key}`;
   },
+  async remove(key) {
+    objects.delete(key);
+  },
 });
 
 async function seedEvaluatingInterview(): Promise<string> {
