@@ -42,16 +42,19 @@ describe('GoogleButton', () => {
   });
 
   it('renders nothing at all when Google is not configured', async () => {
-    stubCapabilities(false);
+    const fetchSpy = stubCapabilities(false);
     const { container } = renderWithProviders(<GoogleButton />);
 
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    await (fetchSpy.mock.results[0]!.value as Promise<unknown>);
+
     // The divider goes with it: an "or" above nothing is its own kind of dead control.
-    await waitFor(() => expect(container).toBeEmptyDOMElement());
+    expect(container).toBeEmptyDOMElement();
     expect(label()).toBeNull();
   });
 
   it('shows nothing while the answer is still in flight', () => {
-    stubCapabilities(true);
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => {})));
     const { container } = renderWithProviders(<GoogleButton />);
 
     expect(container).toBeEmptyDOMElement();
