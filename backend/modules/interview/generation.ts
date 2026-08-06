@@ -165,13 +165,11 @@ export async function generateRound(
   const persona_id = await personaFor(roundType);
 
   await prisma.$transaction(async (tx) => {
-    const round =
-      (await tx.interviewRound.findFirst({
-        where: { interview_id: interview.id, type: roundType },
-      })) ??
-      (await tx.interviewRound.create({
-        data: { interview_id: interview.id, type: roundType, persona_id, status: 'pending' },
-      }));
+    const round = await tx.interviewRound.upsert({
+      where: { interview_id_type: { interview_id: interview.id, type: roundType } },
+      update: {},
+      create: { interview_id: interview.id, type: roundType, persona_id, status: 'pending' },
+    });
 
     await tx.question.createMany({
       // `order_index` is ours, counted 1..count in ask order. The model's `orderIndex` is
