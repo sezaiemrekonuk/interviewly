@@ -149,6 +149,10 @@ When('I POST {string} for the profiling interview', async function (this: AiWorl
   await this.httpPost(`/interviews/${this.interviewId}/profile`, this.profileBody);
 });
 
+When('I POST {string} for the paused interview', async function (this: AiWorld, _path: string) {
+  await this.httpPost(`/interviews/${this.interviewId}/resume`, {});
+});
+
 When(
   'the {word} round of {int} questions is generated',
   async function (this: AiWorld, round: string, count: number) {

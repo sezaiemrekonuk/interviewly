@@ -1,7 +1,7 @@
 # Code owners — derived from the ownership table in .agents/EXECUTE.md §1.
 #
 #   Sezai  @sezaiemrekonuk    foundations F03, interview-core I01–I15
-#   Ahmet  @AhmetSukruKilic   foundations F01, auth A01–A06, report R01–R03
+#   Ahmet  @AhmetSukruKilic   foundations F01, auth A01–A06, report R01–R03, speech S01–S10
 #   Fatih  @fatih-top         foundations F02, admin N01–N02, voice V01–V05, adaptive D01–D03
 #
 # Last matching rule wins, so the file is ordered general -> specific.
@@ -84,6 +84,11 @@ backend/**/modules/interview/my-interviews.ts   @fatih-top
 backend/**/modules/voice/               @fatih-top
 worker/src/jobs/voice-reconcile.ts      @fatih-top
 
+# ------------------------------------------------------- speech (Ahmet) S* --
+# Supersedes voice (ADR-S01). S05 deletes most of modules/voice/, so the rule above
+# shrinks to downgrade.ts as that task lands.
+backend/**/modules/speech/              @AhmetSukruKilic
+
 # ---------------------------------------------------- adaptive (Fatih) D* --
 backend/**/modules/interview/adaptive-select.ts @fatih-top
 backend/**/modules/interview/candidate-prep.ts  @fatih-top
@@ -95,6 +100,7 @@ backend/**/modules/interview/candidate-prep.ts  @fatih-top
 /.agents/ledgers/report/                 @AhmetSukruKilic
 /.agents/ledgers/admin/                  @fatih-top
 /.agents/ledgers/voice/                  @fatih-top
+/.agents/ledgers/speech/                 @AhmetSukruKilic
 /.agents/ledgers/adaptive/               @fatih-top
 /.agents/ledgers/foundations/tasks/F01-design-tokens-types-i18n-errors.md  @AhmetSukruKilic
 /.agents/ledgers/foundations/tasks/F02-prisma-schema-migrate-seed.md       @fatih-top

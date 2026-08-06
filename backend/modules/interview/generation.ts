@@ -120,13 +120,30 @@ export async function generateRound(
   try {
     const client = opts.client ?? aiClient();
     batch = await client.generateRoundQuestions(roundQuestionArgs(interview, roundType, ctx));
+
+    if (batch.questions.length !== count) {
+      logger.warn(
+        {
+          traceId: opts.traceId,
+          interviewId: interview.id,
+          roundType,
+          expected: count,
+          received: batch.questions.length,
+        },
+        'AI_OUTPUT_SCHEMA_INVALID',
+      );
+      throw new ApiError('AI_OUTPUT_INVALID');
+    }
   } catch (err) {
-    if (!(err instanceof AiError)) throw err;
-    // `canTransition` and not a try/catch around the pause: `paused` is reachable from
-    // `hr_round` and from nowhere else (K2), and a caller generating from any other state —
-    // a `paused` interview retrying through `POST /resume`, say — wants its error and not an
-    // `INTERVIEW_PAUSE_FAILED` alarm for a case that is working as designed.
-    if (err.code === 'AI_PROVIDER_UNAVAILABLE' && canTransition(interview.state, 'paused')) {
+    if (!(err instanceof AiError) && !(err instanceof ApiError)) throw err;
+    const code = err.code;
+    // `canTransition` and not a try/catch around the pause: from `profiling` there is no
+    // `paused` edge and none is wanted — `POST /profile` is itself the retry — so attempting
+    // it would raise `INTERVIEW_PAUSE_FAILED`, an alarm for a case that is working as designed.
+    if (
+      (code === 'AI_PROVIDER_UNAVAILABLE' || code === 'AI_OUTPUT_INVALID') &&
+      canTransition(interview.state, 'paused')
+    ) {
       // I07: routed through applyTransition — the sole writer of interviews.state — so this
       // edge also gets the INTERVIEW_STATE_CHANGED emission + SSE fan-out for free.
       //
@@ -142,24 +159,7 @@ export async function generateRound(
         );
       }
     }
-    throw new ApiError(err.code);
-  }
-
-  // The requested count is runtime data, so `QuestionBatchSchema` cannot carry it (I01). This
-  // is the check that makes the contract real, and it is all-or-nothing: a short batch inserts
-  // nothing rather than leaving a half-filled round for the state walk to fall off the end of.
-  if (batch.questions.length !== count) {
-    logger.warn(
-      {
-        traceId: opts.traceId,
-        interviewId: interview.id,
-        roundType,
-        expected: count,
-        received: batch.questions.length,
-      },
-      'AI_OUTPUT_SCHEMA_INVALID',
-    );
-    throw new ApiError('AI_OUTPUT_INVALID');
+    throw err instanceof ApiError ? err : new ApiError(code);
   }
 
   const persona_id = await personaFor(roundType);
