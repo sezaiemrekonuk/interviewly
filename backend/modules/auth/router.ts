@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { authCapabilities } from './capabilities';
 import { requireAuth } from './middleware';
 import { loginLimiter, passwordResetLimiter, profilePatchLimiter, registerLimiter } from './rate-limit';
+import deleteMe from './delete-account';
 import login from './login';
 import logout from './logout';
 import me from './me';
@@ -42,3 +43,7 @@ meRouter.get('/me', requireAuth, me);
 meRouter.get('/me/profile', requireAuth, getMyProfile);
 meRouter.patch('/me/profile', requireAuth, profilePatchLimiter, patchMyProfile);
 meRouter.post('/me/profile/complete', requireAuth, completeOnboarding);
+// Issue 009 — KVKK/GDPR erasure. Unlimited on purpose: an erasure request is a right, and a
+// rate limit on it is a limit on exercising the right. It is idempotent in effect anyway —
+// the session it needs is revoked by the first call.
+meRouter.delete('/me', requireAuth, deleteMe);

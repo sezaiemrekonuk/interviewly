@@ -168,6 +168,15 @@ model User {
   profile                 Json? // §3.3 layer 1 — partial is normal, `null` means every card was skipped
   cv_upload_id            String? // §3.3 — a pointer, not a history: a new CV repoints it
   onboarding_completed_at DateTime? // K8.7
+  // KVKK / GDPR Art. 13 (issue 009) — *which* version of the policy this account accepted,
+  // and when. Null on every account created before consent existed; a bumped
+  // `CONSENT_VERSION` is what makes an old acceptance visibly old rather than silently stale.
+  consent_version         String?
+  consented_at            DateTime?
+  // KVKK Art. 7 / GDPR Art. 17 erasure marker. The row survives (every FK is RESTRICT) but
+  // is anonymised in place by `auth/delete-account.ts`; this column is the proof and the
+  // handle a later retention job removes the anonymous shell by.
+  deleted_at              DateTime?
   created_at              DateTime  @default(now())
 
   cv_upload    Upload?      @relation("UserCv", fields: [cv_upload_id], references: [id], onDelete: Restrict)
@@ -256,7 +265,7 @@ model Interview {
   spent_usd             Decimal        @default(0) @db.Decimal(12, 6)
   started_at            DateTime?
   ended_at              DateTime?
-  deleted_at            DateTime? // the only soft-delete column in the schema (K13)
+  deleted_at            DateTime? // the soft-delete column user-facing reads filter on (K13)
   created_at            DateTime       @default(now())
 
   user               User               @relation(fields: [user_id], references: [id], onDelete: Restrict)

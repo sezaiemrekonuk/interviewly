@@ -15,10 +15,12 @@ vi.mock('next/navigation', () => ({
 
 import RegisterPage from './page';
 
-async function fillAndSubmit(email: string, password: string) {
+/** Consent is part of a normal registration (issue 009), so the happy path ticks the box. */
+async function fillAndSubmit(email: string, password: string, consent = true) {
   const user = userEvent.setup();
   await user.type(screen.getByLabelText(messages.auth.emailLabel), email);
   await user.type(screen.getByLabelText(messages.auth.passwordLabel), password);
+  if (consent) await user.click(screen.getByRole('checkbox'));
   await user.click(screen.getByRole('button', { name: messages.auth.register }));
 }
 
@@ -61,6 +63,7 @@ describe('register page', () => {
     expect(JSON.parse(init?.body as string)).toEqual({
       email: 'someone@example.com',
       password: 'correct-horse',
+      consent: true,
     });
   });
 
@@ -86,19 +89,27 @@ describe('register page', () => {
   });
 
   it('points the Google button at the API redirect chain rather than fetching it', async () => {
+    const user = userEvent.setup();
     stubFetch(201, {});
     renderWithProviders(<RegisterPage />);
 
+    await user.click(screen.getByRole('checkbox'));
+
     const google = await screen.findByRole('link', { name: messages.auth.googleButton });
     expect(google).toHaveAttribute('href', '/api/auth/google');
+    expect(google).not.toHaveAttribute('aria-disabled');
   });
 
   // Issue 60: the anchor is a real navigation, so an unconfigured deployment would answer it
   // by replacing the whole app with `{"error":{"code":"NOT_READY"}}`. The screen must not
-  // offer the control at all in that case.
+  // offer the control at all in that case — and ticking consent must not bring it back, the
+  // two gates being independent.
   it('omits the Google button entirely when the API reports the flow unavailable', async () => {
+    const user = userEvent.setup();
     stubFetch(201, {}, false);
     renderWithProviders(<RegisterPage />);
+
+    await user.click(screen.getByRole('checkbox'));
 
     // `findByRole` rather than `queryByRole`: the button is absent on the first render
     // whatever the answer turns out to be, so only a query that keeps looking until it times
@@ -106,5 +117,43 @@ describe('register page', () => {
     await expect(
       screen.findByRole('link', { name: messages.auth.googleButton }),
     ).rejects.toThrow();
+  });
+
+  // --------------------------------------------------------------- consent (issue 009)
+
+  it('refuses to submit until the policies are accepted, and calls nothing', async () => {
+    const fetchSpy = stubFetch(201, {});
+    renderWithProviders(<RegisterPage />);
+
+    await fillAndSubmit('someone@example.com', 'correct-horse', false);
+
+    expect(await screen.findByText(messages.errors.CONSENT_REQUIRED)).toBeInTheDocument();
+    expect(formCalls(fetchSpy)).toEqual([]);
+    expect(nav.replace).not.toHaveBeenCalled();
+  });
+
+  // The Google redirect creates an account too, so it cannot sit outside the consent gate.
+  it('holds the Google route shut until the box is ticked', async () => {
+    const user = userEvent.setup();
+    stubFetch(201, {});
+    renderWithProviders(<RegisterPage />);
+
+    expect(await screen.findByRole('link', { name: messages.auth.googleButton })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+
+    await user.click(screen.getByRole('checkbox'));
+    expect(screen.getByRole('link', { name: messages.auth.googleButton })).not.toHaveAttribute(
+      'aria-disabled',
+    );
+  });
+
+  it('links both policies from the consent line', () => {
+    stubFetch(201, {});
+    renderWithProviders(<RegisterPage />);
+
+    expect(screen.getByRole('link', { name: 'Privacy Notice' })).toHaveAttribute('href', '/privacy');
+    expect(screen.getByRole('link', { name: 'Terms of Service' })).toHaveAttribute('href', '/terms');
   });
 });

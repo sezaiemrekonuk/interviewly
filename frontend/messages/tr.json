@@ -10,7 +10,9 @@
   },
   "chrome": {
     "newInterview": "Yeni mülakat",
-    "tagline": "Gerçeğinden önce mülakata hazırlan."
+    "tagline": "Gerçeğinden önce mülakata hazırlan.",
+    "privacy": "Gizlilik",
+    "terms": "Koşullar"
   },
   "landing": {
     "hero": "Gerçeğinden önce mülakata hazırlan",
@@ -75,7 +77,12 @@
       "title": "Henüz mülakatın yok",
       "body": "Rolü yaz, on dakika cevapla, raporu oku. Döngü bu kadar.",
       "cta": "İlk mülakatını başlat"
-    }
+    },
+    "deleteAccountTitle": "Hesabımı sil",
+    "deleteAccountBody": "Profiliniz, özgeçmişiniz ve bütün mülakat kayıtlarınız silinir. Bu işlem geri alınamaz.",
+    "deleteAccountAction": "Hesabımı sil",
+    "deleteAccountConfirm": "Hesabınız ve içindeki her şey silinsin mi?",
+    "deleteAccountConfirmAction": "Evet, hepsini sil"
   },
   "mascot": {
     "wave": "El sallayan maskot",
@@ -125,7 +132,9 @@
     "resetSubmit": "Yeni şifreyi kaydet",
     "passwordsMismatch": "İki şifre aynı değil.",
     "resetDoneTitle": "Şifre güncellendi",
-    "resetDoneBody": "Tüm cihazlarda oturumun kapandı. Yeni şifrenle giriş yap."
+    "resetDoneBody": "Tüm cihazlarda oturumun kapandı. Yeni şifrenle giriş yap.",
+    "consentLabel": "<privacy>Gizlilik Bildirimi</privacy>'ni ve <terms>Kullanım Koşulları</terms>'nı okudum, kabul ediyorum.",
+    "consentHint": "Profilinizi, özgeçmişinizi ve mülakat yanıtlarınızı yapay zekâ sağlayıcıları üzerinden işliyoruz. Bildirim bunun ne anlama geldiğini anlatıyor."
   },
   "onboarding": {
     "progress": "Adım {step} / {total}",
@@ -291,7 +300,8 @@
     "EMAIL_RESEND_COOLDOWN": "Başka bir e-posta istemeden önce lütfen biraz bekleyin.",
     "CV_TRUNCATED": "Özgeçmişiniz işlenmeden önce kısaltıldı.",
     "PROFILE_DOB_STRIPPED": "Doğum tarihi çıkarılan profilden kaldırıldı.",
-    "UNKNOWN": "Beklenmeyen bir hata oluştu."
+    "UNKNOWN": "Beklenmeyen bir hata oluştu.",
+    "CONSENT_REQUIRED": "Hesap oluşturmak için Gizlilik Bildirimi'ni ve Kullanım Koşulları'nı kabul edin."
   },
   "dashboard": {
     "title": "Mülakatlarınız",
@@ -315,14 +325,7 @@
       "error": "Hatayla sonlandı",
       "evaluating": "Değerlendiriliyor",
       "inProgress": "Devam ediyor"
-    },
-    "EMAIL_NOT_VERIFIED": "Mülakat başlatmak için e-posta adresini doğrula.",
-    "EMAIL_TOKEN_INVALID": "Bu bağlantı artık geçerli değil. Yeni bir bağlantı iste.",
-    "EMAIL_TOKEN_EXPIRED": "Bu bağlantının süresi doldu. Yeni bir bağlantı iste.",
-    "EMAIL_RESEND_COOLDOWN": "Yeni e-posta istemek için biraz beklemen gerekiyor.",
-    "CV_TRUNCATED": "Özgeçmişin uzun olduğu için kısaltıldı.",
-    "PROFILE_DOB_STRIPPED": "Doğum tarihi profilden kaldırıldı.",
-    "UNKNOWN": "Beklenmedik bir hata oluştu. Tekrar dene."
+    }
   },
   "admin": {
     "title": "Yönetim",
@@ -374,6 +377,80 @@
       "completed": "Tamamlandı",
       "abandoned": "Yarıda bırakıldı",
       "failed": "Başarısız"
+    }
+  },
+  "legal": {
+    "updated": "Son güncelleme 6 Ağustos 2026",
+    "backHome": "Interviewly'ye dön",
+    "contact": "Sorunuz var mı, verilerinizin bir kopyasını mı istiyorsunuz? {email} adresine yazın.",
+    "contactEmail": "privacy@interviewly.app",
+    "privacy": {
+      "title": "Gizlilik Bildirimi",
+      "intro": "Bu bildirim Interviewly'nin sizden ne topladığını, neden topladığını, başka kimlerin gördüğünü ve nasıl sildirebileceğinizi anlatır. KVKK (6698 sayılı Kanun) ile GDPR'ın 13. ve 17. maddelerine göre hazırlanmıştır.",
+      "sections": [
+        {
+          "heading": "Neleri topluyoruz",
+          "body": "Hesabınız: e-posta adresiniz ve Google ile giriş yapmıyorsanız parolanızın özeti. Profiliniz: ad soyad, unvan, doğum tarihi, eğitim geçmişi (okul, derece, alan, mezuniyet yılı), hobiler ve serbest metin ilgi alanları. Yüklediğiniz özgeçmiş, hem PDF hem de içinden çıkarılan metin olarak. Mülakatlarınız: size sorulan her soru, yazılı veya sesli verdiğiniz her yanıt ve bunlardan üretilen rapor. Teknik veriler: tek bir oturum çerezi ve istek ile hesap tanımlayıcılarını tutan sunucu kayıtları — profil alanlarınızın değerleri hiçbir kayıta yazılmaz."
+        },
+        {
+          "heading": "Neden ve hangi hukuki sebeple",
+          "body": "Size uyarlanmış prova mülakatları yürütmek ve yanıtlarınız hakkında rapor üretmek için. Amacın tamamı bu; reklam için profil çıkarmayız, hiçbir veriyi satmayız. Hukuki sebep, kayıt sırasında verdiğiniz açık rızadır (KVKK m. 5/1, GDPR m. 6(1)(a)). Rızanızı dilediğiniz an hesabınızı silerek geri alabilirsiniz."
+        },
+        {
+          "heading": "Başka kimler işliyor",
+          "body": "Profiliniz, özgeçmiş metniniz ve mülakat yanıtlarınız, soru ve rapor üretilebilmesi için büyük dil modeli sağlayıcılarına gönderilir: OpenAI ve Google (Gemini). Sesli modda konuşmanız ayrıca ElevenLabs tarafından işlenir. Bu sağlayıcılar veri işleyenimizdir ve veriyi Türkiye ile AEA dışında işleyebilir. Doğum tarihiniz, herhangi bir modele profil gönderilmeden önce çıkarılır. Başka kimseyle paylaşılmaz ve hiçbir şey satılmaz."
+        },
+        {
+          "heading": "Ne kadar süre saklanıyor",
+          "body": "Profiliniz, özgeçmişiniz ve mülakat kayıtlarınız hesabınız durduğu sürece saklanır. Hesabınızı sildiğinizde profilinizi, özgeçmiş dosyanızı ve sizin için üretilmiş raporları sileriz, bütün mülakat kayıtlarını ürünün erişimi dışına çıkarırız ve e-posta adresinizin üzerine yazarız; adres artık ne giriş yapabilir ne de geri getirilebilir. Geriye yalnızca yapay zekâ kullanımının maliyetine dair, sizi tanımlayan hiçbir şey taşımayan anonim bir muhasebe kaydı kalır."
+        },
+        {
+          "heading": "Haklarınız",
+          "body": "Hakkınızda ne tuttuğumuzu öğrenme, düzeltilmesini, silinmesini isteme ve işlenmesine itiraz etme haklarınız var (KVKK m. 11, GDPR m. 15–21). Silme için başvuru gerekmez: giriş yapıp “Hesabımı sil”’i kullanın. Diğer talepler için aşağıdaki adresten yazın; otuz gün içinde yanıtlarız."
+        },
+        {
+          "heading": "Çerezler",
+          "body": "Tek bir çerez var: “session”. Yalnızca oturumunuzu açık tutar. Üründe analitik çerezi, reklam çerezi veya üçüncü taraf takipçisi bulunmaz."
+        },
+        {
+          "heading": "Bu bildirimdeki değişiklikler",
+          "body": "Hangi sürümü kabul ettiğinizi kayıt altına alıyoruz. Neyi topladığımızı veya kime gönderdiğimizi etkileyecek bir değişiklik olursa, metni sessizce değiştirmek yerine yeni sürümü kabul etmenizi isteriz."
+        }
+      ]
+    },
+    "terms": {
+      "title": "Kullanım Koşulları",
+      "intro": "Bu koşullar Interviewly'yi kullanımınızı düzenler. Hesap oluşturarak bunları kabul edersiniz.",
+      "sections": [
+        {
+          "heading": "Interviewly nedir",
+          "body": "Bir prova aracı. Mülakatlar yapay zekâ karakterlerinin yürüttüğü simülasyonlar, raporlar ise prova geri bildirimidir. Interviewly bir işe alım firması değildir, hiçbir işvereni temsil etmez ve buradaki hiçbir sonuç gerçek bir işe alım kararını etkilemez."
+        },
+        {
+          "heading": "Hesabınız",
+          "body": "En az 18 yaşında olmalı ve kayıt bilgilerinizi doğru vermelisiniz. Kişi başına tek hesap. Hesabınız altında olan biten sizin sorumluluğunuzdadır; parolanızı kimseyle paylaşmayın."
+        },
+        {
+          "heading": "Nasıl kullanabilirsiniz",
+          "body": "Üründe görünen sınırlar içinde dilediğiniz kadar prova yapın. Başkasının özgeçmişini veya kişisel verisini yüklemeyin, kullanma hakkınız olmayan içerik yapıştırmayın, istem ve modellerimizi çıkarmaya çalışmayın, hizmete otomatik erişim kurmayın."
+        },
+        {
+          "heading": "Yapay zekâ üretimi içerik",
+          "body": "Sorular, puanlar ve raporlar dil modelleri tarafından üretilir. Yanlış, eksik veya adaletsiz olabilirler; kariyer, hukuk veya psikoloji tavsiyesi değildirler. Bunları sizin hakkınızda bir değerlendirme olarak değil, prova olarak okuyun."
+        },
+        {
+          "heading": "Erişilebilirlik",
+          "body": "Hizmet olduğu gibi sunulur. Özellikleri değiştirebilir, kesintiye uğratabilir veya kaldırabiliriz ve süren bir mülakatın her kesintiden sağ çıkacağını garanti etmeyiz. Hukukun izin verdiği ölçüde, kullanımdan doğan dolaylı zararlardan sorumlu değiliz."
+        },
+        {
+          "heading": "Sözleşmenin sona ermesi",
+          "body": "Hesabınızı dilediğiniz an ürün içinden silebilirsiniz; bu aynı zamanda işleme rızanızı geri alır. Bu koşulları ihlal eden hesapları askıya alabiliriz ve aldığımızda gerekçesini bildiririz."
+        },
+        {
+          "heading": "Uygulanacak hukuk",
+          "body": "Bu koşullara Türk hukuku uygulanır; uyuşmazlıklarda İstanbul mahkemeleri ve icra daireleri yetkilidir. Bu, yaşadığınız yerdeki tüketici haklarınızı ortadan kaldırmaz."
+        }
+      ]
     }
   }
 }

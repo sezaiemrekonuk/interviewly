@@ -72,6 +72,19 @@ describe('landing (screen 1)', () => {
     expect(screen.getByText(trMessages.landing.preview.hrChip)).toBeInTheDocument();
   });
 
+  it('links both legal pages from the footer (issue 009)', () => {
+    renderWithIntl(<Home />);
+
+    expect(screen.getByRole('link', { name: messages.chrome.privacy })).toHaveAttribute(
+      'href',
+      '/privacy',
+    );
+    expect(screen.getByRole('link', { name: messages.chrome.terms })).toHaveAttribute(
+      'href',
+      '/terms',
+    );
+  });
+
   it('pulls no React Query into the landing tree (§8.1 JS budget)', () => {
     const source = readFileSync(join(__dirname, 'page.tsx'), 'utf8');
     expect(source).not.toContain('@tanstack/react-query');
@@ -256,5 +269,34 @@ describe('signed-in home — history (W08)', () => {
     );
     await waitFor(() => expect(screen.queryByTestId('interview-row')).not.toBeInTheDocument());
     expect(screen.getByTestId('history-empty')).toBeInTheDocument();
+  });
+
+  // ------------------------------------------------- account erasure (issue 009)
+
+  it('erases the account behind a confirm and reloads onto the anonymous landing', async () => {
+    const calls = stubSignedIn();
+    const assign = vi.fn();
+    vi.stubGlobal('location', { ...window.location, assign });
+    await renderSignedIn();
+
+    await act(async () => {
+      await userEvent.click(
+        screen.getByRole('button', { name: messages.home.deleteAccountAction }),
+      );
+    });
+    // Confirm first: one click never destroys an account.
+    expect(calls.every((c) => !(c.method === 'DELETE' && c.url === '/api/me'))).toBe(true);
+
+    await act(async () => {
+      await userEvent.click(
+        screen.getByRole('button', { name: messages.home.deleteAccountConfirmAction }),
+      );
+    });
+
+    await waitFor(() =>
+      expect(calls.some((c) => c.method === 'DELETE' && c.url === '/api/me')).toBe(true),
+    );
+    // A full navigation, not a client-side one: HomeSwitch probes `/me` once, on mount.
+    await waitFor(() => expect(assign).toHaveBeenCalledWith('/'));
   });
 });

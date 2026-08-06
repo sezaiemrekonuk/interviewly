@@ -59,7 +59,7 @@ fields exist so first-run routing is one server answer (K8.7).
 
 | Method + Path | Auth required | Success | Error codes |
 |---|---|---|---|
-| `POST /auth/register` | — | 201, cookie set, `{ user }` | `PASSWORD_TOO_SHORT`, `EMAIL_TAKEN`, `VALIDATION_ERROR`, `RATE_LIMITED` |
+| `POST /auth/register` | — | 201, cookie set, `{ user }` | `CONSENT_REQUIRED`, `PASSWORD_TOO_SHORT`, `EMAIL_TAKEN`, `VALIDATION_ERROR`, `RATE_LIMITED` |
 | `POST /auth/login` | — | 200, cookie set, `{ user }` | `INVALID_CREDENTIALS`, `VALIDATION_ERROR`, `RATE_LIMITED` |
 | `POST /auth/logout` | `requireAuth` | 204, cookie cleared | `UNAUTHENTICATED` |
 | `GET /auth/capabilities` | — | 200, `{ oauth: { google } }` | — |
@@ -73,6 +73,7 @@ fields exist so first-run routing is one server answer (K8.7).
 | `GET /me/profile` (A06) | `requireAuth` | 200, `{ profile, onboardingCompletedAt, cvUploadId }` | `UNAUTHENTICATED` |
 | `PATCH /me/profile` (A06) | `requireAuth` | 200, `{ profile }` | `VALIDATION_ERROR`, `RATE_LIMITED`, `UNAUTHENTICATED` |
 | `POST /me/profile/complete` (A06) | `requireAuth` | 200, `{ onboardingCompletedAt }` | `UNAUTHENTICATED` |
+| `DELETE /me` (issue 009) | `requireAuth` | 204, cookie cleared | `UNAUTHENTICATED` |
 
 Neither Google route ever answers a JSON body. Both are reached by a full browser navigation,
 so an error envelope on them is not a payload the app can read — it *is* the page (issue 60,
@@ -106,6 +107,8 @@ All paths are relative to repo root. They will exist once the named task lands.
 | `backend/modules/auth/login.ts` | A01 | `POST /auth/login` handler |
 | `backend/modules/auth/logout.ts` | A01 | `POST /auth/logout` handler |
 | `backend/modules/auth/me.ts` | A01 | `GET /me` handler |
+| `backend/modules/auth/consent.ts` | issue 009 | `CONSENT_VERSION` + `consentFields()` — the stamp every account-creating path writes |
+| `backend/modules/auth/delete-account.ts` | issue 009 | `DELETE /me` — KVKK/GDPR erasure: anonymise the user row in place, soft-delete every interview, drop the CV and report objects |
 | `backend/modules/auth/google.ts` | A02 | `GET /auth/google` + callback; `arctic` PKCE flow. `resolveGoogleIdentity()` is the shared trust boundary (admin check, link rule, create); `googleConfigured()` + `refuse()` keep both routes off the JSON path (ADR-A11) |
 | `backend/modules/auth/capabilities.ts` | issue 60 | `GET /auth/capabilities` — the runtime answer `GoogleButton` gates on |
 | `backend/modules/auth/test-seam.ts` | A02 | `POST /test/auth/simulate-google-callback`, mounted **only** under `NODE_ENV=test`; `mountTestSeam()` throws at startup anywhere else |

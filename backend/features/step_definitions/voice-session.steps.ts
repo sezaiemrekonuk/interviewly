@@ -91,7 +91,11 @@ Given(
         const targetId = this.interviewId;
         // Sign in as a different user — this.cookie now belongs to the non-owner.
         const nonOwnerEmail = `non-owner-${randomUUID()}@example.com`;
-        await this.httpPost('/auth/register', { email: nonOwnerEmail, password: 'correct-horse-battery' });
+        await this.httpPost('/auth/register', {
+          email: nonOwnerEmail,
+          password: 'correct-horse-battery',
+          consent: true,
+        });
         assert.equal(this.lastStatus, 201, `non-owner register failed: ${JSON.stringify(this.lastBody)}`);
         // Keep the owner's interview id; the cookie is the non-owner's.
         this.interviewId = targetId;

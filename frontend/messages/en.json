@@ -10,7 +10,9 @@
   },
   "chrome": {
     "newInterview": "New interview",
-    "tagline": "Practise the interview before it counts."
+    "tagline": "Practise the interview before it counts.",
+    "privacy": "Privacy",
+    "terms": "Terms"
   },
   "landing": {
     "hero": "Practise the interview before it counts",
@@ -75,7 +77,12 @@
       "title": "No interviews yet",
       "body": "Name the role, answer for ten minutes, read the report. That is the whole loop.",
       "cta": "Start your first interview"
-    }
+    },
+    "deleteAccountTitle": "Delete my account",
+    "deleteAccountBody": "This erases your profile, your CV and every interview transcript. It cannot be undone.",
+    "deleteAccountAction": "Delete my account",
+    "deleteAccountConfirm": "Delete your account and everything in it?",
+    "deleteAccountConfirmAction": "Yes, delete everything"
   },
   "mascot": {
     "wave": "Mascot waving hello",
@@ -125,7 +132,9 @@
     "resetSubmit": "Set new password",
     "passwordsMismatch": "The two passwords do not match.",
     "resetDoneTitle": "Password updated",
-    "resetDoneBody": "You have been signed out everywhere. Sign in again with your new password."
+    "resetDoneBody": "You have been signed out everywhere. Sign in again with your new password.",
+    "consentLabel": "I have read and accept the <privacy>Privacy Notice</privacy> and the <terms>Terms of Service</terms>.",
+    "consentHint": "We process your profile, CV and interview answers through AI providers. The notice explains what that means."
   },
   "onboarding": {
     "progress": "Step {step} of {total}",
@@ -291,7 +300,8 @@
     "EMAIL_RESEND_COOLDOWN": "Wait a moment before requesting another email.",
     "CV_TRUNCATED": "Your CV was too long and was shortened.",
     "PROFILE_DOB_STRIPPED": "Date of birth was removed from the extracted profile.",
-    "UNKNOWN": "An unexpected error occurred."
+    "UNKNOWN": "An unexpected error occurred.",
+    "CONSENT_REQUIRED": "Accept the Privacy Notice and Terms of Service to create an account."
   },
   "dashboard": {
     "title": "Your interviews",
@@ -367,6 +377,80 @@
       "completed": "Completed",
       "abandoned": "Abandoned",
       "failed": "Failed"
+    }
+  },
+  "legal": {
+    "updated": "Last updated 6 August 2026",
+    "backHome": "Back to Interviewly",
+    "contact": "Questions, or want a copy of your data? Write to {email}.",
+    "contactEmail": "privacy@interviewly.app",
+    "privacy": {
+      "title": "Privacy Notice",
+      "intro": "This notice explains what Interviewly collects about you, why, who else sees it, and how to get rid of it. It is written to meet KVKK (Law No. 6698) and GDPR Articles 13 and 17.",
+      "sections": [
+        {
+          "heading": "What we collect",
+          "body": "Your account: email address and, unless you sign in with Google, a hashed password. Your profile: full name, job title, date of birth, education history (school, degree, field, graduation year), hobbies and free-text interests. Your CV, if you upload one, as a PDF and as the text extracted from it. Your interviews: every question put to you, every answer you give in text or voice, and the report generated from them. Technical data: one session cookie, and server logs that record request identifiers and account identifiers, never profile field values."
+        },
+        {
+          "heading": "Why we collect it, and on what basis",
+          "body": "To run practice interviews adapted to you and to produce a report on your answers. That is the whole purpose; we do not profile you for advertising and we sell nothing. The legal basis is your explicit consent, given at registration (KVKK Art. 5/1, GDPR Art. 6(1)(a)). You can withdraw it at any time by deleting your account, which is described below."
+        },
+        {
+          "heading": "Who else processes it",
+          "body": "Your profile, your CV text and your interview answers are sent to large language model providers so questions and reports can be generated: OpenAI and Google (Gemini). In voice mode, your speech is additionally processed by ElevenLabs. These providers act as our processors and may process the data outside Türkiye and the EEA. Your date of birth is stripped before any profile is sent to a model. Nothing is shared with anyone else, and nothing is sold."
+        },
+        {
+          "heading": "How long we keep it",
+          "body": "Your profile, CV and interview transcripts are kept while your account exists. When you delete your account we erase your profile, your CV file and the reports generated for you, put every transcript out of reach of the product, and overwrite your email address so it can neither sign in nor be recovered. What remains is an anonymous accounting record of what our AI usage cost, which carries nothing that identifies you."
+        },
+        {
+          "heading": "Your rights",
+          "body": "You may ask what we hold about you, have it corrected, have it erased, and object to how it is processed (KVKK Art. 11, GDPR Arts. 15–21). Erasure needs no request: sign in and use “Delete my account”. For anything else, contact us at the address below and we will answer within thirty days."
+        },
+        {
+          "heading": "Cookies",
+          "body": "One cookie, named “session”, which keeps you signed in and nothing else. There is no analytics cookie, no advertising cookie and no third-party tracker anywhere in the product."
+        },
+        {
+          "heading": "Changes to this notice",
+          "body": "We record which version of this notice you accepted. If we change it in a way that affects what we collect or who we send it to, we will ask you to accept the new version rather than change it under you."
+        }
+      ]
+    },
+    "terms": {
+      "title": "Terms of Service",
+      "intro": "These terms cover your use of Interviewly. By creating an account you accept them.",
+      "sections": [
+        {
+          "heading": "What Interviewly is",
+          "body": "A practice tool. The interviews are simulations run by AI personas, and the reports are practice feedback. Interviewly is not a recruiter, does not represent any employer, and no result here has any bearing on a real hiring decision."
+        },
+        {
+          "heading": "Your account",
+          "body": "You must be at least 18 and give accurate registration details. One account per person. You are responsible for what happens under your account, so keep your password to yourself."
+        },
+        {
+          "heading": "How you may use it",
+          "body": "Practise as much as you like within the limits shown in the product. Do not upload another person's CV or personal data, do not paste content you have no right to use, do not attempt to extract our prompts or models, and do not automate access to the service."
+        },
+        {
+          "heading": "AI-generated content",
+          "body": "Questions, scores and reports are generated by language models. They can be wrong, incomplete or unfair, and they are not career, legal or psychological advice. Read them as practice, not as an assessment of you."
+        },
+        {
+          "heading": "Availability",
+          "body": "The service is provided as it is. We may change, interrupt or withdraw features, and we do not guarantee that an interview in progress will always survive an outage. Where the law allows, we are not liable for indirect loss arising from your use of the service."
+        },
+        {
+          "heading": "Ending the agreement",
+          "body": "You may delete your account at any time from within the product, which also withdraws your consent to processing. We may suspend an account that breaches these terms, and will say why when we do."
+        },
+        {
+          "heading": "Governing law",
+          "body": "Turkish law governs these terms, and the courts and enforcement offices of Istanbul have jurisdiction over any dispute. This does not remove any consumer protection you have where you live."
+        }
+      ]
     }
   }
 }

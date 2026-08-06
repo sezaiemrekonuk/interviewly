@@ -13,7 +13,7 @@ import { AiWorld } from './world';
 
 Given('I am signed in as a candidate', async function (this: AiWorld) {
   const email = `candidate-${randomUUID()}@example.com`;
-  await this.httpPost('/auth/register', { email, password: 'correct-horse-battery' });
+  await this.httpPost('/auth/register', { email, password: 'correct-horse-battery', consent: true });
   assert.equal(this.lastStatus, 201, `register failed: ${JSON.stringify(this.lastBody)}`);
   this.candidateId = ((this.lastBody?.user as { id: string } | undefined)?.id) ?? '';
 });

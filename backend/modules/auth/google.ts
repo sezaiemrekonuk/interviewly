@@ -9,6 +9,7 @@ import { config } from '../../src/lib/env';
 import { logger } from '../../src/lib/logger';
 import { issueSessionForUser } from '../../src/lib/session';
 
+import { consentFields } from './consent';
 import { redis } from './rate-limit';
 
 // The `state` value travels in this short-lived cookie and is compared against the
@@ -132,12 +133,17 @@ export async function resolveGoogleIdentity(
     return linked;
   }
 
+  // The consent stamp is recorded here too (issue 009): this branch creates an account, and
+  // an account created without a consent record is exactly what KVKK Art. 5 forbids. The
+  // box itself is ticked on `/register`, which is what gates the button that starts this
+  // redirect chain — the OAuth round-trip carries no field of our own to re-assert it with.
   const created = await prisma.user.create({
     data: {
       email_lower,
       google_sub: identity.sub,
       password_hash: null,
       email_verified_at: verifiedNow ?? null,
+      ...consentFields(),
     },
   });
   logger.info({ userId: created.id, traceId }, 'AUTH_REGISTERED');

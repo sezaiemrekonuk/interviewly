@@ -40,6 +40,9 @@ export function makeFakeStorage(bucketUrl = 'https://objects.test.local/private'
       if (!bytes) throw new Error(`no object for key ${key}`);
       return bytes;
     },
+    async remove(key) {
+      objects.delete(key);
+    },
     async signedUrl(key, ttlSeconds) {
       const url = new URL(`${bucketUrl}/${key}`);
       url.searchParams.set('X-Amz-Algorithm', 'AWS4-HMAC-SHA256');

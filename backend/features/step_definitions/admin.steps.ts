@@ -36,6 +36,7 @@ async function register(world: AiWorld): Promise<string> {
   await world.httpPost('/auth/register', {
     email: `candidate-${randomUUID()}@example.com`,
     password: ADMIN_PASSWORD,
+    consent: true,
   });
   assert.equal(world.lastStatus, 201, `register failed: ${JSON.stringify(world.lastBody)}`);
   return world.cookie;

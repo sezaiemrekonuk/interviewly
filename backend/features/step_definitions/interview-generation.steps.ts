@@ -33,7 +33,7 @@ export async function signIn(this: AiWorld, localPart: string): Promise<void> {
   // database that kept the previous run's rows, and `users.email_lower` is unique. The local
   // part is kept for readability; uniqueness is the suffix's job.
   const email = `${localPart}-${randomUUID()}@example.com`;
-  await this.httpPost('/auth/register', { email, password: 'correct-horse-battery' });
+  await this.httpPost('/auth/register', { email, password: 'correct-horse-battery', consent: true });
   assert.equal(this.lastStatus, 201, `register failed: ${JSON.stringify(this.lastBody)}`);
   this.candidateId = (this.lastBody?.user as { id: string } | undefined)?.id ?? '';
 }

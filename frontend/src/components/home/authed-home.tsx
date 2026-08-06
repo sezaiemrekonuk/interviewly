@@ -7,6 +7,7 @@ import { useMyInterviews, useProfile } from '../../lib/query';
 import { useErrorMessage } from '../../lib/use-error-message';
 import { Mascot } from '../mascot';
 
+import { DeleteAccount } from './delete-account';
 import styles from './home.module.css';
 import { InterviewRow } from './interview-row';
 
@@ -94,6 +95,8 @@ export function AuthedHome() {
           </button>
         ) : null}
       </div>
+
+      <DeleteAccount />
     </section>
   );
 }

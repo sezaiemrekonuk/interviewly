@@ -8,7 +8,7 @@ import { config } from '../../src/lib/env';
 
 import { getBaseUrl } from './harness';
 
-type Method = 'GET' | 'POST' | 'PATCH';
+type Method = 'GET' | 'POST' | 'PATCH' | 'DELETE';
 
 interface RequestOpts {
   body?: unknown;

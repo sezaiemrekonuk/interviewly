@@ -2,7 +2,7 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTranslations } from 'next-intl';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
@@ -44,7 +44,17 @@ export interface CredentialsFormProps {
   fieldForCode?: Partial<Record<string, 'email' | 'password'>>;
   /** A code carried in the URL (A02's `/sign-in?error=<CODE>`), shown on mount. */
   initialErrorCode?: string | null;
+  /** Merged into the request body — `/register` carries its consent flag this way (issue 009). */
+  extraBody?: Record<string, unknown>;
+  /**
+   * A precondition this form cannot own as a field rule. Consent lives on the page because it
+   * also gates the Google button, which is not part of this form; when it is unmet the submit
+   * is refused here with this code and nothing leaves the browser.
+   */
+  refuseWith?: string | null;
   onSuccess: (user: SessionUser) => void;
+  /** Rendered immediately above the submit button — the consent block on `/register`. */
+  children?: ReactNode;
 }
 
 export function CredentialsForm({
@@ -53,7 +63,10 @@ export function CredentialsForm({
   submitLabel,
   fieldForCode = {},
   initialErrorCode = null,
+  extraBody,
+  refuseWith = null,
   onSuccess,
+  children,
 }: CredentialsFormProps) {
   const t = useTranslations('auth');
   const messageFor = useErrorMessage();
@@ -72,8 +85,12 @@ export function CredentialsForm({
   } = useForm<Credentials>({ resolver: zodResolver(schema), mode: 'onSubmit' });
 
   async function onSubmit(values: Credentials) {
+    if (refuseWith) {
+      setSubmitCode(refuseWith);
+      return;
+    }
     setSubmitCode(null);
-    const result = await apiPost<{ user: SessionUser }>(endpoint, values);
+    const result = await apiPost<{ user: SessionUser }>(endpoint, { ...values, ...extraBody });
 
     if (result.ok && result.data) {
       onSuccess(result.data.user);
@@ -117,6 +134,8 @@ export function CredentialsForm({
             />
           )}
         </Field>
+
+        {children}
 
         <Button className={styles.submit} type="submit" size="lg" loading={isSubmitting}>
           {submitLabel}

@@ -27,7 +27,9 @@ function errorCode(exchange: Exchange): string | undefined {
 Given(
   'a registered unverified account exists for {string}',
   async function (this: AuthWorld, email: string) {
-    await this.request('POST', '/auth/register', { body: { email, password: '1234567890' } });
+    await this.request('POST', '/auth/register', {
+      body: { email, password: '1234567890', consent: true },
+    });
     assert.equal(this.lastStatus, 201, 'registration fixture did not succeed');
     const user = await userFor(email);
     assert.equal(user.email_verified_at, null, 'a fresh registration must start unverified');
