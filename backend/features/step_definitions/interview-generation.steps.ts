@@ -21,8 +21,10 @@ import {
   type QuestionBatch,
 } from '@interviewly/ai';
 
+import { redis } from '../../modules/auth/rate-limit';
 import { aiClient } from '../../modules/ai';
 import { generateRound } from '../../modules/interview/generation';
+import { EVENT_CHANNEL_PREFIX, eventNameFor, QUESTIONS_READY } from '../../modules/interview/sse';
 import { ApiError, httpStatusFor } from '../../src/lib/api-error';
 import { prisma } from '../../src/lib/db';
 
@@ -138,8 +140,54 @@ Given(
   },
 );
 
-After(function (this: AiWorld) {
+/**
+ * What a room subscribed to `GET /interviews/:id/events` sees, stood up over the same Redis
+ * channel the SSE handler subscribes to — the handler itself only reframes these payloads.
+ *
+ * `hrQuestionCount` is read **at delivery time**, not when the scenario asserts: the bug this
+ * covers is a nudge that arrives while the batch is still being generated, and a count taken
+ * after the request finished reports the same number for both the too-early event and the
+ * useful one.
+ */
+interface ObservedNudge {
+  name: string;
+  interviewId: string;
+  hrQuestionCount: Promise<number>;
+}
+
+let nudgeSubscriber: ReturnType<typeof redis.duplicate> | undefined;
+const nudges: ObservedNudge[] = [];
+
+Given('the room is listening on the interview event stream', async function (this: AiWorld) {
+  nudgeSubscriber = redis.duplicate();
+  await nudgeSubscriber.psubscribe(`${EVENT_CHANNEL_PREFIX}*`);
+  nudgeSubscriber.on('pmessage', (_pattern, _channel, payload) => {
+    const parsed = JSON.parse(payload) as { interviewId: string };
+    nudges.push({
+      name: eventNameFor(payload),
+      interviewId: parsed.interviewId,
+      // Swallowed rather than awaited here: a rejection on a listener callback has no caller
+      // to reach, and the assertion below reads a failed count as "no questions".
+      hrQuestionCount: prisma.question
+        .count({ where: { round: { interview_id: parsed.interviewId, type: 'hr' } } })
+        .catch(() => 0),
+    });
+  });
+});
+
+/** Redis delivery is not ordered against the HTTP response that triggered the publish. */
+async function waitForNudge(satisfied: () => boolean): Promise<void> {
+  for (let i = 0; i < 100 && !satisfied(); i++) {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+}
+
+After(async function (this: AiWorld) {
   unrig(this);
+  nudges.length = 0;
+  const subscriber = nudgeSubscriber;
+  nudgeSubscriber = undefined;
+  await subscriber?.quit();
 });
 
 // ---------------------------------------------------------------- when
@@ -213,6 +261,26 @@ When(
 
 Then('no HR questions exist for that interview', async function (this: AiWorld) {
   assert.equal((await questionsIn(this, 'hr')).length, 0);
+});
+
+/**
+ * The acceptance criterion issue #54 turns on: *an* event is not enough, the room needs one
+ * that arrives when there is something to refetch. Asserting the batch existed at delivery is
+ * what a publish moved back in front of the insert would fail.
+ */
+Then('the room is nudged once the HR questions exist', async function (this: AiWorld) {
+  const mine = (): ObservedNudge[] => nudges.filter((n) => n.interviewId === this.interviewId);
+  await waitForNudge(() => mine().some((n) => n.name === QUESTIONS_READY));
+
+  const ready = mine().filter((n) => n.name === QUESTIONS_READY);
+  assert.equal(ready.length, 1, `expected one ${QUESTIONS_READY}, saw ${ready.length}`);
+  assert.ok(
+    (await ready[0].hrQuestionCount) > 0,
+    `${QUESTIONS_READY} was delivered before the HR batch existed`,
+  );
+  // The transition's nudge is the one that lands too early, so the useful event has to be the
+  // last thing the room hears — otherwise it refetches back into the waiting panel.
+  assert.equal(mine().at(-1)?.name, QUESTIONS_READY, 'a later nudge followed the questions');
 });
 
 // `exactly {int} questions exist for the HR round` is defined in ai-provider.steps.ts, which

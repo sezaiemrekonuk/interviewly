@@ -46,6 +46,33 @@ describe('useInterviewEvents', () => {
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.interview('int-1') });
   });
 
+  // Issue #54: the state change lands before the questions exist (`POST /profile` claims the
+  // transition, then calls the model), so a client listening only for it refetches into an empty
+  // room and waits forever. This is the event that arrives once there is something to show.
+  it('invalidates on the questions-ready event', () => {
+    renderHook(() => useInterviewEvents('int-1'), { wrapper: wrapper(client) });
+
+    MockEventSource.instances[0].emit(
+      'INTERVIEW_QUESTIONS_READY',
+      '{"type":"INTERVIEW_QUESTIONS_READY","interviewId":"int-1","roundType":"hr"}',
+    );
+
+    expect(invalidate).toHaveBeenCalledTimes(1);
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.interview('int-1') });
+  });
+
+  // The pair, in the order the profile submit produces them: one refetch too early, one that
+  // finds the question. Neither may be dropped, and the second is the one that ends the wait.
+  it('refetches again after the questions arrive, not only on the transition', () => {
+    renderHook(() => useInterviewEvents('int-1'), { wrapper: wrapper(client) });
+    const source = MockEventSource.instances[0];
+
+    source.emit('INTERVIEW_STATE_CHANGED', '{"from":"profiling","to":"hr_round"}');
+    source.emit('INTERVIEW_QUESTIONS_READY', '{"type":"INTERVIEW_QUESTIONS_READY"}');
+
+    expect(invalidate).toHaveBeenCalledTimes(2);
+  });
+
   it('invalidates once more on a reconnect, not on the first open', () => {
     renderHook(() => useInterviewEvents('int-1'), { wrapper: wrapper(client) });
     const source = MockEventSource.instances[0];

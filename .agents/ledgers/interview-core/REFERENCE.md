@@ -105,7 +105,7 @@ SCREAMING_SNAKE_CASE code — never a display string. All `:id` routes are owner
 | `POST /interviews/:id/answers` | `requireAuth` | 200 `{ state, nextIndex }` | `INTERVIEW_NOT_FOUND`, `QUESTION_NOT_CURRENT`, `INVALID_STATE_TRANSITION`, `BUDGET_EXCEEDED`, `CSRF_ORIGIN_MISMATCH` | I06, I08 |
 | `POST /interviews/:id/resume` | `requireAuth` | 200 `{ state }` | `INTERVIEW_NOT_FOUND`, `INVALID_STATE_TRANSITION`, `CSRF_ORIGIN_MISMATCH` | I07 |
 | `GET /interviews/:id/report/download` | `requireAuth` | 200 `{ url }` (signed, ≤ 300 s, not under `/assets/`) | `INTERVIEW_NOT_FOUND` | I12 |
-| `GET /interviews/:id/events` | `requireAuth` | 200 SSE stream | `INTERVIEW_NOT_FOUND` | I07 (ADR-I29) |
+| `GET /interviews/:id/events` | `requireAuth` | 200 SSE stream: `INTERVIEW_STATE_CHANGED`, `INTERVIEW_QUESTIONS_READY` | `INTERVIEW_NOT_FOUND` | I07 (ADR-I29), ADR-I38 |
 | `GET /healthz` | — | 200 `{ ok: true }` | — | I14 |
 | `GET /readyz` | — | 200 `{ ready: true }` / 503 `NOT_READY` | `NOT_READY` | I14 |
 
@@ -189,7 +189,7 @@ All paths relative to repo root. Each exists once its providing task lands.
 | `backend/modules/interview/answers.ts` | I06 | `POST /answers`: guarded advance, duration, transcript |
 | `backend/modules/interview/machine.ts` | I06 | K2 transition table + guard (extended I07) |
 | `backend/modules/interview/resume.ts` | I07 | `POST /resume`: `paused → round` |
-| `backend/modules/interview/sse.ts` | I07 | `INTERVIEW_STATE_CHANGED` SSE fan-out |
+| `backend/modules/interview/sse.ts` | I07 | `INTERVIEW_STATE_CHANGED` + `INTERVIEW_QUESTIONS_READY` SSE fan-out |
 | `backend/modules/interview/budget.ts` | I08 | `withBudget(id, fn)`: advisory-locked ceiling (ADR-I33) |
 | `backend/modules/interview/report-run.ts` | I09 | `evaluating → completed\|failed`, store payload |
 | `backend/modules/interview/language.ts` | I10 | Two-consecutive-turn switch counting |

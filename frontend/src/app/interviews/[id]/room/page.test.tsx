@@ -284,6 +284,21 @@ describe('interview room, text mode (W06)', () => {
     );
   });
 
+  // Issue #54's third acceptance criterion: a failed generation must reach the candidate as an
+  // error, not as the waiting panel. The repair is the only thing that could fill this room, so
+  // once it comes back red there is nothing left to wait out.
+  it('surfaces the stall panel at once when the parked repair fails, not in 30 seconds', async () => {
+    // The stub answers `/resume` with its 404 fallback — which failure it is does not matter.
+    stubFetch({
+      states: [roomState({ state: 'profiling', currentIndex: 0, currentQuestion: null, persona: null })],
+    });
+    await renderRoom();
+
+    await waitFor(() => expect(screen.getByTestId('room-stalled')).toBeInTheDocument());
+    expect(screen.getByRole('alert')).toHaveTextContent(messages.room.stalled);
+    expect(screen.getByRole('button', { name: messages.room.retry })).toBeInTheDocument();
+  });
+
   it('turns the waiting beat into a rebuild once nothing is generating', async () => {
     vi.useFakeTimers();
     const calls = stubFetch({ states: [roomState({ currentQuestion: null })] });

@@ -6,8 +6,13 @@ import { useEffect } from 'react';
 import { API_BASE } from './api';
 import { queryKeys } from './query';
 
-/** The backend's only named event (`sse.ts`). */
-const STATE_CHANGED = 'INTERVIEW_STATE_CHANGED';
+/**
+ * The backend's named events (`sse.ts`). Both mean the same thing here — ask again — but they
+ * are two events because the state change lands *before* the questions exist: `POST /profile`
+ * claims `profiling → hr_round` and only then calls the model, so a room that refetched on the
+ * transition alone sits on the waiting panel until the candidate reloads.
+ */
+const EVENTS = ['INTERVIEW_STATE_CHANGED', 'INTERVIEW_QUESTIONS_READY'] as const;
 
 /**
  * K11 — nudge, then refetch. The event body says *that* something changed, never *what*:
@@ -36,10 +41,10 @@ export function useInterviewEvents(interviewId: string | null): void {
       connected = true;
     };
     source.onmessage = invalidate;
-    source.addEventListener(STATE_CHANGED, invalidate);
+    for (const name of EVENTS) source.addEventListener(name, invalidate);
 
     return () => {
-      source.removeEventListener(STATE_CHANGED, invalidate);
+      for (const name of EVENTS) source.removeEventListener(name, invalidate);
       source.close();
     };
   }, [interviewId, queryClient]);

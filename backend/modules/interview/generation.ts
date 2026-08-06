@@ -21,6 +21,7 @@ import { prisma } from '../../src/lib/db';
 import { logger } from '../../src/lib/logger';
 
 import { applyTransition, canTransition } from './machine';
+import { publishQuestionsReady, QUESTIONS_READY } from './sse';
 
 export interface GenerateOpts {
   traceId: string;
@@ -183,6 +184,16 @@ export async function generateRound(
         topic: q.topic,
       })) satisfies Prisma.QuestionCreateManyInput[],
     });
+  });
+
+  // After the commit, not inside it: an event for rows a rolled-back transaction never wrote
+  // would send the room to refetch the empty state it is already showing. The early return
+  // above stays silent for the same reason it exists — a round that was already full had its
+  // event when it was written, and the caller that lost that race gets its own HTTP response.
+  await publishQuestionsReady({
+    type: QUESTIONS_READY,
+    interviewId: interview.id,
+    roundType,
   });
 }
 
