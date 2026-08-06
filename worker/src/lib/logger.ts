@@ -1,3 +1,6 @@
+// K6 logger contract: logger.<level>({ traceId, interviewId, ...fields }, "EVENT_NAME")
+// Both traceId and interviewId are mandatory on interview-scoped lines.
+// No secrets, PII, tokens, or PDF content in any log call.
 import pino from 'pino';
 
 function serialisable(value: unknown): unknown {
