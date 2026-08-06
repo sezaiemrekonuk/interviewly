@@ -93,14 +93,18 @@ export default function InterviewRoomPage() {
   // guard: the retry it turns into on failure is the candidate's, not a loop.
   const parked = roomState === 'profiling';
   const { mutate: startRoom, isIdle: repairIdle } = resume;
-  useEffect(() => {
-    if (parked && repairIdle) startRoom();
-  }, [parked, repairIdle, startRoom]);
   // Which wait ran out, not whether one did: the flag is never reset, it simply stops matching
   // once the round moves on (`current_index` only ever advances), so every later wait starts
   // its own clock without an effect that writes state on the way back down.
   const waitingIndex = room?.currentIndex ?? null;
   const [stalledIndex, setStalledIndex] = useState<number | null>(null);
+  useEffect(() => {
+    if (!parked || !repairIdle) return;
+    // A repair that comes back with an error is a room nothing will fill on its own — the
+    // provider is down (`AI_PROVIDER_UNAVAILABLE`, and `profiling` has no `paused` edge to
+    // land in), so waiting out the stall timer only delays the same alert and Retry by 30s.
+    startRoom(undefined, { onError: () => setStalledIndex(waitingIndex) });
+  }, [parked, repairIdle, startRoom, waitingIndex]);
 useEffect(() => {
   if (!waitingOnHr) return;
   if (stalledIndex !== null && stalledIndex === waitingIndex) return;

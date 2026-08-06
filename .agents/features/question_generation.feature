@@ -68,6 +68,19 @@ Feature: Question generation
     And exactly 3 questions exist for the HR round
     And the interview state is "hr_round"
 
+  @question-generation @backend @AC-7
+  Scenario: The room is nudged again once the HR batch exists
+    Given I set up an interview with 8 questions
+    And the room is listening on the interview event stream
+    # POST /profile claims profiling → hr_round before it calls the model — the claim is what
+    # makes concurrent requests safe — so the transition's nudge reaches a client whose refetch
+    # still finds currentQuestion: null. Without a second event the room waits on a question it
+    # already has, until the candidate reloads (issue #54).
+    When I POST "/interviews/:id/profile" for the profiling interview
+    Then the response status is 200
+    And exactly 3 questions exist for the HR round
+    And the room is nudged once the HR questions exist
+
   @question-generation @ai @AC-1
   Scenario: A generated round returns exactly the requested count of typed questions
     Given I set up an interview with 8 questions

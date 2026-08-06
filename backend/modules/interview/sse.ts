@@ -1,10 +1,11 @@
 /**
- * The `INTERVIEW_STATE_CHANGED` fan-out (§8.3, I07).
+ * The interview event fan-out (§8.3, I07).
  *
  * Redis pub/sub rather than an in-process emitter: `api` scales horizontally, and a room held
  * open by one replica has to see a transition another replica applied. The stream carries
  * state events only — no transcript, no question text, no secret.
  */
+import type { RoundType } from '@interviewly/ai';
 import type { InterviewState } from '@prisma/client';
 import type { RequestHandler } from 'express';
 
@@ -14,19 +15,73 @@ import { REPORT_QUEUE, reportQueue } from '../../src/lib/queue';
 
 export const EVENT_CHANNEL_PREFIX = 'interview:events:';
 
+export const STATE_CHANGED = 'INTERVIEW_STATE_CHANGED';
+/**
+ * The second event, and the reason there is a `type` on the wire at all.
+ *
+ * A state change is not the moment a room becomes answerable: `POST /profile` claims
+ * `profiling → hr_round` *before* it calls the model (the claim is what makes concurrent
+ * requests safe), so the state event reaches a client whose refetch still finds
+ * `currentQuestion: null`. Questions appearing is not a state change — `applyTransition` is the
+ * sole publisher of those — so it needs an event of its own rather than a faked transition.
+ */
+export const QUESTIONS_READY = 'INTERVIEW_QUESTIONS_READY';
+
 export interface InterviewStateChanged {
   from: InterviewState;
   to: InterviewState;
   interviewId: string;
 }
 
+export interface InterviewQuestionsReady {
+  type: typeof QUESTIONS_READY;
+  interviewId: string;
+  roundType: RoundType;
+}
+
 export function eventChannel(interviewId: string): string {
   return `${EVENT_CHANNEL_PREFIX}${interviewId}`;
+}
+
+/**
+ * The channel carries both events, so the name is read back off the payload.
+ *
+ * Untyped payloads are state changes: that is every message published before this field
+ * existed, including the ones a mid-deploy replica is still writing while a new one reads.
+ * A payload that does not parse cannot be classified either, and naming it the event every
+ * client already handles keeps a malformed message a refetch rather than a dropped nudge.
+ */
+export function eventNameFor(payload: string): string {
+  try {
+    const parsed = JSON.parse(payload) as { type?: unknown };
+    return parsed?.type === QUESTIONS_READY ? QUESTIONS_READY : STATE_CHANGED;
+  } catch {
+    return STATE_CHANGED;
+  }
 }
 
 /** Called by `applyTransition` only — publishing anywhere else fakes a state change. */
 export async function publishStateChanged(event: InterviewStateChanged): Promise<void> {
   await redis.publish(eventChannel(event.interviewId), JSON.stringify(event));
+}
+
+/**
+ * Called by `generateRound` once the batch is committed — never before, or the client refetches
+ * into the same empty room the state event already showed it.
+ *
+ * Swallows its own failure, for the reason `applyTransition` wraps its publish: the questions
+ * are already written, and a Redis outage must not turn a generated round into a failed request.
+ * The room falls back to reconstructing from `GET /state` on the candidate's next move.
+ */
+export async function publishQuestionsReady(event: InterviewQuestionsReady): Promise<void> {
+  try {
+    await redis.publish(eventChannel(event.interviewId), JSON.stringify(event));
+  } catch (err) {
+    logger.error(
+      { err, interviewId: event.interviewId, roundType: event.roundType },
+      'INTERVIEW_EVENT_PUBLISH_FAILED',
+    );
+  }
 }
 
 /**
@@ -65,7 +120,7 @@ export const streamInterviewEvents: RequestHandler = async (req, res) => {
     // `quit()` below is async, so a message can still land between the disconnect and the
     // connection actually closing — writing it would be ERR_STREAM_WRITE_AFTER_END.
     if (res.writableEnded) return;
-    res.write(`event: INTERVIEW_STATE_CHANGED\ndata: ${payload}\n\n`);
+    res.write(`event: ${eventNameFor(payload)}\ndata: ${payload}\n\n`);
   });
   await subscriber.subscribe(channel);
 

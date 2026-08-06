@@ -796,3 +796,29 @@ accepted `not-a-url`.
 **Consequences:** the boot validates the real environment, so a local run without `.env`
 exported now fails fast instead of silently borrowing it. `worker/src/index.ts` has the same
 import shape and was not touched (Backlog).
+
+## ADR-I38 — 2026-08-06 — the room gets a second event, `INTERVIEW_QUESTIONS_READY`
+
+**Context:** issue #54. `POST /profile` claims `profiling → hr_round` *before* it calls the
+model — deliberately, because the WHERE-guarded claim is what stops two concurrent requests
+generating two batches (ADR-I07). But the transition is also the only thing that publishes,
+so the room's single nudge arrived while `generateRound` was still in flight: the client
+refetched, found `currentQuestion: null`, and waited on a second event that was never coming.
+"Preparing the next question…" until a manual reload, on the first question of every interview.
+
+Swapping the two statements was the cheap fix and was rejected: it reorders a concurrency
+guard around a UI concern, and it moves generation outside the claim so a provider failure has
+no legal `paused` edge to fall back to (`machine.ts` — `profiling` has none).
+
+**Decision:** `generateRound` publishes `INTERVIEW_QUESTIONS_READY` on the same Redis channel
+once the batch is **committed**, and `use-interview-events.ts` invalidates on it exactly as it
+does on the state change (K11 — both are nudges; neither payload is read). The channel now
+carries two events, so the SSE frame's name is read back off the payload's `type` by
+`eventNameFor`; an untyped payload is a state change, which is every message a mid-deploy
+replica is still publishing. Business logic keeps its ordering.
+
+**Consequences:** every generation path is covered without a second one being written — the
+`paused → hr_round` resume and the stranded-`hr_round` repair publish through the same call.
+The publish is best-effort (the questions are already written; a Redis outage must not fail a
+generated round), and the room's `STALLED_AFTER_MS` timer stays as the backstop for a nudge
+that never lands. `generation.ts` now imports `sse.ts`, which `machine.ts` already did.
