@@ -13,7 +13,7 @@
  */
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { Given, Then, When } from '@cucumber/cucumber';
+import { After, Given, Then, When } from '@cucumber/cucumber';
 import {
   loadPromptRegistry,
   type AiClient,
@@ -98,12 +98,31 @@ Given(
   },
 );
 
+Given('the stub AI shorts the next batch by one question', function () {
+  const client = aiClient();
+  const real = client.generateRoundQuestions.bind(client);
+  client.generateRoundQuestions = async (args: GenerateRoundQuestionsArgs) => {
+    const full = await real(args);
+    return { questions: full.questions.slice(0, args.count - 1) };
+  };
+});
+
+/** Un-rigs both rings: the injected client and the shadowed singleton method. */
+function unrig(world: AiWorld): void {
+  world.roundClient = undefined;
+  delete (aiClient() as unknown as Record<string, unknown>).generateRoundQuestions;
+}
+
 Given(
   'the stub AI is configured to return a schema-valid batch of {int} questions',
   function (this: AiWorld, _count: number) {
-    this.roundClient = undefined;
+    unrig(this);
   },
 );
+
+After(function (this: AiWorld) {
+  unrig(this);
+});
 
 // ---------------------------------------------------------------- when
 

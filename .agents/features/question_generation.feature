@@ -28,6 +28,21 @@ Feature: Question generation
     And the interview state is "hr_round"
     And the recorded AI prompt name is "interview.question.generate"
 
+  @question-generation @backend @AC-7
+  Scenario: A short batch leaves the interview where the same request can retry it
+    Given I set up an interview with 8 questions
+    And the stub AI shorts the next batch by one question
+    When I POST "/interviews/:id/profile" for the profiling interview
+    Then the response status is 500
+    And the response error code is "AI_OUTPUT_INVALID"
+    And no HR questions exist for that interview
+    And the interview state is "profiling"
+    When the stub AI is configured to return a schema-valid batch of 3 questions
+    And I POST "/interviews/:id/profile" for the profiling interview
+    Then the response status is 200
+    And exactly 3 questions exist for the HR round
+    And the interview state is "hr_round"
+
   @question-generation @ai @AC-1
   Scenario: A generated round returns exactly the requested count of typed questions
     Given I set up an interview with 8 questions

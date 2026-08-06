@@ -116,16 +116,14 @@ export const submitProfile: RequestHandler = async (req, res) => {
     },
   });
 
-  // I07: the state column is written by `applyTransition` and by nothing else, so this edge
-  // is guarded and emits `INTERVIEW_STATE_CHANGED` on the same terms as every other one.
-  await applyTransition(updated, 'hr_round', { traceId: req.traceId! });
+  // Claim the transition atomically before generation. `applyTransition` uses a WHERE-guarded
+  // updateMany so only the first concurrent request can advance the state; any duplicate
+  // request fails with INVALID_STATE_TRANSITION before the LLM call is ever made.
+  const state = await applyTransition(updated, 'hr_round', { traceId: req.traceId! });
 
-  // Nothing generates the technical batch here (ADR-I22): it is generated during the HR round
-  // via `ensureTechBatch`, so this request pays for one LLM call and the handover pays for none.
-  // A provider failure below pauses `updated`, which is why the transition above ran first.
   await generateRound(updated, 'hr', { traceId: req.traceId! });
 
-  res.status(200).json({ state: updated.state });
+  res.status(200).json({ state });
 };
 
 export default submitProfile;
