@@ -6,9 +6,17 @@
  * Order is load-bearing: kind → hash → dedup short-circuit → magic bytes → page count →
  * extraction → text floor → store → row. Hashing before validation is what makes a
  * byte-identical re-upload free; a file that is already a row was already validated.
+ *
+ * A `cv` does one more thing before it answers (A06 @AC-32): it attaches itself to the
+ * account. `users.cv_upload_id` is repointed and the extracted text is cached on
+ * `users.profile.cv_text`, which is where `interview/profile.ts`'s `mergeProfile` lifts it
+ * from when it snapshots a candidate. Without that write the id lives and dies in the
+ * uploader's memory and the CV never reaches a single question (issue 62).
  */
 import { createHash } from 'node:crypto';
 
+import { MAX_BLOCK_CHARS } from '@interviewly/ai';
+import type { Prisma } from '@prisma/client';
 import type { RequestHandler } from 'express';
 import multer, { MulterError } from 'multer';
 import { extractText, getDocumentProxy } from 'unpdf';
@@ -16,6 +24,7 @@ import { z } from 'zod';
 
 import { ApiError } from '../../src/lib/api-error';
 import { prisma } from '../../src/lib/db';
+import { logger } from '../../src/lib/logger';
 import { storage } from '../../src/lib/storage';
 
 const MAX_BYTES = 10 * 1024 * 1024;
@@ -60,10 +69,47 @@ export const uploadMiddleware: RequestHandler = (req, res, next) => {
   });
 };
 
+/**
+ * The `cv` half of A06 @AC-32, in one transaction with the row it points at: a user whose
+ * `cv_upload_id` moved but whose `cv_text` did not would hand the next interview the previous
+ * CV's text, which is worse than having none.
+ *
+ * Truncated at the prompt builder's own ceiling rather than left whole — the builder would
+ * cut it to the same 12 000 characters on the way into `<candidate_cv>`, so storing more only
+ * grows every `GET /me/profile` and every `candidate_profile` snapshot for text no model will
+ * ever read. `profile` is merged, never replaced: a CV uploaded on step 2 must not erase the
+ * name saved on step 1 (A06 non-negotiable).
+ */
+async function attachCv(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  uploadId: string,
+  text: string,
+  traceId: string | undefined,
+): Promise<void> {
+  const trimmed = text.trim();
+  if (trimmed.length > MAX_BLOCK_CHARS) {
+    // Field lengths only — A06 non-negotiable: no profile *value* in a log line.
+    logger.info({ userId, traceId, chars: trimmed.length, kept: MAX_BLOCK_CHARS }, 'CV_TRUNCATED');
+  }
+
+  const user = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { profile: true } });
+  const current = (user.profile as Record<string, unknown> | null) ?? {};
+
+  await tx.user.update({
+    where: { id: userId },
+    data: {
+      cv_upload_id: uploadId,
+      profile: { ...current, cv_text: trimmed.slice(0, MAX_BLOCK_CHARS) },
+    },
+  });
+}
+
 export const createUpload: RequestHandler = async (req, res, next) => {
   try {
     const kind = kindSchema.safeParse((req.body as { kind?: unknown } | undefined)?.kind);
     if (!kind.success) throw new ApiError('VALIDATION_ERROR');
+    const isCv = kind.data === 'cv';
 
     const file = req.file;
     if (!file) throw new ApiError('VALIDATION_ERROR');
@@ -73,7 +119,13 @@ export const createUpload: RequestHandler = async (req, res, next) => {
     // `uploads.sha256` is globally `@unique` (F02, K12): the dedup key is the bytes, not
     // (bytes, kind) or (bytes, user). The same PDF sent twice is one object; whoever
     // references it records the role it played.
-    const existing = await prisma.upload.findUnique({ where: { sha256 } });
+    //
+    // A `cv` skips the short-circuit: the extracted text is not stored on `uploads`, only the
+    // bytes are, so a deduped CV would attach an id with no text behind it. It re-walks the
+    // pipeline to recover the text it has to cache. Nothing downstream duplicates — the
+    // `upsert` below resolves to the same row and `storage.put` rewrites the same key with
+    // the same bytes.
+    const existing = isCv ? null : await prisma.upload.findUnique({ where: { sha256 } });
     if (existing) {
       res.status(201).json({ uploadId: existing.id });
       return;
@@ -102,19 +154,25 @@ export const createUpload: RequestHandler = async (req, res, next) => {
     const storageKey = `uploads/${sha256}.pdf`;
     await storage.put(storageKey, file.buffer, file.mimetype);
 
-    // upsert, not create: two identical uploads racing past the findUnique above would make
-    // the second one a P2002 on the unique sha256 rather than the dedup hit it should be.
-    const row = await prisma.upload.upsert({
-      where: { sha256 },
-      update: {},
-      create: {
-        user_id: req.user!.id,
-        kind: kind.data,
-        storage_key: storageKey,
-        mime: file.mimetype,
-        size_bytes: file.size,
-        sha256,
-      },
+    const row = await prisma.$transaction(async (tx) => {
+      // upsert, not create: two identical uploads racing past the findUnique above would make
+      // the second one a P2002 on the unique sha256 rather than the dedup hit it should be.
+      // It is also the whole dedup path for a `cv`, which never consulted the findUnique.
+      const upload = await tx.upload.upsert({
+        where: { sha256 },
+        update: {},
+        create: {
+          user_id: req.user!.id,
+          kind: kind.data,
+          storage_key: storageKey,
+          mime: file.mimetype,
+          size_bytes: file.size,
+          sha256,
+        },
+      });
+
+      if (isCv) await attachCv(tx, req.user!.id, upload.id, text, req.traceId);
+      return upload;
     });
 
     res.status(201).json({ uploadId: row.id });

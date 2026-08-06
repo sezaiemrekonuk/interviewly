@@ -12,7 +12,7 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query';
 
-import { apiDelete, apiGet, apiPatch, apiPost } from './api';
+import { apiDelete, apiGet, apiPatch, apiPost, apiUpload } from './api';
 import { SILENT_REFETCH_CODES } from './error-routing';
 import type { SessionUser } from './use-require-auth';
 
@@ -168,6 +168,24 @@ export function useSaveProfileCard(): UseMutationResult<
       const result = await apiPatch<{ profile: AccountProfile }>('/me/profile', card);
       if (!result.ok) throw new ApiError(result.code ?? 'UNKNOWN');
       return result.data as { profile: AccountProfile };
+    },
+    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.meProfile() }),
+  });
+}
+
+/**
+ * A06 `kind='cv'`. The upload *is* the write: `POST /uploads` repoints `users.cv_upload_id`
+ * and caches the extracted text, so the answer only has to invalidate the profile. Holding
+ * the returned id in page state instead is what made "CV received" a lie the moment the page
+ * reloaded (issue 62) — the id is never read back from here for that reason.
+ */
+export function useUploadCv(): UseMutationResult<{ uploadId: string }, ApiError, File> {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const result = await apiUpload<{ uploadId: string }>('cv', file);
+      if (!result.ok) throw new ApiError(result.code ?? 'UNKNOWN');
+      return result.data as { uploadId: string };
     },
     onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.meProfile() }),
   });

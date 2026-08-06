@@ -40,21 +40,38 @@ function stubFetch(options: {
   onboardingCompletedAt?: string | null;
   patchStatus?: number;
   patchBody?: unknown;
+  uploadStatus?: number;
+  uploadBody?: unknown;
 }) {
   const calls: Call[] = [];
+  // The server's copy of the attachment. `POST /uploads` writes it there, so the stub does
+  // too — a stub that answered `cvUploadId: null` forever could not tell a page reading the
+  // profile apart from one echoing its own upload back at itself.
+  let cvUploadId: string | null = null;
+
   const spy = vi.fn(async (url: string, init?: RequestInit) => {
     const method = init?.method ?? 'GET';
-    calls.push({ url, method, body: init?.body ? JSON.parse(init.body as string) : null });
+    const body = init?.body;
+    calls.push({
+      url,
+      method,
+      body: body && typeof body === 'string' ? JSON.parse(body) : null,
+    });
 
     const json = (status: number, body: unknown) =>
       new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
     if (url === '/api/me') return json(200, { user: USER });
+    if (url === '/api/uploads') {
+      const status = options.uploadStatus ?? 201;
+      if (status === 201) cvUploadId = 'up_1';
+      return json(status, options.uploadBody ?? { uploadId: 'up_1' });
+    }
     if (url === '/api/me/profile' && method === 'GET') {
       return json(200, {
         profile: options.profile ?? {},
         onboardingCompletedAt: options.onboardingCompletedAt ?? null,
-        cvUploadId: null,
+        cvUploadId,
       });
     }
     if (url === '/api/me/profile') {
@@ -172,6 +189,41 @@ describe('onboarding step page', () => {
 
     await waitFor(() => expect(nav.push).toHaveBeenCalledWith('/onboarding/3'));
     expect(calls.some((call) => call.method === 'PATCH')).toBe(false);
+  });
+
+  // Issue 62: the confirmation used to be a local echo of the upload's own answer, so it
+  // said "CV received" whether or not anything had been attached and vanished on reload.
+  // It is now the profile's `cvUploadId`, which is why the refetch has to happen.
+  it('shows the CV confirmation from the refetched profile, not from the upload answer', async () => {
+    const calls = stubFetch({ profile: { fullName: 'Ada' } });
+    await renderStep('2');
+
+    const user = userEvent.setup();
+    const input = await screen.findByLabelText(messages.onboarding.cvLabel);
+    await user.upload(input, new File(['%PDF-1.4 cv'], 'cv.pdf', { type: 'application/pdf' }));
+
+    expect(await screen.findByText(messages.onboarding.cvUploaded)).toBeInTheDocument();
+    expect(calls.some((call) => call.url === '/api/uploads' && call.method === 'POST')).toBe(true);
+    const profileGets = calls.filter(
+      (call) => call.url === '/api/me/profile' && call.method === 'GET',
+    );
+    expect(profileGets.length).toBeGreaterThan(1);
+  });
+
+  it('keeps the CV hint off and shows the mapped code when the upload is refused', async () => {
+    stubFetch({
+      profile: { fullName: 'Ada' },
+      uploadStatus: 422,
+      uploadBody: { error: { code: 'PDF_TEXT_TOO_SHORT' } },
+    });
+    await renderStep('2');
+
+    const user = userEvent.setup();
+    const input = await screen.findByLabelText(messages.onboarding.cvLabel);
+    await user.upload(input, new File(['not a pdf'], 'cv.pdf', { type: 'application/pdf' }));
+
+    expect(await screen.findByText(new RegExp(messages.onboarding.cvFailed))).toBeInTheDocument();
+    expect(screen.queryByText(messages.onboarding.cvUploaded)).toBeNull();
   });
 
   it('resumes a cold deep-link to step 3 back to the first unfilled card', async () => {
