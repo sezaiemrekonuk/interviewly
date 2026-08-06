@@ -275,6 +275,8 @@
     "WEBHOOK_REPLAY_REJECTED": "Webhook rejected: replayed request.",
     "VOICE_SESSION_INVALID": "Voice session is invalid.",
     "VOICE_SESSION_EXPIRED": "Voice session has expired. Start it again.",
+    "SPEECH_AUDIO_INVALID": "The audio could not be read. Please try recording again.",
+    "SPEECH_TRANSCRIPTION_FAILED": "Transcription failed. Please try again or type your answer.",
     "AVATAR_STATE_INCOMPLETE": "Persona avatar set is incomplete.",
     "AVATAR_KEY_MISMATCH": "Persona avatar key does not match content.",
     "MASCOT_POSE_INCOMPLETE": "Mascot pose set is incomplete.",

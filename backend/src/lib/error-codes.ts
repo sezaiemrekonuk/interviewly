@@ -44,6 +44,8 @@ export const ERROR_CODES = {
   WEBHOOK_REPLAY_REJECTED:         { kind: 'api' as ErrorKind, http: 401, owner: 'voice' },
   VOICE_SESSION_INVALID:           { kind: 'api' as ErrorKind, http: 403, owner: 'voice' },
   VOICE_SESSION_EXPIRED:           { kind: 'api' as ErrorKind, http: 403, owner: 'voice' },
+  SPEECH_AUDIO_INVALID:            { kind: 'api' as ErrorKind, http: 400, owner: 'voice' },
+  SPEECH_TRANSCRIPTION_FAILED:     { kind: 'api' as ErrorKind, http: 502, owner: 'voice' },
   // --- UI / assets ---
   AVATAR_STATE_INCOMPLETE:         { kind: 'boot' as ErrorKind, http: undefined, owner: 'ui' },
   AVATAR_KEY_MISMATCH:             { kind: 'boot' as ErrorKind, http: undefined, owner: 'ui' },

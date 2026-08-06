@@ -36,7 +36,10 @@ const schema = z.object({
   MAIL_FROM:                   z.string(),
   OPENAI_API_KEY:              z.string().optional(),
   GEMINI_API_KEY:              z.string().optional(),
-  ELEVENLABS_API_KEY:          z.string().optional(),
+  // min(1): an empty string is not a configured key — boot failure is the fix for issue #56
+  ELEVENLABS_API_KEY:          z.string().min(1),
+  ELEVENLABS_TTS_MODEL:        z.string().default('eleven_multilingual_v2'),
+  ELEVENLABS_STT_MODEL:        z.string().default('scribe_v1'),
   ELEVENLABS_AGENT_ID_HR:      z.string().optional(),
   ELEVENLABS_AGENT_ID_TECH:    z.string().optional(),
   ELEVENLABS_WEBHOOK_SECRET:   z.string().optional(),
