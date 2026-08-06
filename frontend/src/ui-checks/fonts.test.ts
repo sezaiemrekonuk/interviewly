@@ -30,8 +30,6 @@ function messageChars(file: string): Set<string> {
 
 function cmapCodepoints(path: string): Set<number> {
   const font = fontkit.openSync(path);
-  // `openSync` widens to `Font | FontCollection` because it also opens .ttc bundles. A woff2
-  // is always one font, and a collection turning up here would mean the wrong file shipped.
   if (!('characterSet' in font)) throw new Error(`${path} is a font collection, not a font`);
   return new Set(font.characterSet);
 }

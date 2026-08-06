@@ -7,7 +7,9 @@
 import type { RequestHandler } from 'express';
 
 import { ApiError } from '../../src/lib/api-error';
+import { prisma } from '../../src/lib/db';
 
+import { generateRound } from './generation';
 import { applyTransition } from './machine';
 
 export const resumeInterview: RequestHandler = async (req, res) => {
@@ -21,6 +23,14 @@ export const resumeInterview: RequestHandler = async (req, res) => {
   // the HR round, so that is the only state a failed generation can pause. When a second
   // pause source lands, this reads the round back instead of naming it.
   const state = await applyTransition(interview, 'hr_round', { traceId: req.traceId! });
+
+  const hrQuestionCount = await prisma.question.count({
+    where: { round: { interview_id: interview.id, type: 'hr' } },
+  });
+  if (hrQuestionCount === 0) {
+    await generateRound(interview, 'hr', { traceId: req.traceId! });
+  }
+
   res.status(200).json({ state });
 };
 

@@ -40,6 +40,7 @@ export default function InterviewRoomPage() {
   const resume = useResumeInterview(id);
   const [typedFor, setTypedFor] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [resumeError, setResumeError] = useState<string | null>(null);
 
   const room = stateQuery.data;
   const pathname = `/interviews/${id}/room`;
@@ -166,11 +167,21 @@ export default function InterviewRoomPage() {
           <Button
             type="button"
             variant="secondary"
-            onClick={() => resume.mutate()}
+            onClick={() => {
+              setResumeError(null);
+              resume.mutate(undefined, {
+                onError: (err) => setResumeError(errorMessage(err.code)),
+              });
+            }}
             loading={resume.isPending}
           >
             {t('resume')}
           </Button>
+          {resumeError ? (
+            <p role="alert" className={styles.error}>
+              {resumeError}
+            </p>
+          ) : null}
         </div>
       ) : null}
 
