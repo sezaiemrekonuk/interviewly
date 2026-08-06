@@ -20,7 +20,7 @@ import { ApiError } from '../../src/lib/api-error';
 import { prisma } from '../../src/lib/db';
 import { logger } from '../../src/lib/logger';
 
-import { applyTransition } from './machine';
+import { applyTransition, canTransition } from './machine';
 
 export interface GenerateOpts {
   traceId: string;
@@ -93,18 +93,6 @@ async function personaFor(roundType: RoundType): Promise<string> {
   return persona.id;
 }
 
-/**
- * Generates one round and inserts its questions.
- *
- * Failure semantics differ by cause, and the difference is the point:
- *
- *  - **Length mismatch** — the model returned a schema-valid batch of the wrong size. No rows
- *    are handed back, `AI_OUTPUT_INVALID` is raised, and the interview keeps its state so the
- *    round can simply be generated again.
- *  - **Provider unavailable** — the chain is exhausted, which is not something a retry in the
- *    next millisecond fixes. The interview moves to `paused` so it is resumable (I07 owns the
- *    rest of that table) instead of being stranded mid-transition.
- */
 export async function generateRound(
   interview: Interview,
   roundType: RoundType,
@@ -124,7 +112,10 @@ export async function generateRound(
     batch = await client.generateRoundQuestions(roundQuestionArgs(interview, roundType, ctx));
   } catch (err) {
     if (!(err instanceof AiError)) throw err;
-    if (err.code === 'AI_PROVIDER_UNAVAILABLE') {
+    // `canTransition` and not a try/catch around the pause: from `profiling` there is no
+    // `paused` edge and none is wanted — `POST /profile` is itself the retry — so attempting
+    // it would raise `INTERVIEW_PAUSE_FAILED`, an alarm for a case that is working as designed.
+    if (err.code === 'AI_PROVIDER_UNAVAILABLE' && canTransition(interview.state, 'paused')) {
       // I07: routed through applyTransition — the sole writer of interviews.state — so this
       // edge also gets the INTERVIEW_STATE_CHANGED emission + SSE fan-out for free.
       //
