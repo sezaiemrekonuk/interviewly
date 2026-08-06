@@ -98,6 +98,16 @@ export async function generateRound(
   roundType: RoundType,
   opts: GenerateOpts,
 ): Promise<void> {
+  // Idempotent by round, for every caller and not just `ensureTechBatch`: I06's per-answer hook
+  // and I07's `POST /resume` both call this for a round that may already be full, and a second
+  // batch would collide `(round_id, order_index)` or — across two round rows — give the index
+  // walk two questions for the same global index. The all-or-nothing insert below is what makes
+  // a non-zero count mean "this round is done" rather than "this round is half written".
+  const existing = await prisma.question.count({
+    where: { round: { interview_id: interview.id, type: roundType } },
+  });
+  if (existing > 0) return;
+
   const count = roundCount(interview, roundType);
   const ctx: AiCtx = { interviewId: interview.id, traceId: opts.traceId };
 
@@ -112,9 +122,10 @@ export async function generateRound(
     batch = await client.generateRoundQuestions(roundQuestionArgs(interview, roundType, ctx));
   } catch (err) {
     if (!(err instanceof AiError)) throw err;
-    // `canTransition` and not a try/catch around the pause: from `profiling` there is no
-    // `paused` edge and none is wanted — `POST /profile` is itself the retry — so attempting
-    // it would raise `INTERVIEW_PAUSE_FAILED`, an alarm for a case that is working as designed.
+    // `canTransition` and not a try/catch around the pause: `paused` is reachable from
+    // `hr_round` and from nowhere else (K2), and a caller generating from any other state —
+    // a `paused` interview retrying through `POST /resume`, say — wants its error and not an
+    // `INTERVIEW_PAUSE_FAILED` alarm for a case that is working as designed.
     if (err.code === 'AI_PROVIDER_UNAVAILABLE' && canTransition(interview.state, 'paused')) {
       // I07: routed through applyTransition — the sole writer of interviews.state — so this
       // edge also gets the INTERVIEW_STATE_CHANGED emission + SSE fan-out for free.
@@ -180,12 +191,9 @@ export async function generateRound(
 /**
  * ADR-I22: the technical batch is generated *during* the HR round, not by the transition into
  * it, so the round handover is never a loading screen and `POST /profile` never pays for two
- * LLM calls. Idempotent, because the caller is a per-answer hook (I06) and not a one-shot.
+ * LLM calls. Idempotent, because the caller is a per-answer hook (I06) and not a one-shot —
+ * the guard itself now lives in `generateRound`, which every caller needs it from.
  */
 export async function ensureTechBatch(interview: Interview, opts: GenerateOpts): Promise<void> {
-  const existing = await prisma.question.count({
-    where: { round: { interview_id: interview.id, type: 'tech' } },
-  });
-  if (existing > 0) return;
   await generateRound(interview, 'tech', opts);
 }

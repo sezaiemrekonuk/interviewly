@@ -78,3 +78,37 @@ Feature: Sequential interview flow
     Then each transition response status is 409
     And each transition response error code is "INVALID_STATE_TRANSITION"
     And no rejected transition changes state
+
+  @interview-flow @backend @AC-16
+  Scenario: Resume regenerates the batch the pause never wrote
+    Given I set up an interview with 8 questions
+    And the AI provider chain is exhausted
+    When I POST "/interviews/:id/profile" for the profiling interview
+    Then the response status is 503
+    And the interview state is "paused"
+    And no HR questions exist for that interview
+    When the stub AI is configured to return a schema-valid batch of 3 questions
+    And I POST "/interviews/:id/resume" to resume the interview
+    Then the response status is 200
+    And the interview state is "hr_round"
+    And exactly 3 questions exist for the HR round
+    And the HR questions are ordered 1 to 3
+    And the room's current question is HR question 1
+
+  @interview-flow @backend @AC-16
+  Scenario: A resume that fails again stays resumable, and a repeat resume adds no second batch
+    Given I set up an interview with 8 questions
+    And the AI provider chain is exhausted
+    When I POST "/interviews/:id/profile" for the profiling interview
+    And I POST "/interviews/:id/resume" to resume the interview
+    Then the response status is 503
+    And the response error code is "AI_PROVIDER_UNAVAILABLE"
+    And the interview state is "paused"
+    When the stub AI is configured to return a schema-valid batch of 3 questions
+    And I POST "/interviews/:id/resume" to resume the interview
+    Then the response status is 200
+    And exactly 3 questions exist for the HR round
+    When the interview is forced back to "paused"
+    And I POST "/interviews/:id/resume" to resume the interview
+    Then the response status is 200
+    And exactly 3 questions exist for the HR round
