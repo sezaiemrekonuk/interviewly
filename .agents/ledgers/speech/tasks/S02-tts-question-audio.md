@@ -1,5 +1,5 @@
 # S02 — TTS route: question audio, storage-cached, ceiling-checked
-REPO: (this repo) · Depends: S01, I03, I07 · Status: todo
+REPO: (this repo) · Depends: S01, I03, I07 · Status: done
 Read first: STATE.md, REFERENCE.md, then this.
 **Model: claude-sonnet-5** — a GET that returns bytes, with ownership and state guards copied
 from the existing mint handler and a cache read/write over `storage.put`/`get`. The ceiling
@@ -50,21 +50,21 @@ replay costs nothing.
 - `backend/modules/interview/machine.ts` — `applyTransition`, the only writer of state.
 
 ## Steps
-- [ ] **1. Feature scenarios red** — speech AC-1 (owner gets audio, non-owner `FORBIDDEN`,
+- [x] **1. Feature scenarios red** — speech AC-1 (owner gets audio, non-owner `FORBIDDEN`,
   no key in the payload), AC-2 (second request makes no provider call), AC-6 (past the ceiling:
   no provider call, `time_exhausted`). Append to `speech_turn.feature`; see them red.
-- [ ] **2. Route + guards** — `requireAuth`, ownership, voice-capable state, index equals
+- [x] **2. Route + guards** — `requireAuth`, ownership, voice-capable state, index equals
   `current_index`.
-- [ ] **3. Ceiling check** — elapsed from `interviews.started_at` against
+- [x] **3. Ceiling check** — elapsed from `interviews.started_at` against
   `VOICE_MAX_ROUND_SECONDS` / `VOICE_MAX_INTERVIEW_SECONDS`; past it, transition and refuse.
-- [ ] **4. Cache read** — `storage.get('speech/{questionId}.mp3')`; on hit, respond and log
+- [x] **4. Cache read** — `storage.get('speech/{questionId}.mp3')`; on hit, respond and log
   `SPEECH_TTS_SERVED` with `cached: true`.
-- [ ] **5. Cache miss** — `speak(question.text, { voiceId: persona.voice_id, language })`,
+- [x] **5. Cache miss** — `speak(question.text, { voiceId: persona.voice_id, language })`,
   `storage.put`, respond, log `SPEECH_TTS_SERVED` with `cached: false` and the character count.
-- [ ] **6. Failure path** — a `VOICE_UNAVAILABLE` from the seam downgrades to text through
+- [x] **6. Failure path** — a `VOICE_UNAVAILABLE` from the seam downgrades to text through
   `downgradeToText` (V03, kept) and then returns 503, exactly as the retired mint did at
   `modules/voice/session.ts:81-82`.
-- [ ] **7. Unit test** — cache hit calls the provider zero times; a past-ceiling request calls it
+- [x] **7. Unit test** — cache hit calls the provider zero times; a past-ceiling request calls it
   zero times and leaves `ended_reason = 'time_exhausted'`.
 
 ## Definition of done
@@ -82,3 +82,13 @@ psql "$DATABASE_URL" -c "SELECT ended_reason FROM interviews WHERE id = '<past-c
 Expected: tests green; the past-ceiling interview reads `time_exhausted`.
 
 ## Notes
+- Added `backend/modules/speech/tts.ts` and `backend/modules/speech/router.ts`.
+- Mounted speech router at `/interviews` in `backend/src/app.ts`.
+- Added unit tests in `backend/modules/speech/tts.test.ts` for cache-hit no-provider and ceiling transition (`VOICE_SESSION_EXPIRED` + `time_exhausted`).
+- Extended fake provider counters in `backend/modules/speech/fake-speech.ts` for AC-2 assertions.
+- Extended speech acceptance scenarios + steps in `.agents/features/speech_turn.feature` and `backend/features/step_definitions/speech.steps.ts`.
+- Verification ran green:
+  - `npm test -- --project node speech/tts`
+  - `REDIS_URL=redis://127.0.0.1:16380 DATABASE_URL=postgresql://interviewly:interviewly@127.0.0.1:15432/interviewly npm run test:acceptance -- --tags "@speech"`
+  - `psql "postgresql://interviewly:interviewly@127.0.0.1:15432/interviewly" -c "SELECT ended_reason FROM interviews WHERE id = 'cmshq5ykt000si1q0xqmjntb0';"` => `time_exhausted`
+- Local env caveat: host `5432/6380` can collide with native services. Used compose override ports `15432/16380` for reliable acceptance run.
