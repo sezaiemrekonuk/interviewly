@@ -307,6 +307,31 @@ export function useCreateInterview(): UseMutationResult<
   });
 }
 
+/**
+ * I05 body — layer 2, the per-interview pre-questions, or a skip. `{ skip: true }` is the
+ * whole body for the no-form path setup uses today.
+ */
+export type SubmitProfileBody = { skip: true } | { perInterview: Record<string, unknown> };
+
+/**
+ * `POST /interviews/:id/profile` — the only edge out of `profiling`, and the call that
+ * generates the HR batch. Setup fires it between create and navigation so an interview never
+ * reaches the room parked in `profiling` (issue 53). Never retried, matching W02.
+ */
+export function useSubmitProfile(): UseMutationResult<
+  { state: string },
+  ApiError,
+  { interviewId: string; body: SubmitProfileBody }
+> {
+  return useMutation({
+    mutationFn: async ({ interviewId, body }) => {
+      const result = await apiPost<{ state: string }>(`/interviews/${interviewId}/profile`, body);
+      if (!result.ok) throw new ApiError(result.code ?? 'UNKNOWN');
+      return result.data as { state: string };
+    },
+  });
+}
+
 export interface SubmitAnswerBody {
   questionId: string;
   transcript: string;
