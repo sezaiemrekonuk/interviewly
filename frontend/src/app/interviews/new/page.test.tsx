@@ -29,7 +29,7 @@ interface Call {
 }
 
 /** `/me` gates the page; `/interviews` is the one create under test. */
-function stubFetch(options: { createStatus?: number; createBody?: unknown } = {}) {
+function stubFetch(options: { createStatus?: number; createBody?: unknown; profileStatus?: number } = {}) {
   const calls: Call[] = [];
   const spy = vi.fn(async (url: string, init?: RequestInit) => {
     const method = init?.method ?? 'GET';
@@ -50,6 +50,10 @@ function stubFetch(options: { createStatus?: number; createBody?: unknown } = {}
         options.createStatus ?? 201,
         options.createBody ?? { interviewId: 'i1', hrCount: 3, techCount: 5 },
       );
+    }
+    // The profiling → hr_round transition setup fires between create and navigation (issue 53).
+    if (/^\/api\/interviews\/[^/]+\/profile$/.test(url)) {
+      return json(options.profileStatus ?? 200, { state: 'hr_round' });
     }
     return json(404, { error: { code: 'NOT_FOUND' } });
   });
@@ -92,6 +96,40 @@ describe('interview setup page (W05)', () => {
       jobText: 'Senior developer wanted',
       targetQuestionCount: 8,
     });
+  });
+
+  it('fires the profile transition between create and navigation (issue 53)', async () => {
+    const calls = stubFetch();
+    const user = userEvent.setup();
+    await renderSetup();
+
+    await user.type(screen.getByLabelText(messages.setup.listingPaste), 'Senior developer wanted');
+    await user.click(screen.getByRole('button', { name: messages.setup.start }));
+
+    await waitFor(() => expect(nav.push).toHaveBeenCalledWith('/interviews/i1/room'));
+
+    const profile = calls.find((c) => c.url === '/api/interviews/i1/profile');
+    expect(profile).toBeDefined();
+    expect(profile?.method).toBe('POST');
+    expect(profile?.body).toEqual({ skip: true });
+
+    // Ordering: create, then profile, then the push — the room is never entered on `profiling`.
+    const createIndex = calls.findIndex((c) => c.url === '/api/interviews');
+    const profileIndex = calls.findIndex((c) => c.url === '/api/interviews/i1/profile');
+    expect(createIndex).toBeLessThan(profileIndex);
+    expect(nav.push).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not navigate when the profile transition is refused', async () => {
+    stubFetch({ profileStatus: 409 });
+    const user = userEvent.setup();
+    await renderSetup();
+
+    await user.type(screen.getByLabelText(messages.setup.listingPaste), 'Senior developer wanted');
+    await user.click(screen.getByRole('button', { name: messages.setup.start }));
+
+    await screen.findByRole('alert');
+    expect(nav.push).not.toHaveBeenCalled();
   });
 
   it('routes a voice interview to pre-join, not the room', async () => {

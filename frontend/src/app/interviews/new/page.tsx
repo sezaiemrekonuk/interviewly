@@ -7,7 +7,7 @@ import { useState } from 'react';
 import { Mascot } from '../../../components/mascot';
 import { ListingUpload } from '../../../components/setup/listing-upload';
 import { Button, Field, Input, Select } from '../../../components/ui';
-import { useCreateInterview } from '../../../lib/query';
+import { useCreateInterview, useSubmitProfile } from '../../../lib/query';
 import { useErrorMessage } from '../../../lib/use-error-message';
 import { useRequireAuth } from '../../../lib/use-require-auth';
 
@@ -31,6 +31,7 @@ export default function InterviewSetupPage() {
   const tc = useTranslations('common');
   const errorMessage = useErrorMessage();
   const create = useCreateInterview();
+  const submitProfile = useSubmitProfile();
 
   const [mode, setMode] = useState<'text' | 'voice'>('text');
   const [occupation, setOccupation] = useState('');
@@ -41,6 +42,10 @@ export default function InterviewSetupPage() {
   const [formError, setFormError] = useState<string | null>(null);
 
   if (loading || !user) return null;
+
+  // The form is locked for the whole create→profile chain: `create.isPending` alone would
+  // re-enable the CTA during the profile call and let a second submit fire mid-flow.
+  const busy = create.isPending || submitProfile.isPending;
 
   const { hrCount, techCount } = splitRounds(targetQuestionCount);
 
@@ -63,6 +68,10 @@ export default function InterviewSetupPage() {
         uploadId: uploadId ?? undefined,
         targetQuestionCount,
       });
+      // `profiling → hr_round` is the only exit from the born-parked state, and setup is its
+      // only caller (issue 53). Skip the pre-question form for now: the room enters on
+      // `hr_round` with a real question, never on `profiling`.
+      await submitProfile.mutateAsync({ interviewId: result.interviewId, body: { skip: true } });
       // Never optimistic: the room is entered only once the create has resolved an id.
       router.push(
         mode === 'voice'
@@ -91,7 +100,7 @@ export default function InterviewSetupPage() {
           <ListingUpload
             onJobText={setJobText}
             onUploaded={setUploadId}
-            disabled={create.isPending}
+            disabled={busy}
           />
 
           {/* Client-side only. `POST /interviews` takes neither field: I03 classifies the
@@ -103,7 +112,7 @@ export default function InterviewSetupPage() {
                   {...control}
                   value={occupation}
                   onChange={(e) => setOccupation(e.target.value)}
-                  disabled={create.isPending}
+                  disabled={busy}
                 />
               )}
             </Field>
@@ -114,7 +123,7 @@ export default function InterviewSetupPage() {
                   {...control}
                   value={language}
                   onChange={(e) => setLanguage(e.target.value)}
-                  disabled={create.isPending}
+                  disabled={busy}
                 >
                   <option value="en">{tc('localeEnglish')}</option>
                   <option value="tr">{tc('localeTurkish')}</option>
@@ -132,7 +141,7 @@ export default function InterviewSetupPage() {
                   {...control}
                   value={mode}
                   onChange={(e) => setMode(e.target.value as 'text' | 'voice')}
-                  disabled={create.isPending}
+                  disabled={busy}
                 >
                   <option value="text">{t('modeText')}</option>
                   <option value="voice">{t('modeVoice')}</option>
@@ -147,7 +156,7 @@ export default function InterviewSetupPage() {
                   {...control}
                   value={targetQuestionCount}
                   onChange={(e) => setTargetQuestionCount(Number(e.target.value))}
-                  disabled={create.isPending}
+                  disabled={busy}
                 >
                   {ROUND_SHAPES.map((n) => (
                     <option key={n} value={n}>
@@ -165,7 +174,7 @@ export default function InterviewSetupPage() {
             </p>
           ) : null}
 
-          <Button type="submit" size="lg" className={styles.cta} loading={create.isPending}>
+          <Button type="submit" size="lg" className={styles.cta} loading={busy}>
             {t('start')}
           </Button>
         </form>
