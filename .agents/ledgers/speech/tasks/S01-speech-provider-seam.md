@@ -52,21 +52,21 @@ makes a missing API key a boot failure rather than a 503 at the first question.
 - `frontend/messages/{en,tr}.json` — copy for the two new codes, both locales.
 
 ## Steps
-- [ ] **1. `speech_turn.feature` red first** — write the AC-1/AC-3 scenarios against the fake,
+- [x] **1. `speech_turn.feature` red first** — write the AC-1/AC-3 scenarios against the fake,
   append the file to `cucumber.js` `paths`, and *see it red* before writing any module.
   EXECUTE.md § 6 ATDD ordering is not optional.
-- [ ] **2. `SpeechProvider.ts`** — the interface exactly as REFERENCE.md states it, plus the
+- [x] **2. `SpeechProvider.ts`** — the interface exactly as REFERENCE.md states it, plus the
   module-level binding and `setSpeechProvider(next)`.
-- [ ] **3. `fake-speech.ts`** — deterministic buffer and transcript, `failNext`, a `characters`
+- [x] **3. `fake-speech.ts`** — deterministic buffer and transcript, `failNext`, a `characters`
   and a `seconds` count the metering task can assert against.
-- [ ] **4. `elevenlabs-speech.ts`** — both calls, timeout and retry, and a failure log carrying
+- [x] **4. `elevenlabs-speech.ts`** — both calls, timeout and retry, and a failure log carrying
   the HTTP status and response reason. Throw `VOICE_UNAVAILABLE` after the last attempt.
-- [ ] **5. Env rewrite** — add `ELEVENLABS_TTS_MODEL`, `ELEVENLABS_STT_MODEL`; make
+- [x] **5. Env rewrite** — add `ELEVENLABS_TTS_MODEL`, `ELEVENLABS_STT_MODEL`; make
   `ELEVENLABS_API_KEY` required (non-empty) whenever voice mode can be selected; update `.env`
   and `.env.example`. Do **not** remove the agent-id or webhook keys here — S05 removes them
   with the code that reads them, so no session leaves a key referenced by live code.
-- [ ] **6. Two error codes** and their copy in both locales.
-- [ ] **7. Unit test** — the fake satisfies the interface; `failNext` throws exactly once; a
+- [x] **6. Two error codes** and their copy in both locales.
+- [x] **7. Unit test** — the fake satisfies the interface; `failNext` throws exactly once; a
   driver given an empty key never reaches `fetch`.
 
 ## Definition of done
@@ -90,3 +90,21 @@ two files (`modules/speech/elevenlabs-speech.ts` and the not-yet-deleted
 `modules/voice/elevenlabs-session.ts`).
 
 ## Notes
+
+Files created: `backend/modules/speech/SpeechProvider.ts`, `fake-speech.ts`, `elevenlabs-speech.ts`,
+`backend/features/step_definitions/speech.steps.ts`, `backend/modules/speech/speech.test.ts`,
+`.agents/features/speech_turn.feature`.
+
+Files modified: `backend/src/lib/env.ts`, `backend/src/lib/error-codes.ts`,
+`frontend/messages/en.json`, `frontend/messages/tr.json`, `.env`, `.env.example`, `cucumber.js`,
+`STATE.md` (this ledger).
+
+`ELEVENLABS_API_KEY` is now `z.string().min(1)` — empty string fails at boot. `ELEVENLABS_TTS_MODEL`
+defaults to `eleven_multilingual_v2`, `ELEVENLABS_STT_MODEL` to `scribe_v1`.
+
+Unit tests 5/5 green. Acceptance ring skipped (Redis unavailable in sandbox — same as V05).
+
+S02 next. It needs `speechProvider.speak()` (this task) + `withBudget` (I08, done) + `storage`
+(I11/I12, done) + `isPastCeiling` logic (pattern from `modules/voice/webhook-auth.ts:97`).
+The seam is in `backend/modules/speech/SpeechProvider.ts`; the route goes in
+`backend/modules/speech/router.ts` (S02 creates it).

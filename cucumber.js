@@ -51,6 +51,14 @@ process.env.AI_ENABLED = 'false';
 // An acceptance run is a test run whatever the file says.
 process.env.NODE_ENV = 'test';
 //
+// Same forcing again, for the same determinism (issue 60): the auth ring drives Google
+// through that seam and never through the real OAuth flow, so a developer whose local .env
+// carries working client credentials would otherwise flip auth.feature's unconfigured-Google
+// scenario red on their machine and green in CI. The ring asserts what an *unconfigured*
+// deployment does; there is no scenario here that a real credential could help.
+process.env.GOOGLE_CLIENT_ID = '';
+process.env.GOOGLE_CLIENT_SECRET = '';
+//
 // I03 is the first task whose steps import backend/src/app.ts, which loads env.ts's Zod
 // schema at require time — every key must resolve or the process exits before a single
 // scenario runs. Loaded here (once, before requireModule) rather than via a CLI flag so
@@ -95,6 +103,7 @@ module.exports = {
       '.agents/features/rate_limits.feature',
       '.agents/features/reliability.feature',
       '.agents/features/config.feature',
+      '.agents/features/speech_turn.feature',
     ],
     tags: 'not @unwired',
     require: ['backend/features/step_definitions/**/*.ts'],

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 
+import { authCapabilities } from './capabilities';
 import { requireAuth } from './middleware';
 import { loginLimiter, passwordResetLimiter, profilePatchLimiter, registerLimiter } from './rate-limit';
 import deleteMe from './delete-account';
@@ -17,6 +18,9 @@ const router = Router();
 router.post('/register', registerLimiter, register);
 router.post('/login', loginLimiter, login);
 router.post('/logout', requireAuth, logout);
+// Public: the sign-in screen asks this before it offers a provider button, so it has to be
+// answerable by a visitor who has no session yet (issue 60).
+router.get('/capabilities', authCapabilities);
 router.get('/google', startGoogle);
 router.get('/google/callback', googleCallback);
 // Request is authenticated (it resends to *your* address); confirm is not — the link is

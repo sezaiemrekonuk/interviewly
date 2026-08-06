@@ -22,6 +22,7 @@ import type { SessionUser } from './use-require-auth';
  * nobody reads.
  */
 export const queryKeys = {
+  authCapabilities: () => ['auth', 'capabilities'] as const,
   me: () => ['me'] as const,
   meProfile: () => ['me', 'profile'] as const,
   meInterviews: (cursor: string | null = null) => ['me', 'interviews', { cursor }] as const,
@@ -108,6 +109,24 @@ export function useAdminStats(enabled = true): UseQueryResult<AdminStatsResponse
     queryKey: queryKeys.adminStats(),
     queryFn: () => fetchJson<AdminStatsResponse>('/admin/stats'),
     enabled,
+  });
+}
+
+/** `GET /auth/capabilities` — which sign-in providers this deployment can actually serve. */
+export interface AuthCapabilities {
+  oauth: { google: boolean };
+}
+
+/**
+ * Deployment config, not user state: it cannot change while the tab is open, so one fetch
+ * per session is all the auth screens need and a refetch would only add a request to each
+ * of them. Unauthenticated — the sign-in screen asks it before anyone has a session.
+ */
+export function useAuthCapabilities(): UseQueryResult<AuthCapabilities, ApiError> {
+  return useQuery({
+    queryKey: queryKeys.authCapabilities(),
+    queryFn: () => fetchJson<AuthCapabilities>('/auth/capabilities'),
+    staleTime: Infinity,
   });
 }
 

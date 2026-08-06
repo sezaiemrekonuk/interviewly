@@ -2,7 +2,8 @@ import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { messages, renderWithIntl } from '../../../test/render';
+import { formCalls, stubFetch } from '../../../test/fetch';
+import { messages, renderWithProviders } from '../../../test/render';
 
 const nav = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn(), search: '' }));
 
@@ -13,18 +14,6 @@ vi.mock('next/navigation', () => ({
 }));
 
 import RegisterPage from './page';
-
-/** A `fetch` stand-in that answers with one status + JSON body and records its calls. */
-function stubFetch(status: number, body: unknown) {
-  const spy = vi.fn(async () =>
-    new Response(JSON.stringify(body), {
-      status,
-      headers: { 'content-type': 'application/json' },
-    }),
-  );
-  vi.stubGlobal('fetch', spy);
-  return spy;
-}
 
 /** Consent is part of a normal registration (issue 009), so the happy path ticks the box. */
 async function fillAndSubmit(email: string, password: string, consent = true) {
@@ -48,12 +37,12 @@ describe('register page', () => {
 
   it('rejects a short password inline without calling the API', async () => {
     const fetchSpy = stubFetch(201, {});
-    renderWithIntl(<RegisterPage />);
+    renderWithProviders(<RegisterPage />);
 
     await fillAndSubmit('someone@example.com', 'short');
 
     expect(await screen.findByText(messages.errors.PASSWORD_TOO_SHORT)).toBeInTheDocument();
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(formCalls(fetchSpy)).toEqual([]);
   });
 
   // A06 (K8.7): a brand-new account has never completed onboarding, so registration always
@@ -62,16 +51,16 @@ describe('register page', () => {
     const fetchSpy = stubFetch(201, {
       user: { id: 'u1', email: 'someone@example.com', onboardingCompletedAt: null, interviewCount: 0 },
     });
-    renderWithIntl(<RegisterPage />);
+    renderWithProviders(<RegisterPage />);
 
     await fillAndSubmit('someone@example.com', 'correct-horse');
 
     await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/onboarding/1'));
 
-    const [url, init] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit];
+    const [url, init] = formCalls(fetchSpy)[0];
     expect(url).toBe('/api/auth/register');
-    expect(init.method).toBe('POST');
-    expect(JSON.parse(init.body as string)).toEqual({
+    expect(init?.method).toBe('POST');
+    expect(JSON.parse(init?.body as string)).toEqual({
       email: 'someone@example.com',
       password: 'correct-horse',
       consent: true,
@@ -80,7 +69,7 @@ describe('register page', () => {
 
   it('renders EMAIL_TAKEN from the error code, never the raw code', async () => {
     stubFetch(409, { error: { code: 'EMAIL_TAKEN' } });
-    renderWithIntl(<RegisterPage />);
+    renderWithProviders(<RegisterPage />);
 
     await fillAndSubmit('taken@example.com', 'correct-horse');
 
@@ -91,7 +80,7 @@ describe('register page', () => {
 
   it('falls back to UNKNOWN for a code that is not in the registry', async () => {
     stubFetch(500, { error: { code: 'SOMETHING_NEW' } });
-    renderWithIntl(<RegisterPage />);
+    renderWithProviders(<RegisterPage />);
 
     await fillAndSubmit('someone@example.com', 'correct-horse');
 
@@ -101,33 +90,55 @@ describe('register page', () => {
 
   it('points the Google button at the API redirect chain rather than fetching it', async () => {
     const user = userEvent.setup();
-    renderWithIntl(<RegisterPage />);
+    stubFetch(201, {});
+    renderWithProviders(<RegisterPage />);
+
     await user.click(screen.getByRole('checkbox'));
 
-    const google = screen.getByRole('link', { name: messages.auth.googleButton });
+    const google = await screen.findByRole('link', { name: messages.auth.googleButton });
     expect(google).toHaveAttribute('href', '/api/auth/google');
     expect(google).not.toHaveAttribute('aria-disabled');
+  });
+
+  // Issue 60: the anchor is a real navigation, so an unconfigured deployment would answer it
+  // by replacing the whole app with `{"error":{"code":"NOT_READY"}}`. The screen must not
+  // offer the control at all in that case — and ticking consent must not bring it back, the
+  // two gates being independent.
+  it('omits the Google button entirely when the API reports the flow unavailable', async () => {
+    const user = userEvent.setup();
+    stubFetch(201, {}, false);
+    renderWithProviders(<RegisterPage />);
+
+    await user.click(screen.getByRole('checkbox'));
+
+    // `findByRole` rather than `queryByRole`: the button is absent on the first render
+    // whatever the answer turns out to be, so only a query that keeps looking until it times
+    // out can tell "never appears" from "has not appeared yet".
+    await expect(
+      screen.findByRole('link', { name: messages.auth.googleButton }),
+    ).rejects.toThrow();
   });
 
   // --------------------------------------------------------------- consent (issue 009)
 
   it('refuses to submit until the policies are accepted, and calls nothing', async () => {
     const fetchSpy = stubFetch(201, {});
-    renderWithIntl(<RegisterPage />);
+    renderWithProviders(<RegisterPage />);
 
     await fillAndSubmit('someone@example.com', 'correct-horse', false);
 
     expect(await screen.findByText(messages.errors.CONSENT_REQUIRED)).toBeInTheDocument();
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(formCalls(fetchSpy)).toEqual([]);
     expect(nav.replace).not.toHaveBeenCalled();
   });
 
   // The Google redirect creates an account too, so it cannot sit outside the consent gate.
   it('holds the Google route shut until the box is ticked', async () => {
     const user = userEvent.setup();
-    renderWithIntl(<RegisterPage />);
+    stubFetch(201, {});
+    renderWithProviders(<RegisterPage />);
 
-    expect(screen.getByRole('link', { name: messages.auth.googleButton })).toHaveAttribute(
+    expect(await screen.findByRole('link', { name: messages.auth.googleButton })).toHaveAttribute(
       'aria-disabled',
       'true',
     );
@@ -139,7 +150,8 @@ describe('register page', () => {
   });
 
   it('links both policies from the consent line', () => {
-    renderWithIntl(<RegisterPage />);
+    stubFetch(201, {});
+    renderWithProviders(<RegisterPage />);
 
     expect(screen.getByRole('link', { name: 'Privacy Notice' })).toHaveAttribute('href', '/privacy');
     expect(screen.getByRole('link', { name: 'Terms of Service' })).toHaveAttribute('href', '/terms');

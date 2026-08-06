@@ -46,3 +46,19 @@ Feature: User authentication
     When Google sign-in completes for "link@example.com" with email_verified true
     Then the response creates a signed-in session for "link@example.com"
     And the account for "link@example.com" is linked to Google
+
+  @auth @backend @AC-5
+  Scenario: An unconfigured Google never paints an error body as a page
+    Given no Google client credentials are configured
+    When I fetch GET "/auth/capabilities"
+    Then the response status is 200
+    And the response reports Google sign-in as unavailable
+    When I fetch GET "/auth/google"
+    Then the response redirects to "/sign-in?error=NOT_READY"
+    And the response body is not an error envelope
+
+  @auth @backend @AC-5
+  Scenario: A callback with no state cookie returns to the form, not to a JSON body
+    When I fetch GET "/auth/google/callback?code=abc&state=def"
+    Then the response redirects to "/sign-in?error=OAUTH_STATE_MISMATCH"
+    And the response body is not an error envelope

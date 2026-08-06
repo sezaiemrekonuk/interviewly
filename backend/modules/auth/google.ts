@@ -42,11 +42,35 @@ function clearStateCookie(res: Response): void {
   res.cookie(STATE_COOKIE, '', { ...stateCookieOptions(), maxAge: 0 });
 }
 
+/**
+ * Whether this deployment holds both halves of the client credential. Optional in the env
+ * schema so an `AI_ENABLED=false` dev box still boots (K8.5), which means "Google works
+ * here" is a runtime question — `GET /auth/capabilities` answers it for the sign-in screen
+ * so the button is never offered against a credential that does not exist (issue 60).
+ */
+export function googleConfigured(): boolean {
+  return Boolean(config.GOOGLE_CLIENT_ID && config.GOOGLE_CLIENT_SECRET);
+}
+
 function googleClient(): Google {
-  // Optional in the env schema so an `AI_ENABLED=false` dev box still boots (K8.5);
-  // reaching the flow without them is a configuration fault, not a user error.
-  if (!config.GOOGLE_CLIENT_ID || !config.GOOGLE_CLIENT_SECRET) throw new ApiError('NOT_READY');
-  return new Google(config.GOOGLE_CLIENT_ID, config.GOOGLE_CLIENT_SECRET, REDIRECT_URI);
+  const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET } = config;
+  // Unreachable behind the `googleConfigured()` guards both routes open with — kept so the
+  // constructor's two `string` parameters are satisfied by narrowing, not by an assertion.
+  if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) throw new ApiError('NOT_READY');
+  return new Google(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, REDIRECT_URI);
+}
+
+/**
+ * The only way either Google route refuses. Both are reached by a full browser navigation,
+ * so an `ApiError` thrown out of them is painted as the document itself — the blank page
+ * reading `{"error":{"code":"NOT_READY"}}` that issue 60 is about, with no way back but the
+ * Back button. A03 maps `?error=<CODE>` to the translated `errors.<CODE>` instead, so every
+ * refusal lands on a form the visitor can still use.
+ */
+function refuse(res: Response, code: string): void {
+  // Every code that reaches here is a registry constant, but this value lands in a URL and
+  // encoding it is what keeps that true of the ones added later.
+  res.redirect(302, `${config.PUBLIC_ORIGIN}/sign-in?error=${encodeURIComponent(code)}`);
 }
 
 /**
@@ -141,6 +165,14 @@ async function markVerified(
 }
 
 export const startGoogle: RequestHandler = async (req, res) => {
+  // The `GoogleButton` is hidden while this is false, so reaching here means a bookmark, a
+  // stale tab, or a deploy that dropped the credential between the render and the click.
+  if (!googleConfigured()) {
+    logger.warn({ traceId: req.traceId }, 'AUTH_GOOGLE_NOT_CONFIGURED');
+    refuse(res, 'NOT_READY');
+    return;
+  }
+
   const client = googleClient();
   const state = generateState();
   const verifier = generateCodeVerifier();
@@ -163,7 +195,8 @@ const userinfoSchema = z.object({
 /**
  * Consumes the state/verifier pair exactly once and hands the identity to
  * `resolveGoogleIdentity`. Every exit path clears the state cookie, so a failed callback
- * leaves nothing replayable behind.
+ * leaves nothing replayable behind, and every refusal leaves through `refuse` — this URL is
+ * the browser's own address bar, so it has no other honest way to answer.
  */
 export const googleCallback: RequestHandler = async (req, res) => {
   const parsed = callbackQuery.safeParse(req.query);
@@ -171,28 +204,43 @@ export const googleCallback: RequestHandler = async (req, res) => {
   clearStateCookie(res);
 
   if (!parsed.success || !cookieState || cookieState !== parsed.data.state) {
-    throw new ApiError('OAUTH_STATE_MISMATCH');
+    refuse(res, 'OAUTH_STATE_MISMATCH');
+    return;
   }
 
   // GETDEL: the verifier is single-use, so a replayed callback finds nothing.
   const verifier = await redis.getdel(VERIFIER_KEY(parsed.data.state));
-  if (!verifier) throw new ApiError('OAUTH_STATE_MISMATCH');
+  if (!verifier) {
+    refuse(res, 'OAUTH_STATE_MISMATCH');
+    return;
+  }
+
+  // Checked after the state pair, not before it: a forged or replayed callback is wrong on
+  // its own terms whatever the server is holding, and burning the single-use verifier first
+  // keeps a config gap from turning this URL into a replayable one. Reaching here with no
+  // credential means the deploy dropped it between the consent screen and the return trip.
+  if (!googleConfigured()) {
+    logger.warn({ traceId: req.traceId }, 'AUTH_GOOGLE_NOT_CONFIGURED');
+    refuse(res, 'NOT_READY');
+    return;
+  }
 
   const client = googleClient();
-  const identity = await fetchIdentity(client, parsed.data.code, verifier).catch(() => {
+  const identity = await fetchIdentity(client, parsed.data.code, verifier).catch(() => null);
+  if (!identity) {
     // The code, the verifier and the token response never reach a log line.
     logger.warn({ traceId: req.traceId }, 'AUTH_GOOGLE_EXCHANGE_FAILED');
-    throw new ApiError('OAUTH_STATE_MISMATCH');
-  });
+    refuse(res, 'OAUTH_STATE_MISMATCH');
+    return;
+  }
 
   try {
     const user = await resolveGoogleIdentity(identity, req.traceId);
     await issueSessionForUser(user, res, 'google');
   } catch (err) {
     // The browser is mid-redirect: send it back to the form with a code it can render.
-    // A03 maps `?error=<CODE>` to the `errors.<CODE>` message.
     if (err instanceof ApiError) {
-      res.redirect(302, `${config.PUBLIC_ORIGIN}/sign-in?error=${err.code}`);
+      refuse(res, err.code);
       return;
     }
     throw err;
