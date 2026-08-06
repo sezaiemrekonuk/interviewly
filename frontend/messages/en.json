@@ -205,6 +205,8 @@
     "submitHint": "Write an answer to send it.",
     "paused": "This interview is paused.",
     "resume": "Resume",
+    "stalled": "The next question could not be prepared. Nothing you answered is lost — try again to rebuild it.",
+    "retry": "Try again",
     "transcriptTitle": "Answers so far",
     "transcriptEmpty": "No answers yet.",
     "voice": {

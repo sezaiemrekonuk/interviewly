@@ -205,6 +205,8 @@
     "submitHint": "Göndermek için önce cevabını yaz.",
     "paused": "Bu mülakat duraklatıldı.",
     "resume": "Devam et",
+    "stalled": "Sıradaki soru hazırlanamadı. Verdiğin cevapların hiçbiri kaybolmadı — yeniden oluşturmak için tekrar dene.",
+    "retry": "Tekrar dene",
     "transcriptTitle": "Verdiğin cevaplar",
     "transcriptEmpty": "Henüz cevap yok.",
     "voice": {
