@@ -10,6 +10,13 @@ const zBoolean = (defaultValue: boolean) =>
     .optional()
     .transform((v) => (v === undefined ? defaultValue : v === 'true'));
 
+// `.default()` and `.optional()` only fire on `undefined`. A key that is PRESENT but empty
+// (`FOO=` in .env, which is what every unfilled `.env.example` line is) parses as `""` and
+// sails straight past both — `ELEVENLABS_TTS_MODEL=` would resolve to `""`, not the default.
+// Issue #56 is that same empty-string-is-not-absent confusion one layer up, in `??`.
+const emptyAsUnset = <T extends z.ZodType>(inner: T) =>
+  z.preprocess((v) => (v === '' ? undefined : v), inner);
+
 const schema = z.object({
   NODE_ENV:                    z.enum(['development', 'production', 'test']).default('development'),
   PUBLIC_ORIGIN:               z.string().url(),
@@ -36,7 +43,12 @@ const schema = z.object({
   MAIL_FROM:                   z.string(),
   OPENAI_API_KEY:              z.string().optional(),
   GEMINI_API_KEY:              z.string().optional(),
-  ELEVENLABS_API_KEY:          z.string().optional(),
+  // Optional in the shape, then required by the superRefine below whenever AI_ENABLED is on.
+  // An empty string is not a configured key — issue #56's fix — but see the refine for why
+  // that cannot be an unconditional min(1) here.
+  ELEVENLABS_API_KEY:          emptyAsUnset(z.string().min(1).optional()),
+  ELEVENLABS_TTS_MODEL:        emptyAsUnset(z.string().default('eleven_multilingual_v2')),
+  ELEVENLABS_STT_MODEL:        emptyAsUnset(z.string().default('scribe_v1')),
   ELEVENLABS_AGENT_ID_HR:      z.string().optional(),
   ELEVENLABS_AGENT_ID_TECH:    z.string().optional(),
   ELEVENLABS_WEBHOOK_SECRET:   z.string().optional(),
@@ -57,6 +69,28 @@ const schema = z.object({
   LOG_LEVEL:                   z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
   LOG_TRANSPORT:               z.enum(['stdout', 'elastic']).default('stdout'),
   ELASTICSEARCH_URL:           z.string().optional(),
+}).superRefine((env, ctx) => {
+  // S01 asked for the key to be required "whenever voice mode can be selected", and that
+  // qualifier is load-bearing in both directions.
+  //
+  // Unconditional `min(1)` breaks the keyless boot the repo documents and CI depends on:
+  // `.env.example` ships AI_ENABLED=false precisely so a fresh clone — and the four CI jobs
+  // that `cp .env.example .env` — start with no provider credentials at all, and index.ts:15
+  // already skips the B7 provider-key check for the same reason.
+  //
+  // Dropping the requirement entirely puts issue #56 back: an empty string reaching the mint
+  // as a real credential, failing at the first question instead of at boot.
+  //
+  // AI_ENABLED is the seam between the two. Voice cannot be selected while it is false —
+  // voice_session.feature answers 503 VOICE_UNAVAILABLE before any provider call — so the
+  // key is only a boot requirement when it is true.
+  if (env.AI_ENABLED && !env.ELEVENLABS_API_KEY) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['ELEVENLABS_API_KEY'],
+      message: 'required and non-empty when AI_ENABLED=true',
+    });
+  }
 });
 
 const result = schema.safeParse(process.env);

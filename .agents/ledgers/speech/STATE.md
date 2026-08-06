@@ -1,12 +1,17 @@
 # Speech — State
 
 Last updated: 2026-08-06
-Last session ended: **Ledger created; no task started.** Replaces the voice ledger's
-Conversational-AI architecture with ElevenLabs TTS + Scribe STT, both server-side, per the
-owner's decision that ElevenLabs is used for voice generation only. Spec written at
-`.agents/specs/2026-08-06-speech.md`; `2026-07-29-voice.md` marked superseded. V01–V05 stay
-`done` — they were done; the architecture under them was reversed, not the work.
-Next: **S01**, no dependencies outside this ledger that are not already green.
+Last session ended: **S01 complete.** Created `backend/modules/speech/` with `SpeechProvider.ts`
+(interface + module binding), `fake-speech.ts` (FakeSpeechProvider with failNext), and
+`elevenlabs-speech.ts` (real driver: TTS + STT, 5 s timeout, 3 attempts, failure logging).
+Rewrote `backend/src/lib/env.ts`: `ELEVENLABS_API_KEY` now `z.string().min(1)` (boot failure on
+empty), added `ELEVENLABS_TTS_MODEL` (default `eleven_multilingual_v2`) and `ELEVENLABS_STT_MODEL`
+(default `scribe_v1`). Added `SPEECH_AUDIO_INVALID` (400) and `SPEECH_TRANSCRIPTION_FAILED` (502)
+to error-codes.ts; copy added to both locales. Added `.agents/features/speech_turn.feature`
+(3 seam scenarios @speech @AC-1/@AC-3) and wired `cucumber.js`. Wrote step definitions in
+`backend/features/step_definitions/speech.steps.ts`. Unit tests (5/5 green). Acceptance ring
+requires Docker (Redis ECONNREFUSED in sandbox — same situation as V05's devlog).
+Next: **S02** (TTS route), no new dependencies beyond S01 being done.
 
 ## Execution protocol (follow exactly)
 
@@ -22,12 +27,7 @@ EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**S01** (`SpeechProvider` seam, `FakeSpeechProvider`, env + error-code rewrite) is first and has
-no `Depends on`. It creates the seam every later task consumes and makes
-`ELEVENLABS_API_KEY` fail at boot instead of at the first request — the `.optional()` at
-`backend/src/lib/env.ts:39` is what let issue #56 ship silently. Write
-`.agents/features/speech_turn.feature` **red** first (EXECUTE.md § 6, ATDD ordering) and append
-it to `cucumber.js` `paths` the way V04 appended `voice_reconciliation.feature`.
+**S02** (TTS route: question audio, storage-cached, ceiling-checked)
 
 ## Environment
 
@@ -68,7 +68,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 
 | ID | Title | Repo | Status | Depends on |
 |----|-------|------|--------|------------|
-| S01 | `SpeechProvider` seam, `FakeSpeechProvider`, env and error-code rewrite | | todo | F01, F03, I15 |
+| S01 | `SpeechProvider` seam, `FakeSpeechProvider`, env and error-code rewrite | | done | F01, F03, I15 |
 | S02 | TTS route: question audio, storage-cached, ceiling-checked | | todo | S01, I03, I07 |
 | S03 | STT route: audio upload to Scribe to the guarded advance | | todo | S01, I03, I06 |
 | S04 | Per-call usage accounting at both provider call sites | | todo | S02, S03, I08 |

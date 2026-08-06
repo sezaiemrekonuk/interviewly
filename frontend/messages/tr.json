@@ -280,6 +280,8 @@
     "WEBHOOK_REPLAY_REJECTED": "Webhook reddedildi: istek tekrarlanmış.",
     "VOICE_SESSION_INVALID": "Sesli oturum geçersiz.",
     "VOICE_SESSION_EXPIRED": "Sesli oturumun süresi doldu. Yeniden başlat.",
+    "SPEECH_AUDIO_INVALID": "Ses dosyası okunamadı. Lütfen tekrar kayıt yapın.",
+    "SPEECH_TRANSCRIPTION_FAILED": "Transkripsiyon başarısız. Lütfen tekrar deneyin veya yanıtınızı yazın.",
     "AVATAR_STATE_INCOMPLETE": "Persona avatar seti eksik.",
     "AVATAR_KEY_MISMATCH": "Persona avatar anahtarı içerikle eşleşmiyor.",
     "MASCOT_POSE_INCOMPLETE": "Maskot poz seti eksik.",

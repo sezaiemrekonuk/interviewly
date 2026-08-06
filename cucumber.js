@@ -95,6 +95,7 @@ module.exports = {
       '.agents/features/rate_limits.feature',
       '.agents/features/reliability.feature',
       '.agents/features/config.feature',
+      '.agents/features/speech_turn.feature',
     ],
     tags: 'not @unwired',
     require: ['backend/features/step_definitions/**/*.ts'],
