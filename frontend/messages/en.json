@@ -237,7 +237,10 @@
     "strengths": "Strengths",
     "improvements": "Areas to improve",
     "questionsTitle": "Question by question",
-    "star": "STAR {percent}%"
+    "star": "STAR {percent}%",
+    "download": "Download PDF",
+    "downloadNotReady": "Your PDF isn't ready yet — try again in a moment.",
+    "downloadError": "Couldn't get the download link. Try again."
   },
   "errors": {
     "PASSWORD_TOO_SHORT": "Password must be at least 10 characters.",

@@ -69,6 +69,7 @@ export default function InterviewReportPage() {
     <main className={styles.page} data-testid="interview-report">
       {report ? (
         <ReportView
+          interviewId={id}
           payload={report.payload}
           endedReason={room.endedReason}
           turns={room.transcript}

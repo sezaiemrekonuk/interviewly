@@ -1,4 +1,4 @@
-import { act, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MockEventSource, installEventSourceMock } from '../../../../test/event-source-mock';
@@ -65,7 +65,9 @@ interface Call {
  * Two reads back this screen: `/interviews/:id` (the report) and `/interviews/:id/state`
  * (transcript + endedReason — the report read stays thin, ADR-W07).
  */
-function stubFetch(options: { reports?: unknown[]; states?: unknown[] } = {}) {
+function stubFetch(
+  options: { reports?: unknown[]; states?: unknown[]; download?: { status: number; body: unknown } } = {},
+) {
   const calls: Call[] = [];
   const reports = options.reports ?? [{ interviewId: 'i1', state: 'completed', report: { status: 'ready', payload: payload() } }];
   const states = options.states ?? [interviewState()];
@@ -90,6 +92,10 @@ function stubFetch(options: { reports?: unknown[]; states?: unknown[] } = {}) {
         const body = states[Math.min(stateHits, states.length - 1)];
         stateHits += 1;
         return json(200, body);
+      }
+      if (url === '/api/interviews/i1/report/download') {
+        const { status, body } = options.download ?? { status: 200, body: { url: 'https://s3.example.com/signed?x=1' } };
+        return json(status, body);
       }
       return json(404, { error: { code: 'NOT_FOUND' } });
     }),
@@ -208,5 +214,53 @@ describe('report + transcript (W07)', () => {
 
     expect(screen.getByTestId('report-view')).toBeInTheDocument();
     expect(screen.getByTestId('transcript')).toHaveTextContent(messages.room.transcriptEmpty);
+  });
+
+  it('mints the signed URL on click, not on page load, and navigates to it (issue 63)', async () => {
+    const calls = stubFetch();
+    await renderReport();
+
+    expect(calls.filter((c) => c.url === '/api/interviews/i1/report/download')).toHaveLength(0);
+
+    // jsdom doesn't implement real navigation; stub `location` so the `href` assignment
+    // the component makes on success is observable.
+    const originalLocation = window.location;
+    Object.defineProperty(window, 'location', { value: { href: '' }, writable: true });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('report-download'));
+    });
+
+    await waitFor(() => expect(window.location.href).toBe('https://s3.example.com/signed?x=1'));
+    expect(calls.filter((c) => c.url === '/api/interviews/i1/report/download')).toHaveLength(1);
+
+    Object.defineProperty(window, 'location', { value: originalLocation, writable: true });
+  });
+
+  it('shows an inline "not ready" state on INTERVIEW_NOT_FOUND, never a /not-found redirect', async () => {
+    stubFetch({ download: { status: 404, body: { error: { code: 'INTERVIEW_NOT_FOUND' } } } });
+    await renderReport();
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('report-download'));
+    });
+
+    expect(await screen.findByTestId('report-download-not-ready')).toHaveTextContent(
+      messages.report.downloadNotReady,
+    );
+    expect(nav.replace).not.toHaveBeenCalledWith('/not-found');
+  });
+
+  it('shows an inline generic error for any other download failure', async () => {
+    stubFetch({ download: { status: 500, body: { error: { code: 'UNKNOWN' } } } });
+    await renderReport();
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('report-download'));
+    });
+
+    expect(await screen.findByTestId('report-download-error')).toHaveTextContent(
+      messages.report.downloadError,
+    );
   });
 });

@@ -237,7 +237,10 @@
     "strengths": "Güçlü yönlerin",
     "improvements": "Geliştirebileceklerin",
     "questionsTitle": "Soru soru",
-    "star": "STAR %{percent}"
+    "star": "STAR %{percent}",
+    "download": "PDF indir",
+    "downloadNotReady": "PDF'in henüz hazır değil — birazdan tekrar dene.",
+    "downloadError": "İndirme bağlantısı alınamadı. Tekrar dene."
   },
   "errors": {
     "PASSWORD_TOO_SHORT": "Şifre en az 10 karakter olmalı.",

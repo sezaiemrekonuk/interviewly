@@ -427,6 +427,18 @@ export function useReport(
   });
 }
 
+/**
+ * `GET /interviews/:id/report/download` (issue 63) — a mutation, not a query: the signed
+ * URL carries a TTL (`MAX_TTL_SECONDS`), so it is minted on click, never on page load or
+ * cached. `INTERVIEW_NOT_FOUND` here means "no `pdf_key` yet" as often as "not yours"
+ * (ADR-I11) — the caller shows an inline "not ready" state, it never routes off the page.
+ */
+export function useReportDownload(id: string): UseMutationResult<{ url: string }, ApiError, void> {
+  return useMutation({
+    mutationFn: () => fetchJson<{ url: string }>(`/interviews/${id}/report/download`),
+  });
+}
+
 /** I07 — resume from `paused`; `BUDGET_EXCEEDED` refetches into `evaluating` (W07's surface). */
 export function useResumeInterview(
   interviewId: string,

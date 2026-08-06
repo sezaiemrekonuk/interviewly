@@ -271,6 +271,19 @@ describe('interview room, text mode (W06)', () => {
     );
   });
 
+  it('starts a room still parked in profiling instead of waiting on a batch nobody asked for', async () => {
+    const calls = stubFetch({
+      states: [roomState({ state: 'profiling', currentIndex: 0, currentQuestion: null, persona: null })],
+    });
+    await renderRoom();
+
+    await waitFor(() =>
+      expect(
+        calls.filter((c) => c.url === '/api/interviews/i1/resume' && c.method === 'POST'),
+      ).toHaveLength(1),
+    );
+  });
+
   it('turns the waiting beat into a rebuild once nothing is generating', async () => {
     vi.useFakeTimers();
     const calls = stubFetch({ states: [roomState({ currentQuestion: null })] });

@@ -1,6 +1,7 @@
 /**
  * `POST /interviews/:id/resume` — the `paused → hr_round` edge (§8.3, I07), and the only
- * repair for an interview left in `hr_round` with no batch to ask from.
+ * repair for an interview left in `hr_round` with no batch to ask from, or parked in
+ * `profiling` with no request left that can start it.
  *
  * Resume is not a state change and nothing else. The only thing that pauses an interview is a
  * generation that failed, and `generateRound` inserts all-or-nothing *after* the provider call —
@@ -16,9 +17,21 @@ import { prisma } from '../../src/lib/db';
 
 import { generateRound } from './generation';
 import { applyTransition } from './machine';
+import { startHrRound } from './profile';
 
 export const resumeInterview: RequestHandler = async (req, res) => {
   const interview = req.interview!;
+
+  // A room entered on `profiling` is a dead end otherwise: `POST /profile` is the only exit and
+  // only the setup screen calls it, so an interview that never got that call (setup aborted, or
+  // history's Continue link) waits on a question nothing is generating. Same repair, same door.
+  if (interview.state === 'profiling') {
+    const state = await startHrRound(interview, interview.user_id, undefined, {
+      traceId: req.traceId!,
+    });
+    res.status(200).json({ state });
+    return;
+  }
 
   const hrQuestionCount = await prisma.question.count({
     where: { round: { interview_id: interview.id, type: 'hr' } },

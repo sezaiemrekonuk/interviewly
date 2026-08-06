@@ -80,9 +80,22 @@ export default function InterviewRoomPage() {
     if (roomState && REPORT_STATES.has(roomState)) router.replace(`/interviews/${id}`);
   }, [roomState, router, id]);
 
-  // `hr_round` only: `POST /resume` regenerates the HR batch and nothing else, so offering the
-  // control anywhere it cannot repair would answer the candidate with a 409.
-  const waitingOnHr = roomState === 'hr_round' && Boolean(room) && !room?.currentQuestion;
+  // `POST /resume` repairs exactly two rooms with no question: an `hr_round` whose batch never
+  // landed, and one still parked in `profiling` (history's Continue link, or a setup that died
+  // before `POST /profile`). Offering the control anywhere else would answer the candidate
+  // with a 409.
+  const waitingOnHr =
+    (roomState === 'hr_round' || roomState === 'profiling') &&
+    Boolean(room) &&
+    !room?.currentQuestion;
+  // A parked room is not slow, it is stopped — nothing is generating and nothing will, so the
+  // repair fires on arrival instead of after the stall timer. `resume.isIdle` is the once-only
+  // guard: the retry it turns into on failure is the candidate's, not a loop.
+  const parked = roomState === 'profiling';
+  const { mutate: startRoom, isIdle: repairIdle } = resume;
+  useEffect(() => {
+    if (parked && repairIdle) startRoom();
+  }, [parked, repairIdle, startRoom]);
   // Which wait ran out, not whether one did: the flag is never reset, it simply stops matching
   // once the round moves on (`current_index` only ever advances), so every later wait starts
   // its own clock without an effect that writes state on the way back down.

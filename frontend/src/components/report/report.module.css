@@ -144,6 +144,20 @@
   line-height: 1.4;
 }
 
+.downloadRow {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.downloadNote {
+  max-width: 65ch;
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
 .earlyEnd {
   max-width: 70ch;
   margin: 0;

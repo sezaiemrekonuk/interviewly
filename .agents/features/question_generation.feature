@@ -57,6 +57,17 @@ Feature: Question generation
     And exactly 3 questions exist for the HR round
     And the interview state is "hr_round"
 
+  @question-generation @backend @AC-7
+  Scenario: An interview parked in profiling can still be started from the room
+    Given I set up an interview with 8 questions
+    # The setup screen is the only caller of POST /profile. When it never ran — the tab was
+    # closed, the call failed — history's Continue link lands the candidate in a room waiting
+    # on a batch nothing is generating, and only this endpoint can start it.
+    When I POST "/interviews/:id/resume" for that interview
+    Then the response status is 200
+    And exactly 3 questions exist for the HR round
+    And the interview state is "hr_round"
+
   @question-generation @ai @AC-1
   Scenario: A generated round returns exactly the requested count of typed questions
     Given I set up an interview with 8 questions

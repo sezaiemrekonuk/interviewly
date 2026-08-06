@@ -7,7 +7,7 @@
  * must not change what a January report was reasoned from (ADR-A07).
  */
 import type { RequestHandler } from 'express';
-import { Prisma } from '@prisma/client';
+import { Prisma, type Interview } from '@prisma/client';
 import { z } from 'zod';
 
 import { ApiError } from '../../src/lib/api-error';
@@ -86,19 +86,22 @@ export function mergeProfile(
   return Object.keys(snapshot).length > 0 ? snapshot : null;
 }
 
-export const submitProfile: RequestHandler = async (req, res) => {
-  const interview = req.interview!;
-
-  // Before the body is even read: from any state but `profiling` this is a no-op that must
-  // create nothing, least of all an HR batch (question_generation.feature @AC-7).
-  if (interview.state !== 'profiling') throw new ApiError('INVALID_STATE_TRANSITION');
-
-  const parsed = bodySchema.safeParse(req.body);
-  if (!parsed.success) throw new ApiError('VALIDATION_ERROR');
-  const perInterview = 'perInterview' in parsed.data ? parsed.data.perInterview : undefined;
-
+/**
+ * The whole `profiling → hr_round` move: snapshot, index, transition, batch.
+ *
+ * Exported because `POST /resume` is the second door into it — an interview parked in
+ * `profiling` (setup died between the create and this call, or history's Continue link landed
+ * a candidate in a room the state cannot leave) has no other way out, and re-deriving the
+ * snapshot merge or the `current_index = 1` seed there would let the two paths drift.
+ */
+export async function startHrRound(
+  interview: Interview,
+  userId: string,
+  perInterview: Record<string, unknown> | undefined,
+  ctx: { traceId: string },
+): Promise<string> {
   const account = await prisma.user.findUniqueOrThrow({
-    where: { id: req.user!.id },
+    where: { id: userId },
     select: { profile: true },
   });
 
@@ -119,9 +122,27 @@ export const submitProfile: RequestHandler = async (req, res) => {
   // Claim the transition atomically before generation. `applyTransition` uses a WHERE-guarded
   // updateMany so only the first concurrent request can advance the state; any duplicate
   // request fails with INVALID_STATE_TRANSITION before the LLM call is ever made.
-  const state = await applyTransition(updated, 'hr_round', { traceId: req.traceId! });
+  const state = await applyTransition(updated, 'hr_round', ctx);
 
-  await generateRound(updated, 'hr', { traceId: req.traceId! });
+  await generateRound(updated, 'hr', ctx);
+
+  return state;
+}
+
+export const submitProfile: RequestHandler = async (req, res) => {
+  const interview = req.interview!;
+
+  // Before the body is even read: from any state but `profiling` this is a no-op that must
+  // create nothing, least of all an HR batch (question_generation.feature @AC-7).
+  if (interview.state !== 'profiling') throw new ApiError('INVALID_STATE_TRANSITION');
+
+  const parsed = bodySchema.safeParse(req.body);
+  if (!parsed.success) throw new ApiError('VALIDATION_ERROR');
+  const perInterview = 'perInterview' in parsed.data ? parsed.data.perInterview : undefined;
+
+  const state = await startHrRound(interview, req.user!.id, perInterview, {
+    traceId: req.traceId!,
+  });
 
   res.status(200).json({ state });
 };

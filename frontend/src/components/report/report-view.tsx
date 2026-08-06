@@ -2,8 +2,9 @@
 
 import { useTranslations } from 'next-intl';
 
+import { Button } from '../ui';
 import type { TranscriptTurn } from '../room/transcript';
-import type { ReportPayload } from '../../lib/query';
+import { useReportDownload, type ReportPayload } from '../../lib/query';
 
 import styles from './report.module.css';
 
@@ -16,16 +17,23 @@ const EARLY_END_REASONS = new Set(['cut_short', 'budget_exhausted', 'time_exhaus
  * gradient, no mascot — this is a result surface, not an entry one.
  */
 export function ReportView({
+  interviewId,
   payload,
   endedReason,
   turns,
 }: {
+  interviewId: string;
   payload: ReportPayload;
   endedReason: string | null;
   turns: TranscriptTurn[];
 }) {
   const t = useTranslations('report');
   const isEarlyEnd = endedReason !== null && EARLY_END_REASONS.has(endedReason);
+  const download = useReportDownload(interviewId);
+  // `INTERVIEW_NOT_FOUND` from this endpoint means "no pdf_key yet" as often as "not yours"
+  // (ADR-I11) — shown in place, never routed to /not-found via routeForError.
+  const notReady = download.isError && download.error.code === 'INTERVIEW_NOT_FOUND';
+  const downloadFailed = download.isError && !notReady;
   // Per-question rows key off the transcript, so a model-invented `question_id` renders
   // nothing rather than a scored row with no question attached to it.
   const questionText = new Map(turns.map((turn) => [turn.questionId, turn.question]));
@@ -48,6 +56,26 @@ export function ReportView({
           </p>
         </div>
         <p className={styles.impression}>{payload.overall_impression}</p>
+        <div className={styles.downloadRow}>
+          <Button
+            variant="secondary"
+            loading={download.isPending}
+            onClick={() => download.mutate(undefined, { onSuccess: (data) => { window.location.href = data.url; } })}
+            data-testid="report-download"
+          >
+            {t('download')}
+          </Button>
+          {notReady ? (
+            <p role="status" className={styles.downloadNote} data-testid="report-download-not-ready">
+              {t('downloadNotReady')}
+            </p>
+          ) : null}
+          {downloadFailed ? (
+            <p role="alert" className={styles.downloadNote} data-testid="report-download-error">
+              {t('downloadError')}
+            </p>
+          ) : null}
+        </div>
       </header>
 
       <section className={styles.section}>
