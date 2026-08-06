@@ -122,13 +122,16 @@ module.exports = {
     // "no interview exists for…") and `GET /me/interviews`, which no task has landed yet.
     // Whichever task ships that endpoint: wire the steps and delete `and not @AC-29`.
     //
-    // A06: `not @AC-32` defers the CV-upload scenarios — `POST /uploads` is I11's endpoint
-    // and has not landed; inventing it here would duplicate I11's validation (ADR pending).
+    // A06's `not @AC-32` deferral is GONE (issue 62): I11's `POST /uploads` landed, and it
+    // now performs the attach those scenarios describe — `users.cv_upload_id` plus the
+    // truncated `cv_text` on the profile. `cv-upload.ts` wires them against the real endpoint
+    // with only the bucket faked, so nothing about I11's validation is duplicated here.
+    //
     // `not @AC-33 and not @AC-34` defer the interview-snapshot scenarios — both use
     // interview-core steps ("I set up an interview…") that live in AiWorld, and AuthWorld
     // cannot share a cucumber World with it (ADR-A04-3). `interview/profile.ts`'s
     // `mergeProfile` already implements the merge these two scenarios describe; only the
     // cross-ring step wiring is missing, not the behaviour.
-    tags: 'not @wip and not @AC-29 and not @AC-32 and not @AC-33 and not @AC-34',
+    tags: 'not @wip and not @AC-29 and not @AC-33 and not @AC-34',
   },
 };

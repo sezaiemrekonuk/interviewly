@@ -1,6 +1,10 @@
 import './setup';
 
+import type { Buffer } from 'node:buffer';
+
 import { setWorldConstructor, World } from '@cucumber/cucumber';
+
+import { config } from '../../src/lib/env';
 
 import { getBaseUrl } from './harness';
 
@@ -53,6 +57,34 @@ export class AuthWorld extends World {
     // Capture a freshly-issued session cookie for later authenticated requests.
     const pair = this.sessionPair();
     if (pair && !pair.endsWith('session=')) this.sessionCookie = pair;
+  }
+
+  /**
+   * Multipart `POST /uploads` (A06 @AC-32). Not a mode of `request`: the boundary has to be
+   * the one `FormData` generated, so no content-type may be set by hand, and the interview
+   * router mounts `requirePublicOrigin` — which the JSON auth routes above do not.
+   */
+  async uploadFile(kind: string, filename: string, bytes: Buffer): Promise<void> {
+    const form = new FormData();
+    form.append('kind', kind);
+    // Uint8Array.from, not the Buffer itself: Buffer is typed over ArrayBufferLike, which is
+    // not a BlobPart under `strict` because it could be a SharedArrayBuffer.
+    form.append('file', new Blob([Uint8Array.from(bytes)], { type: 'application/pdf' }), filename);
+
+    const res = await fetch(`${getBaseUrl()}/uploads`, {
+      method: 'POST',
+      headers: {
+        origin: config.PUBLIC_ORIGIN,
+        ...(this.sessionCookie ? { cookie: this.sessionCookie } : {}),
+      },
+      body: form,
+    });
+
+    this.lastStatus = res.status;
+    this.lastSetCookie = res.headers.getSetCookie?.() ?? [];
+    const text = await res.text();
+    this.lastBody = text ? JSON.parse(text) : undefined;
+    this.exchanges.push({ status: this.lastStatus, body: this.lastBody });
   }
 
   /**

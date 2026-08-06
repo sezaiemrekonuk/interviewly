@@ -35,7 +35,32 @@ function escapeLiteral(text: string): string {
 }
 
 /**
- * @param pages one line of extractable text per page
+ * A page is 612pt wide with a 72pt margin, and 12pt Helvetica averages ~6pt per glyph — so
+ * roughly 90 characters reach the right edge. Everything past it is off the MediaBox, and
+ * pdf.js drops it: a single 700-character `Tj` extracts as ~95 characters, silently. Text is
+ * therefore laid out as wrapped lines, which is also what makes a page's character count in
+ * `FIXTURES` mean what it says.
+ */
+const CHARS_PER_LINE = 90;
+/** 720pt down to 72pt at 14pt leading — the last line that is still on the page. */
+const LINES_PER_PAGE = 47;
+
+function wrap(text: string): string[] {
+  const lines: string[] = [];
+  for (let at = 0; at < text.length; at += CHARS_PER_LINE) {
+    lines.push(text.slice(at, at + CHARS_PER_LINE));
+  }
+  if (lines.length > LINES_PER_PAGE) {
+    throw new Error(
+      `page holds ${LINES_PER_PAGE} lines (${LINES_PER_PAGE * CHARS_PER_LINE} chars); `
+      + `got ${text.length} — split it across more pages, the overflow would not extract`,
+    );
+  }
+  return lines;
+}
+
+/**
+ * @param pages the extractable text of each page, wrapped onto lines by `wrap`
  * @param padBytes filler inserted as a header comment — legal anywhere, and the only way to
  *   grow a file past a size limit without also growing what the parser has to understand
  */
@@ -52,7 +77,11 @@ export function buildPdf(pages: string[], padBytes = 0): Buffer {
     bodies[3 + i] =
       '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] '
       + `/Resources << /Font << /F1 ${fontId} 0 R >> >> /Contents ${3 + n + i} 0 R >>`;
-    const stream = `BT /F1 12 Tf 72 720 Td (${escapeLiteral(text)}) Tj ET`;
+    // One `Td` sets the first baseline, then each subsequent `0 -14 Td` steps down a line.
+    const body = wrap(text)
+      .map((line) => `(${escapeLiteral(line)}) Tj 0 -14 Td`)
+      .join(' ');
+    const stream = `BT /F1 12 Tf 72 720 Td ${body} ET`;
     bodies[3 + n + i] = `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`;
   });
 
@@ -77,6 +106,26 @@ export function buildPdf(pages: string[], padBytes = 0): Buffer {
   return Buffer.from(out, 'latin1');
 }
 
+const CV_SENTENCE =
+  'Delivered and operated TypeScript services backed by PostgreSQL and Redis, owned the '
+  + 'deployment pipeline end to end, and mentored two engineers on the platform team. ';
+
+/**
+ * A CV whose extractable text overshoots the 12 000-character prompt ceiling, so @AC-32 can
+ * assert that `POST /uploads` truncates it rather than rejecting the file. 4 000 characters a
+ * page keeps every page inside `LINES_PER_PAGE` and the whole thing well under the 30-page cap.
+ */
+const CHARS_PER_CV_PAGE = 4_000;
+
+function longCvPages(totalChars: number): string[] {
+  const pages: string[] = [];
+  for (let written = 0; written < totalChars; written += CHARS_PER_CV_PAGE) {
+    const size = Math.min(CHARS_PER_CV_PAGE, totalChars - written);
+    pages.push(CV_SENTENCE.repeat(Math.ceil(size / CV_SENTENCE.length)).slice(0, size));
+  }
+  return pages;
+}
+
 const FIXTURES: Record<string, () => Buffer> = {
   // 3 pages, ~480 extractable characters — comfortably over the 200-character floor.
   'valid-3-page-listing.pdf': () => buildPdf([LINE_1, LINE_2, LINE_3]),
@@ -87,6 +136,7 @@ const FIXTURES: Record<string, () => Buffer> = {
   'pdf-31-pages.pdf': () => buildPdf(Array.from({ length: 31 }, (_, i) => `${LINE_1} Page ${i + 1}.`)),
   // Valid PDF, over the limit by ~1 MB. Rejected on size before anything parses it.
   'pdf-over-10mb.pdf': () => buildPdf([LINE_1], 11 * 1024 * 1024),
+  'cv-20000-chars.pdf': () => buildPdf(longCvPages(20_000)),
   // The MIME-only attack: text bytes, a .pdf name, and `application/pdf` on the wire.
   'renamed-text-file.pdf': () =>
     Buffer.from(`${LINE_1}\n${LINE_2}\n${LINE_3}\n`.repeat(4), 'utf8'),

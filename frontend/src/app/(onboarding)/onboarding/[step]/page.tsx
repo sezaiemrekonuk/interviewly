@@ -6,10 +6,11 @@ import { use, useEffect, useState } from 'react';
 
 import { Mascot } from '../../../../components/mascot';
 import { Button, Field, FileInput, Input, Textarea } from '../../../../components/ui';
-import { apiPost, apiUpload } from '../../../../lib/api';
+import { apiPost } from '../../../../lib/api';
 import {
   useProfile,
   useSaveProfileCard,
+  useUploadCv,
   type AccountProfile,
   type ProfileCard,
 } from '../../../../lib/query';
@@ -64,21 +65,23 @@ export default function OnboardingStepPage({ params }: { params: Promise<{ step:
   // useRequireAuth redirects UNAUTHENTICATED itself; don't ask for the profile before it has.
   const { data, isPending } = useProfile(!authLoading && Boolean(user));
   const saveCard = useSaveProfileCard();
+  const uploadCvMutation = useUploadCv();
 
   // Only the fields the user has actually touched. The server's copy is the fallback below,
   // so nothing has to be mirrored into state when the query resolves — no hydration effect,
   // and a post-save refetch cannot stamp on a live edit.
   const [draft, setDraft] = useState<Draft>({});
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [cvUploading, setCvUploading] = useState(false);
-  const [uploadedCvId, setUploadedCvId] = useState<string | null>(null);
   const [cvError, setCvError] = useState<string | null>(null);
 
   const profile = data?.profile;
   const fullName = draft.fullName ?? profile?.fullName ?? '';
   const jobTitle = draft.jobTitle ?? profile?.jobTitle ?? '';
   const interestsText = draft.interestsText ?? profile?.interestsText ?? '';
-  const cvUploadId = uploadedCvId ?? data?.cvUploadId ?? null;
+  // The server's copy, never a local echo of the last upload: `POST /uploads` writes
+  // `users.cv_upload_id` itself, so the hint below survives a reload because it is reading
+  // the same thing a reload would read (issue 62).
+  const cvUploadId = data?.cvUploadId ?? null;
   const education =
     draft.education ??
     (profile?.education?.length
@@ -108,15 +111,13 @@ export default function OnboardingStepPage({ params }: { params: Promise<{ step:
   }, [data, mustResume, resumeStep, router]);
 
   async function uploadCv(file: File) {
-    setCvUploading(true);
     setCvError(null);
-    const result = await apiUpload<{ uploadId: string }>('cv', file);
-    setCvUploading(false);
-    if (!result.ok) {
-      setCvError(result.code);
-      return;
+    try {
+      await uploadCvMutation.mutateAsync(file);
+    } catch (err) {
+      // A refused upload leaves the previously attached CV — if any — exactly where it was.
+      setCvError(err instanceof Error ? err.message : 'UNKNOWN');
     }
-    setUploadedCvId(result.data?.uploadId ?? null);
   }
 
   function cardFor(): ProfileCard {
@@ -300,12 +301,19 @@ export default function OnboardingStepPage({ params }: { params: Promise<{ step:
             </Button>
           )}
 
-          {/* A06's `kind='cv'` upload — optional, and stored on the user row rather than in
-              `users.profile`, so it never travels through the step-2 PATCH body. */}
+          {/* A06's `kind='cv'` upload — optional, and attached by `POST /uploads` itself
+              (the pointer on the user row, the text on `users.profile`), so it never travels
+              through the step-2 PATCH body and needs no Continue to persist. */}
           <Field
             label={t('cvLabel')}
             id="cvFile"
-            hint={cvUploading ? t('cvUploading') : cvUploadId ? t('cvUploaded') : undefined}
+            hint={
+              uploadCvMutation.isPending
+                ? t('cvUploading')
+                : cvUploadId
+                  ? t('cvUploaded')
+                  : undefined
+            }
             error={cvError ? `${t('cvFailed')} ${errorMessage(cvError)}` : undefined}
           >
             {({ id, 'aria-describedby': describedBy }) => (
@@ -313,11 +321,12 @@ export default function OnboardingStepPage({ params }: { params: Promise<{ step:
                 id={id}
                 aria-describedby={describedBy}
                 accept="application/pdf"
-                disabled={cvUploading}
+                disabled={uploadCvMutation.isPending}
                 invalid={Boolean(cvError)}
                 onFile={(file) => {
+                  // Clearing the picker is not a detach: the CV is already on the account,
+                  // and there is no endpoint that would take it back off.
                   if (file) void uploadCv(file);
-                  else setUploadedCvId(null);
                 }}
               />
             )}
