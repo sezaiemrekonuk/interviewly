@@ -26,3 +26,35 @@ Feature: Speech provider seam — SpeechProvider interface contract
     Then the speak call throws an ApiError with code "VOICE_UNAVAILABLE"
     When I call speak with text "hello" voiceId "v-001" language "en"
     Then the audio mime is "audio/mpeg"
+
+  @speech @AC-1
+  Scenario: owner can fetch current question speech bytes from same origin without exposing key material
+    Given I am signed in as a speech candidate
+    And I have a voice interview in hr_round with current index 1
+    When I GET "/interviews/:id/questions/:index/speech" as that owner
+    Then the response is "audio/mpeg" bytes
+    And the speech response body does not include the ElevenLabs API key material
+
+  @speech @AC-1
+  Scenario: non-owner cannot fetch another candidate's question speech
+    Given another candidate owns a voice interview in hr_round with current index 1
+    When I GET "/interviews/:id/questions/:index/speech" as a non-owner
+    Then the API response code is "FORBIDDEN"
+
+  @speech @AC-2
+  Scenario: second request for same current question is served from cache with no second provider call
+    Given I am signed in as a speech candidate
+    And I have a voice interview in hr_round with current index 1
+    When I GET "/interviews/:id/questions/:index/speech" as that owner
+    And I GET "/interviews/:id/questions/:index/speech" as that owner
+    Then the fake speech provider speak call count is 1
+
+  @speech @AC-6
+  Scenario: request past voice ceiling ends interview and does not call provider
+    Given I am signed in as a speech candidate
+    And I have a voice interview in hr_round with current index 1
+    And that interview started 2000 seconds ago
+    When I GET "/interviews/:id/questions/:index/speech" as that owner
+    Then the API response code is "VOICE_SESSION_EXPIRED"
+    And the fake speech provider speak call count is 0
+    And that interview ended reason is "time_exhausted"

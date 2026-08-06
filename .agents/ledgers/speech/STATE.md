@@ -1,17 +1,15 @@
 # Speech — State
 
 Last updated: 2026-08-06
-Last session ended: **S01 complete.** Created `backend/modules/speech/` with `SpeechProvider.ts`
-(interface + module binding), `fake-speech.ts` (FakeSpeechProvider with failNext), and
-`elevenlabs-speech.ts` (real driver: TTS + STT, 5 s timeout, 3 attempts, failure logging).
-Rewrote `backend/src/lib/env.ts`: `ELEVENLABS_API_KEY` now `z.string().min(1)` (boot failure on
-empty), added `ELEVENLABS_TTS_MODEL` (default `eleven_multilingual_v2`) and `ELEVENLABS_STT_MODEL`
-(default `scribe_v1`). Added `SPEECH_AUDIO_INVALID` (400) and `SPEECH_TRANSCRIPTION_FAILED` (502)
-to error-codes.ts; copy added to both locales. Added `.agents/features/speech_turn.feature`
-(3 seam scenarios @speech @AC-1/@AC-3) and wired `cucumber.js`. Wrote step definitions in
-`backend/features/step_definitions/speech.steps.ts`. Unit tests (5/5 green). Acceptance ring
-requires Docker (Redis ECONNREFUSED in sandbox — same situation as V05's devlog).
-Next: **S02** (TTS route), no new dependencies beyond S01 being done.
+Last session ended: **S02 complete.** Added `backend/modules/speech/tts.ts` (owner/current-index
+guard, ceiling check before provider, storage cache hit/miss path, `SPEECH_TTS_SERVED` logging,
+`VOICE_UNAVAILABLE` downgrade-to-text) and `backend/modules/speech/router.ts`; mounted in
+`backend/src/app.ts`. Extended `.agents/features/speech_turn.feature` with AC-1/AC-2/AC-6 route
+scenarios and implemented steps in `backend/features/step_definitions/speech.steps.ts`.
+Added unit tests in `backend/modules/speech/tts.test.ts` and fake provider call counters in
+`backend/modules/speech/fake-speech.ts`. Verification: unit + `@speech` acceptance green, and
+SQL check returned `ended_reason = time_exhausted` for the past-ceiling interview.
+Next: **S03** (STT route).
 
 ## Execution protocol (follow exactly)
 
@@ -27,7 +25,7 @@ EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**S02** (TTS route: question audio, storage-cached, ceiling-checked)
+**S03** (STT route: audio upload to Scribe to the guarded advance)
 
 ## Environment
 
@@ -69,7 +67,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | ID | Title | Repo | Status | Depends on |
 |----|-------|------|--------|------------|
 | S01 | `SpeechProvider` seam, `FakeSpeechProvider`, env and error-code rewrite | | done | F01, F03, I15 |
-| S02 | TTS route: question audio, storage-cached, ceiling-checked | | todo | S01, I03, I07 |
+| S02 | TTS route: question audio, storage-cached, ceiling-checked | | done | S01, I03, I07 |
 | S03 | STT route: audio upload to Scribe to the guarded advance | | todo | S01, I03, I06 |
 | S04 | Per-call usage accounting at both provider call sites | | todo | S02, S03, I08 |
 | S05 | Remove the convai, webhook and reconciliation surface; drop `voice_sessions` | | todo | S02, S03, S04 |

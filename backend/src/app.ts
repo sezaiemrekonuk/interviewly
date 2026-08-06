@@ -15,6 +15,7 @@ import { mountTestSeam } from '../modules/auth/test-seam';
 import { listMyInterviews } from '../modules/interview/my-interviews';
 import interviewRouter from '../modules/interview/router';
 import { createUpload, uploadMiddleware } from '../modules/interview/uploads';
+import speechRouter from '../modules/speech/router';
 import reconcileWebhookRouter from '../modules/voice/reconcile-webhook';
 import voiceRouter from '../modules/voice/session';
 import voiceWebhookRouter from '../modules/voice/webhook-router';
@@ -56,6 +57,7 @@ app.use('/', meRouter);
 app.get('/me/interviews', requireAuth, listMyInterviews);
 app.post('/uploads', requireAuth, uploadMiddleware, createUpload);
 app.use('/interviews', voiceRouter);
+app.use('/interviews', speechRouter);
 app.use('/interviews', interviewRouter);
 // V04 before V02: `webhook-router`'s `/:action` matches `post_call` too, and would answer
 // VALIDATION_ERROR before the reconciliation handler was ever reached.

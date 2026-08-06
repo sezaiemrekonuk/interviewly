@@ -7,6 +7,8 @@ const FAKE_TRANSCRIPT = 'This is a fake transcript.';
 
 export class FakeSpeechProvider implements SpeechProvider {
   private _failNext = false;
+  speakCalls = 0;
+  transcribeCalls = 0;
 
   /** Forces the next provider call to throw VOICE_UNAVAILABLE (one-shot). */
   failNext(): void {
@@ -17,6 +19,7 @@ export class FakeSpeechProvider implements SpeechProvider {
     text: string,
     _opts: { voiceId: string; language: string },
   ): Promise<{ audio: Buffer; mime: string; characters: number }> {
+    this.speakCalls += 1;
     if (this._failNext) {
       this._failNext = false;
       throw new ApiError('VOICE_UNAVAILABLE');
@@ -28,6 +31,7 @@ export class FakeSpeechProvider implements SpeechProvider {
     audio: Buffer,
     _opts: { mime: string; language: string },
   ): Promise<{ transcript: string; seconds: number }> {
+    this.transcribeCalls += 1;
     if (this._failNext) {
       this._failNext = false;
       throw new ApiError('VOICE_UNAVAILABLE');
