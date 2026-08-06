@@ -44,9 +44,13 @@ export const resumeInterview: RequestHandler = async (req, res) => {
     ? interview.state
     : await applyTransition(interview, 'hr_round', { traceId: req.traceId! });
 
-  if (hrQuestionCount === 0) {
+if (hrQuestionCount === 0) {
+  try {
     await generateRound(interview, 'hr', { traceId: req.traceId! });
+  } catch (err) {
+    if ((err as { code?: string } | null)?.code !== 'P2002') throw err;
   }
+}
 
   res.status(200).json({ state });
 };
