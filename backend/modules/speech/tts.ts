@@ -15,6 +15,8 @@ import { speechProvider } from './SpeechProvider';
 
 const VOICE_CAPABLE_STATES = new Set(['hr_round', 'tech_round']);
 
+export { VOICE_CAPABLE_STATES };
+
 export function isPastSpeechCeiling(startedAt: Date | null): boolean {
   if (!startedAt) return false;
   const elapsed = (clock.now().getTime() - startedAt.getTime()) / 1000;
@@ -46,10 +48,16 @@ export const serveQuestionSpeech: RequestHandler = async (req, res) => {
   if (index !== interview.current_index) throw new ApiError('QUESTION_NOT_CURRENT');
 
   if (isPastSpeechCeiling(interview.started_at)) {
-    await applyTransition(interview, 'evaluating', {
-      traceId: req.traceId!,
-      endedReason: 'time_exhausted',
-    });
+    // ADR-I32: a losing transition must not replace the caller's error — the session is
+    // expired whether or not this request is the one that moved the interview.
+    try {
+      await applyTransition(interview, 'evaluating', {
+        traceId: req.traceId!,
+        endedReason: 'time_exhausted',
+      });
+    } catch (err) {
+      logger.error({ err, traceId: req.traceId, interviewId: interview.id }, 'INTERVIEW_END_FAILED');
+    }
     throw new ApiError('VOICE_SESSION_EXPIRED');
   }
 

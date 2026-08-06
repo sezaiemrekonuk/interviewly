@@ -58,3 +58,72 @@ Feature: Speech provider seam — SpeechProvider interface contract
     Then the API response code is "VOICE_SESSION_EXPIRED"
     And the fake speech provider speak call count is 0
     And that interview ended reason is "time_exhausted"
+
+  # S03: the STT answer route — POST audio to Scribe to the same guarded advance a typed answer uses.
+
+  @speech @AC-3
+  Scenario: an audio answer is transcribed, persisted as voice, and advances the interview
+    Given I am signed in as a speech candidate
+    And I have a voice interview in hr_round with current index 1
+    When I POST a "audio/webm" answer recording as that owner
+    Then the answer response status is 200
+    And the interview holds exactly 1 answer with input mode "voice"
+    And the interview current index is 2
+
+  @speech @AC-4
+  Scenario: an oversize recording is refused and nothing changes
+    Given I am signed in as a speech candidate
+    And I have a voice interview in hr_round with current index 1
+    When I POST an oversize "audio/webm" answer recording as that owner
+    Then the API response code is "UPLOAD_TOO_LARGE"
+    And the interview holds exactly 0 answers
+    And the interview current index is 1
+
+  @speech @AC-4
+  Scenario: a non-audio recording is refused and nothing changes
+    Given I am signed in as a speech candidate
+    And I have a voice interview in hr_round with current index 1
+    When I POST a "text/plain" answer recording as that owner
+    Then the API response code is "UNSUPPORTED_MEDIA_TYPE"
+    And the interview holds exactly 0 answers
+    And the interview current index is 1
+
+  @speech @AC-4
+  Scenario: an undecodable recording yields a transcription failure and nothing changes
+    Given I am signed in as a speech candidate
+    And I have a voice interview in hr_round with current index 1
+    And the fake speech provider returns an empty transcript next
+    When I POST a "audio/webm" answer recording as that owner
+    Then the API response code is "SPEECH_TRANSCRIPTION_FAILED"
+    And the interview holds exactly 0 answers
+    And the interview current index is 1
+
+  @speech @AC-6
+  Scenario: an audio answer past the voice ceiling ends the interview and calls no provider
+    Given I am signed in as a speech candidate
+    And I have a voice interview in hr_round with current index 1
+    And that interview started 2000 seconds ago
+    When I POST a "audio/webm" answer recording as that owner
+    Then the API response code is "VOICE_SESSION_EXPIRED"
+    And the fake speech provider transcribe call count is 0
+    And that interview ended reason is "time_exhausted"
+    And the interview holds exactly 0 answers
+
+  @speech @AC-3
+  Scenario: a recording naming a stale question is rejected without a transcription call
+    Given I am signed in as a speech candidate
+    And I have a voice interview in hr_round with current index 1
+    When I POST a "audio/webm" answer recording naming a stale question as that owner
+    Then the API response code is "QUESTION_NOT_CURRENT"
+    And the fake speech provider transcribe call count is 0
+    And the interview holds exactly 0 answers
+    And the interview current index is 1
+
+  @speech @AC-14
+  Scenario: no audio is persisted anywhere after a voice answer
+    Given I am signed in as a speech candidate
+    And I have a voice interview in hr_round with current index 1
+    When I POST a "audio/webm" answer recording as that owner
+    Then the answer response status is 200
+    And the fake storage holds no audio object
+    And the interview holds exactly 1 answer with input mode "voice"

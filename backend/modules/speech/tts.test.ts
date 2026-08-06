@@ -26,9 +26,11 @@ vi.mock('../interview/machine', () => ({ applyTransition: m.applyTransition }));
 vi.mock('../../src/lib/storage', () => ({ storage: { get: m.storageGet, put: m.storagePut } }));
 vi.mock('./SpeechProvider', () => ({ speechProvider: { speak: m.speak } }));
 vi.mock('../voice/downgrade', () => ({ downgradeToText: m.downgrade }));
-vi.mock('../../src/lib/logger', () => ({ logger: { info: m.loggerInfo } }));
+vi.mock('../../src/lib/logger', () => ({ logger: { info: m.loggerInfo, error: vi.fn() } }));
 
 import { type Request, type Response } from 'express';
+
+import { ApiError } from '../../src/lib/api-error';
 
 import { isPastSpeechCeiling, serveQuestionSpeech } from './tts';
 
@@ -128,5 +130,15 @@ describe('serveQuestionSpeech', () => {
     expect(m.applyTransition.mock.calls[0]?.[2]?.endedReason).toBe('time_exhausted');
     expect(m.speak).not.toHaveBeenCalled();
     expect(m.storageGet).not.toHaveBeenCalled();
+  });
+
+  it('a losing ceiling transition still surfaces VOICE_SESSION_EXPIRED (ADR-I32)', async () => {
+    m.now.mockReturnValue(new Date('2026-08-06T10:20:01.000Z'));
+    m.applyTransition.mockRejectedValue(new ApiError('INVALID_STATE_TRANSITION'));
+    const { r } = res();
+
+    await expect(serveQuestionSpeech(req(), r, (() => undefined) as never)).rejects.toMatchObject({
+      code: 'VOICE_SESSION_EXPIRED',
+    });
   });
 });
