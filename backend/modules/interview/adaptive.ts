@@ -1,6 +1,7 @@
 /**
- * D03 — the K4 adaptive hook (ADR-D03). Additive over I06's answer handler: score the answer,
- * select the next move (D01), and promote one of the next row's pre-generated candidates (D02).
+ * D03 — the K4 adaptive hook (ADR-D03). Additive over I06's answer handler: generate the next
+ * row's candidate pool (D02), score the answer, select the next move (D01), and promote one of
+ * the candidates into the row.
  *
  * The invariant lives here: a score that fails `ScoresSchema` never promotes a graded row. The
  * raw score is handed to `selectNextQuestion` unparsed — the selector owns the validation, so a
@@ -16,6 +17,7 @@ import { prisma } from '../../src/lib/db';
 import { logger } from '../../src/lib/logger';
 
 import { selectNextQuestion, type AdaptiveSelection } from './adaptive-select';
+import { prepareNextCandidates } from './candidate-prep';
 import { currentQuestionRow } from './state';
 
 const CandidatesSchema = z.array(CandidateSchema);
@@ -44,20 +46,46 @@ export async function promoteNextQuestion(
   if (!nextRow) return; // no unasked row — the interview is ending, nothing to adapt.
   if (nextRow.chosen_reason) return; // §3.8: a resume/refresh must not re-score this turn.
 
-  // Gated on D02's pre-generated candidates (task step 1, IDEA §3.7). An MVP interview never
-  // pre-generates, so the hook is a no-op for it — no score, no LLM call, no promotion. This
-  // is what keeps K4 from breaking the MVP ledger (an answer submit stays call-free).
-  const candidates = CandidatesSchema.safeParse(nextRow.candidates);
-  if (!candidates.success) return;
-
   const client = opts.client ?? aiClient();
-  const raw = await client.scoreAnswer({
-    question: answered.text,
-    transcript,
-    candidateProfile: null,
-    language: interview.language,
-    ctx,
-  });
+
+  // D02 runs here rather than on a turn of its own. It used to be a precondition — no pool,
+  // no promotion — and nothing ever wrote the first pool, so the whole hook was unreachable
+  // (#148). Producing it is now part of the hook: the row promoted this turn is the row
+  // generated this turn.
+  //
+  // Concurrent with the score because the two calls share no input, so the answer response
+  // waits for one provider round-trip and not two. A pool already on the row is reused — a
+  // resume that re-enters the hook must not pay for a second generation.
+  const existing = CandidatesSchema.safeParse(nextRow.candidates);
+  const candidatesPromise = existing.success
+    ? Promise.resolve(existing.data)
+    : prepareNextCandidates({
+        interview,
+        nextQuestionId: nextRow.id,
+        currentQuestion: answered,
+        ctx,
+        client: opts.client,
+      }).catch((err: unknown) => {
+        // Degrade to score-only: the default next row is a working MVP question, and the
+        // score still reaches the report. Rethrowing would cost the score too.
+        logger.warn(
+          { err, traceId, interviewId: interview.id, questionId: nextRow.id },
+          'CANDIDATE_PREGENERATION_FAILED',
+        );
+        return [] as Candidate[];
+      });
+
+  const [raw, candidates] = await Promise.all([
+    client.scoreAnswer({
+      question: answered.text,
+      transcript,
+      candidateProfile: null,
+      language: interview.language,
+      ctx,
+    }),
+    candidatesPromise,
+  ]);
+
   const move = selectNextQuestion(raw, { difficulty: answered.difficulty, topic: answered.topic });
 
   if (!move.graded) {
@@ -66,7 +94,7 @@ export async function promoteNextQuestion(
     return;
   }
 
-  const cand = pickCandidate(candidates.data, move, answered.topic);
+  const cand = pickCandidate(candidates, move, answered.topic);
   if (!cand) {
     // Graded, but nothing to promote — keep the default row (a valid MVP question). The score
     // is still recorded: the report ledger reads answers.scores.
@@ -92,14 +120,24 @@ export async function promoteNextQuestion(
   );
 }
 
-/** Match by the selector's difficulty first, then whether the topic moves (new vs same). */
+/**
+ * Difficulty is the axis the selector actually decided, so it is the one that must be honoured;
+ * the topic move is a preference among candidates that already match it.
+ *
+ * The fallback is not politeness, it is what keeps promotion working on real pools. A
+ * candidate's `topic` is a label the model wrote, and `interview.question.candidates` is never
+ * told the current question's topic — so `c.topic === currentTopic` is a string coincidence,
+ * not a contract. Requiring it turned every `score_low`/`score_mid` turn into a silent no-op
+ * for any question whose topic the pool did not happen to echo.
+ */
 function pickCandidate(
   candidates: Candidate[],
   move: Extract<AdaptiveSelection, { graded: true }>,
   currentTopic: string,
 ): Candidate | undefined {
+  const atDifficulty = candidates.filter((c) => c.difficulty === move.difficulty);
   const wantSameTopic = move.topicMove === 'same';
-  return candidates.find(
-    (c) => c.difficulty === move.difficulty && (c.topic === currentTopic) === wantSameTopic,
+  return (
+    atDifficulty.find((c) => (c.topic === currentTopic) === wantSameTopic) ?? atDifficulty[0]
   );
 }

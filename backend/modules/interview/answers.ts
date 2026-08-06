@@ -102,12 +102,12 @@ export async function advanceWithAnswer(
 
   // I10: a pure heuristic, no `llm_calls` row. It runs before the handover below because a
   // switch has to reach the technical batch that ADR-I22 generates in `interview.language`.
+  //
+  // It also runs before the K4 hook, and the hook reads `interview.language` off this
+  // assignment: the candidate pool D02 generates for the next row is written in the language
+  // the switch just landed on, so no pool is ever stale enough to need a refresh (#148).
   const nextIndex = expected + 1;
-  interview.language = await trackLanguage(interview, data.transcript, {
-    question,
-    nextIndex,
-    traceId,
-  });
+  interview.language = await trackLanguage(interview, data.transcript, { traceId });
 
   // ADR-I22: the technical batch is generated during the HR round, not by the transition into
   // it, so the handover is never a loading screen. Idempotent — every HR answer may call it.
@@ -147,13 +147,25 @@ export async function advanceWithAnswer(
 
   // K4 (ADR-D03): additive adaptive hook. A failure here must not fail the answer — the
   // default next row is a working MVP question, so a scoring/generation hiccup degrades to it.
+  //
+  // Under I08's ceiling, unlike the tech batch above: the hook spends on every turn, so an
+  // interview that has exhausted its budget would otherwise keep billing two provider calls
+  // per answer for the rest of the round. `BudgetExceeded` here is not the 402 the batch
+  // raises — the turn is already stored and the default next question is askable, so the
+  // interview drops to non-adaptive rather than ending.
   try {
-    await promoteNextQuestion(interview, question, answer.id, data.transcript, nextIndex, {
-      traceId,
-      client: opts.client,
-    });
+    await withBudget(interview.id, () =>
+      promoteNextQuestion(interview, question, answer.id, data.transcript, nextIndex, {
+        traceId,
+        client: opts.client,
+      }),
+    );
   } catch (err) {
-    logger.warn({ err, traceId, interviewId: interview.id }, 'ADAPTIVE_HOOK_FAILED');
+    if (err instanceof BudgetExceeded) {
+      logger.warn({ traceId, interviewId: interview.id }, 'ADAPTIVE_SKIPPED_NO_BUDGET');
+    } else {
+      logger.warn({ err, traceId, interviewId: interview.id }, 'ADAPTIVE_HOOK_FAILED');
+    }
   }
 
   return { state, nextIndex };
