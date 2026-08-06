@@ -271,6 +271,35 @@ describe('interview room, text mode (W06)', () => {
     );
   });
 
+  it('turns the waiting beat into a rebuild once nothing is generating', async () => {
+    vi.useFakeTimers();
+    const calls = stubFetch({ states: [roomState({ currentQuestion: null })] });
+    await act(async () => {
+      renderWithProviders(<RoomPage />);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    // A batch can genuinely still be generating here — the state change is published when the
+    // transition is claimed, not when the questions land — so the beat holds first.
+    expect(screen.getByTestId('question-waiting')).toBeInTheDocument();
+    expect(screen.queryByTestId('room-stalled')).not.toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000);
+    });
+
+    expect(screen.queryByTestId('question-waiting')).not.toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent(messages.room.stalled);
+
+    await act(async () => {
+      screen.getByRole('button', { name: messages.room.retry }).click();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(calls.some((c) => c.url === '/api/interviews/i1/resume' && c.method === 'POST')).toBe(true);
+  });
+
   it('types the question at 40 chars/sec', async () => {
     vi.useFakeTimers();
     stubFetch();

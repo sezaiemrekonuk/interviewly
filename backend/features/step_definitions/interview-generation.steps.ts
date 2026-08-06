@@ -113,6 +113,24 @@ function unrig(world: AiWorld): void {
   delete (aiClient() as unknown as Record<string, unknown>).generateRoundQuestions;
 }
 
+/**
+ * The state no request creates on purpose: `POST /profile` claims `hr_round` before it
+ * generates, so a pause that could not be written or a process that died in between leaves
+ * exactly this. Written directly because reproducing it through the API would mean making
+ * `applyTransition` fail, and that seam does not exist outside this file's imagination.
+ */
+Given(
+  'the interview is left in {string} with no questions',
+  async function (this: AiWorld, state: string) {
+    assert.equal(state, 'hr_round', 'only the hr_round strand is modelled here');
+    assert.equal((await questionsIn(this, 'hr')).length, 0, 'the interview already has a batch');
+    await prisma.interview.update({
+      where: { id: this.interviewId },
+      data: { state: 'hr_round', current_index: 1 },
+    });
+  },
+);
+
 Given(
   'the stub AI is configured to return a schema-valid batch of {int} questions',
   function (this: AiWorld, _count: number) {
@@ -151,6 +169,10 @@ When('I POST {string} for the profiling interview', async function (this: AiWorl
 
 When('I POST {string} for the paused interview', async function (this: AiWorld, _path: string) {
   await this.httpPost(`/interviews/${this.interviewId}/resume`, {});
+});
+
+When('I POST {string} for that interview', async function (this: AiWorld, path: string) {
+  await this.httpPost(path.replace(':id', this.interviewId), {});
 });
 
 When(
