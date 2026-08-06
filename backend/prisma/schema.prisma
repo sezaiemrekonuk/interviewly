@@ -286,6 +286,7 @@ model InterviewRound {
   persona   Persona    @relation(fields: [persona_id], references: [id], onDelete: Restrict)
   questions Question[]
 
+  @@unique([interview_id, type])
   @@map("interview_rounds")
 }
 

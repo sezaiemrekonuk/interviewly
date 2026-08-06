@@ -98,6 +98,16 @@ export async function generateRound(
   roundType: RoundType,
   opts: GenerateOpts,
 ): Promise<void> {
+  // Idempotent by round, for every caller and not just `ensureTechBatch`: I06's per-answer hook
+  // and I07's `POST /resume` both call this for a round that may already be full, and a second
+  // batch would collide `(round_id, order_index)` or — across two round rows — give the index
+  // walk two questions for the same global index. The all-or-nothing insert below is what makes
+  // a non-zero count mean "this round is done" rather than "this round is half written".
+  const existing = await prisma.question.count({
+    where: { round: { interview_id: interview.id, type: roundType } },
+  });
+  if (existing > 0) return;
+
   const count = roundCount(interview, roundType);
   const ctx: AiCtx = { interviewId: interview.id, traceId: opts.traceId };
 
@@ -155,13 +165,11 @@ export async function generateRound(
   const persona_id = await personaFor(roundType);
 
   await prisma.$transaction(async (tx) => {
-    const round =
-      (await tx.interviewRound.findFirst({
-        where: { interview_id: interview.id, type: roundType },
-      })) ??
-      (await tx.interviewRound.create({
-        data: { interview_id: interview.id, type: roundType, persona_id, status: 'pending' },
-      }));
+    const round = await tx.interviewRound.upsert({
+      where: { interview_id_type: { interview_id: interview.id, type: roundType } },
+      update: {},
+      create: { interview_id: interview.id, type: roundType, persona_id, status: 'pending' },
+    });
 
     await tx.question.createMany({
       // `order_index` is ours, counted 1..count in ask order. The model's `orderIndex` is
@@ -181,12 +189,9 @@ export async function generateRound(
 /**
  * ADR-I22: the technical batch is generated *during* the HR round, not by the transition into
  * it, so the round handover is never a loading screen and `POST /profile` never pays for two
- * LLM calls. Idempotent, because the caller is a per-answer hook (I06) and not a one-shot.
+ * LLM calls. Idempotent, because the caller is a per-answer hook (I06) and not a one-shot —
+ * the guard itself now lives in `generateRound`, which every caller needs it from.
  */
 export async function ensureTechBatch(interview: Interview, opts: GenerateOpts): Promise<void> {
-  const existing = await prisma.question.count({
-    where: { round: { interview_id: interview.id, type: 'tech' } },
-  });
-  if (existing > 0) return;
   await generateRound(interview, 'tech', opts);
 }

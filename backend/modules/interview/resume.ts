@@ -2,9 +2,13 @@
  * `POST /interviews/:id/resume` — the `paused → hr_round` edge (§8.3, I07), and the only
  * repair for an interview left in `hr_round` with no batch to ask from.
  *
- * Pause discards nothing: every answer and question recorded before the provider gave out is
- * still there, so resuming is a state change and nothing else.
+ * Resume is not a state change and nothing else. The only thing that pauses an interview is a
+ * generation that failed, and `generateRound` inserts all-or-nothing *after* the provider call —
+ * so a paused interview is always missing the batch that pause was about. Flipping the state
+ * without redoing that work hands the candidate a room with no question and no button left to
+ * press, which is worse than the pause it cleared.
  */
+import type { RoundType } from '@interviewly/ai';
 import type { RequestHandler } from 'express';
 
 import { ApiError } from '../../src/lib/api-error';
@@ -40,17 +44,36 @@ export const resumeInterview: RequestHandler = async (req, res) => {
   // That also means concurrent stranded resumes are not serialised by the state guard the way
   // the `paused` path is; `questions(round_id, order_index)` is unique, so the loser of the
   // race fails its insert rather than doubling the batch.
-  const state = stranded
+  let state = stranded
     ? interview.state
     : await applyTransition(interview, 'hr_round', { traceId: req.traceId! });
 
-if (hrQuestionCount === 0) {
-  try {
-    await generateRound(interview, 'hr', { traceId: req.traceId! });
-  } catch (err) {
-    if ((err as { code?: string } | null)?.code !== 'P2002') throw err;
+  if (stranded) {
+    try {
+      await generateRound(interview, 'hr', { traceId: req.traceId! });
+    } catch (err) {
+      if ((err as { code?: string } | null)?.code !== 'P2002') throw err;
+    }
+  } else {
+    // Which batch went missing depends on which generation gave out. ADR-I22 hangs the technical
+    // one off an HR answer, so `current_index` — already advanced past the HR round by the answer
+    // whose hook failed (I06 advances before the hook) — is what names the round the candidate is
+    // actually waiting on. `generateRound` is a no-op when that round is already full, so a pause
+    // the candidate can simply answer through resumes without spending an LLM call.
+    const roundType: RoundType =
+      interview.current_index > interview.hr_question_count ? 'tech' : 'hr';
+
+    // Deliberately not caught: a provider still down re-pauses through the same
+    // `hr_round → paused` edge, which puts the Resume button back rather than consuming the one
+    // recovery the room has.
+    await generateRound(interview, roundType, { traceId: req.traceId! });
+
+    // If the index is already in the technical round, return the interview to `tech_round` so the
+    // room's active persona matches the question being served.
+    if (roundType === 'tech') {
+      state = await applyTransition(interview, 'tech_round', { traceId: req.traceId! });
+    }
   }
-}
 
   res.status(200).json({ state });
 };
