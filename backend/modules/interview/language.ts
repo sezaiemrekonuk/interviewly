@@ -5,14 +5,11 @@
  * no provider call and writes no `llm_calls` row. What lives here is the rule that acts on it —
  * `interviews.language` moves only after two *consecutive* turns in the other language.
  */
-import type { Interview, Question } from '@prisma/client';
+import type { Interview } from '@prisma/client';
 
 import { aiClient } from '../ai';
 import { prisma } from '../../src/lib/db';
 import { logger } from '../../src/lib/logger';
-
-import { prepareNextCandidates } from './candidate-prep';
-import { currentQuestionRow } from './state';
 
 /** MVP interview languages (ai Q1). A turn in any other language is not a switch target. */
 const SUPPORTED = new Set(['en', 'tr']);
@@ -29,14 +26,6 @@ const SWITCH_AFTER = 2;
 const streaks = new Map<string, { language: string; count: number }>();
 
 export interface TrackLanguageOpts {
-  /** The question this turn answered — the anchor for candidate regeneration. */
-  question: Pick<Question, 'text' | 'difficulty' | 'topic'>;
-  /**
-   * The `current_index` the DB row now holds, post-advance. `interview.current_index` is the
-   * caller's pre-advance copy (answers.ts updates the DB, not the in-memory object) — passed
-   * explicitly so regeneration doesn't depend on that staleness lining up with `+ 1`.
-   */
-  nextIndex: number;
   traceId: string;
 }
 
@@ -89,38 +78,10 @@ export async function trackLanguage(
     'LANGUAGE_SWITCHED',
   );
 
-  // A hook, not a step: the turn's response does not wait on an AI call the candidate never
-  // asked for, and a failure here costs a pre-generation, not the answer.
-  void regenerateCandidates(interview, detection.language, opts).catch((err: unknown) => {
-    logger.warn(
-      { err, traceId: opts.traceId, interviewId: interview.id },
-      'CANDIDATE_REGENERATION_FAILED',
-    );
-  });
-
+  // No candidate regeneration here. This used to fire a D02 refresh for the N+1 row, on the
+  // theory that a pool written before the switch was stale. Ordering makes that unnecessary:
+  // `advanceWithAnswer` calls this *before* the K4 hook and adopts the returned language, so
+  // the pool for the row about to be asked is generated after the switch, in the new language
+  // — never refreshed, because it is never written in the old one (#148).
   return detection.language;
-}
-
-/**
- * D02's pre-generated K4 candidates for the N+1 row are in the old language after a switch.
- * Only rows that actually carry candidates are regenerated — an unwritten row has nothing
- * stale in it, and generating one here would spend an LLM call the switch did not require.
- */
-async function regenerateCandidates(
-  interview: Interview,
-  language: string,
-  opts: TrackLanguageOpts,
-): Promise<void> {
-  const next = await currentQuestionRow({
-    id: interview.id,
-    hr_question_count: interview.hr_question_count,
-    current_index: opts.nextIndex,
-  });
-  if (!next?.candidates) return;
-
-  await prepareNextCandidates({
-    interview: { ...interview, language },
-    currentQuestion: opts.question,
-    ctx: { interviewId: interview.id, traceId: opts.traceId },
-  });
 }

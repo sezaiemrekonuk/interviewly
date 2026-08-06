@@ -96,6 +96,20 @@ already having `candidates`; failures log `CANDIDATE_REGENERATION_FAILED` and ne
 turn. Nothing wires D02 into the answer flow yet, so the guard is false in practice today —
 it is what keeps @AC-13's "no llm_calls row" true when D03 does wire it.
 
+**Amended 2026-08-06 (issue #148).** The hook is gone, and `CANDIDATE_REGENERATION_FAILED` with
+it. The guard above was never false *in practice* — it was false *always*, because D02 had no
+other caller, and that circularity is what left K4 unreachable. With D03 now generating the pool
+on the answer path, the ordering already documented in this file does the work: `trackLanguage`
+returns before the K4 hook runs, the hook reads the switched language off `interview.language`,
+and the pool for the row about to be asked is written in the new language. A pool is never
+authored in the old language, so there is nothing to refresh. Pinned by
+`answers.test.ts` — "hands the K4 hook the language the switch just landed on".
+
+@AC-13's steps no longer assert on a raw `llm_calls` count, which stopped measuring the
+classifier the moment the answer path started spending. They now assert that every row the turn
+wrote belongs to one of the two prompts the answer path compiles, resolved by uuid through the
+registry. `detectLanguage` still compiles no prompt and still writes no row.
+
 `cucumber.js` `default.paths` gained `.agents/features/language_detection.feature`;
 `backend/features/step_definitions/language.steps.ts` is new.
 

@@ -114,3 +114,17 @@ non-zero — fix the code, never the assert. End-to-end DB persistence is confir
 - **For D03:** candidates are at `questions.candidates` on the N+1 row after `prepareNextCandidates`.
   D03 reads that row's `candidates` JSON, uses D01's `selectNextQuestion` result's `difficulty` to
   pick the matching candidate, and rewrites `text/difficulty/topic/chosen_reason` on that row.
+
+### Amended 2026-08-06 (issue #148)
+
+- The signature is now `prepareNextCandidates({ interview: { id, language }, nextQuestionId,
+  currentQuestion, ctx, client? })`. It no longer resolves the N+1 row: D03 is the only caller
+  and has already resolved it — to read `chosen_reason` and to promote into it — so re-deriving
+  the per-round `order_index` here was a second copy of the index math the "trap" note warns
+  about, and a second query per turn.
+- The old caller in `language.ts` is gone. It was the only one, and it refused to run unless
+  `candidates` was already written, so nothing ever wrote a first pool — see D03's amendment.
+- "Pre-generation" is relative to the promotion, not to the turn: it runs during the turn that
+  answers question N, for the row that turn promotes. There is no earlier moment — the pool has
+  to reflect an I10 language switch landing on the same turn, and a pool built a turn ahead
+  would target a row whose difficulty the previous promotion had not yet decided.

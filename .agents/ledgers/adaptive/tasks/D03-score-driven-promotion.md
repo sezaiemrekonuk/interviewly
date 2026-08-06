@@ -182,3 +182,37 @@ base turn yet — D02's `prepareNextCandidates` is only called on a language swi
 adaptive end-to-end in production needs a trigger, which needs a way to distinguish adaptive
 interviews (no `adaptive`/mode flag exists; F02 owns the schema). D03 promotes whenever
 candidates exist; seeding them in the general flow is a separate, schema-touching decision.
+
+## Amendment — issue #148, 2026-08-06 (Fatih)
+
+The follow-up above was the whole defect, and it was worse than "not wired": D02's only caller
+guarded itself on the column D02 writes, so the pool could not come into existence by any path.
+D01/D02/D03 were three completed tasks delivering nothing. A finished 8-question interview had
+`candidates` and `chosen_reason` NULL on all eight rows, and the per-answer scores the report
+reads (`report-run.ts` `perAnswerScores`) were never written either.
+
+**The gating decision, revisited.** It was made to protect the MVP ledger's "an answer submit
+stays call-free" — real, but it protected that property by deleting the feature. The trigger it
+was waiting for does not need a schema flag: the ceiling I08 already owns is the right control.
+`promoteNextQuestion` now runs inside `withBudget`, so an interview that has spent its budget
+drops to non-adaptive instead of billing two calls a turn, and @AC-11 stays green for the same
+reason it was green before — an exhausted ceiling makes no call. Cost is now two provider calls
+per answered turn, accepted deliberately.
+
+**Where D02 runs.** Inside the hook, not beside it, and concurrently with `scoreAnswer` — the
+two share no input, so the turn waits on one round-trip rather than two. A generation failure
+is caught to `[]` rather than rethrown: the answer keeps its score and the row keeps the
+default question I06 generated. A pool already on the row is reused, so a resume pays nothing.
+
+**`pickCandidate` corrected.** The note above described a fallback to "the first of the
+difficulty pool" that was never in the code — the match required `c.topic === currentTopic`
+exactly. A candidate's topic is a label the model wrote, and `interview.question.candidates`
+is never told the current question's topic, so that equality was a coincidence. Every
+`score_low`/`score_mid` turn was a silent no-op on any pool that did not happen to echo the
+topic string. The documented fallback now exists; difficulty is honoured, topic is preferred.
+
+**Tests.** `adaptive.test.ts` drives the hook with an *unseeded* row — the step the acceptance
+scenarios performed by hand, which is why they never caught this. `answers.test.ts` pins the
+two orderings (I10 before the hook; the hook inside the ceiling), both verified by mutation. A
+new `@adaptive-questions` scenario seeds no pool. Full default profile: 88 passed, 1 pre-existing
+failure (`@voice-reconciliation`, unrelated — fails identically on master).

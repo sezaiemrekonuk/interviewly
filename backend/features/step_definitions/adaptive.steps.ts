@@ -14,8 +14,9 @@
  */
 import assert from 'node:assert/strict';
 import { After, Before, Given, Then, When } from '@cucumber/cucumber';
-import { ScoresSchema, type AiClient, type Scores } from '@interviewly/ai';
+import { CandidateSchema, ScoresSchema, type AiClient, type Scores } from '@interviewly/ai';
 import type { Difficulty } from '@prisma/client';
+import { z } from 'zod';
 
 import { aiClient } from '../../modules/ai';
 import { advanceWithAnswer } from '../../modules/interview/answers';
@@ -40,10 +41,31 @@ const CONTROLLED_CANDIDATES = [
 // Scenario-local — cucumber runs these serially (mirrors answers.steps).
 let configuredScore: Scores;
 let currentTopic = '';
+/** The next row's text as I06 generated it, so a promotion can be told from a no-op. */
+let defaultNextText = '';
 
 /** A schema-valid score whose `overall` drives the selector; the rest is filler for the report. */
 function validScore(overall: number): Scores {
   return { overall, relevance: overall, depth: overall, structure: overall, star_adherence: 0.8, reasons: ['reason'] };
+}
+
+/**
+ * The configured score over the real client, delegating everything else.
+ *
+ * Spreading the client (`{ ...aiClient(), scoreAnswer }`) does not work here: it is a class
+ * instance, so its methods live on the prototype and an object spread copies none of them.
+ * That was harmless while the hook called nothing but `scoreAnswer`; now that it also
+ * pre-generates, a spread client is one `generateCandidates is not a function` away.
+ */
+function clientScoring(score: () => Scores): AiClient {
+  const real = aiClient();
+  return {
+    generateRoundQuestions: (args) => real.generateRoundQuestions(args),
+    generateReport: (args) => real.generateReport(args),
+    generateCandidates: (args) => real.generateCandidates(args),
+    detectLanguage: (text, current) => real.detectLanguage(text, current),
+    scoreAnswer: async () => score(),
+  };
 }
 
 const realInfo = logger.info;
@@ -75,20 +97,50 @@ After({ tags: '@adaptive-questions' }, function () {
 
 // ---------------------------------------------------------------- given
 
+async function parkOnQuestion(
+  world: AiWorld,
+  topic: string,
+  difficulty: string,
+  seedPool: boolean,
+): Promise<void> {
+  await arriveAtQuestion(world, CURRENT_INDEX, TOTAL);
+  currentTopic = topic;
+  await prisma.question.update({
+    where: { id: await questionIdAt(world, CURRENT_INDEX) },
+    data: { topic, difficulty: difficulty as Difficulty },
+  });
+  defaultNextText = (
+    await prisma.question.findUniqueOrThrow({ where: { id: await questionIdAt(world, NEXT_INDEX) } })
+  ).text;
+  if (!seedPool) return;
+  await prisma.question.update({
+    where: { id: await questionIdAt(world, NEXT_INDEX) },
+    data: { candidates: CONTROLLED_CANDIDATES },
+  });
+}
+
 Given(
   'the current question has topic {string} and difficulty {string}',
   async function (this: AiWorld, topic: string, difficulty: string) {
-    await arriveAtQuestion(this, CURRENT_INDEX, TOTAL);
-    currentTopic = topic;
-    await prisma.question.update({
-      where: { id: await questionIdAt(this, CURRENT_INDEX) },
-      data: { topic, difficulty: difficulty as Difficulty },
-    });
-    // Seed the next row with the D02 candidates the hook promotes from.
-    await prisma.question.update({
+    // Seeded pool: the outline is about the *selection*, so the candidates are controlled
+    // rather than whatever the stub would produce.
+    await parkOnQuestion(this, topic, difficulty, true);
+  },
+);
+
+/**
+ * The #148 scenario. Seeding the pool is what hid the bug for three tasks — it performed by
+ * hand the one step the product had no code to perform — so this one seeds nothing and makes
+ * the turn produce its own pool, exactly as a real interview must.
+ */
+Given(
+  'the current question has topic {string} and difficulty {string} and no candidate pool',
+  async function (this: AiWorld, topic: string, difficulty: string) {
+    await parkOnQuestion(this, topic, difficulty, false);
+    const next = await prisma.question.findUniqueOrThrow({
       where: { id: await questionIdAt(this, NEXT_INDEX) },
-      data: { candidates: CONTROLLED_CANDIDATES },
     });
+    assert.equal(next.candidates, null, 'the fixture pre-seeded the pool this scenario must create');
   },
 );
 
@@ -106,7 +158,7 @@ Given('the stub AI is configured to return a score with overall {int}', function
 When('I submit the current answer for adaptive scoring', async function (this: AiWorld) {
   this.resetEvents(); // only this turn's events count toward the assertions below.
   const interview = await prisma.interview.findUniqueOrThrow({ where: { id: this.interviewId } });
-  const client: AiClient = { ...aiClient(), scoreAnswer: async () => configuredScore };
+  const client = clientScoring(() => configuredScore);
   this.lastStatus = 0;
   this.generateError = undefined;
   try {
@@ -152,4 +204,14 @@ Then('the next question topic is {string} the current topic', async function (th
 
 Then('the next question chosen_reason is {string}', async function (this: AiWorld, reason: string) {
   assert.equal((await nextQuestion(this)).chosen_reason, reason);
+});
+
+Then('the next question carries a candidate pool', async function (this: AiWorld) {
+  const parsed = z.array(CandidateSchema).safeParse((await nextQuestion(this)).candidates);
+  assert.ok(parsed.success, 'the next row carries no schema-valid candidate pool');
+  assert.ok(parsed.data.length > 0, 'the candidate pool is empty');
+});
+
+Then('the next question is not the one the round generated', async function (this: AiWorld) {
+  assert.notEqual((await nextQuestion(this)).text, defaultNextText);
 });
