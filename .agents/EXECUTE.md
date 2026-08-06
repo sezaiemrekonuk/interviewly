@@ -21,13 +21,18 @@ guess — guessing writes to another person's ledger, and two people implementin
 | Person | Ledgers |
 |---|---|
 | Sezai | foundations `F03`, interview-core (`I01`–`I15`), frontend (`W01`–`W11`) |
-| Ahmet | foundations `F01`, auth (`A01`–`A06`), report (`R01`–`R04`) |
+| Ahmet | foundations `F01`, auth (`A01`–`A06`), report (`R01`–`R04`), speech (`S01`–`S10`) |
 | Fatih | foundations `F02`, admin (`N01`–`N02`), voice (`V01`–`V05`), adaptive (`D01`–`D03`) |
 
 Task-ID prefixes are unique per ledger — `F` foundations, `A` auth, `I` interview-core,
-`R` report, `N` admin, `V` voice, `D` adaptive, `W` frontend (web) — so an ID alone tells you
-whose it is. Foundations is the one per-task split; every other ledger belongs wholly to one
+`R` report, `N` admin, `V` voice, `D` adaptive, `W` frontend (web), `S` speech — so an ID alone
+tells you whose it is. Foundations is the one per-task split; every other ledger belongs wholly to one
 person.
+
+**speech supersedes voice (2026-08-06).** `V01`–`V05` stay `done` and are not reopened, but the
+architecture under them was reversed by the owner — ElevenLabs is used for voice generation only,
+with no agent and no webhooks. The replacement work is the `S` ledger
+(`.agents/ledgers/speech/`, ADR-S01). Do not start a new `V` task.
 
 **This table is the only authority on who owns what.** There is deliberately no `Owner`
 column in any `STATE.md`: 50 cells to maintain where three rows already say it is 50 chances
@@ -71,7 +76,8 @@ Apply these in order:
    start anything else.
 2. **Otherwise your task is the first row that is yours, `todo`, and has every ID in its
    `Depends on` at status `done`.** Order: `F` before `A` before `I` before `R` before `N`
-   before `V` before `D`, then ascending number. Direct dependencies are enough — a
+   before `V` before `D` before `S`, then ascending number. (`S` is last because speech is the
+   only ledger with `todo` rows left; the position stops mattering once it has company.) Direct dependencies are enough — a
    dependency cannot be `done` unless its own dependencies were.
 3. **Nothing eligible?** Walk your blocked row's dependencies until you reach a not-`done`
    task that is not yours, or one whose status is `blocked`. That is the root blocker — the

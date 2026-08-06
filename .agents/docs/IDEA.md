@@ -249,6 +249,14 @@ Turkish.
 
 ### 3.5 Voice layer
 
+> **Amended 2026-08-06 — ADR-S01.** The owner reversed this design: ElevenLabs is used for
+> voice generation only. No Conversational-AI agent, no tools, no webhooks, no tunnel, and **no
+> direct browser connection** — so the CSP exception below is retired rather than configured,
+> and K14's single-origin rule now has no exception. The backend calls text-to-speech to ask a
+> question and Scribe speech-to-text to transcribe an answer, both server-side. Current design:
+> `.agents/specs/2026-08-06-speech.md`; the text below is kept as the record of what was
+> decided and built (`.agents/ledgers/voice/`, V01–V05).
+
 **ElevenLabs Agents:** STT + LLM + TTS + turn-taking/barge-in over a single WebSocket.
 
 - The browser connects **directly** to ElevenLabs; the API key never reaches the client.

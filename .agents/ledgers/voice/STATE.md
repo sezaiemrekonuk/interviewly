@@ -8,7 +8,13 @@ added to `voice_session.feature`. ElevenLabs audio surface (§15.1 item 3) unres
 falls back to 120 ms event-timer and accepts an `AudioNode | MediaStream` when the SDK spike resolves it.
 Root `tsconfig.json` gained `@/*` alias for the frontend voice modules. 9/9 vitest, lint + typecheck clean.
 Cucumber acceptance skipped (Docker not available in sandbox).
-Next: **Voice ledger complete.** D03 is the next eligible Fatih task.
+Next: **Voice ledger complete, and superseded (2026-08-06).** The owner reversed this ledger's
+architecture: ElevenLabs is used for voice generation only — no Conversational-AI agent, no
+tools, no webhooks, no tunnel. Replacement work is `.agents/ledgers/speech/` (`S01`–`S10`,
+ADR-S01/S03/S04 supersede ADR-V01/V02/V04 by reference, never by edit). V01–V05 stay `done`;
+they were done. **Do not start a new `V` task.** What survives in code: `downgrade.ts`, the
+`POST /:id/voice/downgrade` route, and `frontend/src/lib/voice/{device-check,active-speaker,
+downgrade}.ts`. D03 is the next eligible Fatih task.
 
 ## Execution protocol (follow exactly)
 
