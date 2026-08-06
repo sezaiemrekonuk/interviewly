@@ -88,11 +88,12 @@ export default function InterviewRoomPage() {
   // its own clock without an effect that writes state on the way back down.
   const waitingIndex = room?.currentIndex ?? null;
   const [stalledIndex, setStalledIndex] = useState<number | null>(null);
-  useEffect(() => {
-    if (!waitingOnHr) return;
-    const timer = setTimeout(() => setStalledIndex(waitingIndex), STALLED_AFTER_MS);
-    return () => clearTimeout(timer);
-  }, [waitingOnHr, waitingIndex]);
+useEffect(() => {
+  if (!waitingOnHr) return;
+  if (stalledIndex !== null && stalledIndex === waitingIndex) return;
+  const timer = setTimeout(() => setStalledIndex(waitingIndex), STALLED_AFTER_MS);
+  return () => clearTimeout(timer);
+}, [waitingOnHr, waitingIndex, stalledIndex]);
   const stalled = waitingOnHr && stalledIndex !== null && stalledIndex === waitingIndex;
 
   if (!ready || stateQuery.isPending) {
