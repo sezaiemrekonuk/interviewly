@@ -10,8 +10,11 @@ export interface SpeechProvider {
 import { ElevenLabsSpeech } from './elevenlabs-speech';
 import { config } from '../../src/lib/env';
 
+// `?? ''` because the key is only a boot requirement under AI_ENABLED=true (env.ts's
+// superRefine). In stub mode it is legitimately unset, and the driver's own `if (!this.apiKey)`
+// guard turns that into VOICE_UNAVAILABLE without ever reaching fetch.
 export let speechProvider: SpeechProvider = new ElevenLabsSpeech(
-  config.ELEVENLABS_API_KEY,
+  config.ELEVENLABS_API_KEY ?? '',
   config.ELEVENLABS_TTS_MODEL,
   config.ELEVENLABS_STT_MODEL,
 );
