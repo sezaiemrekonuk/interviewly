@@ -7,12 +7,18 @@ const FAKE_TRANSCRIPT = 'This is a fake transcript.';
 
 export class FakeSpeechProvider implements SpeechProvider {
   private _failNext = false;
+  private _emptyTranscriptNext = false;
   speakCalls = 0;
   transcribeCalls = 0;
 
   /** Forces the next provider call to throw VOICE_UNAVAILABLE (one-shot). */
   failNext(): void {
     this._failNext = true;
+  }
+
+  /** Forces the next transcribe() to return an empty transcript — an undecodable answer (one-shot). */
+  transcribeEmptyNext(): void {
+    this._emptyTranscriptNext = true;
   }
 
   async speak(
@@ -35,6 +41,10 @@ export class FakeSpeechProvider implements SpeechProvider {
     if (this._failNext) {
       this._failNext = false;
       throw new ApiError('VOICE_UNAVAILABLE');
+    }
+    if (this._emptyTranscriptNext) {
+      this._emptyTranscriptNext = false;
+      return { transcript: '', seconds: 0 };
     }
     // ponytail: 8 bytes/second is a rough estimate for MP3 at low bitrate — good enough for a fake
     const seconds = Math.max(1, audio.length / 8);

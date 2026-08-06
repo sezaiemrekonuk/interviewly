@@ -1,15 +1,16 @@
 # Speech — State
 
-Last updated: 2026-08-06
-Last session ended: **S02 complete.** Added `backend/modules/speech/tts.ts` (owner/current-index
-guard, ceiling check before provider, storage cache hit/miss path, `SPEECH_TTS_SERVED` logging,
-`VOICE_UNAVAILABLE` downgrade-to-text) and `backend/modules/speech/router.ts`; mounted in
-`backend/src/app.ts`. Extended `.agents/features/speech_turn.feature` with AC-1/AC-2/AC-6 route
-scenarios and implemented steps in `backend/features/step_definitions/speech.steps.ts`.
-Added unit tests in `backend/modules/speech/tts.test.ts` and fake provider call counters in
-`backend/modules/speech/fake-speech.ts`. Verification: unit + `@speech` acceptance green, and
-SQL check returned `ended_reason = time_exhausted` for the past-ceiling interview.
-Next: **S03** (STT route).
+Last updated: 2026-08-07
+Last session ended: **S03 complete.** Added `backend/modules/speech/stt.ts`
+(`uploadAudioMiddleware` + `submitAnswerAudio`) — `POST /interviews/:id/answers/audio`: guards
+(owner, voice mode, voice-capable state, `SPEECH_AUDIO_INVALID` on missing part, ceiling reused
+from `tts.ts`), multer memory upload with audio mime allow-list, `transcribe`, then the shared
+`advanceWithAnswer` via `answerInputSchema.safeParse` with `inputMode:'voice'`. Mounted in
+`router.ts` behind a `requirePublicOrigin` `router.use`; exported `VOICE_CAPABLE_STATES` from
+`tts.ts`; added `FakeSpeechProvider.transcribeEmptyNext()`. Wired speech AC-3/4/6/14 in
+`speech_turn.feature` + `speech.steps.ts`; unit tests in `stt.test.ts`. Verification: `@speech`
+acceptance 13/13 green, `speech/stt` unit 4/4 green, `answers` shows `voice` rows.
+Next: **S04** (per-call metering — wrap both provider calls in `withBudget`, opus tier).
 
 ## Execution protocol (follow exactly)
 
@@ -25,7 +26,8 @@ EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**S03** (STT route: audio upload to Scribe to the guarded advance)
+**S04** (per-call usage accounting: wrap both provider call sites in `withBudget`, write the
+`llm_calls` row and increment `spent_usd` in one transaction — opus tier)
 
 ## Environment
 
@@ -68,7 +70,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 |----|-------|------|--------|------------|
 | S01 | `SpeechProvider` seam, `FakeSpeechProvider`, env and error-code rewrite | | done | F01, F03, I15 |
 | S02 | TTS route: question audio, storage-cached, ceiling-checked | | done | S01, I03, I07 |
-| S03 | STT route: audio upload to Scribe to the guarded advance | | todo | S01, I03, I06 |
+| S03 | STT route: audio upload to Scribe to the guarded advance | | done | S01, I03, I06 |
 | S04 | Per-call usage accounting at both provider call sites | | todo | S02, S03, I08 |
 | S05 | Remove the convai, webhook and reconciliation surface; drop `voice_sessions` | | todo | S02, S03, S04 |
 | S06 | Room turn loop: speak, VAD-record, upload, advance | | todo | S02, S03, W10 |

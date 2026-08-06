@@ -54,23 +54,23 @@ advance a typed answer uses.
   (added in S01).
 
 ## Steps
-- [ ] **1. Feature scenarios red** — speech AC-3 (an upload persists `input_mode='voice'` and
+- [x] **1. Feature scenarios red** — speech AC-3 (an upload persists `input_mode='voice'` and
   advances), AC-4 (oversize, wrong mime, undecodable — each changes nothing), AC-6 (past the
   ceiling: no provider call), AC-14 (no audio persisted). See them red.
-- [ ] **2. multer** — memory storage, one part named `audio`, size limit from config, audio mime
+- [x] **2. multer** — memory storage, one part named `audio`, size limit from config, audio mime
   allow-list. `MulterError` maps to `UPLOAD_TOO_LARGE` / `UNSUPPORTED_MEDIA_TYPE` the way
   `uploads.ts:47` already does.
-- [ ] **3. Guards** — `requireAuth`, `requirePublicOrigin`, ownership, voice-capable state,
+- [x] **3. Guards** — `requireAuth`, `requirePublicOrigin`, ownership, voice-capable state,
   ceiling.
-- [ ] **4. Transcribe** — `transcribe(buffer, { mime, language: interview.language })`. Pass the
+- [x] **4. Transcribe** — `transcribe(buffer, { mime, language: interview.language })`. Pass the
   language explicitly (spec Open question 1): auto-detect on a Turkish answer to an English
   question is the failure #149 and I10 already document.
-- [ ] **5. Delegate** — build `{ questionId, transcript, inputMode: 'voice' }`,
+- [x] **5. Delegate** — build `{ questionId, transcript, inputMode: 'voice' }`,
   `answerInputSchema.safeParse`, `advanceWithAnswer`. Respond with its `{ state, nextIndex }`.
-- [ ] **6. Discard** — no reference to the buffer survives the handler. Log
+- [x] **6. Discard** — no reference to the buffer survives the handler. Log
   `SPEECH_STT_TRANSCRIBED` with `interviewId`, `traceId` and the duration in seconds — **not**
   the transcript.
-- [ ] **7. Unit test** — an empty transcript yields `SPEECH_TRANSCRIPTION_FAILED` and no answer
+- [x] **7. Unit test** — an empty transcript yields `SPEECH_TRANSCRIPTION_FAILED` and no answer
   row; a successful upload yields exactly one answer row with `input_mode='voice'`.
 
 ## Definition of done
@@ -89,3 +89,38 @@ Expected: tests green; the answers table shows `voice` rows from the upload path
 else new.
 
 ## Notes
+
+**Landed.** `POST /interviews/:id/answers/audio` — `backend/modules/speech/stt.ts`
+(`uploadAudioMiddleware` + `submitAnswerAudio`), mounted in `router.ts` after a
+`requirePublicOrigin` `router.use` (GET TTS route exempt; POST guarded).
+
+- **One answer path.** Handler transcribes then delegates to `advanceWithAnswer` via
+  `answerInputSchema.safeParse`; no answer row is written here. `inputMode: 'voice'` always.
+  The client names the question it recorded for (`questionId` multipart field, mirroring the
+  typed path) — a retried/duplicate upload fails `QUESTION_NOT_CURRENT` before the provider is
+  called instead of consuming the next question.
+- **Guards order:** `guardVoiceAnswer` middleware runs BEFORE multer (ownership
+  (`activeInterview` + `user_id`), `mode==='voice'`, voice-capable state, ceiling
+  (`isPastSpeechCeiling`, reused from `tts.ts`; past → `applyTransition evaluating
+  time_exhausted` → `VOICE_SESSION_EXPIRED`, no transcribe)) so a rejected request never
+  buffers its body; the handler then checks file-presence (`SPEECH_AUDIO_INVALID`) and
+  `questionId` (missing → `VALIDATION_ERROR`, stale → `QUESTION_NOT_CURRENT`), then
+  transcribes. The ceiling `applyTransition` is try/caught per ADR-I32 in both `stt.ts` and
+  `tts.ts` — a losing concurrent transition logs `INTERVIEW_END_FAILED` and still surfaces
+  `VOICE_SESSION_EXPIRED`.
+- **multer:** memory storage, `.single('audio')`, `fileSize` 10 MiB const (mirrors
+  `uploads.ts` — a per-answer cap is not env config), audio-mime allow-list in `fileFilter`
+  (→ `UNSUPPORTED_MEDIA_TYPE`); Content-Length precheck + `LIMIT_FILE_SIZE` → `UPLOAD_TOO_LARGE`.
+- **Transcript is untrusted:** empty/whitespace or over-length fails `safeParse` →
+  `SPEECH_TRANSCRIPTION_FAILED`, nothing changes. Provider outage still surfaces as
+  `VOICE_UNAVAILABLE` (propagated from the seam).
+- **ADR-S07:** audio is a memory buffer, never `storage.put`/DB/log. AC-14 asserts
+  `fakeStorage.keys()` empty after a voice answer. `SPEECH_STT_TRANSCRIBED` logs `seconds` only.
+- **Fake:** added `transcribeEmptyNext()` (one-shot empty transcript) to drive AC-4 undecodable.
+- **`VOICE_CAPABLE_STATES`** now exported from `tts.ts` and shared.
+- **Next (S04):** metering is NOT here. `transcribe` is not yet wrapped in `withBudget` and no
+  `llm_calls` row is written — S04 wraps both call sites. `seconds` from the STT result is the
+  `unit_kind='second'` quantity S04 bills.
+- **Env note:** run `npx prisma generate` after pulling — the `upload_filename` migration's
+  client must be regenerated or `profile.ts`/`uploads.ts` typecheck red (pre-existing, not S03).
+  Pre-existing unrelated red: `frontend/src/ui-checks/fonts.test.ts` missing `@types/fontkit`.

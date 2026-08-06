@@ -8,6 +8,7 @@ import { After, Before, Given, Then, When } from '@cucumber/cucumber';
 
 import { ApiError } from '../../src/lib/api-error';
 import { prisma } from '../../src/lib/db';
+import { config } from '../../src/lib/env';
 import { setStorage } from '../../src/lib/storage';
 import { FakeSpeechProvider } from '../../modules/speech/fake-speech';
 import { setSpeechProvider, speechProvider } from '../../modules/speech/SpeechProvider';
@@ -118,6 +119,10 @@ Given('the fake speech provider is installed', function (this: AiWorld) {
 
 Given('failNext is set on the fake speech provider', function (this: AiWorld) {
   fake.failNext();
+});
+
+Given('the fake speech provider returns an empty transcript next', function (this: AiWorld) {
+  fake.transcribeEmptyNext();
 });
 
 Given('I am signed in as a speech candidate', async function (this: AiWorld) {
@@ -265,4 +270,102 @@ Then('the fake speech provider speak call count is {int}', function (this: AiWor
 Then('that interview ended reason is {string}', async function (this: AiWorld, endedReason: string) {
   const row = await prisma.interview.findUniqueOrThrow({ where: { id: this.interviewId } });
   assert.equal(row.ended_reason, endedReason);
+});
+
+// ---------------------------------------------------------------- S03: STT answer route
+
+async function currentQuestionId(interviewId: string): Promise<string> {
+  const row = await prisma.interview.findUniqueOrThrow({ where: { id: interviewId } });
+  const question = await prisma.question.findFirstOrThrow({
+    where: { round: { interview_id: interviewId }, order_index: row.current_index },
+  });
+  return question.id;
+}
+
+async function postAnswerAudio(
+  world: AiWorld,
+  mime: string,
+  bytes: Buffer,
+  questionId?: string,
+): Promise<void> {
+  const form = new FormData();
+  form.append('questionId', questionId ?? (await currentQuestionId(world.interviewId)));
+  form.append('audio', new Blob([new Uint8Array(bytes)], { type: mime }), 'answer.webm');
+  const res = await fetch(`${serverState.baseUrl}/interviews/${world.interviewId}/answers/audio`, {
+    method: 'POST',
+    headers: {
+      origin: config.PUBLIC_ORIGIN,
+      ...(world.cookie ? { cookie: world.cookie } : {}),
+    },
+    body: form,
+  });
+  world.lastStatus = res.status;
+  const contentType = res.headers.get('content-type') ?? '';
+  world.lastBody = contentType.includes('application/json')
+    ? ((await res.json()) as Record<string, unknown>)
+    : undefined;
+}
+
+async function countAnswers(interviewId: string, inputMode?: string): Promise<number> {
+  return prisma.answer.count({
+    where: {
+      question: { round: { interview_id: interviewId } },
+      ...(inputMode ? { input_mode: inputMode as never } : {}),
+    },
+  });
+}
+
+When('I POST a {string} answer recording as that owner', async function (this: AiWorld, mime: string) {
+  await postAnswerAudio(this, mime, Buffer.from('fake-audio-bytes-for-one-answer'));
+});
+
+When(
+  'I POST a {string} answer recording naming a stale question as that owner',
+  async function (this: AiWorld, mime: string) {
+    await postAnswerAudio(
+      this,
+      mime,
+      Buffer.from('fake-audio-bytes-for-one-answer'),
+      'q-stale-not-current',
+    );
+  },
+);
+
+When(
+  'I POST an oversize {string} answer recording as that owner',
+  async function (this: AiWorld, mime: string) {
+    // 10 MiB cap + slack + 1 — trips the Content-Length precheck before any byte is buffered.
+    await postAnswerAudio(this, mime, Buffer.alloc(10 * 1024 * 1024 + 4096 + 1, 0x61));
+  },
+);
+
+Then('the answer response status is {int}', function (this: AiWorld, status: number) {
+  assert.equal(this.lastStatus, status, `expected ${status}: ${JSON.stringify(this.lastBody)}`);
+});
+
+Then(
+  'the interview holds exactly {int} answer with input mode {string}',
+  async function (this: AiWorld, count: number, mode: string) {
+    assert.equal(await countAnswers(this.interviewId, mode), count);
+  },
+);
+
+Then('the interview holds exactly {int} answers', async function (this: AiWorld, count: number) {
+  assert.equal(await countAnswers(this.interviewId), count);
+});
+
+Then('the interview current index is {int}', async function (this: AiWorld, index: number) {
+  const row = await prisma.interview.findUniqueOrThrow({ where: { id: this.interviewId } });
+  assert.equal(row.current_index, index);
+});
+
+Then(
+  'the fake speech provider transcribe call count is {int}',
+  function (this: AiWorld, count: number) {
+    assert.equal(fake.transcribeCalls, count, `expected ${count} transcribe calls, got ${fake.transcribeCalls}`);
+  },
+);
+
+Then('the fake storage holds no audio object', function (this: AiWorld) {
+  assert.deepEqual(fakeStorage.keys(), [], `expected empty storage, got ${fakeStorage.keys().join(', ')}`);
 });
