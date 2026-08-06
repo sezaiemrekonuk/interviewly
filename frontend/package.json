@@ -14,10 +14,10 @@
     "@tanstack/react-query": "^5.101.4",
     "next": "16.2.12",
     "next-intl": "^4.13.4",
-    "recharts": "^2.15.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-hook-form": "^7.83.0",
+    "recharts": "^2.15.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {
@@ -31,6 +31,7 @@
     "@vitejs/plugin-react": "^6.0.5",
     "eslint": "^9",
     "eslint-config-next": "16.2.12",
+    "fontkit": "^2.0.4",
     "jsdom": "^29.1.1",
     "typescript": "^5",
     "vitest": "^4.1.10"
