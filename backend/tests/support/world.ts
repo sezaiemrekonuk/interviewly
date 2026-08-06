@@ -27,6 +27,9 @@ export class AuthWorld extends World {
   lastBody: unknown;
   lastSetCookie: string[] = [];
 
+  /** The `Location` of the last response, when it was a redirect. */
+  lastLocation?: string;
+
   /** Every exchange this scenario made, oldest first (A04's batched-resend assertions). */
   exchanges: Exchange[] = [];
 
@@ -42,16 +45,24 @@ export class AuthWorld extends World {
     if (opts.body !== undefined) headers['content-type'] = 'application/json';
     if (opts.useSession && this.sessionCookie) headers.cookie = this.sessionCookie;
 
+    // `manual`, because a followed redirect is the one thing these steps cannot assert on:
+    // the auth routes redirect to PUBLIC_ORIGIN, which no server answers during a run, so
+    // fetch's default would turn "302 to /sign-in?error=NOT_READY" into a transport error.
     const res = await fetch(getBaseUrl() + path, {
       method,
       headers,
       body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+      redirect: 'manual',
     });
 
     this.lastStatus = res.status;
     this.lastSetCookie = res.headers.getSetCookie?.() ?? [];
+    this.lastLocation = res.headers.get('location') ?? undefined;
+    // Express answers a redirected GET with a small HTML body ("Found. Redirecting to …"),
+    // so the parse is gated on the content type rather than on emptiness.
     const text = await res.text();
-    this.lastBody = text ? JSON.parse(text) : undefined;
+    const isJson = res.headers.get('content-type')?.includes('application/json') ?? false;
+    this.lastBody = text && isJson ? JSON.parse(text) : undefined;
     this.exchanges.push({ status: this.lastStatus, body: this.lastBody });
 
     // Capture a freshly-issued session cookie for later authenticated requests.

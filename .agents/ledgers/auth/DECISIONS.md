@@ -241,6 +241,10 @@ the linking or admin logic fails the acceptance suite.
 unbypassable. `OAUTH_STATE_MISMATCH` answers 400 JSON on the callback URL while the admin and
 link refusals redirect to `/sign-in?error=<CODE>`, so A03 handles two shapes, not one.
 
+> **Superseded by ADR-A11 (issue 60):** the 400 JSON body is gone. The callback is reached by
+> a browser navigation, so that body was painted as the page. Every refusal on both Google
+> routes now redirects to `/sign-in?error=<CODE>` — A03 handles one shape after all.
+
 ---
 
 ## ADR-A09 — 2026-07-31 — Two cucumber profiles, because two rings cannot share one World
@@ -295,3 +299,59 @@ lands in Mailpit.
 **Consequences:** `enqueueEmail` swallows and logs a queue outage (`EMAIL_ENQUEUE_FAILED`), which
 is what makes "registration never blocks on the mail" true rather than aspirational. A05 reuses
 both the seam and the job.
+
+---
+
+## ADR-A11 — 2026-08-06 — Neither Google route answers JSON, and the button asks before it offers
+
+**Supersedes the `OAUTH_STATE_MISMATCH` half of ADR-A08.**
+
+**Context:** issue 60. `.env` ships `GOOGLE_CLIENT_ID=` empty and the env schema makes it
+optional, so a stock clone boots with Google unconfigured — while `GoogleButton` rendered
+unconditionally on `/register` and `/sign-in`. The button is a bare `<a>` doing a real browser
+navigation (it has to be: only a navigation follows the 302 chain and keeps the `oauth_state`
+cookie). So clicking it replaced the entire application with
+
+```
+{"error":{"code":"NOT_READY"}}
+```
+
+on a blank page, with the Back button as the only way out. That was the one place in the app
+where a raw error code reached a visitor; every other refusal goes through `useErrorMessage`.
+`ADR-A08` had already established the redirect shape for the two K8 refusals — the JSON body
+was reachable precisely on the paths that had not adopted it.
+
+**Decision, two halves.**
+
+1. **No Google route answers with an error envelope.** `refuse(res, code)` in `google.ts` is
+   the only way either of them declines, redirecting to `${PUBLIC_ORIGIN}/sign-in?error=<CODE>`
+   the way A03 already maps to `errors.<CODE>`. That includes `OAUTH_STATE_MISMATCH`, which
+   ADR-A08 deliberately kept as a 400 JSON body — see below.
+2. **The button asks first.** `GET /auth/capabilities` answers `{ oauth: { google } }` and
+   `GoogleButton` renders `null` until that says yes. It fails closed: a pending or refused
+   probe is not a yes, because a dead control is worse than a missing one here.
+
+**Why not the `NEXT_PUBLIC_GOOGLE_ENABLED` build-time flag the issue suggested:** it does not
+work in this deployment. `frontend/Dockerfile`'s build stage never sees the env file, and Next
+reads `frontend/.env`, not the root one — so the flag would inline as `undefined` and hide the
+button on exactly the deployments that *do* have Google configured. Whether a credential exists
+is a runtime fact about the server, and only the server can answer it.
+
+**Why revisit ADR-A08's 400:** that decision read the task file's "returned" literally and is
+defensible for an API. It is wrong for this URL. `/auth/google/callback` is where the browser's
+address bar points during the redirect chain, so its 400 was painted as the document, exactly
+like the `NOT_READY` above. The `errors.OAUTH_STATE_MISMATCH` string had shipped in `en.json`
+and `tr.json` since F01 and was unreachable — the translation existed for the shape this ADR
+finally gives it.
+
+**Why the capabilities endpoint is public and unlimited:** it names no account and touches no
+database. It reveals only whether a credential is configured, which a working Google button
+announces to anyone who looks at the page.
+
+**Consequences:** the callback checks the state pair *before* it checks configuration, so the
+single-use verifier is still burned when a credential has gone missing — a config gap must not
+turn that URL into a replayable one. The acceptance ring now forces `GOOGLE_CLIENT_ID` empty
+(`cucumber.js`), because it drives Google through the `NODE_ENV=test` seam and a developer's
+real credentials would otherwise flip the unconfigured-Google scenario red locally and green in
+CI. Both auth screens now mount a query, so their component tests render through
+`renderWithProviders` and route the capabilities call separately (`src/test/fetch.ts`).

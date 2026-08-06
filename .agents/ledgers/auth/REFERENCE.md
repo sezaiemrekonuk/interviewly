@@ -62,8 +62,9 @@ fields exist so first-run routing is one server answer (K8.7).
 | `POST /auth/register` | — | 201, cookie set, `{ user }` | `PASSWORD_TOO_SHORT`, `EMAIL_TAKEN`, `VALIDATION_ERROR`, `RATE_LIMITED` |
 | `POST /auth/login` | — | 200, cookie set, `{ user }` | `INVALID_CREDENTIALS`, `VALIDATION_ERROR`, `RATE_LIMITED` |
 | `POST /auth/logout` | `requireAuth` | 204, cookie cleared | `UNAUTHENTICATED` |
-| `GET /auth/google` | — | 302 → Google OAuth | `NOT_READY` (no client credentials configured) |
-| `GET /auth/google/callback` | — | 302 → `/dashboard` (session set) | `OAUTH_STATE_MISMATCH` (400 JSON); `ADMIN_MUST_USE_PASSWORD` / `ACCOUNT_LINK_REQUIRES_PASSWORD` as `302 → /sign-in?error=<CODE>` |
+| `GET /auth/capabilities` | — | 200, `{ oauth: { google } }` | — |
+| `GET /auth/google` | — | 302 → Google OAuth | `NOT_READY` as `302 → /sign-in?error=<CODE>` |
+| `GET /auth/google/callback` | — | 302 → `/dashboard` (session set) | `OAUTH_STATE_MISMATCH`, `NOT_READY`, `ADMIN_MUST_USE_PASSWORD`, `ACCOUNT_LINK_REQUIRES_PASSWORD` — all as `302 → /sign-in?error=<CODE>` |
 | `GET /me` | `requireAuth` | 200, `{ user }` | `UNAUTHENTICATED` |
 | `POST /auth/verify-email/request` (A04) | `requireAuth` | 202, `{ cooldownSeconds }` | `EMAIL_RESEND_COOLDOWN`, `RATE_LIMITED`, `UNAUTHENTICATED` |
 | `POST /auth/verify-email/confirm` (A04) | — | 200, `{ user }` | `EMAIL_TOKEN_INVALID`, `EMAIL_TOKEN_EXPIRED`, `VALIDATION_ERROR` |
@@ -72,6 +73,11 @@ fields exist so first-run routing is one server answer (K8.7).
 | `GET /me/profile` (A06) | `requireAuth` | 200, `{ profile, onboardingCompletedAt, cvUploadId }` | `UNAUTHENTICATED` |
 | `PATCH /me/profile` (A06) | `requireAuth` | 200, `{ profile }` | `VALIDATION_ERROR`, `RATE_LIMITED`, `UNAUTHENTICATED` |
 | `POST /me/profile/complete` (A06) | `requireAuth` | 200, `{ onboardingCompletedAt }` | `UNAUTHENTICATED` |
+
+Neither Google route ever answers a JSON body. Both are reached by a full browser navigation,
+so an error envelope on them is not a payload the app can read — it *is* the page (issue 60,
+ADR-A11). `GET /auth/capabilities` is how the sign-in screen knows whether to offer the
+button at all; it is public because it names no account and carries no secret.
 
 `POST /auth/password-reset/request` answers identically for a registered, a Google-only and an
 unknown address — status, body and headers (K8.6, no enumeration). Its rate limit is keyed by **IP**,
@@ -100,7 +106,8 @@ All paths are relative to repo root. They will exist once the named task lands.
 | `backend/modules/auth/login.ts` | A01 | `POST /auth/login` handler |
 | `backend/modules/auth/logout.ts` | A01 | `POST /auth/logout` handler |
 | `backend/modules/auth/me.ts` | A01 | `GET /me` handler |
-| `backend/modules/auth/google.ts` | A02 | `GET /auth/google` + callback; `arctic` PKCE flow. `resolveGoogleIdentity()` is the shared trust boundary (admin check, link rule, create) |
+| `backend/modules/auth/google.ts` | A02 | `GET /auth/google` + callback; `arctic` PKCE flow. `resolveGoogleIdentity()` is the shared trust boundary (admin check, link rule, create); `googleConfigured()` + `refuse()` keep both routes off the JSON path (ADR-A11) |
+| `backend/modules/auth/capabilities.ts` | issue 60 | `GET /auth/capabilities` — the runtime answer `GoogleButton` gates on |
 | `backend/modules/auth/test-seam.ts` | A02 | `POST /test/auth/simulate-google-callback`, mounted **only** under `NODE_ENV=test`; `mountTestSeam()` throws at startup anywhere else |
 | `frontend/app/(auth)/sign-in/page.tsx` | A03 | Login form + Google button + forgot-password link |
 | `frontend/app/(auth)/register/page.tsx` | A03 | Register form + Google button |

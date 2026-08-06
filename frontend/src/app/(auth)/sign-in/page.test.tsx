@@ -2,7 +2,8 @@ import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { messages, renderWithIntl } from '../../../test/render';
+import { formCalls, stubFetch } from '../../../test/fetch';
+import { messages, renderWithProviders } from '../../../test/render';
 
 const nav = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn(), search: '' }));
 
@@ -13,17 +14,6 @@ vi.mock('next/navigation', () => ({
 }));
 
 import SignInPage from './page';
-
-function stubFetch(status: number, body: unknown) {
-  const spy = vi.fn(async () =>
-    new Response(JSON.stringify(body), {
-      status,
-      headers: { 'content-type': 'application/json' },
-    }),
-  );
-  vi.stubGlobal('fetch', spy);
-  return spy;
-}
 
 async function fillAndSubmit(email: string, password: string) {
   const user = userEvent.setup();
@@ -45,7 +35,7 @@ describe('sign-in page', () => {
 
   it('renders INVALID_CREDENTIALS from the error code', async () => {
     stubFetch(401, { error: { code: 'INVALID_CREDENTIALS' } });
-    renderWithIntl(<SignInPage />);
+    renderWithProviders(<SignInPage />);
 
     await fillAndSubmit('someone@example.com', 'wrong-password');
 
@@ -61,12 +51,12 @@ describe('sign-in page', () => {
     const fetchSpy = stubFetch(200, {
       user: { id: 'u1', email: 'someone@example.com', onboardingCompletedAt: null, interviewCount: 0 },
     });
-    renderWithIntl(<SignInPage />);
+    renderWithProviders(<SignInPage />);
 
     await fillAndSubmit('someone@example.com', 'correct-horse');
 
     await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/onboarding/1'));
-    expect((fetchSpy.mock.calls[0] as unknown as [string])[0]).toBe('/api/auth/login');
+    expect(formCalls(fetchSpy)[0][0]).toBe('/api/auth/login');
   });
 
   it('lands a returning user on the authed home at /', async () => {
@@ -78,7 +68,7 @@ describe('sign-in page', () => {
         interviewCount: 3,
       },
     });
-    renderWithIntl(<SignInPage />);
+    renderWithProviders(<SignInPage />);
 
     await fillAndSubmit('someone@example.com', 'correct-horse');
 
@@ -89,7 +79,8 @@ describe('sign-in page', () => {
   // no form interaction at all, so the banner has to come up on mount.
   it('shows the OAuth refusal carried in ?error= on mount', async () => {
     nav.search = 'error=ADMIN_MUST_USE_PASSWORD';
-    renderWithIntl(<SignInPage />);
+    stubFetch(200, {});
+    renderWithProviders(<SignInPage />);
 
     expect(
       await screen.findByText(messages.errors.ADMIN_MUST_USE_PASSWORD),
@@ -97,10 +88,22 @@ describe('sign-in page', () => {
     expect(screen.queryByText(/ADMIN_MUST_USE_PASSWORD/)).toBeNull();
   });
 
+  // Issue 60: `GET /auth/google` on a deployment with no client credentials now redirects
+  // here instead of answering a JSON body, so this is the screen that has to say what
+  // happened. The code arrives the same way the two K8 refusals above do.
+  it('renders NOT_READY as a message rather than as the code the redirect carried', async () => {
+    nav.search = 'error=NOT_READY';
+    stubFetch(200, {});
+    renderWithProviders(<SignInPage />);
+
+    expect(await screen.findByText(messages.errors.NOT_READY)).toBeInTheDocument();
+    expect(screen.queryByText(/NOT_READY/)).toBeNull();
+  });
+
   it('honours a relative returnPath after a successful sign-in', async () => {
     nav.search = 'returnPath=%2Finterviews%2Fabc';
     stubFetch(200, { user: { id: 'u1' } });
-    renderWithIntl(<SignInPage />);
+    renderWithProviders(<SignInPage />);
 
     await fillAndSubmit('someone@example.com', 'correct-horse');
 
@@ -115,7 +118,7 @@ describe('sign-in page', () => {
     async (hostile) => {
       nav.search = `returnPath=${encodeURIComponent(hostile)}`;
       stubFetch(200, { user: { id: 'u1' } });
-      renderWithIntl(<SignInPage />);
+      renderWithProviders(<SignInPage />);
 
       await fillAndSubmit('someone@example.com', 'correct-horse');
 
@@ -124,7 +127,8 @@ describe('sign-in page', () => {
   );
 
   it('offers the forgot-password and register links', () => {
-    renderWithIntl(<SignInPage />);
+    stubFetch(200, {});
+    renderWithProviders(<SignInPage />);
 
     expect(screen.getByRole('link', { name: messages.auth.forgotPassword })).toHaveAttribute(
       'href',
