@@ -1,5 +1,5 @@
 # R04 — 24 h `abandoned` sweeper: a BullMQ repeatable job that ends interviews stale past 24 h
-REPO: (this repo) · Depends: R01 · Status: todo
+REPO: (this repo) · Depends: R01 · Status: done
 Read first: STATE.md, REFERENCE.md, then this.
 **Model: claude-opus-4.8** — this job writes the interview state machine on a schedule with no user
 in the loop. It must add the missing `→ abandoned` edges to the sole guarded writer, derive
@@ -92,14 +92,14 @@ until this task, no job. This closes that: a repeatable sweeper that ends long-s
   derived from `chat_messages`/`started_at`/`created_at` as pinned above.
 
 ## Steps
-- [ ] **1. Add the three `→ abandoned` edges** to `machine.ts` `TRANSITIONS` (`profiling`,
+- [x] **1. Add the three `→ abandoned` edges** to `machine.ts` `TRANSITIONS` (`profiling`,
   `hr_round`, `paused` → `abandoned`); leave every other edge byte-identical.
-- [ ] **2. Write `worker/src/jobs/abandon-sweep.ts`** — the derived-staleness query (excluding
+- [x] **2. Write `worker/src/jobs/abandon-sweep.ts`** — the derived-staleness query (excluding
   `deleted_at`), the per-row `applyTransition(→ abandoned, endedReason: 'abandoned')` loop, the
   `INVALID_STATE_TRANSITION`-as-skip catch, per-row + batch logging. No AI, no report enqueue.
-- [ ] **3. Register the repeatable** in `worker/src/index.ts` — fixed `jobId`, a cron/every schedule,
+- [x] **3. Register the repeatable** in `worker/src/index.ts` — fixed `jobId`, a cron/every schedule,
   processor calls `sweepAbandoned`; add its `.close()` to `shutdown()`.
-- [ ] **4. Wire the worker tests** — three cases:
+- [x] **4. Wire the worker tests** — three cases:
   - **Swept:** a `paused`/`hr_round`/`profiling` interview whose last activity is > 24 h old →
     ends `abandoned` with `ended_reason = 'abandoned'`, exactly one `INTERVIEW_STATE_CHANGED`
     (`→ abandoned`) and one `INTERVIEW_ABANDONED` log.
@@ -108,7 +108,7 @@ until this task, no job. This closes that: a repeatable sweeper that ends long-s
   - **Idempotent / race-safe:** running the sweep twice ends the interview exactly once (the second
     run's `applyTransition` is a no-op skip, not a failure); a row that a concurrent resume moved out
     of the stale state is skipped.
-- [ ] **5. Run the `## Verification` command.**
+- [x] **5. Run the `## Verification` command.**
 
 ## Definition of done
 - `machine.ts` permits `profiling|hr_round|paused → abandoned` and nothing else new; every other edge
@@ -133,4 +133,42 @@ exactly once.
 
 ## Notes
 
-(Empty until the task is done.)
+Added `profiling|hr_round|paused -> abandoned` edges in `backend/modules/interview/machine.ts`
+and pinned them with new assertions in `machine.test.ts`.
+
+New `worker/src/jobs/abandon-sweep.ts`. `lastActivity = max(chat_messages.created_at,
+started_at, created_at)` and `lastActivity < cutoff` is the same predicate as each term being
+`< cutoff` individually, so the staleness filter is **in the query**, not in this process:
+`deleted_at: null`, `state in (profiling|hr_round|paused)`, `created_at < cutoff`,
+`started_at IS NULL OR started_at < cutoff`, `chat_messages: { none: { created_at: >= cutoff } }`
+(vacuously true for an interview with no messages — the fallback case). `take: 500` +
+`orderBy created_at asc` therefore bounds the transitions a tick performs rather than the rows
+it reads; a swept row leaves the state set, so the next tick continues, and a full batch is
+reported as `truncated`. Rows are ended through `applyTransition(..., { endedReason:
+'abandoned' })`. `from` is captured **before** the call — `applyTransition` writes `state` back
+onto the object it is given, so reading `candidate.state` afterwards logs `abandoned`.
+
+Race/idempotency branch implemented by handling `INVALID_STATE_TRANSITION` as
+`INTERVIEW_ABANDON_SKIP`; unexpected row error logs `INTERVIEW_ABANDON_FAILED` and loop continues.
+
+`worker/src/index.ts` registers one repeatable queue/worker pair, `interview.abandon-sweep`,
+closed in shutdown alongside the other workers. **bullmq 6 removed `repeat` from `JobsOptions`**
+— `queue.add(name, data, { jobId, repeat: { every } })` does not compile (`TS2353`) and, without
+the type error, would enqueue a single job that never repeats. Scheduling goes through
+`queue.upsertJobScheduler('interview-abandon-sweep-v1', { every: 15 min, immediately: true },
+{ name, opts })`; the `jobSchedulerId` is the fixed identity the task asks for, so a worker
+restart upserts the one scheduler instead of stacking a second.
+
+Tests are split along the same line as the code. `worker/src/jobs/abandon-sweep.test.ts` (unit)
+covers the loop: the transition arguments, the `from` state per row, the skip and per-row-failure
+branches, batch truncation, and the query shape. `worker/src/jobs/abandon-sweep.integration.test.ts`
+covers the predicate against real Postgres, where it can actually run: the three stale states
+swept; fresh-by-`created_at`, fresh-by-`started_at`, fresh-by-message untouched (one per fallback
+in the derived definition); `created`/`tech_round`/`evaluating`/`completed`/soft-deleted
+untouched; a double sweep ending a row exactly once; a resumed interview untouched once the
+resume writes a turn.
+
+Verification: `docker compose up -d db cache && npm run -w worker test` — 6/6 files, 34/34 tests.
+Plus `npm run -w worker build` (the task command alone does not cover `index.ts`: the suite mocks
+bullmq, so a `queue.add({ repeat })` that never repeats passed the tests and failed `tsc`) and
+`npm run test:integration` — 3/3 files, 12/12 tests.

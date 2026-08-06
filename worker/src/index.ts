@@ -1,9 +1,10 @@
 import { REPORT_QUEUE, VOICE_RECONCILE_QUEUE, type VoiceReconcileJob } from '@interviewly/backend';
-import { Worker } from 'bullmq';
+import { Queue, Worker } from 'bullmq';
 
 import { processReportJob, type ReportJobData } from './consumer';
 import { handleReportJobFailed } from './failure';
 import { sendEmail, type EmailJob } from './jobs/email-send';
+import { sweepAbandoned } from './jobs/abandon-sweep';
 import { processVoiceReconcileJob } from './jobs/voice-reconcile';
 import { config } from './lib/env';
 import { logger } from './lib/logger';
@@ -14,6 +15,10 @@ import { logger } from './lib/logger';
  */
 
 export const EMAIL_QUEUE_NAME = 'email.send';
+export const ABANDON_SWEEP_QUEUE_NAME = 'interview.abandon-sweep';
+const ABANDON_SWEEP_JOB_NAME = 'interview.abandon-sweep';
+const ABANDON_SWEEP_JOB_ID = 'interview-abandon-sweep-v1';
+const ABANDON_SWEEP_EVERY_MS = 15 * 60 * 1000;
 // K10: report generation is the one LLM-bound job in this process, low concurrency by design
 // (env.ts exposes no override yet — a fixed constant until a task needs to tune it).
 const REPORT_CONCURRENCY = 2;
@@ -59,6 +64,45 @@ const voiceReconcileWorker = new Worker<VoiceReconcileJob>(
   { connection: { url: config.REDIS_URL } },
 );
 
+const abandonSweepQueue = new Queue(ABANDON_SWEEP_QUEUE_NAME, {
+  connection: { url: config.REDIS_URL },
+});
+
+const abandonSweepWorker = new Worker(
+  ABANDON_SWEEP_QUEUE_NAME,
+  async () => {
+    await sweepAbandoned();
+  },
+  { connection: { url: config.REDIS_URL } },
+);
+
+// `queue.add({ repeat })` is gone in bullmq 6 — `repeat` is not in `JobsOptions` and an
+// object literal carrying it does not compile. A scheduler is the only repeatable API left,
+// and its `jobSchedulerId` is the fixed identity this task needs: a worker restart upserts
+// the one scheduler instead of stacking a second one.
+void abandonSweepQueue
+  .upsertJobScheduler(
+    ABANDON_SWEEP_JOB_ID,
+    { every: ABANDON_SWEEP_EVERY_MS, immediately: true },
+    { name: ABANDON_SWEEP_JOB_NAME, opts: { removeOnComplete: true } },
+  )
+  .then(() => {
+    logger.info(
+      {
+        queue: ABANDON_SWEEP_QUEUE_NAME,
+        jobId: ABANDON_SWEEP_JOB_ID,
+        everyMs: ABANDON_SWEEP_EVERY_MS,
+      },
+      'INTERVIEW_ABANDON_SWEEP_SCHEDULED',
+    );
+  })
+  .catch((err) => {
+    logger.error(
+      { queue: ABANDON_SWEEP_QUEUE_NAME, reason: err.message },
+      'INTERVIEW_ABANDON_SWEEP_SCHEDULE_FAILED',
+    );
+  });
+
 // A failed reconciliation under-bills the interview, so it must be loud even while BullMQ
 // still has attempts left.
 voiceReconcileWorker.on('failed', (job, err) => {
@@ -68,16 +112,34 @@ voiceReconcileWorker.on('failed', (job, err) => {
   );
 });
 
+abandonSweepWorker.on('failed', (job, err) => {
+  logger.warn(
+    { queue: ABANDON_SWEEP_QUEUE_NAME, jobId: job?.id, reason: err.message },
+    'INTERVIEW_ABANDON_SWEEP_FAILED',
+  );
+});
+
 logger.info(
   {
-    queues: [EMAIL_QUEUE_NAME, REPORT_QUEUE, VOICE_RECONCILE_QUEUE],
+    queues: [
+      EMAIL_QUEUE_NAME,
+      REPORT_QUEUE,
+      VOICE_RECONCILE_QUEUE,
+      ABANDON_SWEEP_QUEUE_NAME,
+    ],
     reportConcurrency: REPORT_CONCURRENCY,
   },
   'WORKER_STARTED',
 );
 
 async function shutdown(): Promise<void> {
-  await Promise.all([emailWorker.close(), reportWorker.close(), voiceReconcileWorker.close()]);
+  await Promise.all([
+    emailWorker.close(),
+    reportWorker.close(),
+    voiceReconcileWorker.close(),
+    abandonSweepWorker.close(),
+    abandonSweepQueue.close(),
+  ]);
   process.exit(0);
 }
 

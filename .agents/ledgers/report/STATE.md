@@ -1,14 +1,21 @@
 # Report — State
 
 Last updated: 2026-08-05
-Last session ended: **R03 done.** `REPORT_JOB_OPTIONS` (`attempts: 3`, exponential backoff 1 s)
-are `reportQueue` defaults in `backend/src/lib/queue.ts` — not `failure.ts`, which cannot be
-imported from `backend`. New `worker/src/failure.ts`: `handleReportJobFailed` (dead-letters only
-when `attemptsMade >= opts.attempts`, never rejects) + `handleDeadLetter` (`applyTransition
-→ failed`, then `reports.status`; an illegal edge means the whole handler no-ops). `worker-
-exports.ts` gained `applyTransition` + `REPORT_JOB_OPTIONS`. Two things for R04: `lint` was red
-on `master` before this session (fixed, `consumer.ts:30`), and the integration ring needs
-`docker compose stop worker` or the container steals the jobs. R04 is the last report task.
+Last session ended: **R04 done.** Added `profiling|hr_round|paused -> abandoned` edges in
+`backend/modules/interview/machine.ts` + `machine.test.ts` assertions. New
+`worker/src/jobs/abandon-sweep.ts`: staleness is a WHERE clause (`created_at`/`started_at`/
+`chat_messages` vs a 24 h cutoff), so `take: 500` bounds transitions, not rows read; covered by
+`abandon-sweep.integration.test.ts` because a stubbed `findMany` can only re-state the literal.
+Then
+`applyTransition(..., 'abandoned', endedReason: 'abandoned')`, `INVALID_STATE_TRANSITION`
+skip, per-row failure isolation. Registered repeatable `interview.abandon-sweep` in
+`worker/src/index.ts` with clean shutdown close. **bullmq 6 dropped `repeat` from `JobsOptions`
+— schedule with `queue.upsertJobScheduler(id, { every }, { name, opts })`, not `queue.add`;
+`add` with `repeat` fails `tsc` and, uncaught, enqueues a one-shot that never repeats.** One
+trap for any later queue task: `npm run -w worker test` mocks bullmq and never loads
+`index.ts`, so run `npm run -w worker build` before calling wiring done. Verification: worker
+build clean, `npm run -w worker test` 6 files / 35 tests. Only open typecheck error in the repo
+is w11's missing `recharts` in `frontend/src/components/admin/stats-panel.tsx`.
 
 ## Execution protocol (follow exactly)
 
@@ -25,10 +32,7 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-R01–R03 are `done`. Next and last is **R04** (24 h `abandoned` sweeper), opus-tier per
-`MODELS.md`. It adds the `→ abandoned` edges to `machine.ts` (I07's guarded writer, already
-exported to the worker by R03) and one repeatable BullMQ job beside the report consumer in
-`worker/src/index.ts`. It shares no file with R03's `failure.ts`.
+R01–R04 are `done`. Report ledger complete.
 
 ## Environment
 
@@ -83,7 +87,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | R01 | Worker service + BullMQ report consumer: real producer into I07's hook, dequeue → `runReport`, `reports.status` lifecycle | | done | F01, F02, F03, I01, I02, I06, I07, I09 |
 | R02 | Render `ReportPayload` to PDF, write `reports.pdf_key` via I12 storage, denormalise `report_questions` | | done | R01, I12 |
 | R03 | Retry, backoff, dead-letter `→ failed`; idempotent; transient vs schema-gate branch | | done | R01 |
-| R04 | 24 h `abandoned` sweeper: repeatable job ends interviews stale in `profiling`/`hr_round`/`paused` past 24 h → `abandoned` via `applyTransition` (adds the `→ abandoned` edges), idempotent, no AI | | todo | R01 |
+| R04 | 24 h `abandoned` sweeper: repeatable job ends interviews stale in `profiling`/`hr_round`/`paused` past 24 h → `abandoned` via `applyTransition` (adds the `→ abandoned` edges), idempotent, no AI | | done | R01 |
 
 ## Critical path
 

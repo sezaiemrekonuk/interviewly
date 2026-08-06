@@ -16,15 +16,15 @@ import { enqueueReport, publishStateChanged } from './sse';
 
 const TRANSITIONS: Partial<Record<InterviewState, InterviewState[]>> = {
   created: ['profiling'],
-  profiling: ['hr_round'],
+  profiling: ['hr_round', 'abandoned'],
   // `hr_round → evaluating` is not a shortcut: the split can leave a short interview with
   // zero technical questions (target 2 → hr 2, tech 0), and that interview still ends. I08
   // attaches its budget-exhaustion edge to the same two targets.
-  hr_round: ['tech_round', 'evaluating', 'paused'],
+  hr_round: ['tech_round', 'evaluating', 'paused', 'abandoned'],
   tech_round: ['evaluating'],
   // No `tech_round → paused`: the only pause source is a failed generation, and ADR-I22 puts
   // both batches inside the HR round. Add the edge with the source that needs it.
-  paused: ['hr_round'],
+  paused: ['hr_round', 'abandoned'],
   evaluating: ['completed', 'failed'],
 };
 
