@@ -15,26 +15,79 @@ const schema = z.object({
 
 // Keyword → seeded occupation_clusters.key (prisma/seed.ts OCCUPATION_CLUSTERS). First
 // matching keyword wins; unmatched listing leaves occupation_cluster_id null (valid).
+// English and Turkish keywords per cluster — Turkish is the product's primary market, so a
+// Turkish listing must resolve to a cluster too, not fall through to null (issue #149).
+// Keywords are stored with their natural diacritics; `fold` normalises both sides before the
+// compare, so a caps-lock listing ("YAZILIM") still matches "yazılım".
+// A trailing `*` marks a Turkish stem (root + up to five suffix letters), so "mühendis*"
+// catches the inflected "mühendisi"/"mühendisler". No `*` = whole-word match. Short/ambiguous
+// roots stay `*`-free or go multi-word so a stem can't over-match: bare "sales" (not
+// "salesforce"), "data scien*" (not "database").
 // ponytail: flat keyword list, no scoring/ranking — promote if misclassification shows up.
 const OCCUPATION_KEYWORDS: Array<[key: string, words: string[]]> = [
-  ['software_engineering', ['engineer', 'developer', 'programmer', 'devops', 'sre']],
-  ['product_management', ['product manager', 'product owner']],
-  ['data_science', ['data scientist', 'data analyst', 'machine learning', 'analytics']],
-  ['design', ['designer', 'ux', 'ui/', 'ui design']],
-  ['marketing', ['marketing', 'growth', 'seo']],
-  ['sales', ['sales', 'account executive', 'business development']],
-  ['finance', ['finance', 'accountant', 'financial analyst', 'controller']],
-  ['operations', ['operations', 'logistics', 'supply chain']],
-  ['hr', ['human resources', 'recruiter', 'talent acquisition']],
+  // data_science and design precede software_engineering on purpose: "mühendis*"/"engineer*"
+  // are broad enough to swallow "Veri Mühendisi", so the narrower clusters must win first-match.
+  ['data_science', ['data scien*', 'data analyst*', 'machine learning', 'analytics', 'veri bilim*', 'veri analist*', 'veri mühendis*']],
+  ['design', ['designer*', 'ux', 'ui/ux', 'tasarımcı*', 'arayüz tasarım*']],
+  ['software_engineering', ['engineer*', 'developer*', 'programmer', 'devops', 'sre', 'geliştirici*', 'yazılım*', 'mühendis*']],
+  ['product_management', ['product manager', 'product owner', 'ürün müdürü', 'ürün yöneticisi']],
+  ['marketing', ['marketing', 'growth', 'seo', 'pazarlama*']],
+  ['sales', ['sales', 'account executive', 'business development', 'satış*']],
+  ['finance', ['finance', 'accountant', 'financial analyst', 'controller', 'finans']],
+  ['operations', ['operations', 'logistics', 'supply chain', 'operasyon', 'lojistik']],
+  ['hr', ['human resources', 'recruiter', 'talent acquisition', 'insan kaynakları']],
 ];
 
-function classify(jobText: string): { occupation: string; clusterKey: string | null } {
-  const lower = jobText.toLowerCase();
-  for (const [key, words] of OCCUPATION_KEYWORDS) {
-    const hit = words.find((w) => lower.includes(w));
-    if (hit) return { occupation: hit, clusterKey: key };
-  }
-  return { occupation: jobText.slice(0, 80), clusterKey: null };
+const OCCUPATION_TITLE_MAX = 80;
+
+// Up to five suffix letters after a Turkish stem — enough for "-lar"/"-leri"/"-sında" etc.
+const SUFFIX = '[a-z]{0,5}';
+const esc = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// Case- and diacritic-insensitive fold for keyword matching. `toLowerCase()` alone breaks
+// Turkish: "YAZILIM" → "yazilim" (dotted i), "İ" → "i̇" (i + combining dot) — neither equals
+// the dotless-ı keyword. NFD + strip handles ş/ğ/ü/ö/ç; ı needs an explicit map (no decomp).
+// Whitespace is collapsed so a multi-word keyword survives a newline/double space in the body.
+function fold(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/ı/g, 'i')
+    .replace(/\s+/g, ' ');
+}
+
+// A `*`-terminated keyword compiles to stem + bounded suffix; every other keyword is a whole
+// word. \b works because `fold` reduces both sides to ASCII, so [a-z] covers every suffix.
+function toPattern(kw: string): RegExp {
+  const stem = kw.endsWith('*');
+  const body = esc(fold(stem ? kw.slice(0, -1) : kw));
+  return new RegExp(`\\b${body}${stem ? SUFFIX : ''}\\b`);
+}
+
+// Compiled once at load, not rebuilt per classify() call.
+const OCCUPATION_PATTERNS = OCCUPATION_KEYWORDS.map(
+  ([key, kws]) => [key, kws.map(toPattern)] as const,
+);
+
+// Human-readable title: the listing's first non-empty line, trimmed and capped at a word
+// boundary with an ellipsis. Never the matched keyword, never a blind mid-word slice — the
+// title is the interview's label everywhere (history list, delete aria-label, report header).
+function titleFromListing(jobText: string): string {
+  const firstLine = jobText.split('\n').map((l) => l.trim()).find((l) => l.length > 0) ?? '';
+  if (firstLine.length <= OCCUPATION_TITLE_MAX) return firstLine;
+  const capped = firstLine.slice(0, OCCUPATION_TITLE_MAX);
+  const lastSpace = capped.lastIndexOf(' ');
+  const truncated = lastSpace > 0 ? capped.slice(0, lastSpace).trimEnd() : capped;
+  return `${truncated}…`;
+}
+
+export function classify(jobText: string): { occupation: string; clusterKey: string | null } {
+  const t = fold(jobText);
+  // TODO(#149): "Makine/İnşaat Mühendisi" still resolves to software_engineering — the broad
+  // "mühendis*"/"engineer*" stem can't tell disciplines apart. Pre-existing; not fixed here.
+  const clusterKey = OCCUPATION_PATTERNS.find(([, ps]) => ps.some((p) => p.test(t)))?.[0] ?? null;
+  return { occupation: titleFromListing(jobText), clusterKey };
 }
 
 // hrCount = max(2, round(target * 0.4)), techCount = target - hrCount (non-negotiable split).
