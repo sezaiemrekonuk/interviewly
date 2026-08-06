@@ -111,12 +111,6 @@ export async function generateRound(
     const client = opts.client ?? aiClient();
     batch = await client.generateRoundQuestions(roundQuestionArgs(interview, roundType, ctx));
 
-    // The requested count is runtime data, so `QuestionBatchSchema` cannot carry it (I01). This
-    // is the check that makes the contract real, and it is all-or-nothing: a short batch inserts
-    // nothing rather than leaving a half-filled round for the state walk to fall off the end of.
-    // Thrown *inside* this try so it pauses the same way a provider outage does (issue 65):
-    // by the time this runs `applyTransition` has already committed the round, and stranding
-    // it there with zero questions leaves no legal recovery.
     if (batch.questions.length !== count) {
       logger.warn(
         {

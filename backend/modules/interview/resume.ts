@@ -24,10 +24,6 @@ export const resumeInterview: RequestHandler = async (req, res) => {
   // pause source lands, this reads the round back instead of naming it.
   const state = await applyTransition(interview, 'hr_round', { traceId: req.traceId! });
 
-  // Issue 65: a pause can land here with zero HR questions — the failed generation that
-  // caused it never inserted any. Regenerating is idempotent (mirrors `ensureTechBatch`), so
-  // a resume after a genuine provider outage, where the HR batch already exists, does not
-  // spend a second LLM call. A failure here re-pauses via `generateRound`'s own guard.
   const hrQuestionCount = await prisma.question.count({
     where: { round: { interview_id: interview.id, type: 'hr' } },
   });

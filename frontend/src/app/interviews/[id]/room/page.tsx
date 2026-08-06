@@ -40,9 +40,6 @@ export default function InterviewRoomPage() {
   const resume = useResumeInterview(id);
   const [typedFor, setTypedFor] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  // Issue 65 AC4: `resume.mutate()` used to fire-and-forget, so a 409 (a stale room racing a
-  // concurrent resume) or a re-pause (the regenerated batch is short again) left the candidate
-  // looking at an unchanged paused card with no sign anything happened.
   const [resumeError, setResumeError] = useState<string | null>(null);
 
   const room = stateQuery.data;
