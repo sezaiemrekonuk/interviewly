@@ -46,6 +46,17 @@ Feature: Question generation
     And exactly 3 questions exist for the HR round
     And the interview state is "hr_round"
 
+  @question-generation @backend @AC-7
+  Scenario: An interview stranded in hr_round with no batch can still be rebuilt
+    Given I set up an interview with 8 questions
+    # What is left when the pause itself fails to write (INTERVIEW_PAUSE_FAILED) or the process
+    # dies between the profile transition and its generation: a round with nothing to ask.
+    And the interview is left in "hr_round" with no questions
+    When I POST "/interviews/:id/resume" for that interview
+    Then the response status is 200
+    And exactly 3 questions exist for the HR round
+    And the interview state is "hr_round"
+
   @question-generation @ai @AC-1
   Scenario: A generated round returns exactly the requested count of typed questions
     Given I set up an interview with 8 questions

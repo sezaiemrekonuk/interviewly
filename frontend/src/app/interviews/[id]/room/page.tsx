@@ -24,6 +24,18 @@ import styles from '../../../../components/room/room.module.css';
 /** Past the last answer: the report surface (W07) owns the wait and the result. */
 const REPORT_STATES = new Set(['evaluating', 'completed', 'failed', 'abandoned']);
 
+/**
+ * How long the waiting panel is the truth before it becomes a lie. A failed HR generation can
+ * leave the interview in `hr_round` with no batch (the pause that would have said so is itself
+ * a write that can fail), and `GET /state` reports that as `currentQuestion: null` — the same
+ * shape as a batch still being generated, because `POST /profile` claims the transition before
+ * it calls the model and the SSE nudge arrives with it.
+ *
+ * ponytail: a timer, because nothing on the wire distinguishes the two. A generation-in-flight
+ * flag on `GET /state` would; add it if this number ever has to be tuned rather than picked.
+ */
+const STALLED_AFTER_MS = 30_000;
+
 export default function InterviewRoomPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -67,6 +79,21 @@ export default function InterviewRoomPage() {
   useEffect(() => {
     if (roomState && REPORT_STATES.has(roomState)) router.replace(`/interviews/${id}`);
   }, [roomState, router, id]);
+
+  // `hr_round` only: `POST /resume` regenerates the HR batch and nothing else, so offering the
+  // control anywhere it cannot repair would answer the candidate with a 409.
+  const waitingOnHr = roomState === 'hr_round' && Boolean(room) && !room?.currentQuestion;
+  // Which wait ran out, not whether one did: the flag is never reset, it simply stops matching
+  // once the round moves on (`current_index` only ever advances), so every later wait starts
+  // its own clock without an effect that writes state on the way back down.
+  const waitingIndex = room?.currentIndex ?? null;
+  const [stalledIndex, setStalledIndex] = useState<number | null>(null);
+  useEffect(() => {
+    if (!waitingOnHr) return;
+    const timer = setTimeout(() => setStalledIndex(waitingIndex), STALLED_AFTER_MS);
+    return () => clearTimeout(timer);
+  }, [waitingOnHr, waitingIndex]);
+  const stalled = waitingOnHr && stalledIndex !== null && stalledIndex === waitingIndex;
 
   if (!ready || stateQuery.isPending) {
     return <div className={styles.skeleton} data-testid="room-skeleton" />;
@@ -152,18 +179,29 @@ export default function InterviewRoomPage() {
           </div>
         </div>
 
-        {/* One question, one instance: the panel's typed state resets by remount, not by effect. */}
-        <QuestionPanel
-          key={room.currentQuestion?.id ?? 'waiting'}
-          question={room.currentQuestion}
-          onTyped={setTypedFor}
-          instant={voiceMode}
-        />
+        {/* The waiting panel is the truth right up until it is not — past `STALLED_AFTER_MS`
+            it would keep promising a question that no longer has anything generating it. */}
+        {stalled ? null : (
+          // One question, one instance: the panel's typed state resets by remount, not by effect.
+          <QuestionPanel
+            key={room.currentQuestion?.id ?? 'waiting'}
+            question={room.currentQuestion}
+            onTyped={setTypedFor}
+            instant={voiceMode}
+          />
+        )}
       </section>
 
-      {room.state === 'paused' ? (
-        <div className={styles.paused}>
-          <p className={styles.pausedText}>{t('paused')}</p>
+      {/* Both doors out of a round the candidate cannot answer from lead to the same request:
+          `POST /resume` resumes a pause, and regenerates the batch when there is none. */}
+      {room.state === 'paused' || stalled ? (
+        <div className={styles.paused} data-testid={stalled ? 'room-stalled' : 'room-paused'}>
+          <p
+            className={stalled ? styles.error : styles.pausedText}
+            role={stalled ? 'alert' : undefined}
+          >
+            {stalled ? t('stalled') : t('paused')}
+          </p>
           <Button
             type="button"
             variant="secondary"
@@ -175,7 +213,7 @@ export default function InterviewRoomPage() {
             }}
             loading={resume.isPending}
           >
-            {t('resume')}
+            {stalled ? t('retry') : t('resume')}
           </Button>
           {resumeError ? (
             <p role="alert" className={styles.error}>
@@ -192,7 +230,7 @@ export default function InterviewRoomPage() {
           pin itself to the middle of the page. Voice swaps the composer for the controls —
           the same slot, not a second room. */}
       {voiceMode ? (
-        room.state !== 'paused' ? <VoiceControls session={voice} /> : null
+        room.state !== 'paused' && !stalled ? <VoiceControls session={voice} /> : null
       ) : room.currentQuestion && room.state !== 'paused' ? (
         <AnswerComposer onSubmit={handleSubmit} pending={submit.isPending} error={submitError} />
       ) : null}
