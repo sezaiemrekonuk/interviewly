@@ -116,9 +116,12 @@ export const submitProfile: RequestHandler = async (req, res) => {
     },
   });
 
-  await generateRound(updated, 'hr', { traceId: req.traceId! });
-
+  // Claim the transition atomically before generation. `applyTransition` uses a WHERE-guarded
+  // updateMany so only the first concurrent request can advance the state; any duplicate
+  // request fails with INVALID_STATE_TRANSITION before the LLM call is ever made.
   const state = await applyTransition(updated, 'hr_round', { traceId: req.traceId! });
+
+  await generateRound(updated, 'hr', { traceId: req.traceId! });
 
   res.status(200).json({ state });
 };
