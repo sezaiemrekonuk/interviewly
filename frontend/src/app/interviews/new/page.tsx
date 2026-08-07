@@ -1,12 +1,21 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
-import { Mascot } from '../../../components/mascot';
 import { ListingUpload } from '../../../components/setup/listing-upload';
+import {
+  RailBlock,
+  RailFoot,
+  RailMark,
+  SplitShell,
+  WorkBody,
+  WorkTop,
+} from '../../../components/shell/split-shell';
 import { Button, Field, Input, Select } from '../../../components/ui';
+import { DEFAULT_LANDING_PATH } from '../../../lib/auth-redirect';
 import { useCreateInterview, useSubmitProfile } from '../../../lib/query';
 import { useErrorMessage } from '../../../lib/use-error-message';
 import { useRequireAuth } from '../../../lib/use-require-auth';
@@ -84,24 +93,49 @@ export default function InterviewSetupPage() {
     }
   }
 
-  return (
-    <main className={styles.ground}>
-      <section className={styles.card}>
-        <header className={styles.intro}>
-          <div className={styles.introText}>
-            <h1 className={styles.title}>{t('title')}</h1>
-            <p className={styles.subtitle}>{t('subtitle')}</p>
-          </div>
-          <Mascot pose="point" size={96} alt="" className={styles.mascot} />
-        </header>
+  // The context column says what is about to happen; the working surface holds the one form.
+  // Nothing here repeats a value the form already shows — the round split is the hint on the
+  // control that decides it, and it stays there.
+  const rail = (
+    <>
+      <RailMark />
+      <p className={styles.railLead}>{t('subtitle')}</p>
 
+      <RailBlock label={t('railNextLabel')}>
+        <ol className={styles.steps}>
+          <li>{t('railStep1')}</li>
+          <li>{t('railStep2')}</li>
+          <li>{t('railStep3')}</li>
+        </ol>
+      </RailBlock>
+
+      {/* The shell is the chrome now, so this screen carries its own way out. */}
+      <RailFoot>
+        <Link className={styles.back} href={DEFAULT_LANDING_PATH}>
+          <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+            <path
+              d="M9.5 3 4.5 8l5 5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          {t('back')}
+        </Link>
+      </RailFoot>
+    </>
+  );
+
+  return (
+    <SplitShell rail={rail} width="wide">
+      <WorkTop title={t('title')} />
+
+      <WorkBody className={styles.body}>
         <form onSubmit={handleSubmit} className={styles.form}>
           {/* The listing is the subject of this screen, so it leads the form. */}
-          <ListingUpload
-            onJobText={setJobText}
-            onUploaded={setUploadId}
-            disabled={busy}
-          />
+          <ListingUpload onJobText={setJobText} onUploaded={setUploadId} disabled={busy} />
 
           {/* Client-side only. `POST /interviews` takes neither field: I03 classifies the
               occupation from the listing text and reads the language off the session. */}
@@ -178,7 +212,7 @@ export default function InterviewSetupPage() {
             {t('start')}
           </Button>
         </form>
-      </section>
-    </main>
+      </WorkBody>
+    </SplitShell>
   );
 }

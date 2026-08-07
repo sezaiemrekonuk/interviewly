@@ -1,53 +1,59 @@
-/* W09 (DESIGN §5) — the meter is `--accent` on a sunken track, never `--live` (room-only) and
-   never `--primary` (the Enter CTA owns that). Authored in px so the token lint sees every value. */
+/* The mic check, on Direction B's light working surface. The level bar is the shared `Meter`
+   (`tone="default"`, `instant`) — the width-in-a-style-prop it replaces was dropped by the CSP in
+   production and rendered at zero. Authored in px so the token lint sees every value. */
 
 .check {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-}
-
-.meter {
-  height: 8px;
-  overflow: hidden;
-  background: var(--surface-sunken);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-button);
-}
-
-/* A 200ms ease on a realtime signal reads as lag, so the fill is deliberately untransitioned. */
-.meterFill {
-  height: 100%;
-  background: var(--accent);
-  border-radius: var(--radius-button);
-  transition: none;
+  gap: 16px;
 }
 
 .status {
+  display: flex;
+  gap: 8px;
+  align-items: center;
   margin: 0;
   font-size: 14px;
   color: var(--text-muted);
 }
 
+/* Never colour alone: the sentence beside it says the same thing. */
+.dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--border);
+  transition: background var(--duration-default) var(--easing-default);
+}
+
+.status[data-hearing='yes'] .dot {
+  background: var(--accent);
+}
+
+.status[data-hearing='yes'] {
+  color: var(--text);
+}
+
+/* Denied and unavailable share one bed: a refusal is a state of this panel, not a new screen.
+   The danger tone is the inline-start edge, so the copy stays at full ink for reading. */
 .recovery {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
   align-items: flex-start;
-  padding: 16px;
+  padding: 16px 20px;
   background: var(--surface-sunken);
-  border: 1px solid var(--danger);
+  border-inline-start: 2px solid var(--danger);
   border-radius: var(--radius-input);
-}
-
-.recoveryMascot {
-  align-self: center;
 }
 
 .recoveryTitle {
   margin: 0;
+  font-family: var(--font-heading), Georgia, serif;
   font-size: 16px;
   font-weight: 600;
+  color: var(--text);
 }
 
 .recoveryBody {
@@ -58,8 +64,9 @@
 
 .steps {
   margin: 0;
-  padding-left: 20px;
+  padding-inline-start: 20px;
   font-size: 14px;
+  line-height: 1.5;
   color: var(--text-muted);
 }
 

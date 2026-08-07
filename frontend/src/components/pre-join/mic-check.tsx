@@ -3,7 +3,7 @@
 import { useTranslations } from 'next-intl';
 import { useEffect } from 'react';
 
-import { Mascot } from '@/components/mascot';
+import { Meter } from '@/components/shell/meter';
 import { Button, Field, Select } from '@/components/ui';
 import { useMicPermission, type MicPermissionState } from '@/lib/use-mic-permission';
 
@@ -32,7 +32,6 @@ export function MicCheck({ onStateChange }: MicCheckProps) {
   if (state === 'unavailable') {
     return (
       <div className={styles.recovery} data-testid="mic-unavailable">
-        <Mascot pose="shrug" size={96} className={styles.recoveryMascot} />
         <p className={styles.recoveryTitle}>{t('unavailable.title')}</p>
         <p className={styles.recoveryBody}>{t('unavailable.body')}</p>
       </div>
@@ -42,7 +41,6 @@ export function MicCheck({ onStateChange }: MicCheckProps) {
   if (state === 'denied') {
     return (
       <div className={styles.recovery} data-testid="mic-recovery">
-        <Mascot pose="shrug" size={96} className={styles.recoveryMascot} />
         <p className={styles.recoveryTitle}>{t('denied.title')}</p>
         <ol className={styles.steps}>
           <li>{t('denied.step1')}</li>
@@ -55,6 +53,8 @@ export function MicCheck({ onStateChange }: MicCheckProps) {
       </div>
     );
   }
+
+  const hearing = state === 'granted' && level >= SPEAKING;
 
   return (
     <div className={styles.check} data-testid="mic-check">
@@ -76,15 +76,18 @@ export function MicCheck({ onStateChange }: MicCheckProps) {
         </Field>
       ) : null}
 
-      <div className={styles.meter} aria-hidden="true">
-        <div
-          className={styles.meterFill}
-          data-testid="mic-level"
-          style={{ width: `${Math.round(level * 100)}%` }}
-        />
+      {/* `Meter`, not a width in a style prop: the CSP is `style-src 'self' 'nonce-…'`, so the
+          attribute was dropped in production and this bar rendered at zero width for every real
+          user. Decorative because the sentence under it states the same thing in words.
+          Not `tone="live"`: `--live` is the in-session signal and DESIGN §2 rule 3 names
+          pre-join among the surfaces it may never appear on. This room has not started. */}
+      <div data-testid="mic-level">
+        <Meter value={level} max={1} tone="default" instant decorative tall />
       </div>
-      <p className={styles.status} aria-live="polite">
-        {state !== 'granted' ? t('prompt') : level >= SPEAKING ? t('hearYou') : t('quiet')}
+
+      <p className={styles.status} aria-live="polite" data-hearing={hearing ? 'yes' : 'no'}>
+        <span className={styles.dot} aria-hidden="true" />
+        {state !== 'granted' ? t('prompt') : hearing ? t('hearYou') : t('quiet')}
       </p>
     </div>
   );

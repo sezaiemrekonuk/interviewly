@@ -21,6 +21,7 @@ import ReportPage from './page';
 
 const USER = { id: 'u1', email: 'someone@example.com', onboardingCompletedAt: 'now', interviewCount: 1 };
 
+
 const TRANSCRIPT = [
   { questionId: 'q1', question: 'Tell me about yourself.', answer: 'I ship things.', roundType: 'hr' as const },
 ];
@@ -198,6 +199,46 @@ describe('report + transcript (W07)', () => {
       await vi.advanceTimersByTimeAsync(30_000);
     });
     expect(calls.filter((c) => c.url === '/api/interviews/i1')).toHaveLength(atCeiling);
+  });
+
+  it('says STAR does not apply on a technical question instead of printing 0%', async () => {
+    // What the backend actually returns for a technical answer: a good score, a praising
+    // reason, and `star_adherence: 0` because a behavioural-story rubric never ran.
+    const tech = { questionId: 'q2', question: 'How would you keep a worker idempotent?', answer: 'Dedup record.', roundType: 'tech' as const };
+    stubFetch({
+      reports: [
+        {
+          interviewId: 'i1',
+          state: 'completed',
+          report: {
+            status: 'ready',
+            payload: payload({
+              questions: [
+                { question_id: 'q1', score: 4, reason: 'Named a real outcome.', star_adherence: 0.8 },
+                { question_id: 'q2', score: 4, reason: 'Correct approach: one transaction.', star_adherence: 0 },
+              ],
+            }),
+          },
+        },
+      ],
+      states: [interviewState({ transcript: [...TRANSCRIPT, tech], transcriptCursor: 2 })],
+    });
+    await renderReport();
+
+    // The regression first, so it is asserted whether or not the copy has been merged yet.
+    const rows = within(screen.getByTestId('report-questions')).getAllByRole('listitem');
+    expect(rows[1]).not.toHaveTextContent('0%');
+    // The HR row still carries its real reading — this suppresses a rubric, not a number.
+    expect(rows[0]).toHaveTextContent('80%');
+    expect(rows[1]).toHaveTextContent(messages.report.starNotApplicable);
+    expect(screen.getByText(messages.report.starNote)).toBeInTheDocument();
+  });
+
+  it('leaves the STAR footnote off an HR-only report', async () => {
+    stubFetch();
+    await renderReport();
+
+    expect(screen.queryByText(messages.report.starNote)).not.toBeInTheDocument();
   });
 
   it('states the interview ended early on a cut-short endedReason', async () => {

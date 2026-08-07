@@ -131,8 +131,9 @@ describe('interview room, text mode (W06)', () => {
     expect(tech).toHaveAttribute('data-live', 'false');
     expect(within(hr).getByText(messages.room.live)).toBeInTheDocument();
     expect(screen.getAllByText(messages.room.live)).toHaveLength(1);
-    // The inactive tile is a roster row, not a second speaker: it never animates.
-    expect(within(tech).getByAltText('')).toHaveAttribute('data-avatar-state', 'idle');
+    // The inactive tile is a roster row, not a second speaker: it never animates. The room has
+    // no cameras, so the resolved avatar state now drives that persona's waveform, not an image.
+    expect(within(tech).getByTestId('wave')).toHaveAttribute('data-avatar-state', 'idle');
   });
 
   it('re-renders from the refetched state after an SSE event, never from the event body', async () => {
@@ -329,6 +330,18 @@ describe('interview room, text mode (W06)', () => {
   });
 
   it('types the question at 40 chars/sec', async () => {
+    // The shared setup answers `prefers-reduced-motion: reduce`, which resolves every authored
+    // motion in the app instantly — correct for tests about content, wrong for this one, which
+    // is about the motion itself.
+    vi.stubGlobal('matchMedia', ((query: string) => ({
+      matches: false,
+      media: query,
+      addEventListener() {},
+      removeEventListener() {},
+      addListener() {},
+      removeListener() {},
+      dispatchEvent: () => false,
+    })) as unknown as typeof window.matchMedia);
     vi.useFakeTimers();
     stubFetch();
     await act(async () => {

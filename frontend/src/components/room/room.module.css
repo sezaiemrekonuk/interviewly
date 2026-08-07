@@ -1,146 +1,353 @@
-/* Room surface: flat --bg, --shadow-hairline only, no gradient, no mascot, near-zero motion
-   (ui §4.2, DESIGN §5 room brief). The one authored motion moment is the question typing. */
+/* The interview room as a room: the SplitShell's rail carries state, the working surface
+ * carries people. The stage is a grid — speaker, side column, and a foot row that owns the
+ * captions and the control bar. The bar is a grid row, never absolutely positioned: that is
+ * what stops it landing on top of the captions when it wraps.
+ *
+ * Direction B rules: no inline style (CSP drops it), tokens only, px on the 4-grid,
+ * type on 13/14/16/20/28/40/56, logical border properties, shadows from the two tiers.
+ */
 
 .room {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  max-width: 880px;
   min-height: 100dvh;
-  margin: 0 auto;
-  padding: 24px 16px 0;
-  color: var(--text);
+}
+
+.skeleton {
+  min-height: 100dvh;
   background: var(--bg);
 }
 
-/* --------------------------------------------------------------------- tiles */
+/* --------------------------------------------------------------------- rail */
 
-.tiles {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+/* Eight segments, one per question: answered ones carry their round's tone, the current one
+   is the only --primary on the rail. Decorative — the `progress` line under it is the truth. */
+.ticks {
+  display: flex;
+  gap: 4px;
+  margin-top: 8px;
 }
 
+.tick {
+  flex: 1;
+  height: 4px;
+  border-radius: 1px;
+  background: var(--rail-border);
+}
+
+.tickHr {
+  background: var(--rail-text-faint);
+}
+
+.tickTech {
+  background: var(--rail-text-muted);
+}
+
+.tickNow {
+  background: var(--primary);
+}
+
+.timer {
+  display: block;
+  font-size: 28px;
+  line-height: 1.1;
+  color: var(--rail-text);
+}
+
+.railLive {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* Never colour alone: the word beside it says the same thing. */
+.dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--live);
+}
+
+.railLive[data-status='lost'] .dot {
+  background: var(--danger);
+}
+
+.railLive[data-status='connecting'] .dot,
+.railLive[data-status='reconnecting'] .dot {
+  background: var(--rail-text-faint);
+}
+
+/* ------------------------------------------------------------ working surface */
+
+.workGrid {
+  display: grid;
+  flex: 1;
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 0;
+}
+
+/* The transcript takes its width from the stage, never from the rail. */
+.workGrid[data-transcript='open'] {
+  grid-template-columns: minmax(0, 1fr) 320px;
+}
+
+/* Segmented view control — Speaker or Grid, the only chrome in the header. */
+.seg {
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-input);
+}
+
+.segButton {
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 0;
+  border-inline-end: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.segButton:last-child {
+  border-inline-end: 0;
+}
+
+.segButton[aria-pressed='true'] {
+  color: var(--surface);
+  background: var(--text);
+}
+
+/* -------------------------------------------------------------------- stage */
+
+.stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 240px;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 16px;
+  min-height: 0;
+  padding: 16px;
+  overflow-y: auto;
+  background: var(--stage);
+}
+
+.stage[data-view='grid'] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+/* The tiles are grid items of the stage itself — the wrapper exists to name them, not to
+   box them, so it generates no layout of its own. */
+.tiles {
+  display: contents;
+}
+
+.side {
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  gap: 16px;
+  min-width: 0;
+}
+
+.stage[data-view='grid'] .side {
+  display: contents;
+}
+
+.footRow {
+  display: flex;
+  grid-column: 1 / -1;
+  flex-direction: column;
+  gap: 16px;
+  align-items: center;
+}
+
+/* -------------------------------------------------------------------- tiles */
+
 .tile {
-  position: relative;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  align-items: center;
-  padding: 16px;
+  min-width: 0;
+  border-radius: var(--radius-card);
+}
+
+/* Has the floor: the rail's material, lifted onto the light stage. The inversion is the
+   label — nothing else has to say who is speaking. */
+.tileLead {
+  padding: 20px 24px;
+  min-height: 280px;
+  color: var(--rail-text);
+  background: var(--rail);
+  box-shadow: var(--shadow-soft);
+}
+
+.tileSmall {
+  padding: 12px 16px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius-card);
   box-shadow: var(--shadow-hairline);
 }
 
-/* The only use of --live in the app: the active speaker's ring and badge. An outline, not a
-   second box-shadow — the room is capped at --shadow-hairline (ui AC-4b). */
-.tileLive {
-  border-color: var(--live);
-  outline: 2px solid var(--live);
-}
-
-.liveBadge {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  padding: 4px 8px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--surface);
-  background: var(--live);
-  border-radius: var(--radius-button);
-}
-
-.tileAvatar {
-  border-radius: var(--radius-card);
-}
-
-.tileText {
+.tileHead {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  align-items: center;
-  min-width: 0;
-  text-align: center;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
 }
 
 .tileName {
   margin: 0;
+  font-family: var(--font-heading), Georgia, serif;
   font-size: 16px;
   font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: -0.015em;
+}
+
+.tileLead .tileName {
+  font-size: 28px;
 }
 
 .tileRole {
   margin: 0;
+  margin-top: 4px;
   font-size: 13px;
   color: var(--text-muted);
 }
 
-/* Active speaker is never colour-only (ui §4.4): the lit label rides with the ring and the
-   badge, so losing the hue loses nothing. */
-.tileNameLive,
-.tileRoleLive {
-  color: var(--live);
+.tileLead .tileRole {
+  color: var(--rail-text-muted);
 }
 
-/* ---------------------------------------------------------- question + progress */
-
-.stage {
-  display: flex;
-  flex-direction: column;
+/* The live badge: on the rail's raised material, so it reads as part of the speaker's tile
+   rather than a sticker on it. */
+.liveBadge {
+  display: inline-flex;
   gap: 8px;
-}
-
-.progressRow {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.progress {
-  margin: 0;
+  flex: none;
+  align-items: center;
+  padding: 8px;
   font-size: 13px;
-  font-weight: 500;
-  color: var(--text-muted);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--rail-text);
+  background: var(--rail-raised);
+  border: 1px solid var(--rail-border);
+  border-radius: var(--radius-input);
 }
 
-/* Determinate track, not a ring: --accent because --primary is the CTA and --live is the
-   speaker state. Decorative — the label above carries the number. */
-.track {
+/* On a light tile the badge carries the in-session tone instead of the rail's. */
+.tileSmall .liveBadge {
+  color: var(--surface);
+  background: var(--live);
+  border-color: var(--live);
+}
+
+.tileSmall .liveBadge .mini i {
+  background: var(--surface);
+}
+
+/* ---------------------------------------------------------------- presence */
+
+/* Neither interviewer has a camera, so the voice is drawn. Delays are per-bar in CSS, not an
+   inline style: `style` attributes are dropped by the CSP in production. */
+.wave {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  justify-content: center;
+  height: 120px;
+  margin: auto 0;
+}
+
+.wave i {
+  width: 6px;
+  height: 16%;
+  border-radius: 2px;
+  background: var(--rail-text);
+  animation: waveBar 1050ms ease-in-out infinite;
+}
+
+.wave i:nth-child(6n + 1) { max-height: 46%; animation-delay: 0ms; }
+.wave i:nth-child(6n + 2) { max-height: 74%; animation-delay: 100ms; }
+.wave i:nth-child(6n + 3) { max-height: 100%; animation-delay: 200ms; }
+.wave i:nth-child(6n + 4) { max-height: 80%; animation-delay: 290ms; }
+.wave i:nth-child(6n + 5) { max-height: 58%; animation-delay: 140ms; }
+.wave i:nth-child(6n + 6) { max-height: 90%; animation-delay: 250ms; }
+
+@keyframes waveBar {
+  0%,
+  100% { height: 16%; }
+  50% { height: 100%; }
+}
+
+/* Fixed height, because the bars are a percentage of it — a stretched wave would grow its
+   own bars. The auto margins from `.wave` centre it in whatever the side column leaves. */
+.waveSm {
+  height: 32px;
+  gap: 4px;
+}
+
+.waveSm i {
+  width: 3px;
+  background: var(--live);
+}
+
+/* Settled, not disconnected: a finished interviewer flattens instead of vanishing. Written
+   with both classes so it outranks the reduced-motion rule regardless of order. */
+.wave.waveOff i {
   height: 4px;
-  overflow: hidden;
-  background: var(--surface-sunken);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-button);
+  background: var(--border);
+  animation: none;
 }
 
-.trackFill {
-  height: 100%;
-  background: var(--accent);
-  border-radius: var(--radius-button);
+.tileLead .wave.waveOff i {
+  background: var(--rail-border);
+}
+
+.micMeter {
+  margin-top: 4px;
+}
+
+/* ------------------------------------------------------------- captions */
+
+/* The room's primary display of the question: a lifted white sheet at the foot of the stage.
+   `align-self: stretch` — the sheet is the width of the stage, not of its longest line. */
+.caps {
+  align-self: stretch;
+  padding: 16px 20px;
+  background: var(--surface);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-soft);
+}
+
+.eyebrow {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
 }
 
 .question {
-  min-height: 96px;
-  padding: 20px;
+  max-width: 54ch;
+  margin: 0;
+  margin-top: 8px;
+  font-family: var(--font-heading), Georgia, serif;
   font-size: 20px;
-  line-height: 1.45;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-panel);
-  box-shadow: var(--shadow-hairline);
+  line-height: 1.35;
+  letter-spacing: -0.012em;
+  color: var(--text);
 }
 
-/* The waiting beat is a composed state at the panel's own height, not a bare sentence:
-   two static skeleton lines where the question will land, plus the honest label. The
-   avatar's `thinking` state carries the rest. Nothing animates — room rule. */
+/* The waiting beat keeps the sheet's height and shows where the question will land. */
 .questionWaiting {
   display: flex;
   flex-direction: column;
   gap: 16px;
   justify-content: center;
+  min-height: 76px;
 }
 
 .waitingLines {
@@ -161,6 +368,7 @@
 
 .waitingText {
   margin: 0;
+  font-family: var(--font-body), system-ui, sans-serif;
   font-size: 14px;
   color: var(--text-muted);
 }
@@ -174,34 +382,141 @@
   clip: rect(0 0 0 0);
 }
 
-/* -------------------------------------------------------------------- paused */
+/* ---------------------------------------------------------------- control bar */
 
-.paused {
+.bar {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  padding: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-soft);
+}
+
+/* 44px on both axes: the mic is hit mid-sentence. */
+.ck {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid transparent;
+  border-radius: var(--radius-input);
+  cursor: pointer;
+}
+
+.ck[aria-pressed='true'] {
+  background: var(--surface-sunken);
+  border-color: var(--border);
+}
+
+.ckSub {
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+/* The one --danger in the room. */
+.ckLeave {
+  color: var(--surface);
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
+/* A four-bar glyph, not a second meter: the candidate's real level is on their tile. */
+.mini {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.mini i {
+  width: 2px;
+  height: 8px;
+  border-radius: 1px;
+  background: var(--live);
+}
+
+.mini i:nth-child(2) { height: 12px; }
+.mini i:nth-child(3) { height: 8px; }
+.mini i:nth-child(4) { height: 12px; }
+
+.liveBadge .mini i {
+  background: var(--rail-text);
+}
+
+.ck[data-muted='true'] {
+  color: var(--text-muted);
+}
+
+.ck[data-muted='true'] .mini i {
+  background: var(--text-muted);
+}
+
+/* ------------------------------------------------------- paused / stalled / lost */
+
+/* Lifted sheets on the stage ground, on the same footing as the captions. */
+.notice {
   display: flex;
   gap: 16px;
   align-items: center;
   justify-content: space-between;
+  align-self: stretch;
   padding: 12px 16px;
-  background: var(--surface-sunken);
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
+  box-shadow: var(--shadow-hairline);
 }
 
-.pausedText {
+.noticeDanger {
+  border-color: var(--danger);
+}
+
+.noticeText {
   margin: 0;
   font-size: 14px;
+  color: var(--text);
 }
 
 /* ---------------------------------------------------------------- transcript */
 
-.transcript {
+/* Closed by default in voice: a meeting does not open with a document on screen. Closed is
+   visually hidden rather than unmounted — in voice the transcript is the only record of an
+   answer, and it has to keep announcing to a screen reader. */
+.transcriptPanel {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  padding: 16px;
+  overflow-y: auto;
+  background: var(--surface);
+  border-inline-start: 1px solid var(--border);
+}
+
+.transcriptPanel[data-open='false'] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  border: 0;
+  clip: rect(0 0 0 0);
 }
 
 .transcriptTitle {
   margin: 0;
+  font-family: var(--font-heading), Georgia, serif;
   font-size: 16px;
   font-weight: 600;
 }
@@ -225,11 +540,10 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 12px 16px;
+  padding: 12px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
-  box-shadow: var(--shadow-hairline);
 }
 
 .turnPart {
@@ -258,20 +572,47 @@
   font-size: 16px;
 }
 
-/* ------------------------------------------------------------------ composer */
+/* ------------------------------------------------------ written mode (text) */
 
-/* `margin-top: auto` puts it at the foot of a short room; `sticky` keeps it there once the
-   transcript grows past the viewport. */
-.composer {
-  position: sticky;
-  bottom: 0;
+/* Not the room with the audio off: a written Q&A surface on the light ground, with the
+   roster as a strip rather than a stage. */
+.written {
   display: flex;
-  margin-top: auto;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+  padding: 24px;
+  overflow-y: auto;
+  background: var(--surface);
+}
+
+.strip {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.stripTile {
+  flex: 1 1 240px;
+}
+
+.writtenSheet {
+  padding: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-hairline);
+}
+
+/* Sits directly under the question, not pinned to the bottom of the viewport. The answered
+   turns live in the side panel, so this column is short by construction — pushing the composer
+   down with `margin-top: auto` left a ~350px hole between the question and the box you answer
+   it in, which read as a broken layout rather than as breathing room. */
+.composer {
+  display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 16px 0;
-  background: var(--bg);
-  /* logical, not the physical shorthand — the token lint reads a hairline edge out of it */
+  padding-top: 16px;
   border-block-start: 1px solid var(--border);
 }
 
@@ -293,100 +634,10 @@
   color: var(--text-muted);
 }
 
-/* -------------------------------------------------------------- voice (W10) */
-
-/* Same footing as `.composer` — voice swaps the textarea for controls, not the layout. */
-.voiceBar {
-  position: sticky;
-  bottom: 0;
-  display: flex;
-  margin-top: auto;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px 0;
-  background: var(--bg);
-  border-block-start: 1px solid var(--border);
-}
-
-.voiceRow {
-  display: flex;
-  gap: 16px;
-  align-items: center;
-}
-
-/* 44px min on both axes: this is the one control the candidate hits mid-sentence. */
-.voiceButton {
-  min-width: 44px;
-  min-height: 44px;
-  padding: 0 20px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-button);
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
-  font-size: 14px;
-  cursor: pointer;
-}
-
-/* Muted reads as a sunken well plus the button's own label — never a red icon alone. */
-.voiceButton[data-muted='true'] {
-  background: var(--surface-sunken);
-  color: var(--text-muted);
-}
-
-.micMeter {
-  flex: 1;
-}
-
-.micTrack {
-  overflow: hidden;
-  height: 4px;
-  border-radius: 999px;
-  background: var(--surface-sunken);
-}
-
-/* --accent, not --live: this is the candidate's own level, not the active speaker. */
-.micFill {
-  height: 100%;
-  background: var(--accent);
-  transition: width var(--duration-default) var(--easing-default);
-}
-
-.voiceStatus {
-  padding: 4px 12px;
-  border-radius: 999px;
-  background: var(--surface-sunken);
-  color: var(--text-muted);
-  font-size: 13px;
-  white-space: nowrap;
-}
-
-.sessionLost {
-  display: flex;
-  gap: 16px;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  border: 1px solid var(--danger);
-  border-radius: var(--radius-input);
-  background: var(--surface-sunken);
-}
-
-.sessionLostText {
-  margin: 0;
-  font-size: 14px;
-  color: var(--text);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .micFill {
-    transition: none;
-  }
-}
-
 /* --------------------------------------------------------------------- misc */
 
 .errorCard {
+  margin: 24px;
   padding: 16px;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -401,46 +652,95 @@
   color: var(--danger);
 }
 
-.skeleton {
-  min-height: 100dvh;
-  background: var(--bg);
+@media (prefers-reduced-motion: reduce) {
+  .wave i {
+    height: 56%;
+    animation: none;
+  }
 }
 
-/* 390px: the tiles stay side by side and go compact rather than stacking, so the question
-   and the composer are still above the fold on a phone. */
-@media (max-width: 480px) {
-  .room {
-    padding: 16px 12px 0;
+/* The rail stacks into a bar at this width (shell.module.css), so the stage goes to one
+   column and the side tiles sit shoulder to shoulder under the speaker. */
+@media (max-width: 60rem) {
+  .stage {
+    grid-template-columns: minmax(0, 1fr);
   }
 
-  .tile {
-    gap: 4px;
+  .stage[data-view='grid'] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .side {
+    grid-template-rows: none;
+    grid-auto-flow: column;
+  }
+
+  .stage[data-view='grid'] .side {
+    display: grid;
+  }
+
+  .workGrid[data-transcript='open'] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tileLead {
+    min-height: 200px;
+  }
+
+  .wave {
+    height: 80px;
+  }
+}
+
+@media (max-width: 480px) {
+  .written {
+    padding: 16px;
+  }
+
+  .stage {
     padding: 12px;
   }
 
-  /* max-* clamps the avatar box without fighting the inline width the component sets. */
-  .tileAvatar {
-    max-width: 48px;
-    max-height: 48px;
-  }
-
-  .question {
-    font-size: 16px;
-  }
-
-  /* The status chip wraps under the button+meter rather than squeezing the 44px target. */
-  .voiceRow {
-    flex-wrap: wrap;
-    gap: 12px;
-  }
-
-  .sessionLost {
-    flex-direction: column;
-    align-items: stretch;
+  .side {
+    grid-auto-flow: row;
   }
 
   .composerActions {
     flex-direction: column;
     align-items: stretch;
   }
+
+  .notice {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* The way out of the room, on the rail in both modes. Quiet, not --danger: leaving is the
+   ordinary end of a session, and the interview is resumable from the archive afterwards. */
+.leave {
+  min-height: 44px;
+  margin-block-start: 16px;
+  padding: 8px 12px;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--rail-text-muted);
+  text-align: start;
+  background: none;
+  border: 1px solid var(--rail-border);
+  border-radius: var(--radius-button);
+  cursor: pointer;
+  transition:
+    color var(--duration-default) var(--easing-default),
+    background-color var(--duration-default) var(--easing-default);
+}
+
+.leave:hover {
+  color: var(--rail-text);
+  background: var(--rail-raised);
+}
+
+.leave:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }

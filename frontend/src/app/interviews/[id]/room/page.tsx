@@ -8,8 +8,11 @@ import { AvatarPreload } from '../../../../components/avatar';
 import { AnswerComposer } from '../../../../components/room/answer-composer';
 import { PersonaTiles } from '../../../../components/room/persona-tiles';
 import { QuestionPanel } from '../../../../components/room/question-panel';
+import { RoomRail } from '../../../../components/room/room-rail';
+import { DEFAULT_LANDING_PATH } from '../../../../lib/auth-redirect';
 import { Transcript } from '../../../../components/room/transcript';
 import { VoiceControls } from '../../../../components/room/voice-controls';
+import { SplitShell, WorkTop } from '../../../../components/shell/split-shell';
 import { Button } from '../../../../components/ui';
 import { routeForError } from '../../../../lib/error-routing';
 import { ApiError, useInterviewState, useResumeInterview, useSubmitAnswer } from '../../../../lib/query';
@@ -53,6 +56,13 @@ export default function InterviewRoomPage() {
   const [typedFor, setTypedFor] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [resumeError, setResumeError] = useState<string | null>(null);
+
+  // Room chrome, none of it server state: the speaker/grid view, the captions, and whether the
+  // transcript panel is out. `null` is "the candidate has not said" — the default differs by
+  // mode and `room` is not loaded yet on the first render.
+  const [view, setView] = useState<'speaker' | 'grid'>('speaker');
+  const [captionsOn, setCaptionsOn] = useState(true);
+  const [transcriptOpen, setTranscriptOpen] = useState<boolean | null>(null);
 
   const room = stateQuery.data;
   const pathname = `/interviews/${id}/room`;
@@ -141,12 +151,14 @@ useEffect(() => {
   // §3.8 holds in both modes — the server value is the sync on every refetch, something local
   // drives it in between. Text uses the typing/submit lifecycle; voice uses the audio beat,
   // which is why `beat: null` falls back to the same `settled` resolution and not to `idle`.
+  // With no camera in the room this is what moves the speaker's waveform.
   const avatarState = voiceMode
     ? (voice.beat ?? resolveAvatarState('settled', serverAvatarState))
     : resolveAvatarState(phase, serverAvatarState);
-  const progressPercent = room.targetQuestionCount
-    ? Math.round((Math.min(room.currentIndex, room.targetQuestionCount) / room.targetQuestionCount) * 100)
-    : 0;
+
+  // A meeting does not open with a document on screen; a written Q&A keeps its record out.
+  const showTranscript = transcriptOpen ?? !voiceMode;
+  const speaker = room.persona?.name ?? null;
 
   async function handleSubmit(transcript: string): Promise<boolean> {
     if (!room?.currentQuestion) return false;
@@ -170,88 +182,148 @@ useEffect(() => {
     }
   }
 
-  return (
-    <main className={styles.room} data-testid="interview-room">
+  const tiles = (
+    <>
       <PersonaTiles
         personas={room.personas}
         activeId={room.persona?.id ?? null}
         activeState={avatarState}
+        layout={voiceMode ? 'stage' : 'strip'}
+        candidate={voiceMode ? { level: voice.micLevel, muted: voice.muted } : null}
       />
 
       {/* The waiting beat is where both sets are warmed — the handover must not fetch. */}
       {room.currentQuestion ? null : (
         <AvatarPreload sets={room.personas.map((persona) => persona.avatarSet)} />
       )}
+    </>
+  );
 
-      <section className={styles.stage}>
-        <div className={styles.progressRow}>
-          <p className={styles.progress}>
-            {t('progress', {
-              index: Math.min(room.currentIndex, room.targetQuestionCount),
-              total: room.targetQuestionCount,
-            })}
+  // The waiting panel is the truth right up until it is not — past `STALLED_AFTER_MS` it
+  // would keep promising a question that no longer has anything generating it.
+  const question = stalled ? null : (
+    // One question, one instance: the panel's typed state resets by remount, not by effect.
+    <QuestionPanel
+      key={room.currentQuestion?.id ?? 'waiting'}
+      question={room.currentQuestion}
+      onTyped={setTypedFor}
+      instant={voiceMode}
+      speaker={speaker ?? undefined}
+      className={voiceMode ? styles.caps : styles.writtenSheet}
+    />
+  );
+
+  // Both doors out of a round the candidate cannot answer from lead to the same request:
+  // `POST /resume` resumes a pause, and regenerates the batch when there is none.
+  const notice =
+    room.state === 'paused' || stalled ? (
+      <div
+        className={stalled ? `${styles.notice} ${styles.noticeDanger}` : styles.notice}
+        data-testid={stalled ? 'room-stalled' : 'room-paused'}
+      >
+        <p
+          className={stalled ? styles.error : styles.noticeText}
+          role={stalled ? 'alert' : undefined}
+        >
+          {stalled ? t('stalled') : t('paused')}
+        </p>
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={() => {
+            setResumeError(null);
+            resume.mutate(undefined, {
+              onError: (err) => setResumeError(errorMessage(err.code)),
+            });
+          }}
+          loading={resume.isPending}
+        >
+          {stalled ? t('retry') : t('resume')}
+        </Button>
+        {resumeError ? (
+          <p role="alert" className={styles.error}>
+            {resumeError}
           </p>
-          {/* Decorative: the line above is the accessible truth (ui §4.4). */}
-          <div className={styles.track} aria-hidden="true">
-            <div className={styles.trackFill} style={{ width: `${progressPercent}%` }} />
-          </div>
-        </div>
+        ) : null}
+      </div>
+    ) : null;
 
-        {/* The waiting panel is the truth right up until it is not — past `STALLED_AFTER_MS`
-            it would keep promising a question that no longer has anything generating it. */}
-        {stalled ? null : (
-          // One question, one instance: the panel's typed state resets by remount, not by effect.
-          <QuestionPanel
-            key={room.currentQuestion?.id ?? 'waiting'}
-            question={room.currentQuestion}
-            onTyped={setTypedFor}
-            instant={voiceMode}
+  return (
+    <div className={styles.room} data-testid="interview-room">
+      <SplitShell
+        width="default"
+        rail={
+          <RoomRail
+            room={room}
+            voiceStatus={voiceMode ? voice.status : null}
+            onLeave={() => router.push(DEFAULT_LANDING_PATH)}
           />
-        )}
-      </section>
-
-      {/* Both doors out of a round the candidate cannot answer from lead to the same request:
-          `POST /resume` resumes a pause, and regenerates the batch when there is none. */}
-      {room.state === 'paused' || stalled ? (
-        <div className={styles.paused} data-testid={stalled ? 'room-stalled' : 'room-paused'}>
-          <p
-            className={stalled ? styles.error : styles.pausedText}
-            role={stalled ? 'alert' : undefined}
-          >
-            {stalled ? t('stalled') : t('paused')}
-          </p>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => {
-              setResumeError(null);
-              resume.mutate(undefined, {
-                onError: (err) => setResumeError(errorMessage(err.code)),
-              });
-            }}
-            loading={resume.isPending}
-          >
-            {stalled ? t('retry') : t('resume')}
-          </Button>
-          {resumeError ? (
-            <p role="alert" className={styles.error}>
-              {resumeError}
-            </p>
+        }
+      >
+        <WorkTop title={speaker ? t('hasFloor', { name: speaker }) : t('roomTitle')}>
+          {voiceMode ? (
+            <div className={styles.seg} role="group" aria-label={t('viewLabel')}>
+              <button
+                type="button"
+                className={styles.segButton}
+                aria-pressed={view === 'speaker'}
+                onClick={() => setView('speaker')}
+              >
+                {t('viewSpeaker')}
+              </button>
+              <button
+                type="button"
+                className={styles.segButton}
+                aria-pressed={view === 'grid'}
+                onClick={() => setView('grid')}
+              >
+                {t('viewGrid')}
+              </button>
+            </div>
           ) : null}
+        </WorkTop>
+
+        <div className={styles.workGrid} data-transcript={showTranscript ? 'open' : 'closed'}>
+          {voiceMode ? (
+            <section className={styles.stage} data-view={view}>
+              {tiles}
+
+              {/* Captions and the control bar share a grid row of their own: floated over the
+                  stage the bar would land on the captions the moment it wrapped. */}
+              <div className={styles.footRow}>
+                {captionsOn ? question : null}
+                {notice}
+                {room.state !== 'paused' && !stalled ? (
+                  <VoiceControls
+                    session={voice}
+                    captionsOn={captionsOn}
+                    onToggleCaptions={() => setCaptionsOn((on) => !on)}
+                    transcriptOpen={showTranscript}
+                    onToggleTranscript={() => setTranscriptOpen(!showTranscript)}
+                  />
+                ) : null}
+              </div>
+            </section>
+          ) : (
+            // Text is not this room with the audio off: a written Q&A on the light surface,
+            // the roster reduced to a strip, no stage and no controls.
+            <div className={styles.written}>
+              {tiles}
+              {question}
+              {notice}
+              {room.currentQuestion && room.state !== 'paused' ? (
+                <AnswerComposer
+                  onSubmit={handleSubmit}
+                  pending={submit.isPending}
+                  error={submitError}
+                />
+              ) : null}
+            </div>
+          )}
+
+          <Transcript turns={room.transcript} live={voiceMode} open={showTranscript} />
         </div>
-      ) : null}
-
-      {/* Voice fills this pane with no other visible record of the answer, so it announces. */}
-      <Transcript turns={room.transcript} live={voiceMode} />
-
-      {/* Last in the DOM as well as on screen: a sticky composer above the transcript would
-          pin itself to the middle of the page. Voice swaps the composer for the controls —
-          the same slot, not a second room. */}
-      {voiceMode ? (
-        room.state !== 'paused' && !stalled ? <VoiceControls session={voice} /> : null
-      ) : room.currentQuestion && room.state !== 'paused' ? (
-        <AnswerComposer onSubmit={handleSubmit} pending={submit.isPending} error={submitError} />
-      ) : null}
-    </main>
+      </SplitShell>
+    </div>
   );
 }

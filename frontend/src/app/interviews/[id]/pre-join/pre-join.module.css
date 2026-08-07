@@ -1,36 +1,40 @@
-/* Entry surface (ui §4.1/§4.2, DESIGN §5 W09): gradient ground + one soft-shadow panel.
-   The shell already fills the viewport, so no `min-height: 100vh` here. */
+/* Pre-join in Direction B's one shell: the dark rail says what this step is for, the light
+   working surface holds one subject — the microphone. No gradient, no mascot; the shell is the
+   chrome. Authored in px so the token lint sees every value. */
 
-.ground {
-  padding: 24px 16px 64px;
-  background: var(--gradient-entry);
-  background-attachment: fixed;
+.railLead {
+  margin-top: 8px;
+  font-family: var(--font-heading), Georgia, serif;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.015em;
+  color: var(--rail-text);
 }
 
-.panel {
+.body {
   display: flex;
   flex-direction: column;
   gap: 24px;
+  flex: 1;
+  background: var(--bg);
+}
+
+/* One column, held to a readable measure — the check is the only thing on this surface. */
+.pane {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 100%;
   max-width: 480px;
-  margin: 0 auto;
-  padding: 32px;
+}
+
+.panel {
+  padding: 24px;
   background: var(--surface);
-  border-radius: var(--radius-panel);
-  box-shadow: var(--shadow-soft);
-}
-
-.title {
-  margin: 0;
-  font-family: var(--font-heading), sans-serif;
-  font-size: 28px;
-  font-weight: 600;
-}
-
-.subtitle {
-  max-width: 65ch;
-  margin: 4px 0 0;
-  font-size: 16px;
-  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-hairline);
 }
 
 /* The one authored motion moment: the CTA enabling. */
@@ -52,6 +56,17 @@
   text-align: center;
 }
 
+.error {
+  max-width: 480px;
+  margin: 0;
+  padding: 16px 20px;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--surface-sunken);
+  border-inline-start: 2px solid var(--danger);
+  border-radius: var(--radius-input);
+}
+
 /* Skeleton at the panel's final height so granting does not jump the layout. */
 .bar {
   background: var(--surface-sunken);
@@ -59,20 +74,15 @@
 }
 
 .barTitle {
-  height: 32px;
+  height: 20px;
   max-width: 240px;
+  margin-top: 16px;
 }
 
 .barBody {
-  height: 96px;
+  height: 8px;
 }
 
 .barCta {
-  height: 44px;
-}
-
-@media (max-width: 480px) {
-  .panel {
-    padding: 24px;
-  }
+  height: 48px;
 }
