@@ -212,6 +212,32 @@ describe('signed-in home — history (W08)', () => {
     expect(screen.queryByRole('link', { name: messages.home.viewReport })).not.toBeInTheDocument();
   });
 
+  // Issue 84. `failed` and `abandoned` sat between the two sets, so Delete was the only
+  // control on the row and the transcript was reachable only by typing the cuid by hand.
+  it.each([
+    ['failed', 'i3'],
+    ['abandoned', 'i4'],
+  ])('links a %s row to its detail page under a label that is not "View report"', async (state, id) => {
+    stubSignedIn({ pages: [{ items: [row({ id, state })], nextCursor: null }] });
+    await renderSignedIn();
+
+    expect(screen.getByRole('link', { name: messages.home.viewDetails })).toHaveAttribute(
+      'href',
+      `/interviews/${id}`,
+    );
+    expect(screen.queryByRole('link', { name: messages.home.viewReport })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: messages.home.continue })).not.toBeInTheDocument();
+    // Delete is no longer the only thing the row can do.
+    expect(screen.getByRole('button', { name: /Delete the/ })).toBeInTheDocument();
+  });
+
+  // Parity (`i18n/messages.test.ts`) proves the key exists in both files; what it cannot see
+  // is the two labels collapsing back into the same words, which is the point of the split.
+  it('keeps the detail label distinct from the report label in both locales', () => {
+    expect(messages.home.viewDetails).not.toBe(messages.home.viewReport);
+    expect(trMessages.home.viewDetails).not.toBe(trMessages.home.viewReport);
+  });
+
   it('loads the next cursor page and never asks for an offset', async () => {
     const calls = stubSignedIn({
       pages: [

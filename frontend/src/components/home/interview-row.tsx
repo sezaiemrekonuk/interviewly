@@ -13,6 +13,12 @@ import styles from './home.module.css';
 /** `InterviewState` (schema.prisma) split by what the row can offer, not by name. */
 const RESUMABLE = new Set(['created', 'profiling', 'hr_round', 'tech_round', 'paused']);
 const REPORTED = new Set(['evaluating', 'completed']);
+/**
+ * Terminal without a report (issue 84). They get the same destination as `REPORTED` but not
+ * its label: `/interviews/:id` renders the transcript and, since issue 83, an explanation of
+ * how the interview ended — calling that "View report" would promise a score that never came.
+ */
+const VIEWABLE = new Set(['failed', 'abandoned']);
 
 /**
  * The dot is `aria-hidden` and the label always spells the state, so the family is never
@@ -78,9 +84,9 @@ export function InterviewRow({ interview }: { interview: MyInterview }) {
               {t('continue')}
             </Link>
           ) : null}
-          {REPORTED.has(interview.state) ? (
+          {REPORTED.has(interview.state) || VIEWABLE.has(interview.state) ? (
             <Link href={`/interviews/${interview.id}`} className={styles.rowLink}>
-              {t('viewReport')}
+              {REPORTED.has(interview.state) ? t('viewReport') : t('viewDetails')}
             </Link>
           ) : null}
           <button
