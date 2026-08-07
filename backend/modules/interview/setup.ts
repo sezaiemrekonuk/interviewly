@@ -6,11 +6,17 @@ import { prisma } from '../../src/lib/db';
 
 import { applyTransition } from './machine';
 
+// Twice the largest shape the UI offers (`new/page.tsx` ROUND_SHAPES = [6, 8, 10]) and still a
+// count one generation call can satisfy. Unbounded, a request body sized the provider call
+// directly — `generateRound` asks for the whole round at once (issue #98). Mirrored as a CHECK
+// constraint on `interviews.target_question_count` so a direct insert cannot bypass it.
+const MAX_TARGET_QUESTION_COUNT = 20;
+
 const schema = z.object({
   mode: z.enum(['voice', 'text']),
   jobText: z.string().trim().min(1).optional(),
   uploadId: z.string().min(1).optional(),
-  targetQuestionCount: z.coerce.number().int().min(1),
+  targetQuestionCount: z.coerce.number().int().min(1).max(MAX_TARGET_QUESTION_COUNT),
 });
 
 // Keyword → seeded occupation_clusters.key (prisma/seed.ts OCCUPATION_CLUSTERS). First

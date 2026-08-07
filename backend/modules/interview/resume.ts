@@ -15,20 +15,20 @@ import type { RequestHandler } from 'express';
 import { ApiError } from '../../src/lib/api-error';
 import { prisma } from '../../src/lib/db';
 
+import { withBudgetOrEnd } from './budget';
 import { generateRound } from './generation';
 import { applyTransition } from './machine';
 import { startHrRound } from './profile';
 
 export const resumeInterview: RequestHandler = async (req, res) => {
   const interview = req.interview!;
+  const ctx = { traceId: req.traceId! };
 
   // A room entered on `profiling` is a dead end otherwise: `POST /profile` is the only exit and
   // only the setup screen calls it, so an interview that never got that call (setup aborted, or
   // history's Continue link) waits on a question nothing is generating. Same repair, same door.
   if (interview.state === 'profiling') {
-    const state = await startHrRound(interview, interview.user_id, undefined, {
-      traceId: req.traceId!,
-    });
+    const state = await startHrRound(interview, interview.user_id, undefined, ctx);
     res.status(200).json({ state });
     return;
   }
@@ -59,11 +59,13 @@ export const resumeInterview: RequestHandler = async (req, res) => {
   // race fails its insert rather than doubling the batch.
   let state = stranded
     ? interview.state
-    : await applyTransition(interview, 'hr_round', { traceId: req.traceId! });
+    : await applyTransition(interview, 'hr_round', ctx);
 
   if (stranded) {
     try {
-      await generateRound(interview, 'hr', { traceId: req.traceId! });
+      // Under I08's ceiling like every other generation (issue #98): resume is a door back into
+      // the same provider call, so it cannot be the one that spends past the budget.
+      await withBudgetOrEnd(interview, () => generateRound(interview, 'hr', ctx), ctx);
     } catch (err) {
       if ((err as { code?: string } | null)?.code !== 'P2002') throw err;
     }
@@ -78,13 +80,14 @@ export const resumeInterview: RequestHandler = async (req, res) => {
 
     // Deliberately not caught: a provider still down re-pauses through the same
     // `hr_round → paused` edge, which puts the Resume button back rather than consuming the one
-    // recovery the room has.
-    await generateRound(interview, roundType, { traceId: req.traceId! });
+    // recovery the room has. An exhausted budget is the other outcome, and it ends the
+    // interview instead — there is no round left to resume into.
+    await withBudgetOrEnd(interview, () => generateRound(interview, roundType, ctx), ctx);
 
     // If the index is already in the technical round, return the interview to `tech_round` so the
     // room's active persona matches the question being served.
     if (roundType === 'tech') {
-      state = await applyTransition(interview, 'tech_round', { traceId: req.traceId! });
+      state = await applyTransition(interview, 'tech_round', ctx);
     }
   }
 

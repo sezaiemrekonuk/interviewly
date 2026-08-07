@@ -13,6 +13,50 @@ Feature: Question generation
     And the interview has hrQuestionCount 3
     And the interview has techQuestionCount 5
 
+  @question-generation @backend @AC-6
+  Scenario: An oversized question count is refused before an interview exists
+    Given I am signed in as a candidate
+    # The UI only ever offers 6, 8 or 10. Unbounded, the request body sized the single provider
+    # call that generates a round, so one authenticated request could ask for 4000 questions
+    # (issue #98).
+    When I start an interview with a "Backend Developer" listing and 10000 target questions
+    Then the response status is 422
+    And the response error code is "VALIDATION_ERROR"
+    And no interview is created
+    And the database refuses a direct insert of 10000 target questions
+    When I start an interview with a "Backend Developer" listing and 8 target questions
+    Then the response status is 201
+    And the interview has hrQuestionCount 3
+    And the interview has techQuestionCount 5
+
+  @question-generation @backend @AC-6
+  Scenario: The bound is inclusive at 20 and refuses 21
+    # A fresh candidate per scenario, and only two attempts here: the daily cap is 5 rolling
+    # interviews and a rejected attempt burns a slot too (rate-limit.ts).
+    Given I am signed in as a candidate
+    When I start an interview with a "Backend Developer" listing and 21 target questions
+    Then the response status is 422
+    And the response error code is "VALIDATION_ERROR"
+    And no interview is created
+    When I start an interview with a "Backend Developer" listing and 20 target questions
+    Then the response status is 201
+    And the interview has hrQuestionCount 8
+    And the interview has techQuestionCount 12
+
+  @question-generation @backend @AC-7
+  Scenario: An interview with no budget left never buys its HR batch
+    Given I set up an interview with 8 questions
+    And the interview spent_usd equals its budget_usd inside the next AI transaction
+    # The technical batch has always run under I08's ceiling; the HR round — the larger call,
+    # and the first one — did not, so the budget was a ceiling with a hole in it (issue #98).
+    When I POST "/interviews/:id/profile" for the profiling interview
+    Then the response status is 402
+    And the response error code is "BUDGET_EXCEEDED"
+    And no HR questions exist for that interview
+    And no AI call is recorded for that submission
+    And the interview state is "evaluating"
+    And the interview endedReason is "budget_exhausted"
+
   @question-generation @backend @AC-7
   Scenario: HR generation inserts only the first round
     Given I set up an interview with 8 questions
