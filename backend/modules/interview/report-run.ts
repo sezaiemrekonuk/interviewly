@@ -152,8 +152,8 @@ export async function runReport(interviewId: string, opts: ReportOpts): Promise<
   // but a crash in the window now leaves `evaluating` with a report row — which the retry
   // recovers — instead of `completed` with nothing, which nothing can re-enqueue.
   //
-  // Upsert + delete-then-write, because that retry runs this block again: `reports.interview_id`
-  // is unique, so it rewrites the one row rather than adding a second.
+  // Create-only: once one worker writes `reports(interview_id)`, retries/concurrent losers keep
+  // that row as source of truth and do not rewrite payload/question rows.
   const row = {
     status: 'ready' as const,
     payload: gated.data,
@@ -165,12 +165,16 @@ export async function runReport(interviewId: string, opts: ReportOpts): Promise<
     // workers on a redelivered stalled job would otherwise both write. Serialised here rather
     // than left to the unique indexes, which would fail the loser's job instead of ordering it.
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${interviewId}))`;
-    const report = await tx.report.upsert({
-      where: { interview_id: interviewId },
-      create: { interview_id: interviewId, ...row },
-      update: row,
-    });
-    await tx.reportQuestion.deleteMany({ where: { report_id: report.id } });
+    let report: { id: string } | null = null;
+    try {
+      report = await tx.report.create({
+        data: { interview_id: interviewId, ...row },
+        select: { id: true },
+      });
+    } catch (err) {
+      if ((err as { code?: string } | null)?.code !== 'P2002') throw err;
+    }
+    if (!report) return;
     await tx.reportQuestion.createMany({
       data: denormalised.map((q) => ({
         report_id: report.id,
@@ -179,6 +183,7 @@ export async function runReport(interviewId: string, opts: ReportOpts): Promise<
         reason: q.reason,
         star_adherence: q.star_adherence,
       })) satisfies Prisma.ReportQuestionCreateManyInput[],
+      skipDuplicates: true,
     });
   });
 
