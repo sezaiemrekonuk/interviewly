@@ -14,7 +14,9 @@ function uniqueEmail(label: string): string {
 
 async function registerViaApi(request: APIRequestContext, email: string): Promise<void> {
   const response = await request.post('/api/auth/register', {
-    data: { email, password: PASSWORD },
+    // `consent` has been required since issue 61; without it register answers
+    // CONSENT_REQUIRED, which is what the register form's own checkbox sends.
+    data: { email, password: PASSWORD, consent: true },
   });
   // A 429 here is the register limiter (3/hr/IP), not a broken app: this run spends two
   // registrations and a previous run inside the same hour already spent its own. Say so,
@@ -40,7 +42,13 @@ test.describe('auth smoke', () => {
   const existing = uniqueEmail('existing');
 
   test.beforeAll(async ({ playwright, baseURL }) => {
-    const request = await playwright.request.newContext({ baseURL });
+    // `/auth` mounts `requirePublicOrigin` (issue 67) and an API context sends no Origin of
+    // its own, unlike the browser the rest of this file drives. Set it to the origin the
+    // request is actually going to, which is what a form post from that page would carry.
+    const request = await playwright.request.newContext({
+      baseURL,
+      extraHTTPHeaders: baseURL ? { origin: baseURL } : {},
+    });
     await registerViaApi(request, existing);
     await request.dispose();
   });
@@ -50,6 +58,8 @@ test.describe('auth smoke', () => {
 
     await page.locator('#email').fill(uniqueEmail('new'));
     await page.locator('#password').fill(PASSWORD);
+    // Issue 61: the submit button refuses before it posts unless this is ticked.
+    await page.locator('input[type="checkbox"]').check();
     await page.locator('button[type="submit"]').click();
 
     await expect(page).toHaveURL(FIRST_RUN_URL);

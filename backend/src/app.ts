@@ -12,6 +12,7 @@ import adminRouter from '../modules/admin/router';
 import { requireAuth } from '../modules/auth/middleware';
 import authRouter, { meRouter } from '../modules/auth/router';
 import { mountTestSeam } from '../modules/auth/test-seam';
+import { requirePublicOrigin } from '../modules/interview/csrf';
 import { listMyInterviews } from '../modules/interview/my-interviews';
 import { listMyQuestions } from '../modules/interview/my-questions';
 import interviewRouter from '../modules/interview/router';
@@ -43,7 +44,9 @@ app.use('/auth', authRouter);
 app.use('/', meRouter);
 app.get('/me/interviews', requireAuth, listMyInterviews);
 app.get('/me/questions', requireAuth, listMyQuestions);
-app.post('/uploads', requireAuth, uploadMiddleware, createUpload);
+// The one state-changing route with no router of its own, so its guard is per-route by
+// necessity — first in the chain, so a cross-site request never reaches multer's parser.
+app.post('/uploads', requirePublicOrigin, requireAuth, uploadMiddleware, createUpload);
 app.use('/interviews', voiceDowngradeRouter);
 app.use('/interviews', speechRouter);
 app.use('/interviews', interviewRouter);

@@ -10,6 +10,8 @@ import { signInPathFor } from './auth-redirect';
 export interface SessionUser {
   id: string;
   email: string;
+  /** §3.3 card 1 (`profile.fullName`). Absent, not `''`, when the card was skipped. */
+  fullName?: string;
   role: string;
   locale: string;
   /** A04/K8.6 — null until the address is confirmed. ISO timestamp over the wire. */

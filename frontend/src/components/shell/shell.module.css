@@ -27,6 +27,26 @@
   min-width: 0;
 }
 
+/* Above the mobile breakpoint the rail is the left column of a grid row whose height is
+   whatever the working surface needs — so a report or a long interview list stretched the
+   rail to match it, and `.foot`'s `margin-top: auto` pinned the account control to the
+   *bottom of that stretched box*, a screenful or more below the fold. Pinning the rail to
+   the viewport instead of the grid row keeps it exactly one screen tall regardless of how
+   long `.work` runs, so sign-out and the rest of `.foot` are always where the user opened
+   the page — no scrolling required to reach them.
+   No `overflow`: the rail's own content is fixed (a wordmark, three nav items, one account
+   disclosure) and never approaches 100vh, and `overflow-y: auto` here would clip the account
+   dropdown's `position: absolute` panel at the rail's edge — the one thing on this column that
+   is deliberately taller than its trigger. */
+@media (width > 60rem) {
+  .rail {
+    position: sticky;
+    inset-block-start: 0;
+    align-self: start;
+    block-size: 100vh;
+  }
+}
+
 .work {
   background: var(--surface);
   min-width: 0;

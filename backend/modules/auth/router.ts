@@ -1,5 +1,7 @@
 import { Router } from 'express';
 
+import { requirePublicOrigin } from '../interview/csrf';
+
 import { authCapabilities } from './capabilities';
 import { requireAuth } from './middleware';
 import { loginLimiter, passwordResetLimiter, profilePatchLimiter, registerLimiter } from './rate-limit';
@@ -15,6 +17,12 @@ import { confirmPasswordReset, requestPasswordReset } from './password-reset';
 import { confirmVerification, requestVerification } from './verify-email';
 
 const router = Router();
+// I05: mounted once, above the routes, so a state-changing auth route added later cannot
+// ship without it (issue 67 — this router was one of the four that had). GET/HEAD/OPTIONS
+// are exempt, so /capabilities and the two Google redirects are untouched. The two confirm
+// routes are POSTed by our own token pages, not by the mail client, so their Origin is
+// PUBLIC_ORIGIN like any other.
+router.use(requirePublicOrigin);
 router.post('/register', registerLimiter, register);
 router.post('/login', loginLimiter, login);
 router.post('/logout', requireAuth, logout);
@@ -37,6 +45,11 @@ router.post('/password-reset/confirm', confirmPasswordReset);
 export default router;
 
 export const meRouter = Router();
+// Same single mount, one difference: the `/me` prefix is load-bearing. This router is
+// mounted at `/` (app.ts), so a pathless `use` would run on every request the app receives —
+// including the routers mounted after it, which own their guard.
+// `/me` is the prefix of every route below, so this still covers the whole router.
+meRouter.use('/me', requirePublicOrigin);
 meRouter.get('/me', requireAuth, me);
 // A06: the account profile (K8.7, §3.3 layer 1). PATCH is rate-limited per user, not per
 // IP — the endpoint is authenticated, so the account is the thing worth protecting.

@@ -41,7 +41,11 @@ export class AuthWorld extends World {
   readonly passwords = new Map<string, string>();
 
   async request(method: Method, path: string, opts: RequestOpts = {}): Promise<void> {
-    const headers: Record<string, string> = {};
+    // The auth and me routers mount `requirePublicOrigin` (issue 67), and a browser sets
+    // this header on every non-GET itself. Sending it here makes these steps the same
+    // request the app answers in production; a missing one would fail as a CSRF refusal
+    // rather than on whatever the scenario is actually about.
+    const headers: Record<string, string> = { origin: config.PUBLIC_ORIGIN };
     if (opts.body !== undefined) headers['content-type'] = 'application/json';
     if (opts.useSession && this.sessionCookie) headers.cookie = this.sessionCookie;
 
@@ -72,8 +76,7 @@ export class AuthWorld extends World {
 
   /**
    * Multipart `POST /uploads` (A06 @AC-32). Not a mode of `request`: the boundary has to be
-   * the one `FormData` generated, so no content-type may be set by hand, and the interview
-   * router mounts `requirePublicOrigin` — which the JSON auth routes above do not.
+   * the one `FormData` generated, so no content-type may be set by hand.
    */
   async uploadFile(kind: string, filename: string, bytes: Buffer): Promise<void> {
     const form = new FormData();
@@ -110,7 +113,7 @@ export class AuthWorld extends World {
     path: string,
     opts: RequestOpts = {},
   ): Promise<Exchange[]> {
-    const headers: Record<string, string> = {};
+    const headers: Record<string, string> = { origin: config.PUBLIC_ORIGIN };
     if (opts.body !== undefined) headers['content-type'] = 'application/json';
     if (opts.useSession && this.sessionCookie) headers.cookie = this.sessionCookie;
 

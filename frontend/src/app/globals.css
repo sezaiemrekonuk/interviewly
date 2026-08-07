@@ -9,7 +9,7 @@
 html,
 body {
   max-width: 100vw;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 body {
@@ -42,4 +42,12 @@ input {
 a {
   color: inherit;
   text-decoration: none;
+}
+
+/* The header's section links and `#hash` anchors get a native smooth scroll — no JS scroll
+   library. Gated on reduced-motion like every other authored motion in this app. */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
 }
