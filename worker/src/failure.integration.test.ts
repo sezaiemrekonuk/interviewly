@@ -15,7 +15,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { Queue, QueueEvents, Worker, type Job, type Processor } from 'bullmq';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { AiClient, ReportPayload } from '@interviewly/ai';
 import { prisma, REPORT_JOB_OPTIONS, REPORT_QUEUE, runReport, setStorage } from '@interviewly/backend';
@@ -61,6 +61,42 @@ async function seedEvaluatingInterview(): Promise<string> {
     },
   });
   return interview.id;
+}
+
+/** As above, plus one answered question — `report_questions` needs a real FK to denormalise to. */
+async function seedAnsweredInterview(): Promise<{ interviewId: string; questionId: string }> {
+  const interviewId = await seedEvaluatingInterview();
+  const persona = await prisma.persona.create({
+    data: {
+      role: 'hr',
+      name: 'Stub Persona',
+      voice_id: 'stub',
+      avatar_set: {},
+      system_prompt: 'stub',
+    },
+  });
+  const round = await prisma.interviewRound.create({
+    data: { interview_id: interviewId, type: 'hr', persona_id: persona.id },
+  });
+  const question = await prisma.question.create({
+    data: {
+      round_id: round.id,
+      order_index: 1,
+      text: 'Tell me about a project you owned.',
+      kind: 'behavioral',
+      difficulty: 'medium',
+      topic: 'ownership',
+    },
+  });
+  await prisma.answer.create({
+    data: {
+      question_id: question.id,
+      transcript: 'I owned the ingest pipeline end to end.',
+      input_mode: 'text',
+      answered_at: new Date(),
+    },
+  });
+  return { interviewId, questionId: question.id };
 }
 
 interface Ring {
@@ -177,6 +213,151 @@ describe('transient report failure', () => {
     } finally {
       await r.close();
     }
+  }, 30_000);
+});
+
+describe('crash between the report write and the transition (issue 082)', () => {
+  /** A payload the gate accepts, keyed to a question that really exists. */
+  const clientScoring = (questionId: string): AiClient =>
+    ({
+      generateReport: async () => ({
+        overall_impression: 'Answered the question and stayed on topic.',
+        overall_score: 3,
+        strengths: ['Stayed on topic', 'Consistent structure'],
+        improvements: ['Add metrics', 'State the outcome'],
+        rounds: [{ type: 'hr', score: 3, summary: 'Stub HR round.' }],
+        questions: [
+          { question_id: questionId, score: 3, reason: 'Clear ownership.', star_adherence: 0.6 },
+        ],
+        language: 'en',
+      }),
+    }) as unknown as AiClient;
+
+  it('leaves evaluating with a report row, and the retry completes it without duplicating', async () => {
+    const { interviewId, questionId } = await seedAnsweredInterview();
+    let attempts = 0;
+    let stateAfterCrash: string | undefined;
+
+    // `applyTransition` is the only `interview.updateMany` on this path, so failing the first
+    // call is exactly the crash window: the report transaction has committed, the state has not.
+    const crash = vi
+      .spyOn(prisma.interview, 'updateMany')
+      .mockImplementationOnce(() => {
+        throw new Error('worker killed between commits');
+      });
+
+    const r = await ring(async (job: Job<ReportJobData>) => {
+      attempts += 1;
+      try {
+        await runReport(job.data.interviewId, {
+          traceId: `worker-${job.id}`,
+          client: clientScoring(questionId),
+        });
+      } catch (err) {
+        // Read the wreckage the first attempt left before the retry repairs it.
+        if (attempts === 1) {
+          stateAfterCrash = (
+            await prisma.interview.findUniqueOrThrow({ where: { id: interviewId } })
+          ).state;
+        }
+        throw err;
+      }
+    });
+
+    try {
+      await r.run(interviewId);
+
+      expect(attempts).toBe(2);
+      // The whole point: the crash window is recoverable because the interview never left
+      // `evaluating`, and the report it did write was already durable.
+      expect(stateAfterCrash).toBe('evaluating');
+      expect(
+        await prisma.report.count({ where: { interview_id: interviewId, status: 'ready' } }),
+      ).toBe(1);
+
+      const interview = await prisma.interview.findUniqueOrThrow({ where: { id: interviewId } });
+      expect(interview.state).toBe('completed');
+
+      const reports = await prisma.report.findMany({ where: { interview_id: interviewId } });
+      expect(reports).toHaveLength(1);
+      expect(
+        await prisma.reportQuestion.findMany({ where: { report_id: reports[0].id } }),
+      ).toHaveLength(1);
+    } finally {
+      crash.mockRestore();
+      await r.close();
+    }
+  }, 30_000);
+
+  // The regression guard. The test above passes under the old write order too (it fails the
+  // FIRST commit, which is harmless either way); this one fails the SECOND, which is the crash
+  // window. Under `transition -> report` it leaves `completed` with no report and nothing able
+  // to re-enqueue — the bug in issue 082.
+  it('never leaves completed with no report when the report write is the commit that dies', async () => {
+    const { interviewId, questionId } = await seedAnsweredInterview();
+    let attempts = 0;
+    let stateAfterCrash: string | undefined;
+
+    // `$transaction` is only the report write here: the injected client bypasses the chain, so
+    // nothing else on this path opens one.
+    const crash = vi.spyOn(prisma, '$transaction').mockImplementationOnce(() => {
+      throw new Error('worker killed during the report write');
+    });
+
+    const r = await ring(async (job: Job<ReportJobData>) => {
+      attempts += 1;
+      try {
+        await runReport(job.data.interviewId, {
+          traceId: `worker-${job.id}`,
+          client: clientScoring(questionId),
+        });
+      } catch (err) {
+        if (attempts === 1) {
+          stateAfterCrash = (
+            await prisma.interview.findUniqueOrThrow({ where: { id: interviewId } })
+          ).state;
+        }
+        throw err;
+      }
+    });
+
+    try {
+      await r.run(interviewId);
+
+      expect(attempts).toBe(2);
+      expect(stateAfterCrash).toBe('evaluating');
+
+      const interview = await prisma.interview.findUniqueOrThrow({ where: { id: interviewId } });
+      expect(interview.state).toBe('completed');
+      expect(await prisma.report.count({ where: { interview_id: interviewId } })).toBe(1);
+    } finally {
+      crash.mockRestore();
+      await r.close();
+    }
+  }, 30_000);
+
+  // The write is no longer behind the `evaluating → completed` CAS, and BullMQ redelivers a
+  // stalled job — so two runs of this function can overlap. No queue here: `runReport` twice,
+  // concurrently, is the shape that matters.
+  it('two concurrent runs write one report and one row per question', async () => {
+    const { interviewId, questionId } = await seedAnsweredInterview();
+    const run = () =>
+      runReport(interviewId, { traceId: `concurrent-${randomUUID()}`, client: clientScoring(questionId) });
+
+    const results = await Promise.allSettled([run(), run()]);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+
+    // The loser fails on the CAS, which `processReportJob` swallows — not on a unique violation,
+    // which would fail its job and burn a retry.
+    const loser = results.find((r) => r.status === 'rejected') as PromiseRejectedResult;
+    expect((loser.reason as { code?: string }).code).toBe('INVALID_STATE_TRANSITION');
+
+    const reports = await prisma.report.findMany({ where: { interview_id: interviewId } });
+    expect(reports).toHaveLength(1);
+    expect(await prisma.reportQuestion.count({ where: { report_id: reports[0].id } })).toBe(1);
+    expect(
+      (await prisma.interview.findUniqueOrThrow({ where: { id: interviewId } })).state,
+    ).toBe('completed');
   }, 30_000);
 });
 

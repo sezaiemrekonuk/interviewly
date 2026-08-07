@@ -137,10 +137,6 @@ export async function runReport(interviewId: string, opts: ReportOpts): Promise<
   const gated = ReportPayloadSchema.safeParse(payload);
   if (!gated.success) return failReport(interview, ctx, gated.error.message);
 
-  // First, because it is the CAS that makes this run exclusive: a second job on the same
-  // interview finds `evaluating` gone and throws before it can write a second report.
-  await applyTransition(interview, 'completed', { traceId: opts.traceId });
-
   const known = new Set(turns.map((t) => t.questionId));
   const denormalised = gated.data.questions.filter((q) => known.has(q.question_id));
   if (denormalised.length < gated.data.questions.length) {
@@ -152,20 +148,29 @@ export async function runReport(interviewId: string, opts: ReportOpts): Promise<
     );
   }
 
-  // ponytail: the transition above is committed separately from this write, so a crash between
-  // them leaves `completed` with no report row. The report ledger's retry/dead-letter (R01) is
-  // where that is recovered; a shared transaction would mean routing every state write through
-  // a tx-aware `applyTransition`, which nothing else needs.
+  // The report is written BEFORE the transition (issue 082). The two still commit separately,
+  // but a crash in the window now leaves `evaluating` with a report row — which the retry
+  // recovers — instead of `completed` with nothing, which nothing can re-enqueue.
+  //
+  // Upsert + delete-then-write, because that retry runs this block again: `reports.interview_id`
+  // is unique, so it rewrites the one row rather than adding a second.
+  const row = {
+    status: 'ready' as const,
+    payload: gated.data,
+    prompt_uuid: reportPrompt().uuid,
+    prompt_version: reportPrompt().version,
+  };
   await prisma.$transaction(async (tx) => {
-    const report = await tx.report.create({
-      data: {
-        interview_id: interviewId,
-        status: 'ready',
-        payload: gated.data,
-        prompt_uuid: reportPrompt().uuid,
-        prompt_version: reportPrompt().version,
-      },
+    // The `evaluating → completed` CAS used to gate this block; it runs after it now, so two
+    // workers on a redelivered stalled job would otherwise both write. Serialised here rather
+    // than left to the unique indexes, which would fail the loser's job instead of ordering it.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${interviewId}))`;
+    const report = await tx.report.upsert({
+      where: { interview_id: interviewId },
+      create: { interview_id: interviewId, ...row },
+      update: row,
     });
+    await tx.reportQuestion.deleteMany({ where: { report_id: report.id } });
     await tx.reportQuestion.createMany({
       data: denormalised.map((q) => ({
         report_id: report.id,
@@ -176,6 +181,10 @@ export async function runReport(interviewId: string, opts: ReportOpts): Promise<
       })) satisfies Prisma.ReportQuestionCreateManyInput[],
     });
   });
+
+  // Second, and still the CAS that makes this run exclusive: a concurrent job finds `evaluating`
+  // gone and throws rather than reporting a second completion.
+  await applyTransition(interview, 'completed', { traceId: opts.traceId });
 }
 
 /**
