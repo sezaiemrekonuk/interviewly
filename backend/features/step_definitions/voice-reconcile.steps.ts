@@ -82,7 +82,14 @@ function expectedCostUsd(seconds: number): number {
 }
 
 async function llmCallRows(world: AiWorld) {
-  return prisma.llmCall.findMany({ where: { interview_id: world.interviewId } });
+  return prisma.llmCall.findMany({
+    where: { interview_id: world.interviewId },
+    orderBy: [{ created_at: 'asc' }, { id: 'asc' }],
+  });
+}
+
+async function newLlmCallRows(world: AiWorld) {
+  return (await llmCallRows(world)).slice(callsBefore);
 }
 
 async function spentUsd(world: AiWorld): Promise<string> {
@@ -142,7 +149,8 @@ Given(
   async function (this: AiWorld, _seconds: number) {
     // The duration is the webhook's claim, not a stored column — the interview only has to
     // exist in voice mode. No profile step: question generation is stubbed (AI_ENABLED=false)
-    // and writes no llm_calls row, which is what lets "exactly one row" mean what it says.
+    // and writes no reconciliation row. Setup may still record other llm_calls (for example the
+    // title-generation path), so later assertions compare against the pre-webhook baseline.
     await signIn.call(this, 'candidate');
     await this.httpPost('/interviews', {
       mode: 'voice',
@@ -151,9 +159,8 @@ Given(
     });
     assert.equal(this.lastStatus, 201, `setup failed: ${JSON.stringify(this.lastBody)}`);
     this.interviewId = (this.lastBody?.interviewId as string | undefined) ?? '';
-    assert.equal((await llmCallRows(this)).length, 0, 'the fixture already had an llm_calls row');
   },
-);
+  );
 
 Given('the interview already holds an elevenlabs speech usage row', async function (this: AiWorld) {
   // The row S04's TTS path writes, inserted directly so this scenario stays about the
@@ -206,29 +213,32 @@ When('the same post-call reconciliation webhook is delivered again', async funct
 // ---------------------------------------------------------------- then
 
 Then('the worker writes exactly one llm_calls row for the interview', async function (this: AiWorld) {
-  assert.equal((await llmCallRows(this)).length, 1);
+  assert.equal((await newLlmCallRows(this)).length, 1);
 });
 
 Then(
   'the worker writes exactly one llm_calls row for model {string}',
   async function (this: AiWorld, model: string) {
-    const rows = (await llmCallRows(this)).filter((row) => row.model === model);
+    const rows = (await newLlmCallRows(this)).filter((row) => row.model === model);
     assert.equal(rows.length, 1, `expected 1 ${model} row, got ${rows.length}`);
   },
 );
 
 Then('that llm_calls row has provider {string}', async function (this: AiWorld, provider: string) {
-  const [row] = await llmCallRows(this);
+  const [row] = await newLlmCallRows(this);
+  assert.ok(row, 'no reconciled llm_calls row was recorded');
   assert.equal(row.provider, provider);
 });
 
 Then('that llm_calls row has unit_kind {string}', async function (this: AiWorld, kind: string) {
-  const [row] = await llmCallRows(this);
+  const [row] = await newLlmCallRows(this);
+  assert.ok(row, 'no reconciled llm_calls row was recorded');
   assert.equal(row.unit_kind, kind);
 });
 
 Then('that llm_calls row has units {int}', async function (this: AiWorld, units: number) {
-  const [row] = await llmCallRows(this);
+  const [row] = await newLlmCallRows(this);
+  assert.ok(row, 'no reconciled llm_calls row was recorded');
   assert.equal(Number(row.units), units);
 });
 
