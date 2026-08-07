@@ -215,14 +215,20 @@ export function useSignOut(): UseMutationResult<void, ApiError, void> {
  * no session, and `UNAUTHENTICATED` there means "no row to write", not something they can act
  * on. The cookie has already switched the interface by the time this resolves either way.
  */
-export function useSaveLocale(): UseMutationResult<void, ApiError, string> {
+export function useSaveLocale(): UseMutationResult<boolean, ApiError, string> {
   const client = useQueryClient();
   return useMutation({
     mutationFn: async (locale: string) => {
       const result = await apiPatch('/me/locale', { locale });
-      if (!result.ok) throw new ApiError(result.code ?? 'UNKNOWN');
+      if (!result.ok) {
+        if (result.code === 'UNAUTHENTICATED') return false;
+        throw new ApiError(result.code ?? 'UNKNOWN');
+      }
+      return true;
     },
-    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.me() }),
+    onSuccess: (saved) => {
+      if (saved) void client.invalidateQueries({ queryKey: queryKeys.me() });
+    },
   });
 }
 
