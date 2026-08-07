@@ -51,8 +51,8 @@ export default function Home() {
 
       <main className={styles.ground}>
         <HomeSwitch>
-          {/* Deliberately short — three elements and then the stage. The argument is the thing
-              directly below this band, and a full-height hero would put it under the fold. */}
+          {/* Deliberately short — headline, subhead, one CTA. The argument is the stage
+              directly below, and a full-height hero would put it under the fold. */}
           <section className={styles.hero}>
             <h1 className={styles.title}>{t('hero')}</h1>
             <p className={styles.subhead}>{t('subhead')}</p>
@@ -60,17 +60,18 @@ export default function Home() {
               <Link href="/register" className={styles.cta}>
                 {t('cta')}
               </Link>
-              <p className={styles.note}>{t('ctaNote')}</p>
-              <Link href="/sign-in" className={styles.secondary}>
-                {t('signIn')}
-              </Link>
             </div>
           </section>
 
-          <DemoInterview />
+          <section id="demo" className={styles.demoSection} aria-labelledby="how-it-works-title">
+            <h2 id="how-it-works-title" className={styles.demoSectionTitle}>
+              {t('howItWorks')}
+            </h2>
+            <DemoInterview />
+          </section>
 
           {/* ---------------------------------------------- how the questions get written */}
-          <section className={styles.band} aria-labelledby="mechanism-title">
+          <section id="mechanism" className={styles.band} aria-labelledby="mechanism-title">
             <div className={styles.bandHead}>
               <h2 id="mechanism-title" className={styles.bandTitle}>
                 {t('mechanism.title')}
@@ -92,7 +93,7 @@ export default function Home() {
           </section>
 
           {/* ------------------------------------------------------------ voice, or text */}
-          <section className={styles.band} aria-labelledby="modes-title">
+          <section id="modes" className={styles.band} aria-labelledby="modes-title">
             <div className={styles.bandHead}>
               <h2 id="modes-title" className={styles.bandTitle}>
                 {t('modes.title')}
@@ -125,7 +126,7 @@ export default function Home() {
           </section>
 
           {/* --------------------------------------------------- what the report contains */}
-          <section className={styles.band} aria-labelledby="report-title">
+          <section id="report" className={styles.band} aria-labelledby="report-title">
             <div className={styles.bandHead}>
               <h2 id="report-title" className={styles.bandTitle}>
                 {t('report.title')}
@@ -169,7 +170,7 @@ export default function Home() {
           </section>
 
           {/* ------------------------------------------------------------------------ faq */}
-          <section className={styles.band} aria-labelledby="faq-title">
+          <section id="faq" className={styles.band} aria-labelledby="faq-title">
             <div className={styles.bandHead}>
               <h2 id="faq-title" className={styles.bandTitle}>
                 {t('faq.title')}
