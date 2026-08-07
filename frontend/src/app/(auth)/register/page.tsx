@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useState } from 'react';
 
 import { AuthShell } from '../../../components/auth/auth-shell';
@@ -21,6 +21,9 @@ const FIELD_FOR_CODE = {
 export default function RegisterPage() {
   const t = useTranslations('auth');
   const router = useRouter();
+  // The language the form is being read in, carried onto the new row so the verification mail
+  // — sent inside `POST /auth/register`, before the account can reach the switcher — is in it.
+  const locale = useLocale();
 
   // Consent lives on the page, not inside the form: both ways of creating an account —
   // the credentials form and the Google redirect — have to be behind it (issue 009). The
@@ -35,7 +38,7 @@ export default function RegisterPage() {
         schema={registerSchema}
         submitLabel={t('register')}
         fieldForCode={FIELD_FOR_CODE}
-        extraBody={{ consent: consented }}
+        extraBody={{ consent: consented, locale }}
         refuseWith={consented ? null : 'CONSENT_REQUIRED'}
         // `replace`, not `push`: the back button from the landing page should not return
         // to a registration form for an account that now exists.
