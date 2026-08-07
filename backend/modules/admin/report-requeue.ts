@@ -61,11 +61,16 @@ export const requeueReport: RequestHandler = async (req, res, next) => {
     // Not the integrity guard — `runReport`'s `evaluating → completed` CAS is, and no two jobs
     // can both win it. This refuses the *work*: re-running the model over a transcript that
     // already has a report costs money and would overwrite a finished deliverable.
+    //
+    // Only from a terminal state, though. A report row while the interview is still `evaluating`
+    // is the recoverable half of issue 082's crash window — written, then the transition never
+    // landed — and refusing there would strand exactly the interview this endpoint exists for.
+    // Safe to re-run because that write is an upsert onto a unique `interview_id`.
     const existing = await prisma.report.findFirst({
       where: { interview_id: interviewId },
       select: { id: true },
     });
-    if (existing) throw new ApiError('REPORT_ALREADY_EXISTS');
+    if (existing && from !== 'evaluating') throw new ApiError('REPORT_ALREADY_EXISTS');
 
     // Read the job's state rather than inferring it from `remove`'s return code. Measured on
     // bullmq 6.0.2: `remove` answers 1 for a job that never existed, one retained in

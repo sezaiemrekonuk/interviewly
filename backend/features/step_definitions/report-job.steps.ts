@@ -11,6 +11,7 @@
  * ci.yml's `acceptance` job) — importing it would silently depend on a stale or absent build.
  */
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { After, Given, Then, When } from '@cucumber/cucumber';
 import { QueueEvents, Worker, type Job } from 'bullmq';
 
@@ -213,6 +214,19 @@ When('the report job is deleted from Redis', async function (this: AiWorld) {
 
 Then('no report job exists for the interviewId', async function (this: AiWorld) {
   assert.equal(await reportQueue.getJob(this.interviewId), undefined);
+});
+
+When('a report row is written while the interview is still evaluating', async function (this: AiWorld) {
+  // Issue 082's crash window, staged directly: the report transaction committed and the
+  // `evaluating → completed` one did not. The requeue must still be allowed here.
+  await prisma.report.create({
+    data: {
+      interview_id: this.interviewId,
+      status: 'ready',
+      prompt_uuid: randomUUID(),
+      prompt_version: 1,
+    },
+  });
 });
 
 When('the interview is dead-lettered with no report row', async function (this: AiWorld) {

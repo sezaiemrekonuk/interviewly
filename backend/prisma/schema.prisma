@@ -336,7 +336,9 @@ model Answer {
 
 model Report {
   id             String       @id @default(cuid())
-  interview_id   String
+  /// Unique (issue 082): one report per interview, so a retried job upserts instead of
+  /// adding a second row.
+  interview_id   String       @unique
   status         ReportStatus @default(queued)
   payload        Json? // K15 Zod schema
   pdf_key        String?
@@ -363,6 +365,8 @@ model ReportQuestion {
   report   Report   @relation(fields: [report_id], references: [id], onDelete: Restrict)
   question Question @relation(fields: [question_id], references: [id], onDelete: Restrict)
 
+  /// Issue 082: a question is scored once per report, so a concurrent rewrite cannot double it.
+  @@unique([report_id, question_id])
   @@map("report_questions")
 }
 
