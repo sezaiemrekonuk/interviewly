@@ -16,7 +16,10 @@ const CEILING_MICRO = 500_000;
 
 /** Six-decimal string → integer micro-dollars, so a page of costs sums without float drift. */
 export function microUsd(costUsd: string): number {
-  return Math.round(Number(costUsd) * 1e6);
+  const [whole, frac = ''] = costUsd.split('.');
+  const dollars = Number.parseInt(whole || '0', 10);
+  const micros = Number.parseInt(frac.padEnd(6, '0').slice(0, 6) || '0', 10);
+  return dollars * 1_000_000 + micros;
 }
 
 /**
