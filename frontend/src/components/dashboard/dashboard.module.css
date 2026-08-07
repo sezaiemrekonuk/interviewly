@@ -1,0 +1,714 @@
+/* The briefing home. Cards here are containers for measurements, not the page's structure —
+ * the page is a reading order: what is still open, where you stand, what to work on, what you
+ * have done. Density alternates so the eye is not asked to scan six identical boxes.
+ */
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 1120px;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.error {
+  padding: 12px 16px;
+  font-size: 14px;
+  color: var(--danger);
+  background: var(--surface-sunken);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-input);
+}
+
+.topAction {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-button);
+  transition: background-color var(--duration-default) var(--easing-default);
+}
+
+.topAction:hover {
+  background: var(--surface-sunken);
+}
+
+.topAction:focus-visible,
+.primaryCta:focus-visible,
+.cardLink:focus-visible,
+.sessionLink:focus-visible,
+.focusLink:focus-visible,
+.runwayLink:focus-visible,
+.textAction:focus-visible,
+.confirmAction:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* The surface's single --primary: carrying on, or starting the first one. Never both — the
+   runway only renders when there is nothing to carry on from. */
+.primaryCta {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  min-height: 44px;
+  padding: 12px 20px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--surface);
+  background: var(--primary);
+  border-radius: var(--radius-button);
+  transition: background-color var(--duration-default) var(--easing-default);
+}
+
+.primaryCta:hover {
+  background: var(--primary-deep);
+}
+
+/* ------------------------------------------------------------------------------- carry on */
+
+/* The rail's material on the working surface: an interview that is still open is the one
+   thing here that belongs to the room rather than to the archive. */
+.carryOn {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 24px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  color: var(--rail-text);
+  background: var(--rail);
+  border-radius: var(--radius-panel);
+}
+
+.carryOnLabel {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--rail-text-faint);
+}
+
+.carryOnTitle {
+  margin-block-start: 4px;
+  font-family: var(--font-heading), Georgia, serif;
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.carryOnNote {
+  margin-block-start: 4px;
+  font-size: 14px;
+  color: var(--rail-text-muted);
+}
+
+/* ----------------------------------------------------------------------------- card grid */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.card,
+.recent {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+}
+
+.cardHead {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.cardTitle {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* DESIGN §3.3 tertiary: 14px --text-muted. These were --primary-deep, which put seven orange
+   links in one viewport beside the one orange CTA and un-reserved the colour that is supposed to
+   mean "do this now" and nothing else. The underline is permanent rather than a hover, because a
+   muted link with no underline is not legible as a link. */
+.cardLink,
+.sessionLink,
+.focusLink,
+.runwayLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-decoration: underline;
+  border-radius: var(--radius-button);
+}
+
+.cardLink:hover,
+.sessionLink:hover,
+.focusLink:hover,
+.runwayLink:hover {
+  color: var(--text);
+}
+
+.cardEmpty,
+.cardNote {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+/* ------------------------------------------------------------------------------- standing */
+
+.figureRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: baseline;
+}
+
+.figureBlock {
+  display: flex;
+  gap: 4px;
+  align-items: baseline;
+}
+
+.figure {
+  font-size: 56px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--text);
+}
+
+.figureUnit {
+  padding-inline-start: 4px;
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+/* Direction is carried by the sign in the label as well as the colour, so a change of one
+   point survives being printed in greyscale or read out loud. */
+.delta {
+  padding: 4px 8px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: var(--radius-button);
+}
+
+.deltaup {
+  color: var(--success);
+  background: var(--surface-sunken);
+}
+
+.deltadown {
+  color: var(--danger);
+  background: var(--surface-sunken);
+}
+
+.deltaflat {
+  color: var(--text-muted);
+  background: var(--surface-sunken);
+}
+
+.factRow {
+  display: flex;
+  gap: 24px;
+}
+
+.factLabel {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.factValue {
+  margin-block-start: 4px;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.trend {
+  margin-block-start: auto;
+  padding-block-start: 12px;
+  border-block-start: 1px solid var(--border);
+}
+
+.trendCaption {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.spark {
+  display: block;
+  width: 100%;
+  height: 44px;
+  margin-block-start: 8px;
+  color: var(--accent);
+}
+
+/* A module that is not here yet, and the count of what it is waiting for. Silence would make
+   it a surprise on the fourth visit; a number is a reason to come back. */
+.locked {
+  margin-block-start: auto;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--text-muted);
+  background: var(--surface-sunken);
+  border-radius: var(--radius-input);
+}
+
+/* ---------------------------------------------------------------------------- round split */
+
+.bars {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.bar {
+  display: grid;
+  grid-template-columns: 9ch minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+
+.barLabel {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.barValue {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 4ch;
+  gap: 12px;
+  align-items: center;
+}
+
+/* The dashboard's data hue is --accent: the sparkline and the rhythm grid already are, and these
+   bars were --primary, which made the same category of measurement two colours — one of them the
+   action colour. Doubled class rather than !important: this rule and `meter.module.css`'s default
+   have equal specificity and module order across two stylesheets is not guaranteed.
+   Two rules, never a selector list — an unknown vendor pseudo-element discards the whole list. */
+.barMeter.barMeter::-webkit-progress-value {
+  background: var(--accent);
+}
+
+.barMeter.barMeter::-moz-progress-bar {
+  background: var(--accent);
+}
+
+.barNumber {
+  font-size: 16px;
+  font-weight: 600;
+  text-align: end;
+}
+
+.reading {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  margin-block-start: auto;
+  padding-block-start: 12px;
+  border-block-start: 1px solid var(--border);
+}
+
+.readingText {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+/* ---------------------------------------------------------------------------------- focus */
+
+.focusList {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  list-style: none;
+}
+
+/* Nothing scored low enough to work on. A result, not an empty state — so it sits on the same
+   bed and at the same size a row would, rather than shrinking to an apology in muted 14px. */
+.focusClear {
+  max-width: 65ch;
+  padding: 16px;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--surface-sunken);
+  border-radius: var(--radius-card);
+}
+
+.focusItem {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-card);
+}
+
+.focusHead {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.roundChip {
+  padding: 4px 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-button);
+}
+
+.focusScore {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.focusScore[data-band='low'] {
+  color: var(--danger);
+}
+
+.focusScore[data-band='mid'] {
+  color: var(--warning);
+}
+
+.focusQuestion {
+  font-family: var(--font-heading), Georgia, serif;
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+/* The written mark. The part of a score anyone can act on. */
+.focusReason {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.focusLink {
+  margin-block-start: auto;
+  min-height: 0;
+}
+
+/* --------------------------------------------------------------------------------- rhythm */
+
+.weeks {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 4px;
+  list-style: none;
+}
+
+.week {
+  height: 32px;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-input);
+}
+
+.weekOn {
+  background: var(--accent);
+  opacity: 0.45;
+}
+
+.weekBusy {
+  opacity: 1;
+}
+
+/* -------------------------------------------------------------------------------- recent */
+
+.sessions {
+  display: flex;
+  flex-direction: column;
+  list-style: none;
+}
+
+.session {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 12px 20px;
+  align-items: center;
+  padding-block: 12px;
+  border-block-start: 1px solid var(--border);
+}
+
+.session:first-child {
+  border-block-start: 0;
+}
+
+.sessionMain {
+  min-width: 0;
+}
+
+.sessionTitle {
+  overflow: hidden;
+  font-size: 16px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sessionMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-block-start: 4px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.pill {
+  padding: 4px 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+  background: var(--surface-sunken);
+  border-radius: var(--radius-button);
+}
+
+/* Still running earns a tint. The label always spells the state, so the tint never carries it.
+   `--accent-deep` on the sunken bed, not on `--primary-soft`: an accent ink over a primary
+   tint is two hues doing one job, and it left an orange wash on a surface whose only orange is
+   allowed to be the Carry-on action. There is no `--accent-soft` token and inventing one to
+   silence this would be a value earned by a lint rather than by the world (DESIGN §2). */
+.pill[data-live] {
+  color: var(--accent-deep);
+  background: var(--surface-sunken);
+}
+
+.pill[data-quiet] {
+  color: var(--text-muted);
+  opacity: 0.8;
+}
+
+.sessionMode {
+  text-transform: lowercase;
+}
+
+.sessionScore {
+  display: flex;
+  gap: 0;
+  align-items: baseline;
+  justify-self: end;
+}
+
+.sessionScoreValue {
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.sessionNoScore {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.sessionActions,
+.confirm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  align-items: center;
+  justify-self: end;
+}
+
+.confirmQuestion {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.confirmAction {
+  min-height: 44px;
+  padding: 8px 12px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--danger);
+  background: none;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-button);
+  cursor: pointer;
+}
+
+.textAction {
+  min-height: 44px;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--text-muted);
+  background: none;
+  border: 0;
+  border-radius: var(--radius-button);
+  cursor: pointer;
+}
+
+.textAction:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.sessionError {
+  grid-column: 1 / -1;
+  font-size: 13px;
+  color: var(--danger);
+}
+
+/* --------------------------------------------------------------------------------- runway */
+
+.runway {
+  padding: 32px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+}
+
+.runwayTitle {
+  font-family: var(--font-heading), Georgia, serif;
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.runwayLede {
+  max-width: 60ch;
+  margin-block-start: 8px;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.runwaySteps {
+  display: flex;
+  flex-direction: column;
+  margin-block-start: 24px;
+  list-style: none;
+}
+
+.runwayStep {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  padding-block: 16px;
+  border-block-start: 1px solid var(--border);
+}
+
+.runwayIndex {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--surface-sunken);
+  border-radius: var(--radius-button);
+}
+
+.runwayStepDone .runwayIndex {
+  color: var(--surface);
+  background: var(--success);
+}
+
+.runwayStepTitle {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.runwayStepBody {
+  max-width: 60ch;
+  margin-block-start: 4px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.runwayDone {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--success);
+}
+
+/* ------------------------------------------------------------------------------- skeleton */
+
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Held at the height the real modules will occupy, so nothing jumps when they land. */
+.skeletonWide {
+  height: 96px;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-panel);
+}
+
+.skeletonCard {
+  height: 180px;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-card);
+}
+
+/* ---------------------------------------------------------------------------------- 64rem */
+
+@media (width <= 64rem) {
+  .grid,
+  .focusList {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .session {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .sessionActions,
+  .confirm {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  .runway {
+    padding: 20px;
+  }
+
+  .runwayStep {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .runwayStep > :last-child {
+    grid-column: 2;
+  }
+}

@@ -1,0 +1,255 @@
+/* The question archive. Admin's density, on a candidate's surface: this is the one screen in
+ * the product where a user reads many rows at once looking for a pattern, and 16px rows with
+ * card padding would put four of them on a laptop screen.
+ */
+
+/* `left: 0` is load-bearing, not tidiness. Without an inset an absolutely positioned box keeps
+   its static position, and the static position of a <caption> inside a 720px-min table is past
+   the right edge of the 390px viewport — so the hidden caption escaped `.wrapper`'s overflow
+   and gave the page body a second, invisible horizontal scroll (DESIGN §3.6, §6). */
+.srOnly {
+  position: absolute;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  align-items: center;
+  padding-block-end: 16px;
+}
+
+.filterGroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 0;
+  border: 0;
+}
+
+.filterLegend {
+  padding-inline-end: 4px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.chip {
+  min-height: 44px;
+  padding: 8px 12px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-button);
+  cursor: pointer;
+  transition: background-color var(--duration-default) var(--easing-default);
+}
+
+.chip:hover {
+  background: var(--surface-sunken);
+}
+
+/* Selected inverts to the rail's material — the product's one "this is the current one". */
+.chipOn,
+.chipOn:hover {
+  font-weight: 600;
+  color: var(--rail-text);
+  background: var(--rail);
+  border-color: var(--rail);
+}
+
+.chip:focus-visible,
+.open:focus-visible,
+.loadMore:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.count {
+  margin-inline-start: auto;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* -------------------------------------------------------------------------------- table */
+
+.wrapper {
+  overflow-x: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+}
+
+.table {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+}
+
+.table th {
+  padding: 12px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-align: start;
+  border-block-end: 1px solid var(--border);
+}
+
+.table td {
+  padding: 12px 16px;
+  font-size: 14px;
+  vertical-align: top;
+  border-block-end: 1px solid var(--border);
+}
+
+.table tbody tr:last-child td {
+  border-block-end: 0;
+}
+
+.numeric {
+  text-align: end;
+  white-space: nowrap;
+}
+
+.questionCell {
+  min-width: 28ch;
+}
+
+/* Serif, because it was spoken. The same face the room sets a live question in. */
+.question {
+  font-family: var(--font-heading), Georgia, serif;
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+.reason {
+  max-width: 70ch;
+  margin-block-start: 4px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.roundChip {
+  display: inline-block;
+  padding: 4px 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--surface-sunken);
+  border-radius: var(--radius-button);
+  white-space: nowrap;
+}
+
+.score {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* Banded by the score itself, not by the column: sorting worst-first must not repaint a 5
+   as a failure. */
+.score[data-band='low'] {
+  color: var(--danger);
+}
+
+.score[data-band='mid'] {
+  color: var(--warning);
+}
+
+.outOf {
+  padding-inline-start: 4px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.none {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.when {
+  font-size: 13px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* §3.3 tertiary. It was `--primary-deep`, which on a table of sixty rows meant sixty orange
+   elements and no primary action anywhere — `--primary` means "do this now" and a link repeated
+   on every row is not that. Muted needs the underline to stay readable as a link, since it now
+   shares its colour with the date column beside it. */
+.open {
+  font-size: 14px;
+  color: var(--text-muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  white-space: nowrap;
+}
+
+.open:hover {
+  color: var(--text);
+}
+
+/* Why STAR reads "n/a" on technical rows. A footnote under the table rather than a per-row
+   `title`: a tooltip is unreachable on touch and by keyboard, and the same sentence repeated in
+   sixty accessible names is noise. One sentence, visible to everyone, read once. */
+.note {
+  max-width: 70ch;
+  margin-block-start: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.loadMore {
+  align-self: center;
+  min-height: 44px;
+  margin-block-start: 16px;
+  padding: 12px 20px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-button);
+  cursor: pointer;
+}
+
+.loadMore:hover {
+  background: var(--surface-sunken);
+}
+
+/* -------------------------------------------------------------------------------- empty */
+
+.empty {
+  padding: 32px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+}
+
+.emptyTitle {
+  font-family: var(--font-heading), Georgia, serif;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.emptyBody {
+  max-width: 60ch;
+  margin-block-start: 8px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}

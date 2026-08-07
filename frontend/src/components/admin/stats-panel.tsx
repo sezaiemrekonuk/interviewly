@@ -1,33 +1,40 @@
 'use client';
 
 import { useFormatter, useTranslations } from 'next-intl';
-import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, XAxis, YAxis } from 'recharts';
 
 import type { AdminStatsResponse } from '../../lib/query';
+import { Meter } from '../shell/meter';
+import { Spec } from '../shell/split-shell';
 
-import styles from './stats-panel.module.css';
+import styles from './panels.module.css';
+
+/** `report_questions.score` is an integer 0..5 (packages/ai `schemas.ts`) — the bar's ceiling. */
+const SCORE_MAX = 5;
 
 /**
- * Series colour lives in CSS, not here: recharts writes `fill` as a presentation attribute,
- * which any stylesheet rule outranks. That keeps the hues on the tokens (`--accent`,
- * `--warning`, `--text-muted` — never `--primary`) and keeps literals out of the `.tsx` the
- * lint scans.
+ * The Overview surface: what is true across the whole platform. `/admin/stats` is all-time
+ * and takes no filters, so there is no range to show and none is implied.
+ *
+ * Bars are `Meter`, not a chart library: every quantity here is one value against one
+ * ceiling, the numbers are printed beside them anyway, and a <progress> carries its value as
+ * a DOM property — which is the only kind of bar that survives the CSP's ban on style
+ * attributes.
  */
-const SPLIT_CLASSES = [styles.seriesAccent, styles.seriesWarning, styles.seriesMuted];
-
 export function StatsPanel({ stats }: { stats: AdminStatsResponse }) {
   const t = useTranslations('admin');
   const format = useFormatter();
 
   const totalSeconds = Math.round(stats.averageDurationMs / 1000);
+
   const split = [
-    { name: t('stats.completed'), value: stats.completed },
-    { name: t('stats.cutShort'), value: stats.cutShort },
-    { name: t('stats.unfinished'), value: stats.unfinished },
+    { key: 'completed', name: t('stats.completed'), value: stats.completed, note: null },
+    // `ended_reason` is never written as `cut_short` anywhere in the backend, so this
+    // number is structurally 0 rather than "no interviews were cut short".
+    { key: 'cutShort', name: t('stats.cutShort'), value: stats.cutShort, note: t('stats.cutShortNote') },
+    { key: 'unfinished', name: t('stats.unfinished'), value: stats.unfinished, note: null },
   ];
-  // An all-zero platform still draws the ring — a zeroed chart, never a spinner or a gap.
   const splitTotal = split.reduce((sum, slice) => sum + slice.value, 0);
-  const splitData = splitTotal === 0 ? split.map((slice) => ({ ...slice, value: 1 })) : split;
+  const occupationMax = Math.max(1, ...stats.perOccupation.map((row) => row.count));
 
   return (
     <section className={styles.panel} aria-labelledby="admin-stats-heading">
@@ -36,80 +43,66 @@ export function StatsPanel({ stats }: { stats: AdminStatsResponse }) {
       </h2>
 
       <div className={styles.figures}>
-        <div className={styles.card}>
-          <p className={styles.figureLabel}>{t('stats.averageDuration')}</p>
-          <p className={styles.figure} data-testid="admin-avg-duration">
+        <div className={styles.figure}>
+          <span className={styles.eyebrow}>{t('stats.averageDuration')}</span>
+          <p className={`${styles.figureValue} tabular`} data-testid="admin-avg-duration">
             {t('stats.duration', {
               minutes: Math.floor(totalSeconds / 60),
               seconds: totalSeconds % 60,
             })}
           </p>
         </div>
-        <div className={styles.card}>
-          <p className={styles.figureLabel}>{t('stats.totalTokens')}</p>
-          <p className={styles.figure} data-testid="admin-total-tokens">
+        <div className={styles.figure}>
+          <span className={styles.eyebrow}>{t('stats.totalTokens')}</span>
+          <p className={`${styles.figureValue} tabular`} data-testid="admin-total-tokens">
             {format.number(stats.totalTokens)}
           </p>
         </div>
       </div>
 
-      <div className={styles.charts}>
-        <div className={styles.card}>
-          <h3 className={styles.title}>{t('stats.splitTitle')}</h3>
-          <div className={styles.chart} aria-hidden="true">
-            <ResponsiveContainer width="100%" height={200}>
-              <PieChart>
-                <Pie
-                  data={splitData}
-                  dataKey="value"
-                  nameKey="name"
-                  innerRadius={48}
-                  outerRadius={78}
-                  isAnimationActive={false}
-                >
-                  {splitData.map((slice, i) => (
-                    <Cell key={slice.name} className={SPLIT_CLASSES[i]} />
-                  ))}
-                </Pie>
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          {/* The ring is decorative; these three lines are the readable version of it. */}
-          <ul className={styles.legend} data-testid="admin-split">
-            {split.map((slice, i) => (
-              <li className={styles.legendRow} key={slice.name}>
-                <span className={`${styles.swatch} ${SPLIT_CLASSES[i]}`} aria-hidden="true" />
-                <span className={styles.legendLabel}>{slice.name}</span>
-                <span className={styles.legendValue}>{format.number(slice.value)}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
+      <div className={styles.card}>
+        <h3 className={styles.title}>{t('stats.splitTitle')}</h3>
+        <ul className={styles.rows} data-testid="admin-split">
+          {split.map((slice) => (
+            <li className={styles.row} key={slice.key}>
+              <span className={styles.rowLabel}>{slice.name}</span>
+              <span className={`${styles.rowValue} tabular`}>{format.number(slice.value)}</span>
+              <Meter
+                className={styles.rowMeter}
+                value={slice.value}
+                max={splitTotal}
+                decorative
+              />
+              {slice.note ? (
+                <p className={styles.rowNote}>
+                  {slice.note} <Spec />
+                </p>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      </div>
 
+      <div className={styles.pair}>
         <div className={styles.card}>
           <h3 className={styles.title}>{t('stats.occupationTitle')}</h3>
           {stats.perOccupation.length === 0 ? (
             <p className={styles.empty}>{t('stats.empty')}</p>
           ) : (
-            <>
-              <div className={styles.chart} aria-hidden="true">
-                <ResponsiveContainer width="100%" height={200}>
-                  <BarChart data={stats.perOccupation} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
-                    <XAxis dataKey="label" tickLine={false} axisLine={false} interval={0} />
-                    <YAxis tickLine={false} axisLine={false} allowDecimals={false} width={32} />
-                    <Bar dataKey="count" className={styles.seriesAccent} isAnimationActive={false} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-              <ul className={styles.legend} data-testid="admin-occupations">
-                {stats.perOccupation.map((row) => (
-                  <li className={styles.legendRow} key={row.cluster}>
-                    <span className={styles.legendLabel}>{row.label}</span>
-                    <span className={styles.legendValue}>{format.number(row.count)}</span>
-                  </li>
-                ))}
-              </ul>
-            </>
+            <ul className={styles.rows} data-testid="admin-occupations">
+              {stats.perOccupation.map((row) => (
+                <li className={styles.row} key={row.cluster}>
+                  <span className={styles.rowLabel}>{row.label}</span>
+                  <span className={`${styles.rowValue} tabular`}>{format.number(row.count)}</span>
+                  <Meter
+                    className={styles.rowMeter}
+                    value={row.count}
+                    max={occupationMax}
+                    decorative
+                  />
+                </li>
+              ))}
+            </ul>
           )}
         </div>
 
@@ -118,14 +111,27 @@ export function StatsPanel({ stats }: { stats: AdminStatsResponse }) {
           {stats.weakestQuestions.length === 0 ? (
             <p className={styles.empty}>{t('stats.empty')}</p>
           ) : (
-            <ul className={styles.weakList} data-testid="admin-weakest">
-              {stats.weakestQuestions.map((question) => (
-                <li className={styles.weakRow} key={question.questionId}>
-                  <span className={styles.weakId}>{question.questionId}</span>
-                  <span className={styles.weakScore}>{format.number(question.score)}</span>
-                </li>
-              ))}
-            </ul>
+            <>
+              {/* The endpoint returns the id and the score, nothing else. Printing the id
+                  alone and calling it a question is what this line exists to correct. */}
+              <p className={styles.note}>{t('stats.weakestNote')}</p>
+              <ul className={styles.rows} data-testid="admin-weakest">
+                {stats.weakestQuestions.map((question) => (
+                  <li className={styles.row} key={question.questionId}>
+                    <span className={`${styles.rowLabel} tabular`}>{question.questionId}</span>
+                    <span className={`${styles.rowValue} tabular`}>
+                      {format.number(question.score)}
+                    </span>
+                    <Meter
+                      className={styles.rowMeter}
+                      value={question.score}
+                      max={SCORE_MAX}
+                      decorative
+                    />
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
         </div>
       </div>

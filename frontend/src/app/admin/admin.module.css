@@ -1,37 +1,114 @@
-/* Not an entry surface: flat --bg, hairline shadow, no gradient, no mascot, no --live. */
+/* The admin console. Direction B's split shell: the rail says where you are, the working
+ * surface holds one section. Admin is not an entry surface — flat grounds, hairline shadow
+ * only, no gradient, no mascot, no --live outside a running interview's state pill.
+ */
 
-.ground {
-  min-height: 100vh;
-  padding: 24px 16px 32px;
-  background: var(--bg);
-}
+/* ---------- rail ---------- */
 
-.inner {
-  max-width: 1120px;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
-.header {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.title {
-  margin: 0;
-  font-family: var(--font-heading), system-ui, sans-serif;
-  font-size: 20px;
+.railKicker {
+  margin: -16px 0 24px;
+  font-size: 13px;
   font-weight: 600;
-  color: var(--text);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--rail-text-faint);
 }
 
-.subtitle {
-  margin: 0;
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-inline: -20px;
+}
+
+/* The inline-start edge is the current marker, so it is reserved on every item — a border
+   that appears on selection would shift the label 2px sideways on every click. */
+.navItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 4px 20px;
+  border: 0;
+  border-inline-start: 2px solid transparent;
+  background: none;
   font-size: 14px;
+  text-align: start;
+  color: var(--rail-text-muted);
+  cursor: pointer;
+  transition: background var(--duration-default) var(--easing-default),
+    color var(--duration-default) var(--easing-default);
+}
+
+.navItem:hover {
+  background: var(--rail-raised);
+  color: var(--rail-text);
+}
+
+.navItem:focus-visible {
+  outline: 2px solid var(--rail-text);
+  outline-offset: -2px;
+}
+
+.navOn {
+  background: var(--rail-raised);
+  border-inline-start-color: var(--primary);
+  color: var(--rail-text);
+  font-weight: 600;
+}
+
+.navLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.back {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 24px;
+  padding: 8px 0;
+  font-size: 13px;
+  color: var(--rail-text-muted);
+  text-decoration: none;
+}
+
+.back:hover {
+  color: var(--rail-text);
+}
+
+.back:focus-visible {
+  outline: 2px solid var(--rail-text);
+  outline-offset: 2px;
+}
+
+.operator {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- working surface ---------- */
+
+.scope {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
   color: var(--text-muted);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  background: var(--bg);
+  flex: 1;
 }
 
 .error {
@@ -44,7 +121,47 @@
   color: var(--text);
 }
 
-/* Not-authorized: a card on flat --bg. No table shell behind it, no mascot (admin excludes it). */
+/* ---------- specified, not built ---------- */
+
+.specPanel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 320px;
+  padding: 24px;
+  background: var(--spec-hatch);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+}
+
+/* The sentence sits on a solid bed rather than on the hatch: muted ink over the hatch's
+   darker stripe misses AA, and this is the one place the reader has to actually read. */
+.specCard {
+  max-width: 60ch;
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  text-align: center;
+}
+
+.specNote {
+  margin: 12px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+/* ---------- not authorized ---------- */
+
+/* Deliberately outside the shell: a viewer who may not read this console should not be
+   handed its nav as a map of what exists. */
+.ground {
+  min-height: 100vh;
+  padding: 24px 16px 32px;
+  background: var(--bg);
+}
+
 .forbidden {
   max-width: 420px;
   margin: 96px auto 0;
@@ -58,7 +175,7 @@
 
 .forbiddenTitle {
   margin: 0 0 8px;
-  font-family: var(--font-heading), system-ui, sans-serif;
+  font-family: var(--font-heading), Georgia, serif;
   font-size: 20px;
   font-weight: 600;
   color: var(--text);
@@ -92,10 +209,12 @@
   outline-offset: 2px;
 }
 
+/* ---------- loading ---------- */
+
 .skeleton {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 32px;
 }
 
 .skeletonFigures {
@@ -121,7 +240,7 @@
 
 .skeletonHead,
 .skeletonRow {
-  height: 45px;
+  height: 44px;
   border-block-end: 1px solid var(--border);
 }
 
@@ -140,4 +259,29 @@
   margin: 16px;
   border-radius: var(--radius-input);
   background: var(--surface-sunken);
+}
+
+/* The rail is a row at this width, so the nav has to scroll sideways rather than stack
+   eight items above the work. */
+@media (max-width: 60rem) {
+  .railKicker {
+    margin: 0;
+  }
+  .nav {
+    flex-direction: row;
+    margin-inline: 0;
+    overflow-x: auto;
+  }
+  .navItem {
+    width: auto;
+    padding: 4px 12px;
+    border-inline-start: 0;
+    border-block-end: 2px solid transparent;
+  }
+  .navOn {
+    border-block-end-color: var(--primary);
+  }
+  .back {
+    margin-top: 0;
+  }
 }
