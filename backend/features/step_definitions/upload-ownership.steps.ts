@@ -53,7 +53,7 @@ async function uploadAs(
   const ownerId = asSelf
     ? mine.candidateId
     : ((world.lastBody?.user as { id: string } | undefined)?.id ?? '');
-
+  assert.ok(ownerId, `no ownerId in register response: ${JSON.stringify(world.lastBody)}`);
   await world.httpUpload(
     '/uploads',
     `${kind}-${randomUUID()}.pdf`,
