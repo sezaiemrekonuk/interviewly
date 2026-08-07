@@ -1,6 +1,6 @@
 # Speech — REFERENCE (read this once, then you don't need to spelunk)
 
-Reflects the repo as of **2026-08-06**, before any `S` task has run. Written against the code,
+Reflects the repo as of **2026-08-07**, through S05. Written against the code,
 not against the voice ledger's REFERENCE — that one describes the convai architecture this
 ledger replaces, and is now historical.
 
@@ -18,8 +18,8 @@ If reality diverges, trust the code and patch this file.
 | cache | Redis | 6379 | — | compose network only |
 | ElevenLabs | external | — | — | **outbound only.** Never calls us; never called from a browser |
 
-There is no tunnel. `compose.dev.yaml`'s `cloudflared` service exists only for the retired
-webhook and is deleted in S05.
+There is no tunnel — S05 deleted `compose.dev.yaml`'s `cloudflared` service with the webhook
+it existed for.
 
 ## Commands
 
@@ -58,7 +58,7 @@ devlog is the precedent for how to record that honestly.
 
 The third one already exists and is untouched by this ledger (`modules/voice/session.ts:116`).
 
-Retired in S05: `POST /interviews/:id/voice/session`, `POST /webhooks/elevenlabs/:action`,
+Retired by S05: `POST /interviews/:id/voice/session`, `POST /webhooks/elevenlabs/:action`,
 `POST /webhooks/elevenlabs/post_call`.
 
 ## The `SpeechProvider` seam (S01)
@@ -91,9 +91,9 @@ past ceiling  → NO provider call
               → VOICE_SESSION_EXPIRED (403)
 ```
 
-Today this lives in `modules/voice/webhook-auth.ts:97` (`isPastCeiling`) and is the **only**
-writer of `ended_reason = 'time_exhausted'`. S02 and S03 each take a copy of the duty; S05
-deletes the original and must prove the ceiling still fires.
+`isPastSpeechCeiling` (`modules/speech/tts.ts`) is the whole enforcement, called by
+`serveQuestionSpeech` and by `guardVoiceAnswer` (`stt.ts`) before either reaches the provider.
+S05 deleted `webhook-auth.ts`'s original; `speech_turn.feature` @AC-6 is what holds it.
 
 ## Key code anchors
 
@@ -106,13 +106,12 @@ deletes the original and must prove the ceiling still fires.
 | `backend/modules/interview/uploads.ts:37-39` | multer memory-storage limits to copy for the audio part |
 | `backend/modules/interview/profile.ts:112` | where `started_at` is stamped |
 | `backend/modules/interview/state.ts:160-173` | the `/state` payload S09 extends |
-| `backend/modules/voice/downgrade.ts:21` | `downgradeToText` — kept, unchanged |
-| `backend/modules/voice/session.ts:107,116` | `preJoinDowngrade` + its route — kept, unchanged |
+| `backend/modules/voice/downgrade.ts` | `downgradeToText`, `preJoinDowngrade` + `POST /:id/voice/downgrade` — the only voice module left after S05 |
 | `backend/src/lib/storage.ts:15-19` | `Storage` interface: `put` / `get` / `signedUrl` — the TTS cache |
 | `backend/src/lib/db.ts` | `prisma`, `recordLlmCall` — the metering insert |
-| `backend/src/lib/error-codes.ts:42-46` | the voice codes; S01 adds two, S05 removes three |
+| `backend/src/lib/error-codes.ts` | the voice codes; S05 left `VOICE_UNAVAILABLE` + `VOICE_SESSION_EXPIRED` |
 | `backend/src/lib/env.ts:39-47` | the `ELEVENLABS_*` / `VOICE_*` keys |
-| `frontend/src/lib/use-voice-session.ts` | the WSS hook S06 replaces with the turn loop |
+| `frontend/src/lib/use-voice-session.ts` | mic-only after S05 (no socket); S06 hangs the turn loop off it |
 | `frontend/src/lib/use-mic-permission.ts:60` | the `AnalyserNode` RMS loop — the VAD signal |
 | `frontend/src/lib/voice/device-check.ts` | written, tested, unimported (#107) |
 | `frontend/src/lib/voice/active-speaker.ts` | written, tested, unimported (#107) |
@@ -120,7 +119,7 @@ deletes the original and must prove the ceiling still fires.
 | `frontend/src/components/room/voice-controls.tsx` | mute, mic meter, status chip; S09 adds the timer, S10 the error copy |
 | `frontend/src/components/home/interview-row.tsx:76-80` | the unconditional Continue link S07 makes mode-aware |
 | `frontend/src/app/interviews/new/page.tsx:35` | `useState<'text' \| 'voice'>('text')` — the default S08 flips |
-| `packages/ai/config/model-prices.yaml:23-26` | the `elevenlabs/conversational` row S04 splits |
+| `packages/ai/config/model-prices.yaml` | `elevenlabs/tts` + `elevenlabs/stt`; S05 deleted `elevenlabs/conversational` |
 
 ## Schema (tables this ledger reads/writes)
 
@@ -131,7 +130,7 @@ deletes the original and must prove the ceiling still fires.
 | `questions` | `text`, `id` (the audio cache key) | — |
 | `answers` | — | `INSERT` `input_mode='voice'` (via I06 only) |
 | `llm_calls` | — | `INSERT` `provider='elevenlabs'`, `model='tts'\|'stt'`, `unit_kind='character'\|'second'` |
-| `voice_sessions` | — | **dropped in S05** (ADR-S05) |
+| `voice_sessions` | — | **dropped** by S05 (ADR-S05) |
 
 ## Conventions
 
@@ -149,7 +148,7 @@ not appear in a response body, a header, a log line, or a test fixture.
 the acceptance ring runnable with no network.
 
 **Migration rule (ADR-F02):** no new table, no column type change, no new enum value. This
-ledger's one schema change is the `voice_sessions` drop, in its own migration rebased on F02,
-never an edit to the existing migration SQL.
+ledger's one schema change was the `voice_sessions` drop
+(`20260807170000_drop_voice_sessions`). There are no more.
 
 **Prose:** EXECUTE.md §7b. Comments only where the code cannot say it. Docs terse.

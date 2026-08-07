@@ -17,24 +17,10 @@ import { listMyQuestions } from '../modules/interview/my-questions';
 import interviewRouter from '../modules/interview/router';
 import { createUpload, uploadMiddleware } from '../modules/interview/uploads';
 import speechRouter from '../modules/speech/router';
-import reconcileWebhookRouter from '../modules/voice/reconcile-webhook';
-import voiceRouter from '../modules/voice/session';
-import voiceWebhookRouter from '../modules/voice/webhook-router';
+import voiceDowngradeRouter from '../modules/voice/downgrade';
 
 export const app = express();
 
-// V02: the ElevenLabs HMAC is computed over the bytes ElevenLabs sent, and `JSON.stringify`
-// of the parsed body does not reproduce them. Mounted BEFORE the global parser — body-parser
-// marks the request `_body` and the global instance then skips it, so /webhooks/* is parsed
-// exactly once, here, with the raw buffer kept alongside.
-app.use(
-  '/webhooks',
-  express.json({
-    verify(req, _res, buf) {
-      req.rawBody = Buffer.from(buf);
-    },
-  }),
-);
 app.use(express.json());
 app.use(cookieParser());
 app.use((req, _res, next) => {
@@ -58,13 +44,9 @@ app.use('/', meRouter);
 app.get('/me/interviews', requireAuth, listMyInterviews);
 app.get('/me/questions', requireAuth, listMyQuestions);
 app.post('/uploads', requireAuth, uploadMiddleware, createUpload);
-app.use('/interviews', voiceRouter);
+app.use('/interviews', voiceDowngradeRouter);
 app.use('/interviews', speechRouter);
 app.use('/interviews', interviewRouter);
-// V04 before V02: `webhook-router`'s `/:action` matches `post_call` too, and would answer
-// VALIDATION_ERROR before the reconciliation handler was ever reached.
-app.use('/webhooks/elevenlabs', reconcileWebhookRouter);
-app.use('/webhooks/elevenlabs', voiceWebhookRouter);
 app.use('/admin', adminRouter);
 
 // TEST SEAM — acceptance-only Google callback simulator. mountTestSeam() throws if it is

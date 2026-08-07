@@ -49,14 +49,8 @@ const schema = z.object({
   ELEVENLABS_API_KEY:          emptyAsUnset(z.string().min(1).optional()),
   ELEVENLABS_TTS_MODEL:        emptyAsUnset(z.string().default('eleven_multilingual_v2')),
   ELEVENLABS_STT_MODEL:        emptyAsUnset(z.string().default('scribe_v1')),
-  ELEVENLABS_AGENT_ID_HR:      z.string().optional(),
-  ELEVENLABS_AGENT_ID_TECH:    z.string().optional(),
-  ELEVENLABS_WEBHOOK_SECRET:   z.string().optional(),
   VOICE_MAX_ROUND_SECONDS:     z.coerce.number().default(720),
   VOICE_MAX_INTERVIEW_SECONDS: z.coerce.number().default(1500),
-  // Gate 2's replay window (§3.5). Skew is measured in both directions, so this is a
-  // half-width: 300 tolerates ordinary clock drift without holding a captured body replayable.
-  VOICE_WEBHOOK_FRESHNESS_SECONDS: z.coerce.number().default(300),
   S3_ENDPOINT:                 z.string().url(),
   S3_BUCKET:                   z.string(),
   S3_PUBLIC_PREFIX:            z.string().default('/assets'),

@@ -1,21 +1,16 @@
 # Speech — State
 
 Last updated: 2026-08-07
-Last session ended: **S04 complete.** Added `backend/modules/speech/metering.ts`
-(`meterTts`/`meterStt` → shared `recordLlmCall`, one tx). Both provider calls now run inside
-`withBudget` in `tts.ts`/`stt.ts`: TTS bills `character`, STT bills `second`; a thrown provider
-bills nothing, a cache hit (before the wrap) bills nothing, and `BudgetExceeded` surfaces
-`BUDGET_EXCEEDED` + ends the interview `budget_exhausted`. `model-prices.yaml` ADDED
-`elevenlabs/tts`+`elevenlabs/stt` but **kept `elevenlabs/conversational`** (voice-reconcile still
-reads it; S05 deletes it — keeps the ring green). A review pass then fixed two money bugs the
-green suite missed: `reconcile.ts`'s redelivery no-op matched `provider` only, so a speech row
-made every later `post_call` webhook bill the convai session nothing (now keyed on `model` too,
-new @AC-7 scenario); and two concurrent first TTS requests for one question both paid, because
-the cache read sat before the lock (now re-read inside `withBudget`, with `storage.put` under the
-lock and a failed write serving the paid bytes instead of 500ing into a re-billed retry).
-Verification: speech unit 30/30, full unit 486/486, acceptance 104/104 (`@speech` 17/17,
-`@voice-reconciliation` 2/2), lint clean. Next: **S05** (delete convai/webhook/reconcile surface
-+ `elevenlabs/conversational`, drop `voice_sessions`, prove ceiling still fires — opus tier).
+Last session ended: **S05 complete.** `modules/voice/` is now `downgrade.ts` alone (it absorbed
+`preJoinDowngrade` + the route). Deleted: webhook router + four gates, `reconcile{,-webhook}.ts`,
+`voice.reconcile` queue + worker job, `cloudflared`, three error codes + both locales,
+`elevenlabs/conversational`, `voice_sessions` (`20260807170000_drop_voice_sessions`), and the
+three `voice_*.feature` files. `voice_fallback` → `speech_fallback.feature` on
+`FakeSpeechProvider.failNext`. **The ceiling never lived in `webhook-auth.ts`** — it is
+`isPastSpeechCeiling` in `tts.ts`, imported by `stt.ts`; @AC-6 green before and after. Frontend
+went past the file list: `use-voice-session.ts` is mic-only now (no socket, `beat` always null —
+S06 owns it) and `middleware.ts` lost `wss://api.elevenlabs.io`. Verification: lint + typecheck
+clean, unit 553/553, acceptance 101/101, grep clean. Next: **S06** (turn loop — opus).
 
 ## Execution protocol (follow exactly)
 
@@ -31,9 +26,8 @@ EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**S05** (remove the convai, webhook and reconciliation surface; delete `elevenlabs/conversational`;
-drop `voice_sessions`; prove `isPastCeiling`/`time_exhausted` still fires after its gate is gone
-— opus tier)
+**S06** (room turn loop: speak, VAD-record, upload, advance — opus tier). It inherits a
+mic-only `use-voice-session.ts` with no `beat` producer and no test covering `status: 'lost'`.
 
 ## Environment
 
@@ -78,7 +72,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | S02 | TTS route: question audio, storage-cached, ceiling-checked | | done | S01, I03, I07 |
 | S03 | STT route: audio upload to Scribe to the guarded advance | | done | S01, I03, I06 |
 | S04 | Per-call usage accounting at both provider call sites | | done | S02, S03, I08 |
-| S05 | Remove the convai, webhook and reconciliation surface; drop `voice_sessions` | | todo | S02, S03, S04 |
+| S05 | Remove the convai, webhook and reconciliation surface; drop `voice_sessions` | | done | S02, S03, S04 |
 | S06 | Room turn loop: speak, VAD-record, upload, advance | | todo | S02, S03, W10 |
 | S07 | Pre-join on resume, mic-denied downgrade, transient-audio copy | | todo | S06, V03, W09 |
 | S08 | Voice-first default and user-selectable duration | | todo | S01, W05 |
@@ -144,6 +138,9 @@ downgrade}.ts`, and the downgrade invariant itself.
 - **[S06] `use-mic-permission.ts` and `voice/device-check.ts` both own an `AnalyserNode`.**
   `use-mic-permission.ts:4-5` already flags the duplication. S06 must pick one as the VAD
   source rather than adding a third audio graph.
+- **[S05→S07] Nothing tests `status: 'lost'` in the room.** `voice.test.tsx`'s dropped-session
+  reconnect test went with the socket S05 deleted. The lost banner + `reconnect` still render
+  off `status`, which now comes from the mic — S07 (mic-denied) is where it gets covered again.
 
 ## Backlog (deferred, unnumbered — promote to a task when its trigger fires)
 

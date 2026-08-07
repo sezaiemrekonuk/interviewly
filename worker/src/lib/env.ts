@@ -1,5 +1,5 @@
 // Subset of backend/src/lib/env.ts covering the keys the worker uses:
-// DB/cache/storage access, mail send, LLM providers, ElevenLabs webhook verification.
+// DB/cache/storage access, mail send, LLM providers.
 import { z } from 'zod';
 
 /** Same literal-string boolean parsing as `backend/src/lib/env.ts` — see the note there. */
@@ -26,8 +26,6 @@ const schema = z.object({
   MAIL_FROM:                   z.string(),
   OPENAI_API_KEY:              z.string().optional(),
   GEMINI_API_KEY:              z.string().optional(),
-  ELEVENLABS_API_KEY:          z.string().optional(),
-  ELEVENLABS_WEBHOOK_SECRET:   z.string().optional(),
   S3_ENDPOINT:                 z.string().url(),
   S3_BUCKET:                   z.string(),
   S3_PUBLIC_PREFIX:            z.string().default('/assets'),

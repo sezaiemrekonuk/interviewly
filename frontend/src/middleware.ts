@@ -6,7 +6,9 @@ import type { NextRequest } from 'next/server';
 // the app never hydrates. Per-request nonce lets those scripts run without 'unsafe-inline'.
 export function middleware(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
-  const csp = `default-src 'self'; script-src 'self' 'nonce-${nonce}'; style-src 'self' 'nonce-${nonce}'; img-src 'self' data:; font-src 'self'; connect-src 'self' wss://api.elevenlabs.io; frame-ancestors 'none';`;
+  // S05 narrowed `connect-src` back to 'self': the ElevenLabs socket allowance existed for the
+  // convai dial ADR-S01 removed, and the browser now talks only to this origin (speech AC-9).
+  const csp = `default-src 'self'; script-src 'self' 'nonce-${nonce}'; style-src 'self' 'nonce-${nonce}'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none';`;
 
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set('x-nonce', nonce);

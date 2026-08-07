@@ -6,8 +6,8 @@
  * so a call the budget already refused never reaches here and a provider error bills nothing.
  *
  * No idempotency key, no existence check: a synchronous call that returned bytes happened
- * exactly once (ADR-S04). That is the whole difference from `reconcile.ts`, which defended
- * against webhook redelivery that no longer occurs.
+ * exactly once (ADR-S04). The deferred job this replaced needed one only because a redelivered
+ * post-call notification could bill twice; S05 deleted that path.
  */
 import { loadModelPrices, roundCostUsd } from '@interviewly/ai';
 
