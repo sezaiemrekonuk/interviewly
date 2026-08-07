@@ -57,6 +57,7 @@
     "loadMore": "Load more",
     "continue": "Continue",
     "viewReport": "View report",
+    "viewDetails": "View details",
     "delete": "Delete",
     "deleteLabel": "Delete the {occupation} interview",
     "deleteConfirm": "Delete this interview?",
