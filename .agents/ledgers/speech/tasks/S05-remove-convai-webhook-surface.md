@@ -1,5 +1,5 @@
 # S05 — Remove the convai, webhook and reconciliation surface; drop `voice_sessions`
-REPO: (this repo) · Depends: S02, S03, S04 · Status: todo
+REPO: (this repo) · Depends: S02, S03, S04 · Status: done
 Read first: STATE.md, REFERENCE.md, then this.
 **Model: claude-opus-5** — deletion across seven backend files, the worker, a queue, a
 migration, four error codes, two locales and the compose file, where the risk is not what gets
@@ -75,23 +75,23 @@ invariant survives the architecture change unchanged; only the trigger it is dri
 from `FakeVoiceSession` to `FakeSpeechProvider`.
 
 ## Steps
-- [ ] **1. Rewrite `speech_fallback.feature` first** — same assertions as `voice_fallback`,
+- [x] **1. Rewrite `speech_fallback.feature` first** — same assertions as `voice_fallback`,
   driven by `FakeSpeechProvider.failNext`. Green before anything is deleted, so the invariant is
   demonstrably still covered when the old file goes.
-- [ ] **2. Assert the ceiling** — add a `speech_turn.feature` scenario driving a past-ceiling TTS
+- [x] **2. Assert the ceiling** — add a `speech_turn.feature` scenario driving a past-ceiling TTS
   and a past-ceiling STT to `time_exhausted`. Green **before** `webhook-auth.ts` is touched.
-- [ ] **3. Backend deletion** — the file list above, in one pass, then `npm run typecheck` as the
+- [x] **3. Backend deletion** — the file list above, in one pass, then `npm run typecheck` as the
   guide to what still references it.
-- [ ] **4. Worker deletion** — job, test, worker registration, shutdown, env keys.
-- [ ] **5. Frontend and locale deletion** — the four webhook error keys in both locales, the WSS
+- [x] **4. Worker deletion** — job, test, worker registration, shutdown, env keys.
+- [x] **5. Frontend and locale deletion** — the four webhook error keys in both locales, the WSS
   test scaffolding.
-- [ ] **6. Config deletion** — the tunnel, the four env keys in `.env`, `.env.example` and both
+- [x] **6. Config deletion** — the tunnel, the four env keys in `.env`, `.env.example` and both
   `env.ts` files.
-- [ ] **7. Migration** — a new migration dropping `voice_sessions`, plus the model and the
+- [x] **7. Migration** — a new migration dropping `voice_sessions`, plus the model and the
   `Interview.voice_sessions` relation at `schema.prisma:267,359-369`.
-- [ ] **8. Acceptance cleanup** — delete the three feature files and their step definitions;
+- [x] **8. Acceptance cleanup** — delete the three feature files and their step definitions;
   update `cucumber.js` paths and `COVERAGE.md` in the same pass.
-- [ ] **9. Full gate** — lint, typecheck, unit, acceptance. A green ring here is the only proof
+- [x] **9. Full gate** — lint, typecheck, unit, acceptance. A green ring here is the only proof
   that nothing load-bearing left with the deletion.
 
 ## Definition of done
@@ -115,3 +115,40 @@ psql "$DATABASE_URL" -c "\dt voice_sessions"
 Expected: all gates green; the grep prints nothing; `\dt` reports no such relation.
 
 ## Notes
+
+**The ceiling never depended on `webhook-auth.ts`.** S02 put `isPastSpeechCeiling` in
+`modules/speech/tts.ts`; `stt.ts` imports it. Deleting `isPastCeiling` removed a second copy,
+not the enforcement. `speech_turn.feature` @AC-6 (TTS + STT) was green before the deletion and
+after it.
+
+**Three things the file list did not name but the DoD required:**
+- `frontend/src/middleware.ts:9` still carried `connect-src 'self' wss://api.elevenlabs.io`.
+  Narrowed to `'self'` — a CSP allowance for a dial nobody makes.
+- `use-voice-session.ts` was not on the delete list but held the `new WebSocket` the DoD
+  forbids. Rewritten as a mic-only hook keeping its exported surface
+  (`VoiceConnectionStatus`, `UseVoiceSessionResult`, `reconnect`) so `room/page.tsx`,
+  `room-rail.tsx` and `voice-controls.tsx` still compile. **`status` now derives from the mic**
+  (`granted`→connected, `denied`/`unavailable`→lost, else connecting) and `beat` is always
+  `null`. **S06 owns both**: it drives `beat` from the turn loop and decides whether status
+  should mean anything richer.
+- `src/test/websocket-mock.ts` could not just be deleted — `installMediaDevicesMock` lives in
+  it and `voice.test.tsx` needs it. Renamed `media-devices-mock.ts`, WebSocket half removed.
+
+**Coverage deliberately dropped, not forgotten:** `voice.test.tsx`'s
+"offers a reconnect on a dropped session" went with the socket it dropped. Nothing now produces
+`status: 'lost'` in a test. **S07** (mic-denied) is the natural place to re-cover it.
+
+`a {string} event is emitted with the interviewId` moved from the deleted `voice-webhook.steps`
+into `speech-fallback.steps` — one global step registry, so nothing else had to change.
+
+`preJoinDowngrade` + `POST /:id/voice/downgrade` moved from `session.ts` into `downgrade.ts`,
+which is now the entire `modules/voice/` directory. V03's `downgradeToText` is untouched.
+
+Also deleted, beyond the file list: `elevenlabs/conversational` in `model-prices.yaml` (S04
+kept it alive for voice-reconcile), the worker's `ELEVENLABS_API_KEY` (its only consumer was
+`reconcile.ts`), and `answers.steps.ts`'s `voiceSession.count` assertion.
+
+**Stale after this task, not fixed here:** `.agents/specs/2026-07-29-voice.md` and
+`.agents/docs/IDEA.md` still describe the webhook architecture. They are the historical record
+(ADR-S01 supersedes by reference, never by edit). `.agents/EXECUTE.md`'s "voice does not work
+on localhost without the tunnel" WAS fixed — it is an instruction, not a record.

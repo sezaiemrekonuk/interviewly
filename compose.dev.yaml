@@ -10,9 +10,3 @@ services:
     ports: ["8025:8025"]     # Mailpit web inbox — where verification/reset links are read
   api:
     ports: ["4000:4000"]
-  tunnel:
-    image: cloudflare/cloudflared:latest
-    command: tunnel --url http://edge:80
-    depends_on:
-      edge:
-        condition: service_started

@@ -185,6 +185,7 @@ Then('the stored answer duration_ms is {int}', async function (this: AiWorld, ex
 
 Then('no audio session is required', async function (this: AiWorld) {
   const interview = await prisma.interview.findUniqueOrThrow({ where: { id: this.interviewId } });
+  // S05 dropped `voice_sessions` (ADR-S05); `mode` is now the whole assertion — a text
+  // interview never reaches the speech routes, which are the only audio surface left.
   assert.equal(interview.mode, 'text');
-  assert.equal(await prisma.voiceSession.count({ where: { interview_id: interview.id } }), 0);
 });

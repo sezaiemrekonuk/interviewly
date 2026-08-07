@@ -88,7 +88,7 @@ reset limits are asserted inside their own feature files, next to the flows they
 | 5 | **out-of-ring** — §8.1 indexes exist and `questions(round_id, order_index)` UNIQUE; migration verification (ordering indirectly exercised by `question_generation.feature`) |
 | 6 | folded into `admin_cost.feature::Deleted interviews disappear for users and remain auditable for admins` — `userInterviews` helper excludes soft-deleted rows |
 | 7 | folded into `interview_flow.feature::An answer cannot target a non-current question` — guarded `current_index` update (count 0 → `QUESTION_NOT_CURRENT`, count 1 otherwise) |
-| 8 | folded into `voice_reconciliation.feature::The post-call webhook records elevenlabs seconds and reconciles spent_usd in one transaction` and `interview_flow.feature::Budget exhaustion…` — atomic `spent_usd` + `llm_calls` transaction |
+| 8 | folded into `speech_turn.feature` @AC-5 and `interview_flow.feature::Budget exhaustion…` — atomic `spent_usd` + `llm_calls` transaction |
 | 9 | **out-of-ring** — every interview-scoped table resolves to one `interviews.id` with K6 log columns; schema-structural verification in migration ring |
 | 10 | **out-of-ring** — `prisma/seed.ts` produces admin user, occupation_clusters, personas, sample interview; seed verification (also `infra` AC-1) |
 | 11 | **out-of-ring** — all FKs `ON DELETE RESTRICT`, no cascade; migration/constraint verification |
@@ -106,32 +106,38 @@ reset limits are asserted inside their own feature files, next to the flows they
 | 1 | **out-of-ring** — `docker compose up` brings all services healthy + seeded app; compose/e2e verification, not HTTP acceptance ring |
 | 2 | **out-of-ring** — only `edge` publishes a host port; `docker compose port` topology verification |
 | 3 | **out-of-ring** — `migrate` exits 0 before `api`/`worker`; compose ordering verification |
-| 4 | **out-of-ring** — `observability`/`dev` profiles gate elasticsearch/kibana/tunnel; compose-profile verification |
+| 4 | **out-of-ring** — `observability`/`dev` profiles gate elasticsearch/kibana; compose-profile verification (S05 deleted the `tunnel` service) |
 | 5 | in-ring: `config.feature::A missing required env var fails startup fast and a valid one serves` + `::Each missing or malformed required key is named at boot` |
 | 6 | in-ring: `object_storage.feature::A private report is handed out only as a short-lived signed URL scoped to its owner` + `::A signed URL reads the private object until its TTL expires and then is refused` |
 | 7 | **out-of-ring** — edge CSP + security headers; Caddyfile/edge header verification via curl, not API acceptance ring |
 | 8 | **out-of-ring** — every image uses repo-root build context; build/compose verification |
-| 9 | **out-of-ring** — structured JSON logs, no secrets; log/observability verification (redaction partially exercised in-ring by `voice_webhook.feature` AC-10 via the LogSink seam) |
+| 9 | **out-of-ring** — structured JSON logs, no secrets; log/observability verification |
 | 10 | **out-of-ring** — CI pipeline (lint→typecheck→build→migrate-check→Cucumber) and bad-migration gate; CI verification |
 | 11 | **out-of-ring** — one image across environments, no `NODE_ENV`-branched business logic; CI/static verification |
 | 12 | **out-of-ring** — `.env.example` committed with every validated key; repo/CI verification |
 | 6a | **out-of-ring** — a registration lands one mail in the `mail` sink and stopping `mail` retries the job without failing the request; compose/queue verification (the enqueue half is in-ring via `email_verification.feature` AC-21) |
 
-## voice — 8 in-ring, 2 out-of-ring
+## voice — 1 in-ring, 12 superseded or out-of-ring
+
+**Superseded by speech (ADR-S01/S03/S04/S05).** S05 deleted `voice_session.feature`,
+`voice_webhook.feature` and `voice_reconciliation.feature` with the mint, the four webhook
+gates and the reconciliation job they asserted. Those AC rows are retired, not regressed: the
+architecture they describe no longer exists. `voice_fallback.feature` was renamed
+`speech_fallback.feature` — the downgrade invariant survived the architecture change.
 
 | AC | Classification |
 |---|---|
-| 1 | `voice_session.feature::The mint binds expires_at to the tighter of the round and interview ceiling` |
-| 2 | `voice_session.feature::A mint is refused unless the owner targets a voice-capable interview with voice enabled` + `::A voice-capable owner mint succeeds when voice is enabled` |
-| 3 | `voice_webhook.feature::A webhook failing signature or freshness is rejected and mutates nothing` |
-| 4 | `voice_webhook.feature::A webhook whose nonce matches no unexpired row is rejected as an invalid session` + `::A webhook arriving after the ceiling ends the interview time_exhausted` |
-| 5 | `voice_webhook.feature::A valid submit_answer persists a voice answer and advances the clock` |
-| 6 | `voice_fallback.feature::A fatal voice error downgrades the interview to text and preserves progress` + `::A healthy voice session stays in voice mode` |
-| 7 | `voice_reconciliation.feature::The post-call webhook records elevenlabs seconds and reconciles spent_usd in one transaction` |
+| 1 | **retired** — the mint is gone (ADR-S01); the ceiling it bound `expires_at` to is now re-checked on every TTS/STT call, covered by `speech_turn.feature` @AC-6 |
+| 2 | **retired** — no mint to refuse |
+| 3 | **retired** — no webhook to sign (ADR-S03) |
+| 4 | **retired** — no nonce; the ceiling half is `speech_turn.feature` @AC-6 |
+| 5 | **retired** — answers arrive over `POST /interviews/:id/answers/audio`, covered by `speech_turn.feature` @AC-3 |
+| 6 | `speech_fallback.feature::A fatal speech error downgrades the interview to text and preserves progress` + `::A healthy speech call stays in voice mode` |
+| 7 | **retired** — reconciliation replaced by per-call metering (ADR-S04), covered by `speech_turn.feature` @AC-5 |
 | 8 | **out-of-ring** — self-camera tile + `getUserMedia` local binding; browser/hardware, not curl-observable |
-| 9 | **out-of-ring** — built voice room opens exactly one cross-origin `wssOrigin` connection; browser/edge-CSP observable only |
-| 10 | `voice_webhook.feature::Voice webhook log lines carry the interviewId but never a session secret or transcript` (asserted via the `LogSink` seam) |
-| 11 | **out-of-ring** — pre-join precedes the mint and a denied mic creates no `voice_sessions` row; the *absence* of a row is assertable but the device denial that triggers it is browser-only. The downgrade itself is covered by `voice_fallback.feature` |
+| 9 | **retired** — there is no `wssOrigin` and no WebSocket; the CSP stays `connect-src 'self'` |
+| 10 | **retired** — no webhook log lines; the no-secrets/no-transcript rule is the speech spec's K6 |
+| 11 | **out-of-ring** — pre-join precedes the room and a denied mic downgrades to text; the device denial is browser-only. The downgrade itself is covered by `speech_fallback.feature` |
 | 12 | **out-of-ring** — one active speaker per round drives ring/waveform; browser-observable only (the underlying one-live-question guarantee is `interview_flow.feature`) |
 | 13 | **out-of-ring** — no `REC` indicator and no recording artifact exists; DOM/static verification |
 

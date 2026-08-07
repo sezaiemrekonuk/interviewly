@@ -1,15 +1,33 @@
 /*
  * App chrome. Transparent over whatever ground the route already paints — the flat --bg of
  * the landing and the report, the entry gradient on setup — so it never introduces a second
- * background. Not sticky: nothing here is worth pinning over a live page.
+ * background at rest. Sticky, so it stays reachable on a long scroll (the landing is one long
+ * page); `.headerScrolled` is the ground it picks up once there is page underneath it to
+ * separate from — a blurred, translucent read of `--surface` rather than a flat fill, so the
+ * hero content is still faintly legible sliding under it instead of vanishing behind a wall.
  *
  * The bar is full-bleed and the row inside carries the page gutter, so the rule crosses the
  * viewport while the wordmark stays on the same left edge as the headline under it.
  */
 
 .header {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 20;
   width: 100%;
-  border-block-end: 1px solid var(--border);
+  border-block-end: 1px solid transparent;
+  transition:
+    background-color var(--duration-default) var(--easing-default),
+    border-color var(--duration-default) var(--easing-default),
+    box-shadow var(--duration-default) var(--easing-default);
+}
+
+.headerScrolled {
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  border-block-end-color: var(--border);
+  box-shadow: var(--shadow-hairline);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 .headerInner {
@@ -31,7 +49,7 @@
   align-items: center;
   min-height: 44px;
   font-family: var(--font-heading), Georgia, serif;
-  font-size: 16px;
+  font-size: 20px;
   font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--text);
@@ -40,6 +58,7 @@
 
 .wordmark:focus-visible,
 .navLink:focus-visible,
+.navCta:focus-visible,
 .footerLink:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -66,6 +85,25 @@
 
 .navLink:hover {
   color: var(--text);
+}
+
+/* Bordered, not `--primary`: the landing hero already carries the surface's one CTA fill
+   (DESIGN §2 rule 1), so this door-in reads as an action without a second orange fighting it. */
+.navCta {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-button);
+  transition: background-color var(--duration-default) var(--easing-default);
+}
+
+.navCta:hover {
+  background: var(--surface-sunken);
 }
 
 /* ------------------------------------------------------------------ footer */

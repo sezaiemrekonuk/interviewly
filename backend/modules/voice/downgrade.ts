@@ -5,9 +5,14 @@
  * `interviews.state` and nothing else. The guarded `updateMany` is the whole mechanism: it is
  * both the one-directional rule and the idempotency, in one write.
  */
+import { Router, type RequestHandler } from 'express';
+
 import type { Interview } from '@prisma/client';
 
-import { prisma } from '../../src/lib/db';
+import { requireAuth } from '../auth/middleware';
+import { requirePublicOrigin } from '../interview/csrf';
+import { ApiError } from '../../src/lib/api-error';
+import { activeInterview, prisma } from '../../src/lib/db';
 import { logger } from '../../src/lib/logger';
 
 /**
@@ -35,3 +40,21 @@ export async function downgradeToText(
   logger.info({ traceId: ctx.traceId, interviewId: interview.id }, 'VOICE_DOWNGRADED_TO_TEXT');
   return true;
 }
+
+// V05: client-side microphone denial path. Moved here from `session.ts`, which S05 deleted
+// with the mint — this is the only voice route that survived ADR-S01.
+const preJoinDowngrade: RequestHandler = async (req, res) => {
+  const interview = await activeInterview(String(req.params.id));
+  if (!interview) throw new ApiError('INTERVIEW_NOT_FOUND');
+  if (interview.user_id !== req.user!.id) throw new ApiError('FORBIDDEN');
+
+  await downgradeToText(interview, { traceId: req.traceId! });
+  res.status(200).json({});
+};
+
+const router = Router({ mergeParams: true });
+router.use(requireAuth);
+router.use(requirePublicOrigin);
+router.post('/:id/voice/downgrade', preJoinDowngrade);
+
+export default router;

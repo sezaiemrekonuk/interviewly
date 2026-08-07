@@ -1,10 +1,9 @@
 import { act, screen, waitFor, within } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MockEventSource, installEventSourceMock } from '../../../../test/event-source-mock';
 import { messages, renderWithProviders } from '../../../../test/render';
-import { MockWebSocket, installMediaDevicesMock, installWebSocketMock } from '../../../../test/websocket-mock';
+import { installMediaDevicesMock } from '../../../../test/media-devices-mock';
 
 const nav = vi.hoisted(() => ({
   push: vi.fn(),
@@ -64,19 +63,12 @@ function voiceState(over: Record<string, unknown> = {}) {
   };
 }
 
-const MINT = {
-  token: 'sess-token',
-  wssOrigin: 'wss://voice.example',
-  dynamicVars: { interviewId: 'i1', nonce: 'n1' },
-  expiresAt: '2026-08-05T10:10:00.000Z',
-};
-
 interface Call {
   url: string;
   method: string;
 }
 
-function stubFetch(options: { states?: Record<string, unknown>[]; mintOk?: boolean } = {}) {
+function stubFetch(options: { states?: Record<string, unknown>[] } = {}) {
   const calls: Call[] = [];
   const states = options.states ?? [voiceState()];
   let stateHits = 0;
@@ -94,11 +86,6 @@ function stubFetch(options: { states?: Record<string, unknown>[]; mintOk?: boole
         const body = states[Math.min(stateHits, states.length - 1)];
         stateHits += 1;
         return json(200, body);
-      }
-      if (url === '/api/interviews/i1/voice/session') {
-        return options.mintOk === false
-          ? json(503, { error: { code: 'VOICE_UNAVAILABLE' } })
-          : json(201, MINT);
       }
       return json(404, { error: { code: 'NOT_FOUND' } });
     }),
@@ -123,7 +110,6 @@ describe('interview room, voice mode (W10)', () => {
     nav.push.mockReset();
     nav.replace.mockReset();
     installEventSourceMock();
-    installWebSocketMock();
     mics = installMediaDevicesMock();
   });
 
@@ -150,7 +136,7 @@ describe('interview room, voice mode (W10)', () => {
     expect(screen.queryByTestId('mascot')).not.toBeInTheDocument();
   });
 
-  it('advances only on a state refetch — a turn frame moves the beat, never the index', async () => {
+  it('advances only on a state refetch — nothing client-side moves the index', async () => {
     const calls = stubFetch({
       states: [
         voiceState(),
@@ -173,23 +159,9 @@ describe('interview room, voice mode (W10)', () => {
     await renderRoom();
 
     expect(screen.getByText(messages.room.progress.replace('{index}', '1').replace('{total}', '8'))).toBeInTheDocument();
-
-    const ws = await waitFor(() => {
-      expect(MockWebSocket.last).toBeDefined();
-      return MockWebSocket.last!;
-    });
-    await act(async () => ws.emitOpen());
-
-    // The candidate finishes speaking. The socket says so; the room must not believe it.
-    await act(async () => {
-      ws.emitMessage({ type: 'user_transcript', text: 'I ship.' });
-    });
-
-    expect(
-      screen.getByText(messages.room.progress.replace('{index}', '1').replace('{total}', '8')),
-    ).toBeInTheDocument();
     expect(screen.getByTestId('question-typed')).toHaveTextContent('Tell me about yourself.');
-    // The socket carried an answer; the transcript is server-filled and stays empty until the refetch.
+    // K11: the transcript is server-filled. Nothing in the room derives it locally, so it stays
+    // empty until the refetch — S05 removed the socket that used to be the tempting shortcut.
     expect(screen.queryByText('I ship.')).not.toBeInTheDocument();
 
     const before = stateCalls(calls);
@@ -207,36 +179,9 @@ describe('interview room, voice mode (W10)', () => {
     expect(await screen.findByText('I ship.')).toBeInTheDocument();
   });
 
-  it('offers a reconnect on a dropped session and re-syncs from a state refetch', async () => {
-    const calls = stubFetch();
-    await renderRoom();
-
-    const ws = await waitFor(() => {
-      expect(MockWebSocket.last).toBeDefined();
-      return MockWebSocket.last!;
-    });
-    await act(async () => ws.emitOpen());
-    await waitFor(() =>
-      expect(screen.getByTestId('voice-status')).toHaveTextContent(messages.room.voice.status.connected),
-    );
-
-    await act(async () => ws.emitClose());
-
-    const banner = await screen.findByTestId('session-lost');
-    expect(within(banner).getByText(messages.room.voice.lost)).toBeInTheDocument();
-
-    const before = stateCalls(calls);
-    await act(async () => {
-      await userEvent.click(within(banner).getByRole('button', { name: messages.room.voice.reconnect }));
-    });
-
-    await waitFor(() => expect(MockWebSocket.instances).toHaveLength(2));
-    await act(async () => MockWebSocket.last!.emitOpen());
-
-    // V05 reconciles server-side; the client's truth comes back through `/state`, not the socket.
-    await waitFor(() => expect(stateCalls(calls)).toBeGreaterThan(before));
-    await waitFor(() => expect(screen.queryByTestId('session-lost')).not.toBeInTheDocument());
-  });
+  // S05 deleted 'offers a reconnect on a dropped session' with the socket it dropped. The lost
+  // banner is still rendered off `status === 'lost'`, which the mic now produces; S07 owns the
+  // mic-denied path and re-covers it there.
 
   it('reads the transcript from state into a polite live region', async () => {
     stubFetch({

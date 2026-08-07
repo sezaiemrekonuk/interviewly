@@ -1,17 +1,16 @@
-import { REPORT_QUEUE, VOICE_RECONCILE_QUEUE, type VoiceReconcileJob } from '@interviewly/backend';
+import { REPORT_QUEUE } from '@interviewly/backend';
 import { Queue, Worker } from 'bullmq';
 
 import { processReportJob, type ReportJobData } from './consumer';
 import { handleReportJobFailed } from './failure';
 import { sendEmail, type EmailJob } from './jobs/email-send';
 import { sweepAbandoned } from './jobs/abandon-sweep';
-import { processVoiceReconcileJob } from './jobs/voice-reconcile';
 import { config } from './lib/env';
 import { logger } from './lib/logger';
 
 /**
  * The worker process. A04 gives it its first consumer (`email.send`); R01 adds the report
- * queue alongside it and V04 the voice reconciliation job.
+ * queue alongside it. S05 removed V04's voice reconciliation job (ADR-S04).
  */
 
 export const EMAIL_QUEUE_NAME = 'email.send';
@@ -58,12 +57,6 @@ reportWorker.on('failed', (job, err) => {
   void handleReportJobFailed(job, err);
 });
 
-const voiceReconcileWorker = new Worker<VoiceReconcileJob>(
-  VOICE_RECONCILE_QUEUE,
-  processVoiceReconcileJob,
-  { connection: { url: config.REDIS_URL } },
-);
-
 const abandonSweepQueue = new Queue(ABANDON_SWEEP_QUEUE_NAME, {
   connection: { url: config.REDIS_URL },
 });
@@ -103,15 +96,6 @@ void abandonSweepQueue
     );
   });
 
-// A failed reconciliation under-bills the interview, so it must be loud even while BullMQ
-// still has attempts left.
-voiceReconcileWorker.on('failed', (job, err) => {
-  logger.warn(
-    { queue: VOICE_RECONCILE_QUEUE, interviewId: job?.data?.interviewId, reason: err.message },
-    'VOICE_RECONCILE_JOB_FAILED',
-  );
-});
-
 abandonSweepWorker.on('failed', (job, err) => {
   logger.warn(
     { queue: ABANDON_SWEEP_QUEUE_NAME, jobId: job?.id, reason: err.message },
@@ -124,7 +108,6 @@ logger.info(
     queues: [
       EMAIL_QUEUE_NAME,
       REPORT_QUEUE,
-      VOICE_RECONCILE_QUEUE,
       ABANDON_SWEEP_QUEUE_NAME,
     ],
     reportConcurrency: REPORT_CONCURRENCY,
@@ -136,7 +119,6 @@ async function shutdown(): Promise<void> {
   await Promise.all([
     emailWorker.close(),
     reportWorker.close(),
-    voiceReconcileWorker.close(),
     abandonSweepWorker.close(),
     abandonSweepQueue.close(),
   ]);

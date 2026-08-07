@@ -2,7 +2,7 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { AvatarPreload } from '../../../../components/avatar';
 import { AnswerComposer } from '../../../../components/room/answer-composer';
@@ -72,14 +72,7 @@ export default function InterviewRoomPage() {
   // `mode` is the server's, so a fatal voice error (V03 downgrade) lands here as a plain
   // refetch and the room becomes the text room — there is no client-side mode flag to unset.
   const voiceMode = room?.mode === 'voice';
-  const { refetch } = stateQuery;
-  const voice = useVoiceSession(id, {
-    enabled: voiceMode,
-    // K11 — the only thing a session event may do to room state is ask for it again.
-    onResync: useCallback(() => {
-      void refetch();
-    }, [refetch]),
-  });
+  const voice = useVoiceSession(id, { enabled: voiceMode });
 
   // Navigation belongs in an effect: routing during render is what makes a redirect fire twice.
   useEffect(() => {

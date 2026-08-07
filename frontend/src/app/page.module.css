@@ -26,11 +26,14 @@
 
 /* --------------------------------------------------------------------------------- hero */
 
-/* Deliberately short. The argument is the stage directly below it; a full-viewport hero here
-   would push the one thing worth seeing under the fold. Single column, because a right-hand
-   action column at this height is mostly empty space with a button floating in it. */
+/* User asked for a big, tall hero that pushes the stage down the page — the intentionally
+   short version this replaced is described in the sibling git history, not here. */
 .hero {
-  padding-block: 40px 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 88vh;
+  padding-block: 40px;
 }
 
 .title {
@@ -41,6 +44,11 @@
   line-height: 1.02;
   letter-spacing: -0.025em;
   text-wrap: balance;
+  /* 56px is the type scale's ceiling (DESIGN §6) — landing hero only, and already spent
+     here. Bigger still, without a second literal size: scale the box instead of the font. */
+  transform: scale(1.2);
+  transform-origin: left top;
+  margin-block-end: 24px;
 }
 
 .subhead {
@@ -81,30 +89,27 @@
 
 .cta:focus-visible,
 .closingCta:focus-visible,
-.secondary:focus-visible,
 .faqQuestion:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
-.secondary {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  font-size: 14px;
-  color: var(--text-muted);
-  border-radius: var(--radius-button);
-  transition: color var(--duration-default) var(--easing-default);
+/* The stage gets its own ground and heading, set off from the hero rather than reading as
+   its overflow. */
+.demoSection {
+  padding-block: 40px 64px;
+  background: var(--surface-sunken);
 }
 
-.secondary:hover {
-  color: var(--text);
-  text-decoration: underline;
-}
-
-.note {
-  font-size: 13px;
-  color: var(--text-muted);
+.demoSectionTitle {
+  max-width: 72rem;
+  padding-inline: 24px;
+  padding-block-end: 24px;
+  margin-inline: auto;
+  font-family: var(--font-heading), Georgia, serif;
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
 }
 
 /* -------------------------------------------------------------------------- shared bands */
@@ -494,12 +499,65 @@
    Outside either gate the band is simply visible, which is the correct default. */
 @supports (animation-timeline: view()) {
   @media not (prefers-reduced-motion: reduce) {
+    .demoSection,
     .band,
     .langBand,
     .closing {
       animation: enter linear both;
       animation-timeline: view();
       animation-range: entry 0% entry 40%;
+    }
+
+    /* Portfolio-style cascade: each card in a row tracks its own entry into view and lands
+       a beat after the one before it, instead of the whole row appearing as one block. */
+    .step,
+    .modeVoice,
+    .modeText,
+    .anatomyRow,
+    .langCard,
+    .faqItem {
+      animation: enter linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 60%;
+    }
+
+    .step:nth-child(2),
+    .modeText,
+    .langCard:nth-child(2) {
+      animation-delay: 90ms;
+    }
+
+    .step:nth-child(3) {
+      animation-delay: 180ms;
+    }
+
+    .anatomyRow:nth-child(2) {
+      animation-delay: 60ms;
+    }
+    .anatomyRow:nth-child(3) {
+      animation-delay: 120ms;
+    }
+    .anatomyRow:nth-child(4) {
+      animation-delay: 180ms;
+    }
+    .anatomyRow:nth-child(5) {
+      animation-delay: 240ms;
+    }
+    .anatomyRow:nth-child(6) {
+      animation-delay: 300ms;
+    }
+
+    .faqItem:nth-child(2) {
+      animation-delay: 60ms;
+    }
+    .faqItem:nth-child(3) {
+      animation-delay: 120ms;
+    }
+    .faqItem:nth-child(4) {
+      animation-delay: 180ms;
+    }
+    .faqItem:nth-child(5) {
+      animation-delay: 240ms;
     }
   }
 }

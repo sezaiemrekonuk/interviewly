@@ -19,9 +19,8 @@
   "landing": {
     "hero": "Gerçeğinden önce mülakata hazırlan",
     "subhead": "İki mülakatçı, kendi ilanından yazılmış sorular ve her cevaba gerekçeli bir puan.",
-    "cta": "Hesap oluştur",
-    "ctaNote": "Ön izleme boyunca ücretsiz. Kart yok.",
-    "signIn": "Hesabın var mı? Giriş yap",
+    "cta": "Mülakata Başla",
+    "howItWorks": "Nasıl çalışır",
     "demo": {
       "title": "Sandalyeye otur",
       "lede": "Önce Ada sorar, sonra Turing. Vereceğin cevabı seç, puanlanışını izle. Hesap gerekmez, hiçbir şey kaydedilmez.",
@@ -562,9 +561,6 @@
     "SECURITY_PROMPT_INJECTION_SUSPECTED": "Şüpheli içerik tespit edildi ve güvenle işlendi.",
     "ENV_VALIDATION_FAILED": "Sunucu yapılandırması eksik.",
     "VOICE_UNAVAILABLE": "Bu mülakatta sesli mod kullanılamıyor. Metin moduyla devam et.",
-    "WEBHOOK_SIGNATURE_INVALID": "Webhook reddedildi: imza geçersiz.",
-    "WEBHOOK_REPLAY_REJECTED": "Webhook reddedildi: istek tekrarlanmış.",
-    "VOICE_SESSION_INVALID": "Sesli oturum geçersiz.",
     "VOICE_SESSION_EXPIRED": "Sesli oturumun süresi doldu. Yeniden başlat.",
     "SPEECH_AUDIO_INVALID": "Ses dosyası okunamadı. Lütfen tekrar kayıt yapın.",
     "SPEECH_TRANSCRIPTION_FAILED": "Transkripsiyon başarısız. Lütfen tekrar deneyin veya yanıtınızı yazın.",
@@ -859,6 +855,15 @@
   "nav": {
     "label": "Interviewly",
     "today": "Bugün",
+    "tryNow": "Hemen dene",
+    "signIn": "Giriş yap",
+    "sections": {
+      "demo": "Demo",
+      "mechanism": "Nasıl çalışır",
+      "modes": "Modlar",
+      "report": "Rapor",
+      "faq": "SSS"
+    },
     "interviews": "Mülakatlar",
     "new": "Yeni mülakat",
     "profile": "Profil",

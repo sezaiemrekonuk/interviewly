@@ -8,15 +8,7 @@
  * subpaths it was never granted.
  */
 export { runReport, type ReportOpts } from '../modules/interview/report-run';
-export { reconcileVoiceUsage, type ReconcileResult } from '../modules/voice/reconcile';
-export type { VoiceReconcileJob } from '../modules/voice/reconcile-webhook';
-export {
-  REPORT_JOB_OPTIONS,
-  REPORT_QUEUE,
-  reportQueue,
-  VOICE_RECONCILE_QUEUE,
-  voiceReconcileQueue,
-} from './lib/queue';
+export { REPORT_JOB_OPTIONS, REPORT_QUEUE, reportQueue } from './lib/queue';
 // R03: the dead-letter transition. K2 — the worker never writes `interviews.state` any other way.
 export { applyTransition } from '../modules/interview/machine';
 // R02: the worker stores the rendered report PDF through I12's wrapper rather than building a
