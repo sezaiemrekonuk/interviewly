@@ -12,30 +12,47 @@ const SRC_DIR = join(ROOT, 'src');
 const GLOBALS_CSS = join(ROOT, 'styles', 'globals.css');
 
 const SHIPPED_TOKENS: Record<string, string> = {
-  '--bg': '#FBF9F6',
-  '--surface': '#FFFFFF',
-  '--surface-sunken': '#F4F2EE',
-  '--text': '#111436',
-  '--text-muted': '#646884',
-  '--primary': '#C94D00',
-  '--primary-soft': '#FFF1E8',
-  '--accent': '#6F76F1',
-  '--live': '#12873D',
-  '--success': '#10B981',
-  '--warning': '#F59E0B',
-  '--danger': '#C62A20',
-  '--border': '#E8E4DE',
-  '--grad-lavender': '#EFE9FF',
-  '--grad-cream': '#FBF9F6',
-  '--grad-peach': '#FFE8D6',
-  '--radius-panel': '24px',
-  '--radius-card': '16px',
-  '--radius-input': '12px',
-  '--radius-button': '999px',
-  '--shadow-hairline': '0 1px 2px rgba(17,20,54,.06)',
-  '--shadow-soft': '0 8px 24px -12px rgba(17,20,54,.12)',
+  '--bg': '#F1F2F7',
+  '--surface': '#FBFBFD',
+  '--surface-sunken': '#E7E9F1',
+  '--text': '#12131C',
+  '--text-muted': '#565C71',
+  '--primary': '#B2400A',
+  '--primary-soft': '#FBEFE7',
+  '--accent': '#4046CC',
+  '--live': '#0C6F33',
+  '--success': '#0E7A3A',
+  '--warning': '#8A5A00',
+  '--danger': '#B52519',
+  '--border': '#CBCEDD',
+  '--radius-panel': '6px',
+  '--radius-card': '3px',
+  '--radius-input': '2px',
+  '--radius-button': '2px',
+  '--shadow-hairline': '0 1px 2px rgba(18,19,28,.07), 0 10px 26px -14px rgba(18,19,28,.30)',
+  '--shadow-soft': '0 2px 3px rgba(18,19,28,.05), 0 30px 60px -26px rgba(18,19,28,.42)',
   '--duration-default': '200ms',
   '--easing-default': 'ease-out',
+};
+
+// Direction B's surfaces. These carry the split shell (the dark context column, the
+// interview stage) and the chart series; they have no equivalent in the old registry.
+const ADDED_TOKENS: Record<string, string> = {
+  '--rail': '#191B2B',
+  '--rail-raised': '#232640',
+  '--rail-border': '#343954',
+  '--rail-text': '#F2F3F9',
+  '--rail-text-muted': '#A9AECB',
+  '--rail-text-faint': '#8A90B4',
+  '--stage': '#D5D8E7',
+  '--primary-deep': '#8F3407',
+  '--accent-deep': '#383DB0',
+  '--series-1': '#4046CC',
+  '--series-2': '#B2400A',
+  '--series-3': '#186972',
+  '--series-4': '#63389A',
+  '--series-5': '#0E6E33',
+  '--series-6': '#7A4E00',
 };
 
 function declaredValue(name: string): string | undefined {
@@ -47,7 +64,7 @@ function declaredValue(name: string): string | undefined {
 }
 
 describe('token registry (ui §4.2)', () => {
-  for (const [name, value] of Object.entries(SHIPPED_TOKENS)) {
+  for (const [name, value] of Object.entries({ ...SHIPPED_TOKENS, ...ADDED_TOKENS })) {
     it(`${name} exists exactly once with its shipped value`, () => {
       const occurrences = TOKENS_CSS.split(`${name}:`).length - 1;
       const expectedOccurrences = name === '--duration-default' ? 2 : 1;
@@ -56,10 +73,12 @@ describe('token registry (ui §4.2)', () => {
     });
   }
 
-  it('--gradient-entry composes the three gradient stops', () => {
-    expect(declaredValue('--gradient-entry')).toBe(
-      'linear-gradient(160deg, var(--grad-lavender) 0%, var(--grad-cream) 52%, var(--grad-peach) 100%)'
-    );
+  it('the retired entry gradient is not redeclared', () => {
+    // Direction B has no wash. Re-adding the token is the first step back to the old
+    // identity, so it fails here rather than in review.
+    for (const name of ['--gradient-entry', '--grad-lavender', '--grad-cream', '--grad-peach']) {
+      expect(declaredValue(name)).toBeUndefined();
+    }
   });
 });
 

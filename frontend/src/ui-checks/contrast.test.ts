@@ -38,9 +38,12 @@ const live = token('--live');
 const bg = token('--bg');
 const surface = token('--surface');
 const sunken = token('--surface-sunken');
-const gradLavender = token('--grad-lavender');
-const gradCream = token('--grad-cream');
-const gradPeach = token('--grad-peach');
+const stage = token('--stage');
+const rail = token('--rail');
+const railRaised = token('--rail-raised');
+const railText = token('--rail-text');
+const railTextMuted = token('--rail-text-muted');
+const railTextFaint = token('--rail-text-faint');
 const white = '#FFFFFF';
 
 const pairs: Array<[string, string, string]> = [
@@ -50,12 +53,20 @@ const pairs: Array<[string, string, string]> = [
   ['--text-muted over --bg', textMuted, bg],
   ['--text-muted over --surface', textMuted, surface],
   ['--text-muted over --surface-sunken', textMuted, sunken],
-  ['--text over --grad-lavender', text, gradLavender],
-  ['--text over --grad-cream', text, gradCream],
-  ['--text over --grad-peach', text, gradPeach],
-  ['--text-muted over --grad-lavender', textMuted, gradLavender],
-  ['--text-muted over --grad-cream', textMuted, gradCream],
-  ['--text-muted over --grad-peach', textMuted, gradPeach],
+  // The stage is the interview room's ground. Nothing sits on it bare today — every tile and
+  // sheet carries its own background — but it is a legal ground, and the first caption placed
+  // directly on it must not be the thing that discovers it was never checked.
+  ['--text over --stage', text, stage],
+  ['--text-muted over --stage', textMuted, stage],
+  ['--danger over --stage', danger, stage],
+  // The context column is a second full ground with its own ink ramp. `--rail-text-faint` on
+  // `--rail-raised` (the current nav item) is the tightest pair in the whole system.
+  ['--rail-text over --rail', railText, rail],
+  ['--rail-text over --rail-raised', railText, railRaised],
+  ['--rail-text-muted over --rail', railTextMuted, rail],
+  ['--rail-text-muted over --rail-raised', railTextMuted, railRaised],
+  ['--rail-text-faint over --rail', railTextFaint, rail],
+  ['--rail-text-faint over --rail-raised', railTextFaint, railRaised],
   ['white on --primary', white, primary],
   ['white on --live', white, live],
   // Error copy is 13px and lands on all three grounds — the card, the page and the
