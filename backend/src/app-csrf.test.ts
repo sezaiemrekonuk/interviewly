@@ -36,15 +36,66 @@ vi.mock('ioredis', () => ({ Redis: class { on() {} quit() {} } }));
 
 const EVIL = 'https://evil.example';
 
+/** Express 5 exposes neither of these; both are read off `stack` below. */
+interface UseLayer {
+  name: string;
+  /** `true` for a pathless `use(fn)` — it matches every path. */
+  slash: boolean;
+  /** Compiled prefix matchers. Falsy return means this mount does not cover that path. */
+  matchers: ((path: string) => unknown)[];
+  route?: undefined;
+}
+interface RouteLayer {
+  route: { path: string; stack: { method: string }[] };
+}
+type Layer = UseLayer | RouteLayer;
+
+const stackOf = (router: Router): Layer[] => (router as unknown as { stack: Layer[] }).stack;
+
 /**
- * Express does not expose "what is mounted on this router", so this reads `stack` directly.
- * A layer with no `route` came from `.use` — mounted across the router — and its `name` is
- * the handler's function name. A per-route wiring would put the guard inside `layer.route`
- * instead, and fail this, which is the whole point.
+ * A layer with no `route` came from `.use`; one with a `route` is a single path's handlers.
+ * Per-route wiring would put the guard inside `layer.route` and fail this, which is the point.
  */
-function hasRouterWideGuard(router: Router): boolean {
-  const stack = (router as unknown as { stack: { name: string; route?: unknown }[] }).stack;
-  return stack.some((layer) => !layer.route && layer.name === 'requirePublicOrigin');
+function hasGuardMount(router: Router): boolean {
+  return stackOf(router).some((l) => !l.route && l.name === 'requirePublicOrigin');
+}
+
+/** `requirePublicOrigin` exempts these itself (csrf.ts), so they are not gaps. */
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
+/**
+ * Every state-changing route on `router` that no `requirePublicOrigin` mount above it
+ * covers — the list this file wants empty.
+ *
+ * `hasGuardMount` alone cannot see this. Express 5.2.1 keeps a mount's path only inside
+ * compiled closures (`layer.path` is undefined until a request is matching), so a scoped
+ * `use('/me', guard)` and a pathless `use(guard)` look identical by name. `meRouter` is
+ * mounted at `/` and therefore has to scope its guard to `/me` — which means "the guard is
+ * mounted" stops implying "the guard covers the routes", and a `POST /profile/avatar` added
+ * below it would be registered, reachable and unguarded while `hasGuardMount` stayed green.
+ *
+ * So this asks the mounts what they actually match. Order matters: a `use` registered after
+ * a route does not run for it, so only guards seen earlier in the stack count.
+ */
+function unguardedStateChangingRoutes(router: Router): string[] {
+  const guards: UseLayer[] = [];
+  const gaps: string[] = [];
+
+  for (const layer of stackOf(router)) {
+    if (!layer.route) {
+      if (layer.name === 'requirePublicOrigin') guards.push(layer);
+      continue;
+    }
+    const methods = [...new Set(layer.route.stack.map((s) => s.method.toUpperCase()))].filter(
+      (m) => !SAFE_METHODS.has(m),
+    );
+    if (methods.length === 0) continue;
+
+    const path = layer.route.path;
+    const covered = guards.some((g) => g.slash || g.matchers.some((match) => match(path)));
+    if (!covered) gaps.push(`${methods.join(',')} ${path}`);
+  }
+  return gaps;
 }
 
 let baseUrl = '';
@@ -68,16 +119,24 @@ async function call(method: string, path: string, headers: HeadersInit = {}) {
   return { status: res.status, code: (body as { error?: { code?: string } })?.error?.code };
 }
 
-describe('every browser-facing router mounts the guard router-wide', () => {
-  it.each([
-    ['auth', () => import('../modules/auth/router').then((m) => m.default)],
-    ['me', () => import('../modules/auth/router').then((m) => m.meRouter)],
-    ['admin', () => import('../modules/admin/router').then((m) => m.default)],
-    ['interview', () => import('../modules/interview/router').then((m) => m.default)],
-    ['voice', () => import('../modules/voice/session').then((m) => m.default)],
-    ['speech', () => import('../modules/speech/router').then((m) => m.default)],
-  ])('%s', async (_name, load) => {
-    expect(hasRouterWideGuard(await load())).toBe(true);
+const ROUTERS = [
+  ['auth', () => import('../modules/auth/router').then((m) => m.default)],
+  ['me', () => import('../modules/auth/router').then((m) => m.meRouter)],
+  ['admin', () => import('../modules/admin/router').then((m) => m.default)],
+  ['interview', () => import('../modules/interview/router').then((m) => m.default)],
+  ['voice', () => import('../modules/voice/session').then((m) => m.default)],
+  ['speech', () => import('../modules/speech/router').then((m) => m.default)],
+] as const;
+
+describe('every browser-facing router mounts the guard with .use', () => {
+  it.each(ROUTERS)('%s', async (_name, load) => {
+    expect(hasGuardMount(await load())).toBe(true);
+  });
+});
+
+describe('and every state-changing route it carries is inside that mount', () => {
+  it.each(ROUTERS)('%s', async (_name, load) => {
+    expect(unguardedStateChangingRoutes(await load())).toEqual([]);
   });
 });
 
