@@ -13,71 +13,244 @@
     "profile": "Profile",
     "tagline": "Practise the interview before it counts.",
     "privacy": "Privacy",
-    "terms": "Terms"
+    "terms": "Terms",
+    "admin": "Admin"
   },
   "landing": {
     "hero": "Practise the interview before it counts",
-    "subhead": "An HR and a technical interviewer, a real conversation, and a scored report on every answer.",
+    "subhead": "Two interviewers, questions written from your own job listing, and a score with reasons on every answer.",
     "cta": "Create account",
-    "ctaNote": "Free while in preview. No card, no setup.",
+    "ctaNote": "Free while in preview. No card.",
     "signIn": "Already have an account? Sign in",
-    "props": {
-      "practice": {
-        "title": "Questions for your role",
-        "body": "Paste a job listing or name the role — the questions follow it, not a generic list."
+    "demo": {
+      "title": "Sit in the chair",
+      "lede": "Ada opens, Turing follows. Pick the answer you would give and watch it get marked. No account, nothing recorded.",
+      "rolePrompt": "Practising for",
+      "fromListing": "From the listing",
+      "ada": "Ada",
+      "turing": "Turing",
+      "roleHr": "HR interviewer",
+      "roleTech": "Technical interviewer",
+      "hasFloor": "Has the floor",
+      "roundWaiting": "Waiting",
+      "roundDone": "Round done",
+      "asks": "{name} · {role}",
+      "yourTurn": "Your turn — pick the answer you would give",
+      "youAnswered": "You answered",
+      "verdict": "Marked {score} out of {max}. STAR adherence {percent}%.",
+      "verdictPlain": "Marked {score} out of {max}.",
+      "tryAgain": "Pick a different answer",
+      "marked": "Marked. That is one question of eight.",
+      "outOf": "/ {max}",
+      "star": "STAR {percent}%",
+      "axes": {
+        "score": "Score",
+        "star": "STAR adherence"
       },
-      "feedback": {
-        "title": "Feedback on every answer",
-        "body": "Each answer is scored against the criteria the question was asked for."
+      "nextRound": "{name} takes the technical round",
+      "sampleNote": "Sample questions and answers, written to show the format. A real interview is written from the listing you paste.",
+      "report": {
+        "title": "Your sample report",
+        "meta": "{count} questions, both rounds",
+        "close": "A real interview runs six, eight or ten questions across both rounds, and the report adds strengths, gaps, every question scored, the full transcript and a PDF.",
+        "cta": "Start a real one",
+        "replay": "Try a different answer"
       },
-      "progress": {
-        "title": "A report you can reread",
-        "body": "Strengths, gaps and the full transcript, kept after the interview ends."
+      "roles": {
+        "frontend": {
+          "label": "Frontend engineer",
+          "listing": "Senior Frontend Engineer — React, TypeScript, design systems. You will own the component library.",
+          "hr": {
+            "question": "Tell me about a release that slipped. What did you do about it?",
+            "answers": {
+              "a": "Our design-system migration slipped two weeks when a shared modal broke in three products. I cut the release down to the twelve components nobody was blocked on, shipped those on the original date, and told both product leads the same afternoon with a new date for the rest. We hit it, and I added a cross-product smoke test so the next break shows up before release day.",
+              "b": "It happens sometimes. We talked as a team, worked out what went wrong, and made sure we planned better the next time round.",
+              "c": "Honestly the whole quarter was difficult. Two people left, the roadmap changed twice, and the design team was rebuilding the tokens underneath us at the same time. Everyone was stretched thin. I think the planning process was the real problem — we commit to dates before the designs are settled, and I have been saying so for a while."
+            },
+            "reasons": {
+              "a": "Situation, decision, who you told, and the result — plus a fix that outlived the incident. Ada would push once more on what you gave up by cutting scope, and whether the product leads actually agreed.",
+              "b": "Nothing here is yours. Every verb is \"we\", there is no decision and no result, and the answer would fit any slipped release at any company. Name what you did and what changed because of it.",
+              "c": "This is context, not an answer. Ada asked what you did; four sentences in, the subject is still the quarter. The last line also puts the cause outside the room, which is the part an HR interviewer is listening for."
+            }
+          },
+          "tech": {
+            "question": "A list of a thousand rows re-renders on every keystroke in the filter box. Where do you look first?",
+            "answers": {
+              "a": "First, whether the filter state lives above the list — if the input and the rows share a parent, every keystroke re-renders all thousand. I would confirm it on a flamegraph before changing anything, then either move that state down, memoise the row, or debounce the filter. If the rows are genuinely expensive I would virtualise, but that is the last step, not the first.",
+              "b": "I would add React.memo to the row component and see whether that helps.",
+              "c": "Re-renders are usually a state colocation problem. React diffs the whole subtree when a parent's state changes, and because that comparison is linear in the number of children you pay for every row. There is nuance here too — the scheduler works in units, so time slicing hides some of the cost, and concurrent rendering changes the picture again."
+            },
+            "reasons": {
+              "a": "Measure, then change. You named the likely cause, said how you would confirm it, gave three ordered fixes, and put virtualisation last where it belongs. Turing would follow up on how you choose between moving state and memoising.",
+              "b": "A guess, and the one people reach for before they know what is slow. `memo` does nothing when the row props are new objects each render, which is the usual reason this bug survives the first attempt.",
+              "c": "Accurate and off target. Turing asked where you would look first and got the reconciler. The depth reads well; nothing in it is a step you would actually take on Monday morning."
+            }
+          }
+        },
+        "product": {
+          "label": "Product manager",
+          "listing": "Product Manager — B2B SaaS, self-serve growth. You will own activation and onboarding.",
+          "hr": {
+            "question": "Tell me about a decision you made that turned out to be wrong.",
+            "answers": {
+              "a": "I removed our onboarding checklist because activation had not moved in six weeks. Two weeks later, setup tickets were up forty per cent — the checklist was not driving activation, it was preventing confusion, and I had measured the wrong thing. I brought it back behind a flag, wrote down what I had actually been testing, and now I do not remove a surface without a metric for what it was quietly holding up.",
+              "b": "I have made plenty. You learn from them and move on — I would rather be wrong quickly than right slowly.",
+              "c": "We decided to build an integrations marketplace. In hindsight the market was not there yet, sales had oversold the demand, and engineering estimated a quarter when it took two. With better data going in, I do not think we would have started."
+            },
+            "reasons": {
+              "a": "A real decision, a number that moved the wrong way, and a rule you now follow because of it. Ada would ask who had told you the checklist mattered before you removed it, and what you did with that.",
+              "b": "A slogan, not an answer. There is no decision, no consequence and nothing you would do differently — and \"wrong quickly\" is a value, not an example.",
+              "c": "The decision is real; nothing in it is yours. Sales oversold, engineering underestimated, the data was missing. Ada asked what you got wrong — say what you would have decided differently with the information you actually had at the time."
+            }
+          },
+          "tech": {
+            "question": "Your onboarding rewrite ships and activation drops eight per cent. What do you check first?",
+            "answers": {
+              "a": "Whether the number is real. Instrumentation ships with rewrites, so I would confirm the event still fires and that activation is defined the way it was last week. Then split the drop: new users or everyone, all channels or one, all plans or one. Segmentation usually names the cause before any qualitative work does. Session recordings on whichever segment moved, and only then a decision about rolling back.",
+              "b": "I would roll it back, and then work out what happened.",
+              "c": "Activation is a lagging indicator, so an eight per cent drop one week in might be noise — you would want the confidence interval before reacting. There is seasonality too, and a rewrite changes the population you are measuring because it changes who gets through the funnel at all, which makes a clean comparison quite hard."
+            },
+            "reasons": {
+              "a": "You checked the measurement before the product, then segmented before guessing. Naming rollback as the last decision rather than the first is what separates this from panic. Turing would push on how long you let it run before deciding.",
+              "b": "Reasonable instinct, no method. Rolling back destroys the evidence, and you would ship the same rewrite again in six weeks without knowing which part of it hurt.",
+              "c": "All true, and none of it is a check. Every sentence is a reason the number might not mean anything. Turing asked what you would do first."
+            }
+          }
+        },
+        "data": {
+          "label": "Data analyst",
+          "listing": "Data Analyst — commercial reporting. SQL, dbt, and a lot of stakeholders.",
+          "hr": {
+            "question": "Tell me about a time you had to tell someone their number was wrong.",
+            "answers": {
+              "a": "Our head of sales was quoting a conversion rate in board decks that double-counted renewals. I rebuilt it, checked it against the billing export, and took him the two queries side by side before the next board meeting rather than after it. He was annoyed for a day, then asked me to audit the other three metrics in the deck. I now publish the definition next to every number I own.",
+              "b": "I told them politely and explained the correct figure. They understood, and we moved on.",
+              "c": "This happens constantly. Most stakeholders pull their own numbers out of the BI tool without checking the definitions, and then two people arrive at a meeting with different figures. I have pushed for a metrics layer for a long time — that is the actual fix, rather than analysts correcting people one at a time."
+            },
+            "reasons": {
+              "a": "The person, the error, how you verified it, when you told him, and what changed afterwards. Taking it before the board meeting rather than after is the detail that makes the story yours.",
+              "b": "Three sentences with no friction in them. Ada asked about a hard conversation and got a summary of one going well, which is the version people give when they are not describing a real one.",
+              "c": "You have answered a different question — what is wrong with the org, not what you did. The proposed fix is sound, and Ada was listening for how you handled a person."
+            }
+          },
+          "tech": {
+            "question": "A daily revenue dashboard shows a thirty per cent jump overnight. Walk me through your first hour.",
+            "answers": {
+              "a": "Whether it is the data or the business. One query on raw rows for yesterday and the day before, no models in the way. If the row count jumped, I would look for a re-run inserting duplicates; if the count is flat and the sum moved, it is real or it is currency. Then the last dbt run and any upstream schema change in that window. Before I tell anyone it is real, I want the same number from a source the pipeline does not touch — usually the billing export.",
+              "b": "I would ask the engineering team whether anything changed in the pipeline.",
+              "c": "Thirty per cent is well outside normal variance, so it is almost certainly upstream rather than genuine growth. In my experience these are nearly always duplicate loads — a failed job retries and inserts the same batch twice. I would start from that assumption and work backwards."
+            },
+            "reasons": {
+              "a": "Raw rows before models, row count before sum, and a second source before you tell anyone. That last step is the one most answers skip. Turing would ask what you say to the CFO at minute five, before you know.",
+              "b": "One question, to someone else, and then you are waiting. Turing asked for your first hour and got your first minute.",
+              "c": "A good guess is still a guess. You committed to a cause before running a query, and the answer never checks whether the number is real — if it turns out to be, the hour is spent proving something true is false."
+            }
+          }
+        }
       }
     },
-    "preview": {
-      "label": "A few minutes in",
-      "hrChip": "HR",
-      "hrQuestion": "Tell me about a project that slipped. What did you do about it?",
-      "answer": "I cut the scope back to what the release needed and told the client the same day.",
-      "techChip": "Technical",
-      "techQuestion": "This query gets slow at ten million rows. Where do you look first?",
-      "score": "Scored 4 / 5 — clear structure, name the result"
+    "mechanism": {
+      "title": "The questions come from your listing",
+      "lede": "Not a question bank with the job title swapped in. The listing is read for the role, the seniority and the stack, and both rounds are written against what it actually asks for.",
+      "steps": {
+        "listing": {
+          "title": "You paste the listing",
+          "body": "The one you are actually applying to. It is kept with the interview, so you can practise against the same job again without hunting for it."
+        },
+        "rounds": {
+          "title": "Ada opens, Turing follows",
+          "body": "An HR round on motivation, conflict and ownership, then a technical round on what the listing names. Two interviewers, two briefs, two voices."
+        },
+        "report": {
+          "title": "Every answer is marked as you go",
+          "body": "A score out of five, STAR adherence and a written reason, on every answer. The report at the end collects measurements already taken."
+        }
+      }
+    },
+    "modes": {
+      "title": "Speak it, or type it",
+      "lede": "The words are the same. Saying them out loud is the part that goes wrong on the day.",
+      "voice": {
+        "title": "Voice",
+        "body": "A real conversation. Ada and Turing speak, you answer out loud, and the next question comes when you stop. There is a microphone check before the room, and captions if you want them.",
+        "mute": "Mute",
+        "captions": "Captions",
+        "leave": "Leave"
+      },
+      "text": {
+        "title": "Text",
+        "body": "Read the question, write the answer, send it. Same interviewers, same scoring, no microphone — and it works on a train.",
+        "label": "Your answer",
+        "placeholder": "Type your answer",
+        "send": "Send answer"
+      }
+    },
+    "report": {
+      "title": "What lands at the end",
+      "lede": "One page to reread the night before, and a PDF that stays yours.",
+      "items": {
+        "score": {
+          "term": "An overall score",
+          "def": "Out of five, with the HR and technical rounds scored separately — the gap between them is the part you can act on."
+        },
+        "rounds": {
+          "term": "Both rounds, summarised",
+          "def": "What each interviewer made of you, in their own words — including where the two of them disagreed."
+        },
+        "strengths": {
+          "term": "Strengths and gaps",
+          "def": "Named specifically enough to act on before the real interview. Never \"improve your communication\"."
+        },
+        "questions": {
+          "term": "Question by question",
+          "def": "Every question you were asked, the score it got, and the written reason it was marked that way."
+        },
+        "transcript": {
+          "term": "The full transcript",
+          "def": "Everything asked and everything you said, kept after the interview ends so you can read what you actually answered."
+        },
+        "pdf": {
+          "term": "A PDF",
+          "def": "The same report, downloadable, so it survives outside the product."
+        }
+      }
+    },
+    "languages": {
+      "title": "English and Türkçe, both native",
+      "lede": "Not one written and the other translated. Each interviewer asks in the language of the interview, and the report comes back in it.",
+      "en": "English",
+      "tr": "Türkçe",
+      "enQuestion": "This query gets slow at ten million rows. Where do you look first?",
+      "trQuestion": "Bu sorgu on milyon satırda yavaşlıyor. Önce nereye bakarsınız?"
+    },
+    "faq": {
+      "title": "Before you start",
+      "items": {
+        "listing": {
+          "q": "What if I do not have a job listing?",
+          "a": "You need one to begin, because the questions are written from it. Paste any listing for the role you are aiming at — it does not have to be a job you are applying to."
+        },
+        "voice": {
+          "q": "Does voice need anything installed?",
+          "a": "A microphone and a browser. There is a device check before the room opens, so nothing is a surprise once the interview has started."
+        },
+        "time": {
+          "q": "How long does one take?",
+          "a": "Six, eight or ten questions — roughly ten to twenty-five minutes. You can pause and come back; the interview keeps its place."
+        },
+        "languages": {
+          "q": "Which languages?",
+          "a": "English and Turkish, both fully. The interview and the report follow the language set on your account."
+        },
+        "data": {
+          "q": "What happens to my answers?",
+          "a": "They are stored with the interview so the report can quote them back to you. You can delete an interview, or your whole account, at any time. The privacy notice has the detail."
+        }
+      }
     },
     "closing": {
       "line": "Ten minutes now, fewer surprises on the day.",
       "cta": "Start practising"
-    }
-  },
-  "home": {
-    "greeting": "Welcome back, {name}",
-    "greetingPlain": "Welcome back",
-    "newInterview": "Start a new interview",
-    "historyTitle": "Your interviews",
-    "loadMore": "Load more",
-    "continue": "Continue",
-    "viewReport": "View report",
-    "delete": "Delete",
-    "deleteLabel": "Delete the {occupation} interview",
-    "deleteConfirm": "Delete this interview?",
-    "deleteConfirmAction": "Delete",
-    "cancel": "Cancel",
-    "occupationUnknown": "Interview",
-    "state": {
-      "created": "Not started",
-      "profiling": "Getting ready",
-      "hr_round": "HR round",
-      "tech_round": "Technical round",
-      "paused": "Paused",
-      "evaluating": "Scoring",
-      "completed": "Completed",
-      "abandoned": "Left unfinished",
-      "failed": "Did not finish"
-    },
-    "empty": {
-      "title": "No interviews yet",
-      "body": "Name the role, answer for ten minutes, read the report. That is the whole loop.",
-      "cta": "Start your first interview"
     }
   },
   "mascot": {
@@ -130,7 +303,22 @@
     "resetDoneTitle": "Password updated",
     "resetDoneBody": "You have been signed out everywhere. Sign in again with your new password.",
     "consentLabel": "I have read and accept the <privacy>Privacy Notice</privacy> and the <terms>Terms of Service</terms>.",
-    "consentHint": "We process your profile, CV and interview answers through AI providers. The notice explains what that means."
+    "consentHint": "We process your profile, CV and interview answers through AI providers. The notice explains what that means.",
+    "railSignInLede": "Practise the interview before it counts.",
+    "railSignInBody": "An HR interviewer and a technical interviewer, a real conversation, and a score on every answer.",
+    "railSignInFoot": "Ten minutes. Free while in preview.",
+    "railRegisterLede": "Practise the interview before it counts.",
+    "railRegisterBody": "Tell us the role you are after and two interviewers take it from there — one on your experience, one on the technical work. Every answer comes back with a report.",
+    "railRegisterFoot": "A minute to set up, ten to sit it. Free while in preview.",
+    "railForgotLede": "Locked out is a temporary condition.",
+    "railForgotBody": "We send a link to the address on the account. It works once and expires in an hour.",
+    "railForgotFoot": "Nothing changes until you set a new password.",
+    "railResetLede": "A new password ends every other session.",
+    "railResetBody": "That includes this browser, any phone you signed in on, and anything still holding an older session.",
+    "railResetFoot": "You will sign in again with the new one.",
+    "railVerifyLede": "One link, and the address is yours.",
+    "railVerifyBody": "A confirmed address is how your reports find you again, and how a password reset gets back to you.",
+    "railVerifyFoot": "The link works once and expires."
   },
   "onboarding": {
     "progress": "Step {step} of {total}",
@@ -194,49 +382,32 @@
     "sizeMb": "{value} MB"
   },
   "profile": {
-    "title": "Your profile",
-    "subtitle": "Everything here shapes the questions you get. Change it whenever it changes.",
-    "monogramAlt": "Your initial",
-    "namePlaceholder": "No name yet",
-    "jobTitlePlaceholder": "No job title yet",
-    "emailVerified": "Email verified",
-    "emailUnverified": "Email not verified",
-    "verifyEmail": "Verify it",
-    "completeness": "{filled} of {total} filled in",
-    "tabs": {
-      "account": "Account",
-      "education": "Education",
-      "interests": "Interests",
-      "cv": "CV"
+    "title": "Profile",
+    "lede": "This is what the interviewers know about you before the first question. The more that is here, the closer the questions get to your actual experience — and none of it is shown to anyone else.",
+    "inputs": "{filled} of {total} inputs filled in.",
+    "inputsCv": "Your CV changes the questions more than anything else here.",
+    "identity": {
+      "title": "Who you are",
+      "effect": "Your name and current role. The HR round opens from these, and the technical round pitches its difficulty against the seniority in your title."
     },
-    "status": {
-      "filled": "{filled} of {total}",
-      "entries": "{count} added",
-      "none": "Nothing yet",
-      "added": "Added",
-      "attached": "Attached"
+    "cv": {
+      "title": "Your CV",
+      "effect": "The strongest single input. Its text is read when the technical round is written, so the questions follow the work you have actually done rather than the job title on the listing."
     },
-    "accountTitle": "Account details",
-    "accountBody": "Your name and title open every interview brief.",
-    "educationTitle": "Education",
-    "educationBody": "Up to five entries. They tell the technical round what to expect.",
-    "interestsTitle": "Interests",
-    "interestsBody": "The HR round opens here. A few words are enough.",
-    "cvTitle": "CV",
-    "cvBody": "One PDF, read once and kept as text. A new one replaces it.",
-    "emailTitle": "Sign-in email",
-    "emailBody": "This is the address you sign in with. It cannot be changed here yet.",
+    "education": {
+      "title": "Education",
+      "effect": "Where you studied and in what. The technical round leans on this when your CV is thin, and skips the basics when it is not."
+    },
+    "interests": {
+      "title": "Interests",
+      "effect": "What you do outside work. The HR round uses these for the opening question and for the ones about motivation."
+    },
     "save": "Save",
     "saved": "Saved",
-    "saveFailed": "That did not save.",
     "nothingToSave": "No changes to save",
+    "saveFailed": "That did not save.",
     "loading": "Loading your profile",
-    "cancel": "Cancel",
-    "deleteAccountTitle": "Delete my account",
-    "deleteAccountBody": "This erases your profile, your CV and every interview transcript. It cannot be undone.",
-    "deleteAccountAction": "Delete my account",
-    "deleteAccountConfirm": "Delete your account and everything in it?",
-    "deleteAccountConfirmAction": "Yes, delete everything"
+    "cancel": "Cancel"
   },
   "setup": {
     "title": "Set up your interview",
@@ -253,7 +424,12 @@
     "modeVoice": "Voice",
     "roundShape": "Number of questions",
     "roundSplit": "{hrCount} HR + {techCount} technical questions",
-    "start": "Start"
+    "start": "Start",
+    "railNextLabel": "What happens next",
+    "railStep1": "We read the listing and work out the role.",
+    "railStep2": "An HR round, then a technical round.",
+    "railStep3": "Every answer is scored, and the report is waiting at the end.",
+    "back": "Back to the app"
   },
   "preJoin": {
     "title": "Microphone check",
@@ -305,7 +481,25 @@
         "reconnecting": "Reconnecting",
         "lost": "Disconnected"
       }
-    }
+    },
+    "roundLabel": "Round",
+    "roundHr": "HR",
+    "roundTech": "Technical",
+    "elapsedLabel": "Elapsed",
+    "elapsedNote": "Since you joined this room.",
+    "railLive": "Live",
+    "roomTitle": "Interview room",
+    "hasFloor": "{name} has the floor",
+    "viewLabel": "View",
+    "viewSpeaker": "Speaker",
+    "viewGrid": "Grid",
+    "captions": "Captions",
+    "stateOn": "on",
+    "stateOff": "off",
+    "transcriptToggle": "Transcript",
+    "leave": "Leave",
+    "roleCandidate": "Candidate",
+    "micLevel": "Microphone level"
   },
   "report": {
     "title": "Your report",
@@ -325,7 +519,9 @@
     "star": "STAR {percent}%",
     "download": "Download PDF",
     "downloadNotReady": "Your PDF isn't ready yet — try again in a moment.",
-    "downloadError": "Couldn't get the download link. Try again."
+    "downloadError": "Couldn't get the download link. Try again.",
+    "starNotApplicable": "STAR n/a",
+    "starNote": "STAR scores how an answer is built as a story, so it is only marked on HR questions."
   },
   "errors": {
     "PASSWORD_TOO_SHORT": "Password must be at least 10 characters.",
@@ -380,27 +576,108 @@
     "CONSENT_REQUIRED": "Accept the Privacy Notice and Terms of Service to create an account."
   },
   "dashboard": {
-    "title": "Your interviews",
-    "loading": "Loading your interviews…",
-    "loadMore": "Load more",
-    "delete": "Delete",
-    "deleteLabel": "Delete this interview",
-    "startedOn": "Started {date}",
-    "noOccupation": "Untitled interview",
-    "empty": {
-      "title": "No interviews yet",
-      "body": "Set one up and it will show here with its report.",
-      "cta": "Start an interview"
+    "title": "Today",
+    "greeting": "Good to see you, {name}",
+    "greetingPlain": "Good to see you",
+    "newInterview": "New interview",
+    "loading": "Loading your practice…",
+    "carryOn": {
+      "label": "Still open",
+      "at": "Stopped at the {state} stage. Nothing you answered is lost.",
+      "cta": "Carry on",
+      "untitled": "Interview"
     },
-    "outcome": {
+    "standing": {
+      "title": "Where you stand",
+      "none": "No scored interview yet. Your first report sets the baseline everything else is measured against.",
+      "outOf": "/ {max}",
+      "best": "Best",
+      "scored": "Scored",
+      "trend": "Your last few, oldest to newest",
+      "trendLocked": "The trend line needs {n} more scored {n, plural, one {interview} other {interviews}}. Two points is not a direction.",
+      "delta": {
+        "up": "+{n} on your last",
+        "down": "−{n} on your last",
+        "flat": "Level with your last"
+      }
+    },
+    "rounds": {
+      "title": "HR against technical",
+      "hr": "HR",
+      "tech": "Technical",
+      "none": "Scored rounds appear here once a report has landed.",
+      "noScore": "—",
+      "gap": "Your {round} round is {n} lower. That is the one to practise.",
+      "even": "Both rounds score the same. Neither is the weak one.",
+      "gapOne": "From one interview: HR {hr}, Technical {tech}.",
+      "weakerLink": "Your lowest {round} answers"
+    },
+    "focus": {
+      "title": "Work on this",
+      "seeAll": "All questions",
+      "none": "The answers you scored lowest will collect here, with the reason each one was marked down.",
+      "open": "Open the report",
+      "outOf": "/ {max}",
+      "clear": "Nothing scored {ceiling} or lower. Your floor is solid — an answer marked down will land here."
+    },
+    "rhythm": {
+      "title": "How often you practise",
+      "none": "Nothing in the last {weeks} weeks.",
+      "summary": "{total} {total, plural, one {interview} other {interviews}} across {active} of the last {weeks} weeks."
+    },
+    "recent": {
+      "title": "Recent sessions",
+      "seeAll": "See all"
+    },
+    "session": {
+      "untitled": "Interview",
+      "continue": "Continue",
+      "viewReport": "Report",
+      "viewTranscript": "Transcript",
+      "delete": "Delete",
+      "deleteLabel": "Delete the {occupation} interview",
+      "deleteConfirm": "Delete this interview?",
+      "deleteConfirmAction": "Delete",
+      "cancel": "Cancel",
+      "noScore": "No score",
+      "outOf": "/ {max}",
+      "mode": {
+        "text": "Text",
+        "voice": "Voice"
+      }
+    },
+    "runway": {
+      "title": "Three things, then your first interview",
+      "lede": "The questions are written from your listing and from what we know about you. Two minutes here changes what you get asked.",
+      "done": "Done",
+      "steps": {
+        "profile": {
+          "title": "Say who you are",
+          "body": "Your name and current role. The HR round opens from this.",
+          "cta": "Fill it in"
+        },
+        "cv": {
+          "title": "Add your CV",
+          "body": "The technical round reads it, so the questions follow your actual experience rather than the job title.",
+          "cta": "Upload"
+        },
+        "first": {
+          "title": "Paste a listing and start",
+          "body": "Ten to twenty-five minutes. You can pause and come back.",
+          "cta": "Start your first interview"
+        }
+      }
+    },
+    "state": {
+      "created": "Not started",
+      "profiling": "Getting ready",
+      "hr_round": "HR round",
+      "tech_round": "Technical round",
+      "paused": "Paused",
+      "evaluating": "Scoring",
       "completed": "Completed",
-      "cut_short": "Cut short",
-      "budget_exhausted": "Budget reached",
-      "time_exhausted": "Time reached",
-      "abandoned": "Abandoned",
-      "error": "Ended with an error",
-      "evaluating": "Being evaluated",
-      "inProgress": "In progress"
+      "abandoned": "Left unfinished",
+      "failed": "Did not finish"
     }
   },
   "admin": {
@@ -425,8 +702,12 @@
         "state": "State",
         "tokens": "Tokens",
         "cost": "Cost (USD)",
-        "flags": "Flags"
-      }
+        "flags": "Flags",
+        "id": "Interview"
+      },
+      "noUserJoin": "No user column: the row carries a raw account id, and there is no endpoint that resolves it to a person.",
+      "unpriced": "unknown",
+      "ceilingPill": "At ceiling"
     },
     "stats": {
       "heading": "Platform stats",
@@ -441,7 +722,9 @@
       "empty": "No data yet",
       "completed": "Completed",
       "cutShort": "Cut short",
-      "unfinished": "Unfinished"
+      "unfinished": "Unfinished",
+      "cutShortNote": "Always zero: no code path writes cut_short as an ended reason.",
+      "weakestNote": "Question ids only — the endpoint does not return the question text."
     },
     "state": {
       "created": "Created",
@@ -453,6 +736,45 @@
       "completed": "Completed",
       "abandoned": "Abandoned",
       "failed": "Failed"
+    },
+    "nav": {
+      "label": "Admin sections",
+      "overview": "Overview",
+      "interviews": "Interviews",
+      "costs": "Costs",
+      "modelCalls": "Model calls",
+      "sessions": "Sessions",
+      "users": "Users",
+      "queue": "Queue",
+      "audit": "Audit",
+      "back": "Back to the app"
+    },
+    "scope": {
+      "allTime": "All time — neither endpoint takes a date range."
+    },
+    "spec": {
+      "modelCalls": "Every call is written to llm_calls with its provider, model, latency and fallback, but no endpoint reads them. The table has no success or failure column either, so an error rate cannot be derived from this data at all.",
+      "sessions": "Voice sessions are stored per interview and no endpoint returns them, so live and recent sessions cannot be listed here.",
+      "users": "There is no user endpoint. An interview row carries a raw account id and nothing that resolves it, so accounts cannot be listed or joined to the interviews they ran.",
+      "queue": "Question generation and scoring run inline on the request, so there is no queue to show — this section waits on the background worker.",
+      "audit": "Admin reads go to the server log only. Nothing writes an audit trail to the database, so there is no history to show here.",
+      "filters": "None of these filter anything yet: neither endpoint takes a parameter other than the interview cursor.",
+      "byModel": "Per-model and per-provider spend, token counts and latency all sit in llm_calls, but no endpoint aggregates them. Voice is charged once per interview at a per-minute rate and rolls into the same total, so text and voice cannot be split apart here."
+    },
+    "filters": {
+      "dateRange": "Last 30 days",
+      "provider": "Provider",
+      "mode": "Mode",
+      "search": "Search interview or email"
+    },
+    "costs": {
+      "heading": "Spend",
+      "total": "Total spend, loaded rows",
+      "totalNote": "Summed from the {count} interviews loaded here, not from the platform: no endpoint returns a platform total, and neither takes a date range.",
+      "unpricedNote": "{count} of them spent tokens and recorded no cost. cost_usd is NOT NULL and stores 0 when the model has no price row, so those read unknown and stay out of this total rather than understating it.",
+      "byCluster": "Spend by occupation",
+      "byModel": "Spend by model",
+      "noSpend": "Nothing spent yet"
     }
   },
   "legal": {
@@ -528,5 +850,100 @@
         }
       ]
     }
+  },
+  "nav": {
+    "label": "Interviewly",
+    "today": "Today",
+    "interviews": "Interviews",
+    "new": "New interview",
+    "profile": "Profile",
+    "settings": "Settings",
+    "admin": "Admin",
+    "signOut": "Sign out",
+    "signingOut": "Signing out…",
+    "account": "Account",
+    "accountCurrent": "Account — {section}, current page"
+  },
+  "settings": {
+    "title": "Settings",
+    "account": {
+      "title": "Account",
+      "emailLabel": "Email",
+      "verified": "Verified",
+      "unverified": "Not verified yet",
+      "verify": "Verify it",
+      "passwordLabel": "Password",
+      "passwordBody": "Changing it is done through a reset link, so the new password is never typed into a page you are already signed in to.",
+      "passwordAction": "Send a reset link",
+      "passwordSent": "Sent. Check your inbox."
+    },
+    "preferences": {
+      "title": "Preferences",
+      "languageLabel": "Language",
+      "languageBody": "Sets the interface, and the language your next interview and report are written in. A running interview keeps the language it started in."
+    },
+    "privacy": {
+      "title": "Privacy and data",
+      "body": "Your interviews, answers and CV are stored so the reports can quote them back to you. Deleting an interview removes it; deleting your account removes everything.",
+      "notice": "Privacy notice",
+      "terms": "Terms"
+    },
+    "erase": {
+      "title": "Delete account",
+      "body": "Every interview, transcript, report and the CV on this account are removed. This cannot be undone and there is no way to recover them afterwards.",
+      "confirmLabel": "Type your email address to confirm",
+      "action": "Delete my account",
+      "erasing": "Deleting…"
+    }
+  },
+  "archive": {
+    "title": "Interviews",
+    "viewLabel": "How to view your practice",
+    "views": {
+      "sessions": "Sessions",
+      "questions": "Questions"
+    },
+    "loadMore": "Load more",
+    "empty": {
+      "sessions": {
+        "title": "Nothing here yet",
+        "body": "Every interview you run is kept — the score, the transcript and the report. Start one and this fills up.",
+        "cta": "Start an interview"
+      }
+    },
+    "questions": {
+      "caption": "Every question you have answered, with its score and the reason it was marked that way.",
+      "roundFilter": "Round",
+      "allRounds": "Both",
+      "sortBy": "Sort",
+      "sorts": {
+        "recent": "Most recent",
+        "worst": "Worst first"
+      },
+      "count": "{shown} {shown, plural, one {question} other {questions}}",
+      "outOf": "/ {max}",
+      "noScore": "—",
+      "loadMore": "Load more",
+      "columns": {
+        "question": "Question",
+        "round": "Round",
+        "score": "Score",
+        "star": "STAR (HR only)",
+        "when": "When",
+        "open": "Open the report"
+      },
+      "empty": {
+        "title": "No answered questions yet",
+        "body": "Once an interview has been scored, every question you were asked lands here — sortable, so your weakest answers are one click away."
+      },
+      "starNotApplicable": "n/a",
+      "starNote": "STAR scores how an answer is built as a story, so it is only marked on HR questions."
+    }
+  },
+  "notFound": {
+    "title": "That page is not here",
+    "body": "It may have been deleted, or the link may be wrong. Nothing on your account has changed.",
+    "home": "Go to Today",
+    "interviews": "Your interviews"
   }
 }
