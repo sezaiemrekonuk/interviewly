@@ -46,7 +46,7 @@ export const CandidateSchema = z.object({
 export const INTERVIEW_TITLE_MAX = 80;
 
 export const InterviewTitleSchema = z.object({
-  title: z.string().trim().min(1).max(INTERVIEW_TITLE_MAX),
+  title: z.string().trim().min(1).max(INTERVIEW_TITLE_MAX).refine((t) => !/[\r\n]/.test(t), { message: 'must be single line' }),
 });
 
 export const ScoresSchema = z.object({
