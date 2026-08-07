@@ -1,5 +1,10 @@
+export interface SpeechCtx {
+  interviewId: string;
+  traceId: string;
+}
+
 export interface SpeechProvider {
-  speak(text: string, opts: { voiceId: string; language: string }):
+  speak(text: string, opts: { voiceId: string; language: string; ctx: SpeechCtx }):
     Promise<{ audio: Buffer; mime: string; characters: number }>;
   transcribe(audio: Buffer, opts: { mime: string; language: string }):
     Promise<{ transcript: string; seconds: number }>;

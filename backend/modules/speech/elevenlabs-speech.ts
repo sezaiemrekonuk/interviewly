@@ -1,4 +1,6 @@
-import type { SpeechProvider } from './SpeechProvider';
+import { AI_VOICE_DEBUG_EVENT, logAiCall } from '@interviewly/ai';
+
+import type { SpeechCtx, SpeechProvider } from './SpeechProvider';
 import { ApiError } from '../../src/lib/api-error';
 import { logger } from '../../src/lib/logger';
 
@@ -32,9 +34,19 @@ export class ElevenLabsSpeech implements SpeechProvider {
 
   async speak(
     text: string,
-    opts: { voiceId: string; language: string },
+    opts: { voiceId: string; language: string; ctx: SpeechCtx },
   ): Promise<{ audio: Buffer; mime: string; characters: number }> {
     if (!this.apiKey) throw new ApiError('VOICE_UNAVAILABLE');
+
+    logAiCall(logger, {
+      event: AI_VOICE_DEBUG_EVENT,
+      promptName: 'elevenlabs.text-to-speech',
+      interviewId: opts.ctx.interviewId,
+      traceId: opts.ctx.traceId,
+      provider: 'elevenlabs',
+      model: this.ttsModel,
+      messages: [{ role: 'user', content: text }],
+    });
 
     let lastErr: unknown;
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {

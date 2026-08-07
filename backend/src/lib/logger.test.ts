@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { foldFields } from './logger';
+import { runWithRequestContext } from './request-context';
 
 describe('foldFields', () => {
   it('puts the event name in title and the fields in msg as JSON', () => {
@@ -29,5 +30,20 @@ describe('foldFields', () => {
 
   it('gives a bare event name a title too', () => {
     expect(foldFields(['WORKER_READY'])).toEqual([{ title: 'WORKER_READY' }, '{}']);
+  });
+
+  it('folds the request context in, and lets the call site win on a clash', () => {
+    const [, msg] = runWithRequestContext(
+      { traceId: 'from-context', userAgent: 'curl/8', ip: '10.0.0.1', method: 'POST', path: '/interviews' },
+      () => foldFields([{ traceId: 'from-call-site', interviewId: 'i1' }, 'AI_PROMPT_BUILDER_DEBUG']),
+    ) as [unknown, string];
+    expect(JSON.parse(msg)).toEqual({
+      traceId: 'from-call-site',
+      userAgent: 'curl/8',
+      ip: '10.0.0.1',
+      method: 'POST',
+      path: '/interviews',
+      interviewId: 'i1',
+    });
   });
 });

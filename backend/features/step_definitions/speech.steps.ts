@@ -161,7 +161,11 @@ When(
   'I call speak with text {string} voiceId {string} language {string}',
   async function (this: AiWorld, text: string, voiceId: string, language: string) {
     lastSpeakText = text;
-    speakResult = await speechProvider.speak(text, { voiceId, language });
+    speakResult = await speechProvider.speak(text, {
+      voiceId,
+      language,
+      ctx: { interviewId: this.interviewId, traceId: 'speech-steps' },
+    });
   },
 );
 
@@ -170,7 +174,11 @@ When(
   async function (this: AiWorld, text: string, voiceId: string, language: string) {
     lastSpeakText = text;
     try {
-      speakResult = await speechProvider.speak(text, { voiceId, language });
+      speakResult = await speechProvider.speak(text, {
+      voiceId,
+      language,
+      ctx: { interviewId: this.interviewId, traceId: 'speech-steps' },
+    });
     } catch (err) {
       thrownError = err;
     }

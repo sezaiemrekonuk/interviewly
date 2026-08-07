@@ -3,6 +3,8 @@
 // No secrets, PII, tokens, or PDF content in any log call.
 import pino from 'pino';
 
+import { requestContext } from './request-context';
+
 function serialisable(value: unknown): unknown {
   if (value instanceof Error) return value.stack ?? `${value.name}: ${value.message}`;
   return value;
@@ -11,10 +13,11 @@ function serialisable(value: unknown): unknown {
 /** Exported for the test that pins the shape; pino calls it through the hook below. */
 export function foldFields(args: unknown[]): unknown[] {
   const [first, ...rest] = args;
-  if (typeof first === 'string') return [{ title: first }, '{}'];
+  if (typeof first === 'string') return [{ title: first }, JSON.stringify(requestContext())];
   if (typeof first !== 'object' || first === null || first instanceof Error) return args;
 
-  const fields: Record<string, unknown> = {};
+  // Request metadata first so an explicit field at the call site always wins.
+  const fields: Record<string, unknown> = { ...requestContext() };
   for (const [key, value] of Object.entries(first as Record<string, unknown>)) {
     fields[key] = serialisable(value);
   }

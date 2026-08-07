@@ -14,6 +14,7 @@
  *   6. injection scan   — logs SECURITY_PROMPT_INJECTION_SUSPECTED, never blocks
  * Step 7 (output validation) belongs to the caller, against the method's Zod schema.
  */
+import { AI_CHAT_DEBUG_EVENT, logAiCall } from './ai-debug';
 import { AiError, noopLogger, type AiLogger } from './errors';
 import { loadInjectionPatterns, type InjectionPattern } from './config';
 import { loadPromptRegistry, type PromptFile, type PromptRegistry } from './registry';
@@ -85,6 +86,19 @@ export class PromptBuilder {
     }
 
     this.scanForInjection(boundValues, ctx);
+
+    logAiCall(this.logger, {
+      event: AI_CHAT_DEBUG_EVENT,
+      promptName: template.name,
+      interviewId: ctx.interviewId,
+      traceId: ctx.traceId,
+      provider: template.provider,
+      model: template.model,
+      promptUuid: template.uuid,
+      promptVersion: template.version,
+      promptYaml: template.source,
+      messages,
+    });
 
     return {
       system,

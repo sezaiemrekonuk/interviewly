@@ -3,6 +3,7 @@ import type { RequestHandler } from 'express';
 
 import { ApiError } from '../../src/lib/api-error';
 import { prisma } from '../../src/lib/db';
+import { setRequestContext } from '../../src/lib/request-context';
 import { SESSION_COOKIE, issueCookie, sessionExpiry } from '../../src/lib/session';
 
 declare global {
@@ -38,6 +39,7 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
     issueCookie(res, token);
 
     req.user = user;
+    setRequestContext({ userId: user.id });
     next();
   } catch (err) {
     next(err);

@@ -99,3 +99,6 @@ export type { LanguageDetection } from './detect-language';
 
 export { AiError, noopLogger } from './errors';
 export type { AiErrorCode, AiLogger } from './errors';
+
+export { AI_CHAT_DEBUG_EVENT, AI_VOICE_DEBUG_EVENT, logAiCall } from './ai-debug';
+export type { AiDebugCall, AiDebugMessage } from './ai-debug';
