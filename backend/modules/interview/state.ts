@@ -2,6 +2,7 @@ import type { RequestHandler } from 'express';
 
 import { clock } from '../../src/lib/clock';
 import { prisma } from '../../src/lib/db';
+import { logger } from '../../src/lib/logger';
 
 /** The columns the index walk needs — an `Interview` satisfies it; a test fixture need not. */
 export interface IndexedInterview {
@@ -47,6 +48,20 @@ export async function deliverCurrentQuestion(interview: IndexedInterview) {
   const deliveredAt = question.asked_at ?? clock.now();
   if (!question.asked_at) {
     await prisma.question.update({ where: { id: question.id }, data: { asked_at: deliveredAt } });
+    // Once per question, at the stamp: a refetch re-delivers the same row, and counting those
+    // would make a difficulty histogram measure polling instead of the interview.
+    logger.info(
+      {
+        interviewId: interview.id,
+        questionId: question.id,
+        difficulty: question.difficulty,
+        topic: question.topic,
+        kind: question.kind,
+        chosenReason: question.chosen_reason,
+        currentIndex: interview.current_index,
+      },
+      'QUESTION_DIFFICULTY_DELIVERED',
+    );
   }
 
   return {
