@@ -1,10 +1,18 @@
 /*
- * App chrome. The header is transparent over whatever ground the route already paints —
- * gradient on entry surfaces, flat --bg elsewhere — so it never introduces a second
- * background or a seam. Not sticky: nothing here is worth pinning over a live page.
+ * App chrome. Transparent over whatever ground the route already paints — the flat --bg of
+ * the landing and the report, the entry gradient on setup — so it never introduces a second
+ * background. Not sticky: nothing here is worth pinning over a live page.
+ *
+ * The bar is full-bleed and the row inside carries the page gutter, so the rule crosses the
+ * viewport while the wordmark stays on the same left edge as the headline under it.
  */
 
 .header {
+  width: 100%;
+  border-block-end: 1px solid var(--border);
+}
+
+.headerInner {
   display: flex;
   flex-wrap: wrap;
   gap: 16px;
@@ -12,45 +20,52 @@
   justify-content: space-between;
   width: 100%;
   max-width: 72rem;
-  padding: 24px;
+  padding: 8px 24px;
   margin: 0 auto;
 }
 
+/* 44px tap targets inside 8px of padding: a 60px bar, not the 76px one that block padding
+   plus a 44px control would have made. */
 .wordmark {
-  font-family: var(--font-heading), sans-serif;
-  font-size: 20px;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-family: var(--font-heading), Georgia, serif;
+  font-size: 16px;
   font-weight: 600;
+  letter-spacing: -0.01em;
   color: var(--text);
-  border-radius: var(--radius-input);
+  border-radius: var(--radius-button);
 }
 
-.wordmark:focus-visible {
+.wordmark:focus-visible,
+.navLink:focus-visible,
+.footerLink:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
 .nav {
   display: flex;
-  gap: 16px;
+  flex-wrap: wrap;
+  gap: 8px 16px;
   align-items: center;
 }
 
+/* Quiet: the chrome never carries the surface's one --primary, so a nav link that lit up
+   in it would be a second call to action on every screen. */
 .navLink {
-  padding: 4px 8px;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   font-size: 14px;
-  font-weight: 500;
-  color: var(--text);
+  color: var(--text-muted);
   border-radius: var(--radius-button);
   transition: color var(--duration-default) var(--easing-default);
 }
 
 .navLink:hover {
-  color: var(--primary);
-}
-
-.navLink:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  color: var(--text);
 }
 
 /* ------------------------------------------------------------------ footer */
@@ -69,14 +84,14 @@
   flex-wrap: wrap;
   gap: 8px 16px;
   align-items: baseline;
-  padding: 32px 0;
+  padding: 24px 0;
   font-size: 13px;
   color: var(--text-muted);
   border-block-start: 1px solid var(--border);
 }
 
 .footerMark {
-  font-family: var(--font-heading), sans-serif;
+  font-family: var(--font-heading), Georgia, serif;
   font-weight: 600;
   color: var(--text);
 }
@@ -94,27 +109,25 @@
   text-decoration: underline;
 }
 
-.footerLink:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+/* 390 px is the mobile reference width (ui §4.3). The old chrome had no query at all: at
+   390 the wordmark and four controls wrapped into a 24px-padded stack half a screen tall. */
+@media (width <= 48rem) {
+  .headerInner {
+    gap: 12px;
+    padding: 8px 16px;
+  }
+
+  .footer {
+    padding: 0 16px;
+    margin-top: 48px;
+  }
 }
 
 /* --------------------------------------------------------- route shells */
 
-/*
- * The setup route paints `--gradient-entry` on its own <main> with
- * `background-attachment: fixed`. Repeating it here with the same attachment keeps the two
- * boxes sampling the *viewport*, so the chrome sits on one continuous ground with no seam.
- */
-.entryShell {
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
-  background: var(--gradient-entry);
-  background-attachment: fixed;
-}
-
-/* Flat `--bg` shell for the non-entry surfaces the chrome wraps (ui §4.2, closed list). */
+/* Flat `--bg` shell for the surfaces the chrome still wraps — the legal documents. Every
+   other route now carries its own split shell, so `.entryShell` and the gradient it painted
+   went with them. */
 .flatShell {
   display: flex;
   flex-direction: column;

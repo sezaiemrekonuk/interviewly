@@ -26,6 +26,7 @@ export const queryKeys = {
   me: () => ['me'] as const,
   meProfile: () => ['me', 'profile'] as const,
   meInterviews: (cursor: string | null = null) => ['me', 'interviews', { cursor }] as const,
+  meQuestions: (cursor: string | null = null) => ['me', 'questions', { cursor }] as const,
   interviewState: (id: string) => ['interview', id, 'state'] as const,
   interview: (id: string) => ['interview', id] as const,
   adminInterviews: (filters: Record<string, unknown> = {}) =>
@@ -182,6 +183,29 @@ export interface ProfileResponse {
   cv: CvUpload | null;
 }
 
+/**
+ * `POST /auth/logout` (`backend/modules/auth/logout.ts`) — revokes the session row and clears
+ * the cookie, 204 either way.
+ *
+ * The cache is *cleared*, not invalidated: invalidation refetches, and refetching `/me`
+ * immediately after ending a session asks the API to confirm the thing we just destroyed. It
+ * also has to happen before the navigation, or the next account to sign in on this machine
+ * paints the previous one's name for a frame.
+ *
+ * A refused logout still clears and still navigates. The session is dead server-side in every
+ * case worth handling, and a user who pressed Sign out on a shared machine must never be left
+ * looking at their own account because a request failed.
+ */
+export function useSignOut(): UseMutationResult<void, ApiError, void> {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      await apiPost('/auth/logout', {});
+    },
+    onSettled: () => client.clear(),
+  });
+}
+
 /** `enabled=false` while `useRequireAuth` is still resolving — an anonymous 401 here is noise. */
 export function useProfile(enabled = true): UseQueryResult<ProfileResponse, ApiError> {
   return useQuery({
@@ -245,6 +269,70 @@ export interface MyInterview {
   createdAt: string;
   startedAt: string | null;
   endedAt: string | null;
+  /**
+   * `reports.payload.overall_score`, projected onto the list row so a trend across interviews
+   * is one request instead of one per interview. Null until a report is `ready` — an interview
+   * that is still running, or whose report failed, has no score rather than a zero.
+   */
+  overallScore: number | null;
+  /** `payload.rounds[].score`, split by `type`. Either side is null if that round has none. */
+  roundScores: { hr: number | null; tech: number | null };
+}
+
+/**
+ * One answered question, from `GET /me/questions` — every question the account has answered,
+ * across every interview, newest first.
+ *
+ * Two different scores live here and they are not the same measurement. `score`/`reason` come
+ * from `report_questions`, written once when the report is generated. `answerScores` is
+ * `answers.scores`, written per answer as the interview runs (`interview/adaptive.ts`) — four
+ * axes and the model's own notes. Both are optional: an interview with no report has the
+ * second and not the first.
+ */
+export interface MyQuestion {
+  questionId: string;
+  interviewId: string;
+  occupation: string | null;
+  roundType: 'hr' | 'tech';
+  text: string;
+  answeredAt: string | null;
+  durationMs: number | null;
+  score: number | null;
+  reason: string | null;
+  starAdherence: number | null;
+  answerScores: {
+    overall: number;
+    relevance: number;
+    depth: number;
+    structure: number;
+    starAdherence: number;
+    reasons: string[];
+  } | null;
+}
+
+export interface MyQuestionsPage {
+  items: MyQuestion[];
+  nextCursor: string | null;
+}
+
+/**
+ * The question history, paged the same way the interview list is. Separate from
+ * `useMyInterviews` on purpose: `/interviews` reads both, but the briefing home only needs the
+ * weakest few and should not pull a whole interview list to find them.
+ */
+export function useMyQuestions(
+  enabled = true,
+): UseInfiniteQueryResult<InfiniteData<MyQuestionsPage>, ApiError> {
+  return useInfiniteQuery({
+    enabled,
+    queryKey: queryKeys.meQuestions(),
+    queryFn: ({ pageParam }) =>
+      fetchJson<MyQuestionsPage>(
+        pageParam ? `/me/questions?cursor=${encodeURIComponent(pageParam)}` : '/me/questions',
+      ),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last: MyQuestionsPage) => last.nextCursor,
+  });
 }
 
 export interface MyInterviewsPage {

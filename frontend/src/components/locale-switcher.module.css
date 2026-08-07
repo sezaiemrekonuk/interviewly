@@ -1,19 +1,20 @@
-/* A quiet segmented pill, not two native buttons. Token values only (ui §4.2). */
+/*
+ * A segmented control, not two buttons: one hairline box, one lit cell. Direction B is
+ * near-square, so the track is a 2px-radius outline rather than a pill on a sunken bed.
+ */
 
 .track {
   display: inline-flex;
-  gap: 4px;
-  padding: 4px;
-  background: var(--surface-sunken);
+  border: 1px solid var(--border);
   border-radius: var(--radius-button);
-  box-shadow: var(--shadow-hairline);
 }
 
 .segment {
+  min-height: 32px;
   padding: 4px 12px;
   font-family: var(--font-body), sans-serif;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-muted);
   cursor: pointer;
   background: transparent;
@@ -22,6 +23,11 @@
   transition:
     color var(--duration-default) var(--easing-default),
     background-color var(--duration-default) var(--easing-default);
+}
+
+/* The divider belongs to the second cell, so the track's own outline stays one box. */
+.segment + .segment {
+  border-inline-start: 1px solid var(--border);
 }
 
 .segment:hover {
@@ -33,10 +39,14 @@
   outline-offset: 2px;
 }
 
-/* The lit segment is a raised surface on the sunken track — never colour alone. */
+/* Inverted, never colour alone: `aria-pressed` carries the state and the full language
+   name carries the accessible label. */
 .segmentActive {
-  color: var(--text);
+  color: var(--surface);
   cursor: default;
-  background: var(--surface);
-  box-shadow: var(--shadow-hairline);
+  background: var(--text);
+}
+
+.segmentActive:hover {
+  color: var(--surface);
 }

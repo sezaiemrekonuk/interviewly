@@ -2,10 +2,11 @@
  * The terminal case of the K8.7 first-run rule (`lib/first-run.ts`): onboarding done and
  * at least one interview exists. Also the fallback when a `?returnPath=` is unusable.
  *
- * `/` is the authed landing surface (`components/home/authed-home.tsx` via `HomeSwitch`);
- * there is no standalone `/dashboard` route.
+ * `/dashboard` is the signed-in home. It used to be `/`, which served both audiences and
+ * flashed the marketing page at signed-in visitors; the two are now separate surfaces and
+ * `/` redirects here for anyone with a session (`components/home/home-switch.tsx`).
  */
-export const DEFAULT_LANDING_PATH = '/';
+export const DEFAULT_LANDING_PATH = '/dashboard';
 
 /**
  * Narrows a `?returnPath=` query value to a same-origin path.

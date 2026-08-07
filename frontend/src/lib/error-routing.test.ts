@@ -19,7 +19,7 @@ describe('routeForError', () => {
   it('sends FORBIDDEN to the landing page, but renders in place on an admin route', () => {
     const r = router();
     expect(routeForError('FORBIDDEN', r, { pathname: '/interviews/abc' })).toBe('navigated');
-    expect(r.replace).toHaveBeenCalledWith('/');
+    expect(r.replace).toHaveBeenCalledWith('/dashboard');
 
     const admin = router();
     expect(routeForError('FORBIDDEN', admin, { pathname: '/admin' })).toBe('not-authorized');
