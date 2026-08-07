@@ -11,7 +11,13 @@
  * interview row, and why the charge commits on its own connection instead of inside this
  * transaction.
  */
+import type { Interview } from '@prisma/client';
+
+import { ApiError } from '../../src/lib/api-error';
 import { prisma } from '../../src/lib/db';
+import { logger } from '../../src/lib/logger';
+
+import { applyTransition } from './machine';
 
 export class BudgetExceeded extends Error {
   constructor() {
@@ -53,4 +59,42 @@ export async function withBudget<T>(interviewId: string, fn: () => Promise<T>): 
     },
     { maxWait: TX_TIMEOUT_MS, timeout: TX_TIMEOUT_MS },
   );
+}
+
+/**
+ * `withBudget` plus the ending an exhausted interview needs, for every generation call site.
+ *
+ * All three want the same two things when the ceiling refuses: the interview ends rather than
+ * sitting in a round it has no question for — the remaining turns and the report would cost too
+ * — and the caller answers 402. Copying that per call site is how a ceiling grows holes: the HR
+ * batch, the largest of the generations, ran outside it entirely until issue #98.
+ *
+ * Not for the adaptive hook (I06), which degrades to the default question instead of ending and
+ * so calls `withBudget` directly.
+ */
+export async function withBudgetOrEnd<T>(
+  interview: Interview,
+  fn: () => Promise<T>,
+  ctx: { traceId: string },
+): Promise<T> {
+  try {
+    return await withBudget(interview.id, fn);
+  } catch (err) {
+    if (!(err instanceof BudgetExceeded)) throw err;
+    logger.warn({ traceId: ctx.traceId, interviewId: interview.id }, 'BUDGET_EXHAUSTED');
+    // ADR-I32: a losing transition must not replace the caller's error — the request is a 402
+    // whether or not this one is the request that moved the interview.
+    try {
+      await applyTransition(interview, 'evaluating', {
+        traceId: ctx.traceId,
+        endedReason: 'budget_exhausted',
+      });
+    } catch (transitionErr) {
+      logger.error(
+        { err: transitionErr, traceId: ctx.traceId, interviewId: interview.id },
+        'INTERVIEW_END_FAILED',
+      );
+    }
+    throw new ApiError('BUDGET_EXCEEDED');
+  }
 }

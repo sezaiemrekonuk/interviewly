@@ -17,7 +17,7 @@ import { prisma } from '../../src/lib/db';
 import { logger } from '../../src/lib/logger';
 
 import { promoteNextQuestion } from './adaptive';
-import { BudgetExceeded, withBudget } from './budget';
+import { BudgetExceeded, withBudget, withBudgetOrEnd } from './budget';
 import { ensureTechBatch } from './generation';
 import { trackLanguage } from './language';
 import { applyTransition } from './machine';
@@ -116,26 +116,7 @@ export async function advanceWithAnswer(
   // it. An exhausted budget ends the interview rather than refusing this one call, because
   // every remaining turn — and the report — would cost too.
   if (interview.state === 'hr_round') {
-    try {
-      await withBudget(interview.id, () => ensureTechBatch(interview, { traceId }));
-    } catch (err) {
-      if (!(err instanceof BudgetExceeded)) throw err;
-      logger.warn({ traceId, interviewId: interview.id }, 'BUDGET_EXHAUSTED');
-      // ADR-I32: a losing transition must not replace the caller's error — the request is a
-      // 402 whether or not this one is the request that moved the interview.
-      try {
-        await applyTransition(interview, 'evaluating', {
-          traceId,
-          endedReason: 'budget_exhausted',
-        });
-      } catch (transitionErr) {
-        logger.error(
-          { err: transitionErr, traceId, interviewId: interview.id },
-          'INTERVIEW_END_FAILED',
-        );
-      }
-      throw new ApiError('BUDGET_EXCEEDED');
-    }
+    await withBudgetOrEnd(interview, () => ensureTechBatch(interview, { traceId }), { traceId });
   }
 
   let state: InterviewState = interview.state;
