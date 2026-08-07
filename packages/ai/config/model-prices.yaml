@@ -16,6 +16,10 @@ models:
     unit_kind: token
     input_per_1m_usd: 0.40
     output_per_1m_usd: 1.60
+  openai/gpt-4.1-nano:
+    unit_kind: token
+    input_per_1m_usd: 0.10
+    output_per_1m_usd: 0.40
   google/gemini-2.5-flash:
     unit_kind: token
     input_per_1m_usd: 0.30

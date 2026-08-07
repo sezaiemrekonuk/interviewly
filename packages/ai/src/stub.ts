@@ -13,6 +13,7 @@
 import type {
   AiClient,
   GenerateCandidatesArgs,
+  GenerateInterviewTitleArgs,
   GenerateReportArgs,
   GenerateRoundQuestionsArgs,
   ScoreAnswerArgs,
@@ -25,14 +26,18 @@ import {
   questionVars,
   reportVars,
   scoreVars,
+  titleVars,
 } from './prompt-vars';
 import {
   CandidateSchema,
+  INTERVIEW_TITLE_MAX,
+  InterviewTitleSchema,
   QuestionBatchSchema,
   ReportPayloadSchema,
   ScoresSchema,
   type Candidate,
   type Difficulty,
+  type InterviewTitle,
   type QuestionBatch,
   type QuestionKind,
   type ReportPayload,
@@ -138,6 +143,25 @@ export class StubAiClient implements AiClient {
         topic: i === 2 ? 'stub-new-topic' : 'stub-topic-1',
       })),
       'generateCandidates',
+    );
+  }
+
+  async generateInterviewTitle(args: GenerateInterviewTitleArgs): Promise<InterviewTitle> {
+    this.builder.build({
+      promptName: PROMPT_NAMES.generateInterviewTitle,
+      vars: titleVars(args),
+      ctx: args.ctx,
+    });
+
+    const firstLine =
+      args.jobListing
+        .split('\n')
+        .map((l) => l.trim())
+        .find((l) => l.length > 0) ?? 'Interview';
+    return parse(
+      InterviewTitleSchema,
+      { title: firstLine.slice(0, INTERVIEW_TITLE_MAX).trim() || 'Interview' },
+      'generateInterviewTitle',
     );
   }
 

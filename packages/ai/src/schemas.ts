@@ -43,6 +43,12 @@ export const CandidateSchema = z.object({
   topic: z.string().min(1),
 });
 
+export const INTERVIEW_TITLE_MAX = 80;
+
+export const InterviewTitleSchema = z.object({
+  title: z.string().trim().min(1).max(INTERVIEW_TITLE_MAX),
+});
+
 export const ScoresSchema = z.object({
   overall: score,
   relevance: score,
@@ -85,4 +91,5 @@ export type Question = z.infer<typeof QuestionSchema>;
 export type QuestionBatch = z.infer<typeof QuestionBatchSchema>;
 export type Candidate = z.infer<typeof CandidateSchema>;
 export type Scores = z.infer<typeof ScoresSchema>;
+export type InterviewTitle = z.infer<typeof InterviewTitleSchema>;
 export type ReportPayload = z.infer<typeof ReportPayloadSchema>;

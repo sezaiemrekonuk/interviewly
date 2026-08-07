@@ -3,6 +3,9 @@ import { z } from 'zod';
 
 import { ApiError } from '../../src/lib/api-error';
 import { prisma } from '../../src/lib/db';
+import { logger } from '../../src/lib/logger';
+
+import { aiClient } from '../ai';
 
 import { applyTransition } from './machine';
 
@@ -102,6 +105,30 @@ function split(target: number): { hrCount: number; techCount: number } {
   return { hrCount, techCount: target - hrCount };
 }
 
+async function titleInterview(
+  interviewId: string,
+  jobText: string,
+  language: string,
+  traceId: string,
+): Promise<void> {
+  try {
+    const { title } = await aiClient().generateInterviewTitle({
+      jobListing: jobText,
+      language,
+      ctx: { interviewId, traceId },
+    });
+    await prisma.interview.update({ where: { id: interviewId }, data: { occupation: title } });
+    logger.info({ event: 'INTERVIEW_TITLE_GENERATED', interviewId, traceId });
+  } catch (err) {
+    logger.warn({
+      event: 'INTERVIEW_TITLE_FALLBACK',
+      interviewId,
+      traceId,
+      reason: err instanceof Error ? err.message : 'unknown',
+    });
+  }
+}
+
 export const setupInterview: RequestHandler = async (req, res) => {
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) throw new ApiError('VALIDATION_ERROR');
@@ -166,6 +193,8 @@ export const setupInterview: RequestHandler = async (req, res) => {
       }
       throw err;
     });
+
+  await titleInterview(interview.id, jobText, req.user!.locale, req.traceId!);
 
   await applyTransition(interview, 'profiling', { traceId: req.traceId! });
 

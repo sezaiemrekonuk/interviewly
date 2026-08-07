@@ -33,6 +33,14 @@ const created: Array<Record<string, unknown>> = [];
  */
 let createRejectsWith: unknown;
 
+const updated: Array<Record<string, unknown>> = [];
+
+let titleResult: () => Promise<{ title: string }>;
+
+vi.mock('../ai', () => ({
+  aiClient: () => ({ generateInterviewTitle: () => titleResult() }),
+}));
+
 vi.mock('../../src/lib/db', () => ({
   prisma: {
     upload: {
@@ -46,6 +54,10 @@ vi.mock('../../src/lib/db', () => ({
       create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
         if (createRejectsWith) throw createRejectsWith;
         created.push(data);
+        return { id: 'itw_1', ...data };
+      }),
+      update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+        updated.push(data);
         return { id: 'itw_1', ...data };
       }),
     },
@@ -166,7 +178,9 @@ describe('setupInterview uploadId ownership (issue #73)', () => {
 
   beforeEach(() => {
     created.length = 0;
+    updated.length = 0;
     createRejectsWith = undefined;
+    titleResult = async () => ({ title: 'Kıdemli Backend Geliştirici' });
   });
 
   async function setup(body: Record<string, unknown>, user = 'usr_a') {
@@ -222,6 +236,23 @@ describe('setupInterview uploadId ownership (issue #73)', () => {
       upload_id: 'upl_a_listing',
       job_source: 'upload',
     });
+  });
+
+  it('replaces the first-line heuristic title with the model-written one', async () => {
+    const res = await setup({ jobText: 'ACME A.Ş.\nKıdemli Backend Yazılım Geliştirici' });
+    expect(res.status).toBe(201);
+    expect(created[0]).toMatchObject({ occupation: 'ACME A.Ş.' });
+    expect(updated).toEqual([{ occupation: 'Kıdemli Backend Geliştirici' }]);
+  });
+
+  it('keeps the heuristic title and still answers 201 when the title call fails', async () => {
+    titleResult = async () => {
+      throw new Error('provider down');
+    };
+    const res = await setup({ jobText: 'Zamboni Technician\nIce rink maintenance.' });
+    expect(res.status).toBe(201);
+    expect(created[0]).toMatchObject({ occupation: 'Zamboni Technician' });
+    expect(updated).toHaveLength(0);
   });
 
   it("still accepts a pasted listing with no uploadId as job_source 'paste'", async () => {
