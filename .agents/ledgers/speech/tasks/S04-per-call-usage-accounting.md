@@ -47,17 +47,17 @@ existed only to survive webhook redelivery that no longer occurs.
 - `backend/modules/speech/tts.ts`, `stt.ts` — the two call sites from S02/S03.
 
 ## Steps
-- [ ] **1. Feature scenario red** — speech AC-5: one TTS call writes one `character` row and one
+- [x] **1. Feature scenario red** — speech AC-5: one TTS call writes one `character` row and one
   STT call one `second` row, each with `spent_usd` incremented in the same transaction. See it
   red.
-- [ ] **2. Price rows** — split `elevenlabs/conversational` into `elevenlabs/tts` and
+- [x] **2. Price rows** — split `elevenlabs/conversational` into `elevenlabs/tts` and
   `elevenlabs/stt` in `model-prices.yaml`, with the per-character and per-second rates.
-- [ ] **3. Wrap the TTS call** in `withBudget`; on success insert the `character` row and
+- [x] **3. Wrap the TTS call** in `withBudget`; on success insert the `character` row and
   increment inside the same transaction.
-- [ ] **4. Wrap the STT call** the same way with the `second` row.
-- [ ] **5. Cache hit bills nothing** — assert it, because the natural refactor is to put the
+- [x] **4. Wrap the STT call** the same way with the `second` row.
+- [x] **5. Cache hit bills nothing** — assert it, because the natural refactor is to put the
   metering around the whole handler.
-- [ ] **6. Unit test** — a throwing provider leaves zero `llm_calls` rows and `spent_usd`
+- [x] **6. Unit test** — a throwing provider leaves zero `llm_calls` rows and `spent_usd`
   unchanged; an interview already at its budget makes no provider call at all.
 
 ## Definition of done
@@ -77,3 +77,43 @@ Expected: tests green; the query shows exactly two ElevenLabs rows shapes — `t
 and `stt`/`second` — and no `conversational`/`second` row.
 
 ## Notes
+Landed 2026-08-07.
+
+- **New file** `backend/modules/speech/metering.ts`: `meterTts`/`meterStt`. Each calls the
+  shared `recordLlmCall` (insert + `spent_usd` increment in one tx). NOT-NULL columns carry
+  `prompt_uuid:''`, `prompt_version:0`, `attempt_no:1` (reconcile.ts reasoning, not its file).
+  Prices loaded once at module load. Missing price → `PRICE_MISSING` warn + `cost_usd:0`.
+- **Wrapping** (tts.ts / stt.ts): `withBudget(interview.id, async () => { const r = await
+  provider.call(); await meter(...); return r; })`. Mirrors the AI path — the advisory lock is
+  held across the provider call AND the metering commit, so an over-budget interview never
+  reaches ElevenLabs and a concurrent call reads the charged total. `meter` never runs if the
+  provider throws → a failed call bills nothing. TTS cache hit is BEFORE `withBudget` → free.
+- **BudgetExceeded** now surfaces `BUDGET_EXCEEDED` (402) from both routes and ends the
+  interview `budget_exhausted` (ADR-I32 losing-transition-safe), mirroring `answers.ts`.
+- **`model-prices.yaml`:** ADDED `elevenlabs/tts` (per-1M-char via `input_per_1m_usd:180.00`)
+  and `elevenlabs/stt` (`per_minute_usd:0.006667`). **KEPT `elevenlabs/conversational`** rather
+  than removing it: `voice-reconcile.steps.ts:79` still looks it up, and STATE.md is explicit
+  that **S05** (not S04) deletes the convai/reconcile surface to keep the acceptance ring green.
+  Marked it `# S05 removes this`. Rates are placeholders subject to the file's pre-demo re-check.
+- **Tests:** `metering.test.ts` (verification filter `speech/metering`) — pure meter shape/cost
+  + route tests for throwing-provider-bills-nothing and over-budget-no-call, both routes.
+  `tts.test.ts`/`stt.test.ts` gained a `withBudget` passthrough + `./metering` mock (the wrap
+  added a dependency; behaviour assertions unchanged).
+- **Verification:** metering 8/8, all speech unit 28/28, `@speech` acceptance 17/17, full unit
+  484/484, lint clean. psql shows `tts`/`character` + `stt`/`second`; the `conversational` rows
+  in the shared dev DB are pre-existing `@voice-reconciliation` residue, not from this run.
+- **Review pass (same day).** Two money bugs no test covered, both fixed here:
+  1. `reconcile.ts`'s redelivery no-op matched `provider: 'elevenlabs'` only, so the first
+     speech row on an interview made every later `post_call` webhook bill the convai session
+     nothing. Now matches `model: 'conversational'` too; new @AC-7 scenario in
+     `voice_reconciliation.feature`, verified red without the fix. S05 deletes this whole
+     surface, but both routers are mounted today.
+  2. Two concurrent first TTS requests for one question both missed the pre-lock cache read and
+     both paid. The cache is now re-read INSIDE `withBudget`, with `storage.put` moved under the
+     lock so the loser's re-read sees the winner's write. A failing `storage.put` serves the
+     already-paid bytes and logs `SPEECH_TTS_CACHE_WRITE_FAILED` instead of 500ing into a
+     re-billed retry.
+  Also: `round6` replaced by `roundCostUsd`, exported from `packages/ai/src/cost.ts`.
+  Re-verified: unit 486/486, acceptance 104/104 (@speech 17/17, @voice-reconciliation 2/2).
+- **Next (S05):** delete `elevenlabs/conversational`, `reconcile.ts`, the webhook/convai
+  surface, and prove `isPastCeiling`/`time_exhausted` still fires after its gate is gone.

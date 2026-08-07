@@ -26,7 +26,12 @@ vi.mock('../interview/machine', () => ({ applyTransition: m.applyTransition }));
 vi.mock('../../src/lib/storage', () => ({ storage: { get: m.storageGet, put: m.storagePut } }));
 vi.mock('./SpeechProvider', () => ({ speechProvider: { speak: m.speak } }));
 vi.mock('../voice/downgrade', () => ({ downgradeToText: m.downgrade }));
-vi.mock('../../src/lib/logger', () => ({ logger: { info: m.loggerInfo, error: vi.fn() } }));
+vi.mock('../../src/lib/logger', () => ({ logger: { info: m.loggerInfo, error: vi.fn(), warn: vi.fn() } }));
+vi.mock('../interview/budget', () => ({
+  withBudget: async (_id: string, fn: () => Promise<unknown>) => fn(),
+  BudgetExceeded: class extends Error {},
+}));
+vi.mock('./metering', () => ({ meterTts: vi.fn() }));
 
 import { type Request, type Response } from 'express';
 

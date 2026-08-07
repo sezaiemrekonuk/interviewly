@@ -155,6 +155,26 @@ Given(
   },
 );
 
+Given('the interview already holds an elevenlabs speech usage row', async function (this: AiWorld) {
+  // The row S04's TTS path writes, inserted directly so this scenario stays about the
+  // reconciliation no-op. `cost_usd` is 0 so the spent_usd delta below is the voice cost alone.
+  await prisma.llmCall.create({
+    data: {
+      interview_id: this.interviewId,
+      provider: 'elevenlabs',
+      model: 'tts',
+      prompt_uuid: '',
+      prompt_version: 0,
+      attempt_no: 1,
+      units: 240,
+      unit_kind: 'character',
+      cost_usd: 0,
+      latency_ms: 0,
+      trace_id: `trace-speech-${this.interviewId}`,
+    },
+  });
+});
+
 Given('the interview spent_usd before reconciliation is recorded', async function (this: AiWorld) {
   spentBefore = await spentUsd(this);
   callsBefore = (await llmCallRows(this)).length;
@@ -188,6 +208,14 @@ When('the same post-call reconciliation webhook is delivered again', async funct
 Then('the worker writes exactly one llm_calls row for the interview', async function (this: AiWorld) {
   assert.equal((await llmCallRows(this)).length, 1);
 });
+
+Then(
+  'the worker writes exactly one llm_calls row for model {string}',
+  async function (this: AiWorld, model: string) {
+    const rows = (await llmCallRows(this)).filter((row) => row.model === model);
+    assert.equal(rows.length, 1, `expected 1 ${model} row, got ${rows.length}`);
+  },
+);
 
 Then('that llm_calls row has provider {string}', async function (this: AiWorld, provider: string) {
   const [row] = await llmCallRows(this);

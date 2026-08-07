@@ -127,3 +127,30 @@ Feature: Speech provider seam — SpeechProvider interface contract
     Then the answer response status is 200
     And the fake storage holds no audio object
     And the interview holds exactly 1 answer with input mode "voice"
+
+  # S04: per-call usage accounting — every provider call bills spent_usd in one transaction.
+
+  @speech @AC-5
+  Scenario: a TTS call writes one character-metered llm_calls row and charges spent_usd
+    Given I am signed in as a speech candidate
+    And I have a voice interview in hr_round with current index 1
+    When I GET "/interviews/:id/questions/:index/speech" as that owner
+    Then the interview has exactly 1 elevenlabs llm_calls row for model "tts" with unit kind "character"
+    And the interview spent_usd is greater than zero
+
+  @speech @AC-5
+  Scenario: an STT call writes one second-metered llm_calls row and charges spent_usd
+    Given I am signed in as a speech candidate
+    And I have a voice interview in hr_round with current index 1
+    When I POST a "audio/webm" answer recording as that owner
+    Then the answer response status is 200
+    And the interview has exactly 1 elevenlabs llm_calls row for model "stt" with unit kind "second"
+    And the interview spent_usd is greater than zero
+
+  @speech @AC-5
+  Scenario: a cached TTS response makes no provider call and bills nothing
+    Given I am signed in as a speech candidate
+    And I have a voice interview in hr_round with current index 1
+    When I GET "/interviews/:id/questions/:index/speech" as that owner
+    And I GET "/interviews/:id/questions/:index/speech" as that owner
+    Then the interview has exactly 1 elevenlabs llm_calls row for model "tts" with unit kind "character"

@@ -369,3 +369,21 @@ Then(
 Then('the fake storage holds no audio object', function (this: AiWorld) {
   assert.deepEqual(fakeStorage.keys(), [], `expected empty storage, got ${fakeStorage.keys().join(', ')}`);
 });
+
+// ---------------------------------------------------------------- S04: per-call usage accounting
+
+Then(
+  'the interview has exactly {int} elevenlabs llm_calls row for model {string} with unit kind {string}',
+  async function (this: AiWorld, count: number, model: string, unitKind: string) {
+    const rows = await prisma.llmCall.findMany({
+      where: { interview_id: this.interviewId, provider: 'elevenlabs', model },
+    });
+    assert.equal(rows.length, count, `expected ${count} elevenlabs/${model} rows, got ${rows.length}`);
+    for (const row of rows) assert.equal(row.unit_kind, unitKind, `unexpected unit_kind ${row.unit_kind}`);
+  },
+);
+
+Then('the interview spent_usd is greater than zero', async function (this: AiWorld) {
+  const row = await prisma.interview.findUniqueOrThrow({ where: { id: this.interviewId } });
+  assert.ok(Number(row.spent_usd) > 0, `spent_usd not positive: ${row.spent_usd.toString()}`);
+});
