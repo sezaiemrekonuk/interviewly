@@ -71,6 +71,118 @@
   color: var(--text-muted);
 }
 
+/* ---------- segmented control ---------- */
+
+/* A fieldset so `disabled` reaches every radio natively while the form is in flight. The UA
+   default border/padding is reset — the track below is the only box. */
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+/* Matching `ui.module.css .label` — the legend is this group's field label. */
+.legend {
+  padding: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+.groupNote {
+  max-width: 65ch;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+/* Merged cells, equal width, one hairline box — never a row of separate buttons. */
+.track {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-button);
+}
+
+.segment {
+  display: flex;
+  min-height: 56px;
+  cursor: pointer;
+}
+
+/* The divider belongs to the following cell, so the track's own outline stays one box. */
+.segment + .segment {
+  border-inline-start: 1px solid var(--border);
+}
+
+/* Visually hidden, still focusable and still a radio: the ring is drawn on the body below. */
+.segmentInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.segmentBody {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  text-align: center;
+  transition:
+    color var(--duration-default) var(--easing-default),
+    background-color var(--duration-default) var(--easing-default);
+}
+
+.segmentLabel {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.segmentMeta {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.segment:hover .segmentLabel,
+.segment:hover .segmentMeta {
+  color: var(--text);
+}
+
+.segmentInput:focus-visible + .segmentBody {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* Inverted, never colour alone — the radio's own checked state is the accessible truth. */
+.segmentInput:checked + .segmentBody {
+  background: var(--text);
+}
+
+.segmentInput:checked + .segmentBody .segmentLabel,
+.segmentInput:checked + .segmentBody .segmentMeta {
+  color: var(--surface);
+}
+
+.group:disabled .segment {
+  cursor: default;
+  opacity: 0.5;
+}
+
 /* The danger tone is the inline-start edge, so the message itself stays at full ink. */
 .error {
   margin: 0;
@@ -90,6 +202,22 @@
 @media (max-width: 480px) {
   .row {
     grid-template-columns: 1fr;
+  }
+
+  /* Four cells side by side stop being readable well before this width, so the track stacks
+     and the divider moves to the block edge — still one box, still one lit cell. */
+  .track {
+    grid-auto-flow: row;
+    grid-auto-columns: auto;
+  }
+
+  .segment {
+    min-height: 48px;
+  }
+
+  .segment + .segment {
+    border-inline-start: 0;
+    border-block-start: 1px solid var(--border);
   }
 
   .cta {

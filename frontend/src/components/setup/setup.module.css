@@ -26,6 +26,12 @@
   border: 0;
 }
 
+.extracted {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
 .error {
   margin: 0;
   font-size: 13px;

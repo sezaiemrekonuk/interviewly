@@ -1,9 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useState } from 'react';
+import { Suspense, useState, type ReactNode } from 'react';
 
 import { ListingUpload } from '../../../components/setup/listing-upload';
 import {
@@ -14,7 +14,7 @@ import {
   WorkBody,
   WorkTop,
 } from '../../../components/shell/split-shell';
-import { Button, Field, Input, Select } from '../../../components/ui';
+import { Button, Field, Input } from '../../../components/ui';
 import { DEFAULT_LANDING_PATH } from '../../../lib/auth-redirect';
 import { useCreateInterview, useSubmitProfile } from '../../../lib/query';
 import { useErrorMessage } from '../../../lib/use-error-message';
@@ -22,8 +22,18 @@ import { useRequireAuth } from '../../../lib/use-require-auth';
 
 import styles from './setup.module.css';
 
-// I03's body has no round-shape enum, only `targetQuestionCount`. These are the offered shapes.
-const ROUND_SHAPES = [6, 8, 10] as const;
+// I03's body has no round-shape enum, only `targetQuestionCount` (plus `hrQuestionCount` for
+// the custom shape). These are the offered lengths; `custom` is the escape hatch.
+const LENGTHS = [
+  { key: 'fast', count: 6, label: 'lengthFast', meta: 'lengthFastMeta' },
+  { key: 'medium', count: 10, label: 'lengthMedium', meta: 'lengthMediumMeta' },
+  { key: 'long', count: 15, label: 'lengthLong', meta: 'lengthLongMeta' },
+] as const;
+
+type LengthKey = (typeof LENGTHS)[number]['key'] | 'custom';
+
+// I03's own ceiling — mirrored as a CHECK constraint on `interviews.target_question_count`.
+const MAX_TOTAL = 20;
 
 // Mirrors I03's deterministic split so the shape is visible *before* the create. The 201
 // returns the same two counts, but setup navigates away on success, so the response copy is
@@ -33,20 +43,78 @@ function splitRounds(target: number): { hrCount: number; techCount: number } {
   return { hrCount, techCount: target - hrCount };
 }
 
-export default function InterviewSetupPage() {
+const ESCAPES: Record<string, string> = { n: '\n', t: '\t', r: '\r', '\\': '\\' };
+
+/**
+ * `?prefill=` carries a listing through a link — a job board, a shared URL, a bookmarklet.
+ * A query string cannot hold a real newline, so the sender writes the C escapes and this puts
+ * the line breaks back. Unrecognised escapes are left alone: `C:\temp` is not a control code.
+ */
+function unescapeText(raw: string): string {
+  return raw.replace(/\\([ntr\\])/g, (_, char: string) => ESCAPES[char]);
+}
+
+/**
+ * One hairline box, one lit cell — the same segmented control the locale switcher uses, built
+ * on native radios so arrow keys, the label click target and the form semantics come free.
+ */
+function Segmented<T extends string>({
+  legend,
+  note,
+  name,
+  value,
+  options,
+  disabled,
+  onChange,
+}: {
+  legend: ReactNode;
+  note?: ReactNode;
+  name: string;
+  value: T;
+  options: ReadonlyArray<{ value: T; label: string; meta?: string }>;
+  disabled?: boolean;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <fieldset className={styles.group} disabled={disabled}>
+      <legend className={styles.legend}>{legend}</legend>
+      {note ? <p className={styles.groupNote}>{note}</p> : null}
+      <div className={styles.track}>
+        {options.map((option) => (
+          <label key={option.value} className={styles.segment}>
+            <input
+              type="radio"
+              name={name}
+              value={option.value}
+              checked={value === option.value}
+              onChange={() => onChange(option.value)}
+              className={styles.segmentInput}
+            />
+            <span className={styles.segmentBody}>
+              <span className={styles.segmentLabel}>{option.label}</span>
+              {option.meta ? <span className={styles.segmentMeta}>{option.meta}</span> : null}
+            </span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+function InterviewSetup() {
   const { user, loading } = useRequireAuth();
   const router = useRouter();
+  const params = useSearchParams();
   const t = useTranslations('setup');
-  const tc = useTranslations('common');
   const errorMessage = useErrorMessage();
   const create = useCreateInterview();
   const submitProfile = useSubmitProfile();
 
-  const [mode, setMode] = useState<'text' | 'voice'>('text');
-  const [occupation, setOccupation] = useState('');
-  const [language, setLanguage] = useState('en');
-  const [targetQuestionCount, setTargetQuestionCount] = useState<number>(8);
-  const [jobText, setJobText] = useState('');
+  const [mode, setMode] = useState<'text' | 'voice'>('voice');
+  const [lengthKey, setLengthKey] = useState<LengthKey>('medium');
+  const [customHr, setCustomHr] = useState('4');
+  const [customTech, setCustomTech] = useState('6');
+  const [jobText, setJobText] = useState(() => unescapeText(params.get('prefill') ?? ''));
   const [uploadId, setUploadId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -56,17 +124,35 @@ export default function InterviewSetupPage() {
   // re-enable the CTA during the profile call and let a second submit fire mid-flow.
   const busy = create.isPending || submitProfile.isPending;
 
-  const { hrCount, techCount } = splitRounds(targetQuestionCount);
+  const preset = LENGTHS.find((l) => l.key === lengthKey);
+  const hr = Number(customHr);
+  const tech = Number(customTech);
+  const { hrCount, techCount } = preset
+    ? splitRounds(preset.count)
+    : { hrCount: hr, techCount: tech };
+  const targetQuestionCount = hrCount + techCount;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setFormError(null);
 
-    // Pasted text is required even with an uploadId: I03 rejects an upload-only body as
-    // VALIDATION_ERROR until I11 hands the extracted text back. Sending it would spend a
-    // round trip to earn a message that does not name the actual problem.
     if (!jobText.trim()) {
       setFormError(errorMessage('LISTING_REQUIRED'));
+      return;
+    }
+
+    // The custom shape is the only one that can be out of range, and it is checked here rather
+    // than left to the 400: `min`/`max` on a number input are advisory, and the server's
+    // VALIDATION_ERROR would not say which of the two fields was wrong.
+    if (
+      !preset &&
+      (!Number.isInteger(hr) ||
+        !Number.isInteger(tech) ||
+        hr < 1 ||
+        tech < 1 ||
+        hr + tech > MAX_TOTAL)
+    ) {
+      setFormError(t('lengthCustomInvalid', { max: MAX_TOTAL }));
       return;
     }
 
@@ -76,6 +162,9 @@ export default function InterviewSetupPage() {
         jobText: jobText.trim(),
         uploadId: uploadId ?? undefined,
         targetQuestionCount,
+        // Omitted for a preset: the server owns the 40/60 split and re-deriving it here would
+        // give it a second home. Sent for custom, which is the whole point of custom.
+        ...(preset ? {} : { hrQuestionCount: hrCount }),
       });
       // `profiling → hr_round` is the only exit from the born-parked state, and setup is its
       // only caller (issue 53). Skip the pre-question form for now: the room enters on
@@ -135,72 +224,77 @@ export default function InterviewSetupPage() {
       <WorkBody className={styles.body}>
         <form onSubmit={handleSubmit} className={styles.form}>
           {/* The listing is the subject of this screen, so it leads the form. */}
-          <ListingUpload onJobText={setJobText} onUploaded={setUploadId} disabled={busy} />
+          <ListingUpload
+            value={jobText}
+            onJobText={setJobText}
+            onUploaded={setUploadId}
+            disabled={busy}
+          />
 
-          {/* Client-side only. `POST /interviews` takes neither field: I03 classifies the
-              occupation from the listing text and reads the language off the session. */}
-          <div className={styles.row}>
-            <Field label={t('occupation')}>
-              {(control) => (
-                <Input
-                  {...control}
-                  value={occupation}
-                  onChange={(e) => setOccupation(e.target.value)}
-                  disabled={busy}
-                />
-              )}
-            </Field>
+          <Segmented
+            legend={t('mode')}
+            name="mode"
+            value={mode}
+            disabled={busy}
+            onChange={setMode}
+            options={[
+              { value: 'voice', label: t('modeVoice'), meta: t('modeVoiceMeta') },
+              { value: 'text', label: t('modeText'), meta: t('modeTextMeta') },
+            ]}
+          />
 
-            <Field label={t('language')}>
-              {(control) => (
-                <Select
-                  {...control}
-                  value={language}
-                  onChange={(e) => setLanguage(e.target.value)}
-                  disabled={busy}
-                >
-                  <option value="en">{tc('localeEnglish')}</option>
-                  <option value="tr">{tc('localeTurkish')}</option>
-                </Select>
-              )}
-            </Field>
-          </div>
+          <Segmented
+            legend={t('roundShape')}
+            note={t('lengthCapNote')}
+            name="length"
+            value={lengthKey}
+            disabled={busy}
+            onChange={setLengthKey}
+            options={[
+              ...LENGTHS.map((l) => ({
+                value: l.key as LengthKey,
+                label: t(l.label),
+                meta: t(l.meta),
+              })),
+              { value: 'custom' as LengthKey, label: t('lengthCustom') },
+            ]}
+          />
 
-          <p className={styles.note}>{t('choiceNotSent')}</p>
+          {preset ? (
+            <p className={styles.note}>{t('roundSplit', { hrCount, techCount })}</p>
+          ) : (
+            <div className={styles.row}>
+              <Field label={t('customHr')}>
+                {(control) => (
+                  <Input
+                    {...control}
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    max={MAX_TOTAL - 1}
+                    value={customHr}
+                    onChange={(e) => setCustomHr(e.target.value)}
+                    disabled={busy}
+                  />
+                )}
+              </Field>
 
-          <div className={styles.row}>
-            <Field label={t('mode')}>
-              {(control) => (
-                <Select
-                  {...control}
-                  value={mode}
-                  onChange={(e) => setMode(e.target.value as 'text' | 'voice')}
-                  disabled={busy}
-                >
-                  <option value="text">{t('modeText')}</option>
-                  <option value="voice">{t('modeVoice')}</option>
-                </Select>
-              )}
-            </Field>
-
-            {/* The split is the hint on the control that decides it, not a loose line. */}
-            <Field label={t('roundShape')} hint={t('roundSplit', { hrCount, techCount })}>
-              {(control) => (
-                <Select
-                  {...control}
-                  value={targetQuestionCount}
-                  onChange={(e) => setTargetQuestionCount(Number(e.target.value))}
-                  disabled={busy}
-                >
-                  {ROUND_SHAPES.map((n) => (
-                    <option key={n} value={n}>
-                      {n}
-                    </option>
-                  ))}
-                </Select>
-              )}
-            </Field>
-          </div>
+              <Field label={t('customTech')}>
+                {(control) => (
+                  <Input
+                    {...control}
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    max={MAX_TOTAL - 1}
+                    value={customTech}
+                    onChange={(e) => setCustomTech(e.target.value)}
+                    disabled={busy}
+                  />
+                )}
+              </Field>
+            </div>
+          )}
 
           {formError ? (
             <p role="alert" className={styles.error}>
@@ -214,5 +308,17 @@ export default function InterviewSetupPage() {
         </form>
       </WorkBody>
     </SplitShell>
+  );
+}
+
+/**
+ * `useSearchParams` (the `?prefill=` listing) opts the tree into request-time rendering, and
+ * Next requires the boundary to be explicit. Null fallback: this resolves in the same tick.
+ */
+export default function InterviewSetupPage() {
+  return (
+    <Suspense fallback={null}>
+      <InterviewSetup />
+    </Suspense>
   );
 }
