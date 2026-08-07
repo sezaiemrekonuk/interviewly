@@ -42,3 +42,55 @@ Feature: PDF upload validation
     Then the response status is 201
     And the returned uploadId differs from the first uploadId
     And a second uploads record exists for the new sha256
+
+  # `uploadId` is the one id in the interview module that arrives in a body instead of as
+  # `:id`, so the ownership resolver never saw it (issue #73). Unchecked, an absent id was a
+  # foreign-key violation surfacing as a 500 and a foreign id silently attached another
+  # candidate's upload. One case per scenario: each is a separate claim and has to be able to
+  # fail on its own.
+
+  @upload @upload-ownership @db @AC-73
+  Scenario: A nonexistent uploadId is refused before the foreign key is reached
+    Given I am signed in as a candidate
+    When I start an interview with the "nonexistent" uploadId
+    Then the response status is 422
+    And the response error code is "VALIDATION_ERROR"
+    And no interview is created
+
+  @upload @upload-ownership @db @AC-73
+  Scenario: Another candidate's uploadId cannot be attached to my interview
+    Given I am signed in as a candidate
+    And another candidate has uploaded a job listing
+    When I start an interview with the "other candidate's listing" uploadId
+    Then the response status is 422
+    And the response error code is "VALIDATION_ERROR"
+    And no interview is created
+
+  @upload @upload-ownership @db @AC-73
+  Scenario: My own CV is not a job listing
+    Given I am signed in as a candidate
+    And I have uploaded my CV
+    When I start an interview with the "own CV" uploadId
+    Then the response status is 422
+    And the response error code is "VALIDATION_ERROR"
+    And no interview is created
+
+  @upload @upload-ownership @db @AC-73
+  Scenario: A foreign uploadId and an absent one are one answer
+    # A 500 for an id that is absent against a 201 for one that exists told any caller which
+    # upload ids are real. Both must now be indistinguishable, status and body.
+    Given I am signed in as a candidate
+    And another candidate has uploaded a job listing
+    When I start an interview with the "nonexistent" uploadId
+    And I start an interview with the "other candidate's listing" uploadId
+    Then that response is identical to the "nonexistent" uploadId response
+    And no interview is created
+
+  @upload @upload-ownership @db @AC-73
+  Scenario: An interview accepts the candidate's own listing upload
+    Given I am signed in as a candidate
+    And I have uploaded a job listing
+    When I start an interview with the "own listing" uploadId
+    Then the response status is 201
+    And the interview jobSource is "upload"
+    And the interview references my own upload

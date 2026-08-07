@@ -142,6 +142,19 @@ const FIXTURES: Record<string, () => Buffer> = {
     Buffer.from(`${LINE_1}\n${LINE_2}\n${LINE_3}\n`.repeat(4), 'utf8'),
 };
 
+/**
+ * A listing PDF nobody has uploaded before, for the issue #73 ownership scenarios.
+ *
+ * They cannot use `FIXTURES`: `uploads.sha256` is globally unique and the dedup short-circuit
+ * is not scoped per user, so a shared fixture hands the second uploader the FIRST uploader's
+ * row — which is exactly the ownership the scenarios are trying to establish, quietly
+ * inverted. The nonce makes the bytes, and so the row, this scenario's own. Long enough for
+ * the 200-character floor whichever `kind` it is uploaded as.
+ */
+export function uniqueListingBytes(nonce: string): Buffer {
+  return buildPdf([`${LINE_1} Reference: ${nonce}.`, LINE_2, LINE_3]);
+}
+
 export function fixtureBytes(name: string): Buffer {
   const build = FIXTURES[name];
   if (!build) throw new Error(`no upload fixture named ${name}`);
