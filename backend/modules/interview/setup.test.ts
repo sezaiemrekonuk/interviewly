@@ -4,10 +4,100 @@
  * bare keyword, never a mid-word slice — and a Turkish software listing must resolve to a
  * cluster, not fall through to null (which made the admin perOccupation chart blind to the
  * primary market).
+ *
+ * The second half covers the `uploadId` ownership check (issue #73), which no acceptance
+ * scenario reaches: it needs two users and an upload id belonging to the other one. Asserted
+ * over real HTTP because the properties under test are a status code and the absence of a
+ * write — a thrown `ApiError` alone would not prove either.
  */
-import { describe, expect, it } from 'vitest';
+import type { User } from '@prisma/client';
+import type { AddressInfo } from 'node:net';
 
-import { classify } from './setup';
+import express from 'express';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const UPLOADS = [
+  { id: 'upl_a_listing', user_id: 'usr_a', kind: 'listing' },
+  { id: 'upl_b_listing', user_id: 'usr_b', kind: 'listing' },
+  { id: 'upl_b_cv', user_id: 'usr_b', kind: 'cv' },
+];
+
+/** Every `interview.create` the handler reached — length 0 is "no row was written". */
+const created: Array<Record<string, unknown>> = [];
+
+/**
+ * What the next `interview.create` rejects with, for the TOCTOU tests. The shape is the one
+ * Prisma 6 actually produced against the real table for a dangling `upload_id` — probed, not
+ * guessed — so a Prisma upgrade that renames `meta.constraint` fails here rather than in
+ * production, where it would silently go back to being a 500.
+ */
+let createRejectsWith: unknown;
+
+vi.mock('../../src/lib/db', () => ({
+  prisma: {
+    upload: {
+      findFirst: vi.fn(async ({ where }: { where: Record<string, unknown> }) =>
+        UPLOADS.find((u) => Object.entries(where).every(([k, v]) => u[k as keyof typeof u] === v)) ??
+        null,
+      ),
+    },
+    occupationCluster: { findUnique: vi.fn(async () => ({ id: 'ocl_1' })) },
+    interview: {
+      create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+        if (createRejectsWith) throw createRejectsWith;
+        created.push(data);
+        return { id: 'itw_1', ...data };
+      }),
+    },
+  },
+}));
+
+vi.mock('./machine', () => ({ applyTransition: vi.fn(async () => 'profiling') }));
+
+const { ApiError, httpStatusFor } = await import('../../src/lib/api-error');
+const { classify, setupInterview } = await import('./setup');
+
+const app = express();
+app.use(express.json());
+// Stands in for `requireAuth`: the caller is whoever the header says, so one app serves both
+// seeded users. Everything else `setupInterview` reads off the request is filled in here too.
+app.use((req, _res, next) => {
+  req.user = { id: req.header('x-test-user') ?? 'usr_a', locale: 'tr' } as User;
+  req.traceId = 'trc_test';
+  next();
+});
+app.post('/interviews', setupInterview);
+app.use(((err, _req, res, _next) => {
+  const code = err instanceof ApiError ? err.code : 'INTERNAL_ERROR';
+  res.status(err instanceof ApiError ? httpStatusFor(err.code) : 500).json({ error: { code } });
+}) satisfies express.ErrorRequestHandler);
+
+let baseUrl = '';
+let server: ReturnType<typeof app.listen>;
+
+beforeAll(async () => {
+  server = app.listen(0);
+  await new Promise((resolve) => server.once('listening', resolve));
+  baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+});
+
+afterAll(async () => {
+  await new Promise((resolve, reject) => server.close((e) => (e ? reject(e) : resolve(null))));
+});
+
+beforeEach(() => {
+  created.length = 0;
+  createRejectsWith = undefined;
+});
+
+async function setup(body: Record<string, unknown>, user = 'usr_a') {
+  const res = await fetch(`${baseUrl}/interviews`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-test-user': user },
+    body: JSON.stringify({ mode: 'text', jobText: 'Backend Developer', targetQuestionCount: 4, ...body }),
+  });
+  return { status: res.status, body: (await res.json()) as Record<string, never> };
+}
 
 describe('classify', () => {
   it('titles a Turkish listing from its first line and clusters it', () => {
@@ -84,5 +174,105 @@ describe('classify', () => {
     );
     expect(occupation).toBe('ACME Teknoloji A.Ş.');
     expect(clusterKey).toBe('software_engineering');
+  });
+});
+
+describe('setupInterview uploadId ownership (issue #73)', () => {
+  it('refuses a non-existent uploadId with 422, not the FK violation 500', async () => {
+    const res = await setup({ uploadId: 'not-a-real-upload-id' });
+    expect(res.status).toBe(422);
+    expect(res.body).toEqual({ error: { code: 'VALIDATION_ERROR' } });
+    expect(created).toHaveLength(0);
+  });
+
+  it("refuses another user's uploadId and writes no interview row", async () => {
+    const res = await setup({ uploadId: 'upl_b_listing' }, 'usr_a');
+    expect(res.status).toBe(422);
+    expect(created).toHaveLength(0);
+  });
+
+  it('answers identically for a foreign id and a missing one, so neither is an oracle', async () => {
+    const foreign = await setup({ uploadId: 'upl_b_listing' }, 'usr_a');
+    const missing = await setup({ uploadId: 'upl_does_not_exist' }, 'usr_a');
+    // The TOCTOU branch is in this set too: it raises the same ApiError, so a race must not
+    // be distinguishable from a foreign id either.
+    createRejectsWith = {
+      code: 'P2003',
+      meta: { modelName: 'Interview', constraint: 'interviews_upload_id_fkey' },
+    };
+    const raced = await setup({ uploadId: 'upl_a_listing' }, 'usr_a');
+    expect(foreign).toEqual(missing);
+    expect(raced).toEqual(missing);
+    expect(foreign.status).toBe(422);
+  });
+
+  it("refuses the caller's own CV — a CV is not a job listing", async () => {
+    const res = await setup({ uploadId: 'upl_b_cv' }, 'usr_b');
+    expect(res.status).toBe(422);
+    expect(created).toHaveLength(0);
+  });
+
+  it("accepts the caller's own listing upload and records job_source 'upload'", async () => {
+    const res = await setup({ uploadId: 'upl_a_listing' }, 'usr_a');
+    expect(res.status).toBe(201);
+    expect(res.body).toEqual({ interviewId: 'itw_1', hrCount: 2, techCount: 2 });
+    expect(created).toHaveLength(1);
+    expect(created[0]).toMatchObject({
+      user_id: 'usr_a',
+      upload_id: 'upl_a_listing',
+      job_source: 'upload',
+    });
+  });
+
+  it("still accepts a pasted listing with no uploadId as job_source 'paste'", async () => {
+    const res = await setup({});
+    expect(res.status).toBe(201);
+    expect(created[0]).toMatchObject({ upload_id: null, job_source: 'paste' });
+  });
+
+  it('answers 422 rather than 500 for every malformed body shape', async () => {
+    // @AC "no request body can produce a 500 from setup.ts" — the ids are the new path, the
+    // rest are the guards it was inserted between.
+    for (const body of [
+      { uploadId: 42 },
+      { uploadId: '' },
+      { jobText: undefined, uploadId: 'upl_a_listing' }, // uploadId with no text: #73 is not I11
+      { targetQuestionCount: 999 },
+      { mode: 'telepathy' },
+    ]) {
+      const res = await setup({ jobText: 'Backend Developer', ...body });
+      expect({ body, status: res.status }).toEqual({ body, status: 422 });
+    }
+    expect(created).toHaveLength(0);
+  });
+
+  it('answers 422 when the upload is deleted between the check and the insert', async () => {
+    // The residual TOCTOU: the ownership read passes, `delete-account.ts` removes the row, the
+    // insert hits the foreign key. Without the catch this is the same 500 the fix set out to
+    // remove, reachable by timing instead of by a bad id.
+    createRejectsWith = {
+      code: 'P2003',
+      meta: { modelName: 'Interview', constraint: 'interviews_upload_id_fkey' },
+    };
+    const res = await setup({ uploadId: 'upl_a_listing' }, 'usr_a');
+    expect(res.status).toBe(422);
+    expect(res.body).toEqual({ error: { code: 'VALIDATION_ERROR' } });
+  });
+
+  it('still fails loudly when a different foreign key is the one violated', async () => {
+    // A missing user or cluster is not a malformed request body — turning every P2003 into a
+    // 422 would hide a real bug behind a client error.
+    createRejectsWith = {
+      code: 'P2003',
+      meta: { modelName: 'Interview', constraint: 'interviews_user_id_fkey' },
+    };
+    const res = await setup({ uploadId: 'upl_a_listing' }, 'usr_a');
+    expect(res.status).toBe(500);
+  });
+
+  it('refuses a listing-less body with LISTING_REQUIRED before it looks anything up', async () => {
+    const res = await setup({ jobText: undefined });
+    expect(res.status).toBe(422);
+    expect(res.body).toEqual({ error: { code: 'LISTING_REQUIRED' } });
   });
 });

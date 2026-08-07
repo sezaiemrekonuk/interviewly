@@ -113,31 +113,59 @@ export const setupInterview: RequestHandler = async (req, res) => {
   // store in the NOT NULL job_text column, so it is a malformed request today.
   if (!jobText) throw new ApiError('VALIDATION_ERROR');
 
+  // Issue #73: `uploadId` is the one id in this module that arrives in a body rather than as
+  // `:id`, so `ownership.ts` never sees it. Unchecked, a foreign id attached another user's
+  // upload to this interview and a bogus one reached the FK as a 500. Same reasoning as
+  // ownership.ts: not-owned and not-found answer identically, so neither confirms the other.
+  // `kind` is in the same query — a CV is not a job listing.
+  if (uploadId) {
+    const upload = await prisma.upload.findFirst({
+      where: { id: uploadId, user_id: req.user!.id, kind: 'listing' },
+      select: { id: true },
+    });
+    if (!upload) throw new ApiError('VALIDATION_ERROR');
+  }
+
   const { occupation, clusterKey } = classify(jobText);
   const cluster = clusterKey
     ? await prisma.occupationCluster.findUnique({ where: { key: clusterKey } })
     : null;
   const { hrCount, techCount } = split(targetQuestionCount);
 
-  const interview = await prisma.interview.create({
-    data: {
-      user_id: req.user!.id,
-      mode,
-      job_text: jobText,
-      job_source: uploadId ? 'upload' : 'paste',
-      upload_id: uploadId ?? null,
-      occupation,
-      occupation_cluster_id: cluster?.id ?? null,
-      language: req.user!.locale,
-      target_question_count: targetQuestionCount,
-      hr_question_count: hrCount,
-      // Born `created`, moved by the guard in the same request. Inserting straight into
-      // `profiling` would be one write fewer and the only state change in the system that
-      // emits no `INTERVIEW_STATE_CHANGED` (@AC-16 lists this edge).
-      state: 'created',
-      current_index: 0,
-    },
-  });
+  // A transaction would NOT close the window between the read above and this insert: under
+  // Read Committed a concurrent DELETE still commits in between, and only `SELECT … FOR SHARE`
+  // on `uploads` would block it — a row lock on every setup for a race `delete-account.ts:86`
+  // is the sole source of. Catching the violation costs nothing and answers it as what it is.
+  // The upload FK only: a P2003 on user_id or the cluster is a different bug and stays a 500.
+  const interview = await prisma.interview
+    .create({
+      data: {
+        user_id: req.user!.id,
+        mode,
+        job_text: jobText,
+        job_source: uploadId ? 'upload' : 'paste',
+        upload_id: uploadId ?? null,
+        occupation,
+        occupation_cluster_id: cluster?.id ?? null,
+        language: req.user!.locale,
+        target_question_count: targetQuestionCount,
+        hr_question_count: hrCount,
+        // Born `created`, moved by the guard in the same request. Inserting straight into
+        // `profiling` would be one write fewer and the only state change in the system that
+        // emits no `INTERVIEW_STATE_CHANGED` (@AC-16 lists this edge).
+        state: 'created',
+        current_index: 0,
+      },
+    })
+    .catch((err: unknown) => {
+      const e = err as { code?: string; meta?: { constraint?: string } } | null;
+      // Prisma 6 reports the FK as `meta.constraint` — the older `field_name` is not emitted
+      // here (checked against the real table, not assumed).
+      if (e?.code === 'P2003' && e.meta?.constraint === 'interviews_upload_id_fkey') {
+        throw new ApiError('VALIDATION_ERROR');
+      }
+      throw err;
+    });
 
   await applyTransition(interview, 'profiling', { traceId: req.traceId! });
 
