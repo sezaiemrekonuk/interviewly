@@ -170,7 +170,9 @@ Then(
 );
 
 Then('a second uploads record exists for the new sha256', async function (this: AiWorld) {
-  const row = await prisma.upload.findUniqueOrThrow({
+  // findFirst, not findUnique: `uploads` is unique per (owner, bytes) now, so the sha256 alone
+  // is no longer a unique key. This scenario has one candidate, so it is still one row.
+  const row = await prisma.upload.findFirstOrThrow({
     where: { sha256: sha256Of('another-valid-listing.pdf') },
   });
   assert.equal(row.id, lastUploadId);
