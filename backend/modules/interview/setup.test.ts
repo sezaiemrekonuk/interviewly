@@ -57,48 +57,6 @@ vi.mock('./machine', () => ({ applyTransition: vi.fn(async () => 'profiling') })
 const { ApiError, httpStatusFor } = await import('../../src/lib/api-error');
 const { classify, setupInterview } = await import('./setup');
 
-const app = express();
-app.use(express.json());
-// Stands in for `requireAuth`: the caller is whoever the header says, so one app serves both
-// seeded users. Everything else `setupInterview` reads off the request is filled in here too.
-app.use((req, _res, next) => {
-  req.user = { id: req.header('x-test-user') ?? 'usr_a', locale: 'tr' } as User;
-  req.traceId = 'trc_test';
-  next();
-});
-app.post('/interviews', setupInterview);
-app.use(((err, _req, res, _next) => {
-  const code = err instanceof ApiError ? err.code : 'INTERNAL_ERROR';
-  res.status(err instanceof ApiError ? httpStatusFor(err.code) : 500).json({ error: { code } });
-}) satisfies express.ErrorRequestHandler);
-
-let baseUrl = '';
-let server: ReturnType<typeof app.listen>;
-
-beforeAll(async () => {
-  server = app.listen(0);
-  await new Promise((resolve) => server.once('listening', resolve));
-  baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-});
-
-afterAll(async () => {
-  await new Promise((resolve, reject) => server.close((e) => (e ? reject(e) : resolve(null))));
-});
-
-beforeEach(() => {
-  created.length = 0;
-  createRejectsWith = undefined;
-});
-
-async function setup(body: Record<string, unknown>, user = 'usr_a') {
-  const res = await fetch(`${baseUrl}/interviews`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-test-user': user },
-    body: JSON.stringify({ mode: 'text', jobText: 'Backend Developer', targetQuestionCount: 4, ...body }),
-  });
-  return { status: res.status, body: (await res.json()) as Record<string, never> };
-}
-
 describe('classify', () => {
   it('titles a Turkish listing from its first line and clusters it', () => {
     const { occupation, clusterKey } = classify(
@@ -178,6 +136,48 @@ describe('classify', () => {
 });
 
 describe('setupInterview uploadId ownership (issue #73)', () => {
+  const app = express();
+  app.use(express.json());
+  // Stands in for `requireAuth`: the caller is whoever the header says, so one app serves both
+  // seeded users. Everything else `setupInterview` reads off the request is filled in here too.
+  app.use((req, _res, next) => {
+    req.user = { id: req.header('x-test-user') ?? 'usr_a', locale: 'tr' } as User;
+    req.traceId = 'trc_test';
+    next();
+  });
+  app.post('/interviews', setupInterview);
+  app.use(((err, _req, res, _next) => {
+    const code = err instanceof ApiError ? err.code : 'INTERNAL_ERROR';
+    res.status(err instanceof ApiError ? httpStatusFor(err.code) : 500).json({ error: { code } });
+  }) satisfies express.ErrorRequestHandler);
+
+  let baseUrl = '';
+  let server: ReturnType<typeof app.listen>;
+
+  beforeAll(async () => {
+    server = app.listen(0);
+    await new Promise((resolve) => server.once('listening', resolve));
+    baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  });
+
+  afterAll(async () => {
+    await new Promise((resolve, reject) => server.close((e) => (e ? reject(e) : resolve(null))));
+  });
+
+  beforeEach(() => {
+    created.length = 0;
+    createRejectsWith = undefined;
+  });
+
+  async function setup(body: Record<string, unknown>, user = 'usr_a') {
+    const res = await fetch(`${baseUrl}/interviews`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-test-user': user },
+      body: JSON.stringify({ mode: 'text', jobText: 'Backend Developer', targetQuestionCount: 4, ...body }),
+    });
+    return { status: res.status, body: (await res.json()) as Record<string, never> };
+  }
+
   it('refuses a non-existent uploadId with 422, not the FK violation 500', async () => {
     const res = await setup({ uploadId: 'not-a-real-upload-id' });
     expect(res.status).toBe(422);
