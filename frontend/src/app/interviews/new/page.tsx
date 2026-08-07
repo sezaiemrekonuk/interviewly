@@ -43,15 +43,15 @@ function splitRounds(target: number): { hrCount: number; techCount: number } {
   return { hrCount, techCount: target - hrCount };
 }
 
-const ESCAPES: Record<string, string> = { n: '\n', t: '\t', r: '\r', '\\': '\\' };
+const ESCAPES: Record<string, string> = { n: '\n', '\\': '\\' };
 
 /**
  * `?prefill=` carries a listing through a link — a job board, a shared URL, a bookmarklet.
- * A query string cannot hold a real newline, so the sender writes the C escapes and this puts
- * the line breaks back. Unrecognised escapes are left alone: `C:\temp` is not a control code.
+ * Some senders represent newlines as C-style escapes (e.g. `\\n`). Only `\\n` and `\\\\` are
+ * unescaped here so sequences like `C:\\temp` are not mutated.
  */
 function unescapeText(raw: string): string {
-  return raw.replace(/\\([ntr\\])/g, (_, char: string) => ESCAPES[char]);
+  return raw.replace(/\\([n\\\\])/g, (_, char: string) => ESCAPES[char]);
 }
 
 /**
