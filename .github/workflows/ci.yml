@@ -8,7 +8,8 @@ on:
     branches: [master]
 
 jobs:
-  lint:
+  static:
+    # lint + commitlint + typecheck merged: same checks, one checkout/npm-ci instead of two.
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -22,15 +23,6 @@ jobs:
       # PR-only: on a push event there is no base.sha, and the range would be empty.
       - if: github.event_name == 'pull_request'
         run: npx commitlint --from ${{ github.event.pull_request.base.sha }}
-
-  typecheck:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: '22', cache: 'npm' }
-      - run: npm ci --prefer-offline --no-audit --fund=false
       # @prisma/client hoists to the workspace root, where its postinstall finds no schema
       # and emits a stub client. Without this every Prisma type is missing (F02).
       - run: npx prisma generate --schema backend/prisma/schema.prisma
@@ -38,23 +30,19 @@ jobs:
       - run: npm run typecheck
 
   build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-      - run: cp .env.example .env
-      - run: docker compose build
-
-  compose-check:
+    # docker build + compose config merged: same checks, one checkout instead of two.
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       # compose.yaml declares `env_file: [.env]`, which is gitignored.
       - run: cp .env.example .env
+      - run: docker compose build
       - run: docker compose config
 
-  migrate-check:
+  unit:
+    # migrate-check + unit tests merged: both only need node + postgres, one npm-ci instead
+    # of two. Unit tests don't touch postgres but sharing the service costs nothing.
     runs-on: ubuntu-latest
     timeout-minutes: 15
     services:
@@ -68,6 +56,7 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: '22', cache: 'npm' }
       - run: npm ci --prefer-offline --no-audit --fund=false
+      - run: npx prisma generate --schema backend/prisma/schema.prisma
       - name: migrate-check
         # Step-level env, not a command prefix: the prefix only reached `migrate deploy`
         # and `migrate diff` then failed to resolve env("DATABASE_URL") (P1012).
@@ -81,16 +70,6 @@ jobs:
             --from-schema-datasource prisma/schema.prisma \
             --to-schema-datamodel prisma/schema.prisma \
             --exit-code
-
-  unit:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: '22', cache: 'npm' }
-      - run: npm ci --prefer-offline --no-audit --fund=false
-      - run: npx prisma generate --schema backend/prisma/schema.prisma
       # env.ts process.exit(1)s at import on a missing key (F03). `npm test` loads .env via
       # node --env-file-if-exists; vitest's own dotenv handling worked locally but not here.
       - run: cp .env.example .env
