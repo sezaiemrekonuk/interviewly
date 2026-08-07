@@ -28,13 +28,15 @@ export function Meter({
   value: number;
   max?: number;
   tone?: MeterTone;
-  label?: string;
-  decorative?: boolean;
   tall?: boolean;
   onRail?: boolean;
   instant?: boolean;
   className?: string;
-}) {
+} &
+  (
+    | { decorative?: false; label: string }
+    | { decorative: true; label?: string }
+  )) {
   // Clamp: a provider can report a level above 1, and a budget can be spent past its ceiling.
   // Either would render as an overflowing bar rather than a full one.
   const safeMax = max > 0 ? max : 1;
