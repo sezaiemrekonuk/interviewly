@@ -32,6 +32,29 @@ interface AdminItem {
 
 const items = <T>(world: AiWorld): T[] => (world.lastBody?.items ?? []) as T[];
 
+/**
+ * A fresh admin, signed in, cookie returned and left on the world.
+ *
+ * Exported because `report-job.steps.ts` needs the same actor for the requeue endpoint
+ * (issue 081), and a second copy of the create-then-login dance would drift from this one —
+ * `admin` is a seeded role here, not something any endpoint can grant.
+ */
+export async function signInAsAdmin(world: AiWorld): Promise<string> {
+  const admin = await prisma.user.create({
+    data: {
+      email_lower: `admin-${randomUUID()}@example.com`,
+      password_hash: await hash(ADMIN_PASSWORD),
+      role: 'admin',
+      email_verified_at: new Date(),
+    },
+  });
+
+  world.cookie = '';
+  await world.httpPost('/auth/login', { email: admin.email_lower, password: ADMIN_PASSWORD });
+  assert.equal(world.lastStatus, 200, `admin login failed: ${JSON.stringify(world.lastBody)}`);
+  return world.cookie;
+}
+
 async function register(world: AiWorld): Promise<string> {
   await world.httpPost('/auth/register', {
     email: `candidate-${randomUUID()}@example.com`,
@@ -110,20 +133,7 @@ When('the owner fetches GET {string}', async function (this: AiWorld, path: stri
 });
 
 When('an admin fetches GET {string}', async function (this: AiWorld, path: string) {
-  const admin = await prisma.user.create({
-    data: {
-      email_lower: `admin-${randomUUID()}@example.com`,
-      password_hash: await hash(ADMIN_PASSWORD),
-      role: 'admin',
-      email_verified_at: new Date(),
-    },
-  });
-
-  this.cookie = '';
-  await this.httpPost('/auth/login', { email: admin.email_lower, password: ADMIN_PASSWORD });
-  assert.equal(this.lastStatus, 200, `admin login failed: ${JSON.stringify(this.lastBody)}`);
-  this.actors.admin = this.cookie;
-
+  this.actors.admin = await signInAsAdmin(this);
   await this.httpGet(path);
 });
 
@@ -263,18 +273,7 @@ When('the non-admin user fetches GET {string}', async function (this: AiWorld, p
 });
 
 When('an admin user fetches GET {string}', async function (this: AiWorld, path: string) {
-  const admin = await prisma.user.create({
-    data: {
-      email_lower: `admin-ac18-${randomUUID()}@example.com`,
-      password_hash: await hash(ADMIN_PASSWORD),
-      role: 'admin',
-      email_verified_at: new Date(),
-    },
-  });
-  this.cookie = '';
-  await this.httpPost('/auth/login', { email: admin.email_lower, password: ADMIN_PASSWORD });
-  assert.equal(this.lastStatus, 200, `admin login failed: ${JSON.stringify(this.lastBody)}`);
-  this.actors.adminUser = this.cookie;
+  this.actors.adminUser = await signInAsAdmin(this);
   await this.httpGet(path);
 });
 

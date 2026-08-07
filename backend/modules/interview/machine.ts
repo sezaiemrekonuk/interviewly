@@ -26,6 +26,21 @@ const TRANSITIONS: Partial<Record<InterviewState, InterviewState[]>> = {
   // both batches inside the HR round. Add the edge with the source that needs it.
   paused: ['hr_round', 'abandoned'],
   evaluating: ['completed', 'failed'],
+  // Operational recovery only (issue 081), and the reason `→ evaluating` is no longer a
+  // one-way door. A report job that is lost after the interview has already left `evaluating`
+  // — a crash between the transition and the report write (the `ponytail:` note in
+  // `report-run.ts`), or a dead-letter — cannot be re-driven by re-adding a job: `runReport`
+  // uses `evaluating → completed` as its CAS and would throw before writing anything. So the
+  // way back has to be the state, and re-entering `evaluating` is what fires `enqueueReport`
+  // below for free.
+  //
+  // The one caller is `POST /admin/interviews/:id/report/requeue`, which refuses an interview
+  // that already has a `reports` row — that guard, not this table, is what keeps a finished
+  // report from being overwritten. Nothing on the candidate's path can reach these edges:
+  // every other transition source is a round endpoint, and none of them run from a terminal
+  // state.
+  completed: ['evaluating'],
+  failed: ['evaluating'],
 };
 
 export function canTransition(from: InterviewState, to: InterviewState): boolean {

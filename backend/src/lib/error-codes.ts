@@ -21,6 +21,11 @@ export const ERROR_CODES = {
   LISTING_REQUIRED:                { kind: 'api' as ErrorKind, http: 422, owner: 'backend' },
   CSRF_ORIGIN_MISMATCH:            { kind: 'api' as ErrorKind, http: 403, owner: 'backend' },
   NOT_READY:                       { kind: 'api' as ErrorKind, http: 503, owner: 'backend' },
+  // --- Report ledger recovery (issue 081) ---
+  // Both are refusals of POST /admin/interviews/:id/report/requeue, and both are 409 because
+  // the request is well-formed and the interview exists — only the moment is wrong.
+  REPORT_ALREADY_EXISTS:           { kind: 'api' as ErrorKind, http: 409, owner: 'backend' },
+  REPORT_JOB_RUNNING:              { kind: 'api' as ErrorKind, http: 409, owner: 'backend' },
   // --- Upload ---
   UPLOAD_TOO_LARGE:                { kind: 'api' as ErrorKind, http: 413, owner: 'backend' },
   UNSUPPORTED_MEDIA_TYPE:          { kind: 'api' as ErrorKind, http: 415, owner: 'backend' },
