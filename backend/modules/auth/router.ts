@@ -46,8 +46,8 @@ export default router;
 
 export const meRouter = Router();
 // Same single mount, one difference: the `/me` prefix is load-bearing. This router is
-// mounted at `/` (app.ts), so a pathless `use` would run on every request the app receives
-// — including the ElevenLabs webhooks, which carry no Origin and are gated by HMAC instead.
+// mounted at `/` (app.ts), so a pathless `use` would run on every request the app receives —
+// including the routers mounted after it, which own their guard.
 // `/me` is the prefix of every route below, so this still covers the whole router.
 meRouter.use('/me', requirePublicOrigin);
 meRouter.get('/me', requireAuth, me);

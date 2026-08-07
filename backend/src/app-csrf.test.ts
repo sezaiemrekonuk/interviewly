@@ -11,7 +11,7 @@
  *  - structurally, that every browser-facing router mounts it router-WIDE (`.use`), which is
  *    the I05 property that makes a state-changing route added later covered by default;
  *  - over HTTP, that the paths the issue proved writable now refuse a foreign origin, and
- *    that the routes which must stay open — the HMAC webhooks, every GET — still are.
+ *    that the routes which must stay open — every GET — still are.
  *
  * Every request below stops in middleware, before any handler, so nothing here reads
  * Postgres or writes Redis. `ioredis` is faked only because `auth/rate-limit.ts` opens a
@@ -124,7 +124,7 @@ const ROUTERS = [
   ['me', () => import('../modules/auth/router').then((m) => m.meRouter)],
   ['admin', () => import('../modules/admin/router').then((m) => m.default)],
   ['interview', () => import('../modules/interview/router').then((m) => m.default)],
-  ['voice', () => import('../modules/voice/session').then((m) => m.default)],
+  ['voice', () => import('../modules/voice/downgrade').then((m) => m.default)],
   ['speech', () => import('../modules/speech/router').then((m) => m.default)],
 ] as const;
 
@@ -183,17 +183,9 @@ describe('a state-changing request from a foreign origin is refused', () => {
 });
 
 describe('the guard leaves the routes it must not touch alone', () => {
-  // Server-to-server: no Origin to check, HMAC instead (webhook-router.ts). `meRouter` is
-  // mounted at `/`, so a pathless `use` on it — rather than the `/me` one — reaches these.
-  it.each(['post_call', 'submit_answer', 'next_question', 'end_round'])(
-    'POST /webhooks/elevenlabs/%s, no Origin',
-    async (action) => {
-      expect((await call('POST', `/webhooks/elevenlabs/${action}`)).code).not.toBe(
-        'CSRF_ORIGIN_MISMATCH',
-      );
-    },
-  );
-
+  // S05 deleted the HMAC-gated server-to-server routes this also covered (ADR-S03). Nothing
+  // but a browser reaches this app now, so GET-by-method is the only exemption left to assert.
+  //
   // GET is exempt by method, which is what keeps the SSE stream and the report download
   // working. These stop at `requireAuth` — reaching it is the proof the guard passed them.
   it.each([

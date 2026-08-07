@@ -495,10 +495,9 @@ automatically, which would silently publish `db`, `cache` and `bucket` on a bare
 `docker compose up`. Dev extras live in `compose.dev.yaml` and are required explicitly
 with `-f`.
 
-**Voice mode does not work on `localhost` without the tunnel.** ElevenLabs cannot call
-`http://localhost`, so the `cloudflared` service in the `dev` profile publishes the edge
-and its hostname goes into `PUBLIC_ORIGIN`. This is the single most likely "why doesn't it
-work on my machine" of the project.
+**Voice mode works on `localhost`.** S05 deleted the `cloudflared` tunnel with the webhooks
+that needed it (ADR-S01/S03): ElevenLabs never calls us, `backend` calls ElevenLabs. Nothing
+about voice needs public ingress any more.
 
 Working on UI with no provider keys? `AI_ENABLED=false` skips provider validation and puts
 the app in stub mode. Everything boots.

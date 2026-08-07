@@ -25,10 +25,3 @@ export const reportQueue = new Queue(REPORT_QUEUE, {
   connection: { url: config.REDIS_URL },
   defaultJobOptions: REPORT_JOB_OPTIONS,
 });
-
-export const VOICE_RECONCILE_QUEUE = 'voice.reconcile';
-
-// V04. Same producer/consumer sharing as `report` above.
-export const voiceReconcileQueue = new Queue(VOICE_RECONCILE_QUEUE, {
-  connection: { url: config.REDIS_URL },
-});

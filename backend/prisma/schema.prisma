@@ -275,7 +275,6 @@ model Interview {
   occupation_cluster OccupationCluster? @relation(fields: [occupation_cluster_id], references: [id], onDelete: Restrict)
   interview_rounds   InterviewRound[]
   reports            Report[]
-  voice_sessions     VoiceSession[]
   chat_messages      ChatMessage[]
   llm_calls          LlmCall[]
 
@@ -370,18 +369,6 @@ model ReportQuestion {
   /// Issue 082: a question is scored once per report, so a concurrent rewrite cannot double it.
   @@unique([report_id, question_id])
   @@map("report_questions")
-}
-
-model VoiceSession {
-  id           String    @id @default(cuid())
-  interview_id String
-  nonce        String // an unguessable secret, not a PK; never returned by a list endpoint
-  expires_at   DateTime
-  consumed_at  DateTime?
-
-  interview Interview @relation(fields: [interview_id], references: [id], onDelete: Restrict)
-
-  @@map("voice_sessions")
 }
 
 model Upload {

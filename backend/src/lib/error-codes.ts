@@ -45,9 +45,8 @@ export const ERROR_CODES = {
   ENV_VALIDATION_FAILED:           { kind: 'boot' as ErrorKind, http: undefined, owner: 'infra' },
   // --- Voice ---
   VOICE_UNAVAILABLE:               { kind: 'api' as ErrorKind, http: 503, owner: 'voice' },
-  WEBHOOK_SIGNATURE_INVALID:       { kind: 'api' as ErrorKind, http: 401, owner: 'voice' },
-  WEBHOOK_REPLAY_REJECTED:         { kind: 'api' as ErrorKind, http: 401, owner: 'voice' },
-  VOICE_SESSION_INVALID:           { kind: 'api' as ErrorKind, http: 403, owner: 'voice' },
+  // S05 removed WEBHOOK_SIGNATURE_INVALID, WEBHOOK_REPLAY_REJECTED and VOICE_SESSION_INVALID
+  // with their only producer (ADR-S03). VOICE_SESSION_EXPIRED stays: the ceiling still needs it.
   VOICE_SESSION_EXPIRED:           { kind: 'api' as ErrorKind, http: 403, owner: 'voice' },
   SPEECH_AUDIO_INVALID:            { kind: 'api' as ErrorKind, http: 400, owner: 'voice' },
   SPEECH_TRANSCRIPTION_FAILED:     { kind: 'api' as ErrorKind, http: 502, owner: 'voice' },

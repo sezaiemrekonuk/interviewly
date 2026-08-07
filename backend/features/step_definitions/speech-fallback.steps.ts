@@ -1,17 +1,20 @@
 /**
- * `voice_fallback.feature` @AC-6 — the voice → text downgrade (V03).
+ * `speech_fallback.feature` @AC-7 — the voice → text downgrade (V03, kept by S05).
  *
- * Driven entirely through `FakeVoiceSession`: the fatal signal is a mint whose driver throws,
- * which is the one voice failure the server observes for itself (§3.8). No network.
+ * Driven entirely through `FakeSpeechProvider`: the fatal signal is a `speak()` that throws on
+ * the TTS route, which is the one speech failure the server observes for itself (§3.8). The
+ * mint it used to be driven by is gone (ADR-S01). No network.
  */
 import assert from 'node:assert/strict';
 import { After, Before, Given, Then, When } from '@cucumber/cucumber';
 
-import { FakeVoiceSession } from '../../modules/voice/fake-session';
-import { setVoiceSession } from '../../modules/voice/session';
+import { FakeSpeechProvider } from '../../modules/speech/fake-speech';
+import { setSpeechProvider } from '../../modules/speech/SpeechProvider';
 import { prisma } from '../../src/lib/db';
 import { logger } from '../../src/lib/logger';
+import { setStorage } from '../../src/lib/storage';
 
+import { makeFakeStorage } from '../fixtures/fake-storage';
 import { questionIdAt } from './answers.steps';
 import { signIn } from './interview-generation.steps';
 import { AiWorld } from './world';
@@ -23,9 +26,16 @@ const TOTAL_QUESTIONS = 8;
 
 const realInfo = logger.info;
 
-// ponytail: third copy of this patch (report-run.steps `captureWarnings`, voice-webhook.steps
-// `captureLogs`). Extract to one step-definition helper when a fourth ring needs it.
-Before({ tags: '@voice-fallback' }, function (this: AiWorld) {
+let fake: FakeSpeechProvider;
+
+// ponytail: third copy of this patch (report-run.steps `captureWarnings`, ai-provider.steps).
+// Extract to one step-definition helper when a fourth ring needs it.
+Before({ tags: '@speech-fallback' }, function (this: AiWorld) {
+  fake = new FakeSpeechProvider();
+  setSpeechProvider(fake);
+  // The TTS route caches through `storage`; the fake keeps the ring off the real bucket and
+  // guarantees the healthy scenario is a genuine provider call rather than a cache hit.
+  setStorage(makeFakeStorage());
   this.resetEvents();
   captureInfo(this);
 });
@@ -40,7 +50,7 @@ function captureInfo(world: AiWorld): void {
   } as typeof logger.info;
 }
 
-After({ tags: '@voice-fallback' }, function () {
+After({ tags: '@speech-fallback' }, function () {
   logger.info = realInfo;
 });
 
@@ -109,38 +119,55 @@ Given(
 
 // ---------------------------------------------------------------- when
 
-/**
- * `failNext()` makes the driver throw on the mint the room is about to attempt. Installed here
- * rather than in a hook because the `@voice` hook (voice-session.steps) replaces the session
- * with a clean fake at scenario start and would overwrite an earlier install.
- */
-When('the fake voice session reports a fatal error', async function (this: AiWorld) {
-  const fake = new FakeVoiceSession();
+/** The room asks for the current question's audio; `failNext()` makes that `speak()` throw. */
+async function getCurrentQuestionSpeech(world: AiWorld): Promise<void> {
+  const { current_index } = await interviewRow(world);
+  await world.httpGet(`/interviews/${world.interviewId}/questions/${current_index}/speech`);
+}
+
+When('the fake speech provider reports a fatal error', async function (this: AiWorld) {
   fake.failNext();
-  setVoiceSession(fake);
 
   this.resetEvents();
-  await this.httpPost(`/interviews/${this.interviewId}/voice/session`, {});
+  await getCurrentQuestionSpeech(this);
   assert.equal(this.lastStatus, 503, `expected VOICE_UNAVAILABLE: ${JSON.stringify(this.lastBody)}`);
 });
 
-When('the fake voice session completes a turn without error', async function (this: AiWorld) {
+When('the fake speech provider serves a question without error', async function (this: AiWorld) {
   this.resetEvents();
-  await this.httpPost(`/interviews/${this.interviewId}/voice/session`, {});
-  assert.equal(this.lastStatus, 201, `mint failed: ${JSON.stringify(this.lastBody)}`);
+  await getCurrentQuestionSpeech(this);
+  assert.equal(this.lastStatus, 200, `speech failed: ${JSON.stringify(this.lastBody)}`);
 });
 
-When('I POST {string} after the downgrade', async function (this: AiWorld, path: string) {
-  await this.httpPost(path.replace(':id', this.interviewId), {});
+/**
+ * The downgrade is one-directional (§3.8): the speech route is `voice`-only, so asking it for
+ * audio from `text` is an illegal transition, not a transient outage. Same assertion the mint
+ * carried before ADR-S01 removed it.
+ */
+When('I request the current question speech after the downgrade', async function (this: AiWorld) {
+  await getCurrentQuestionSpeech(this);
 });
 
 // ---------------------------------------------------------------- then
 
 // `the response status is {int}` (ai-provider.steps), `the response error code is {string}`
-// (interview-setup.steps), `the interview currentIndex is {int}` (answers.steps),
-// `a {string} event is emitted with the interviewId` (voice-webhook.steps) and
+// (interview-setup.steps), `the interview currentIndex is {int}` (answers.steps) and
 // `no {string} event is emitted` (prompt-builder.steps) are already global over AiWorld and
 // mean exactly what this feature means. Redefining any of them is an ambiguous-step failure.
+
+// S05: moved here from the deleted voice ring's step definitions. This is now its only
+// consumer.
+Then(
+  'a {string} event is emitted with the interviewId',
+  function (this: AiWorld, event: string) {
+    const captured = this.eventsNamed(event);
+    assert.ok(captured.length > 0, `no ${event} event captured`);
+    assert.ok(
+      captured.some((e) => e.fields.interviewId === this.interviewId),
+      `${event} carried no interviewId: ${JSON.stringify(captured)}`,
+    );
+  },
+);
 
 Then('the interview mode becomes {string}', async function (this: AiWorld, mode: string) {
   assert.equal((await interviewRow(this)).mode, mode);
