@@ -63,6 +63,18 @@ Feature: Report availability
     And exactly one report row exists for the interview
 
   @report @backend @requeue
+  Scenario: A requeue is still allowed when a crash left a report behind in evaluating
+    Given I am on the last technical question of an interview
+    When I submit an answer for the current question
+    Then the interview state is "evaluating"
+    When the report job is deleted from Redis
+    And a report row is written while the interview is still evaluating
+    And an admin requeues the report for the interview
+    Then the response status is 202
+    And exactly one report job is enqueued for the interviewId
+    And exactly one report row exists for the interview
+
+  @report @backend @requeue
   Scenario: An admin requeues an interview dead-lettered with no report
     Given I am on the last technical question of an interview
     When I submit an answer for the current question
