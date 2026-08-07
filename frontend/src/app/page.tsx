@@ -51,8 +51,8 @@ export default function Home() {
 
       <main className={styles.ground}>
         <HomeSwitch>
-          {/* Deliberately short — three elements and then the stage. The argument is the thing
-              directly below this band, and a full-height hero would put it under the fold. */}
+          {/* Deliberately short — headline, subhead, one CTA. The argument is the stage
+              directly below, and a full-height hero would put it under the fold. */}
           <section className={styles.hero}>
             <h1 className={styles.title}>{t('hero')}</h1>
             <p className={styles.subhead}>{t('subhead')}</p>
@@ -60,14 +60,15 @@ export default function Home() {
               <Link href="/register" className={styles.cta}>
                 {t('cta')}
               </Link>
-              <p className={styles.note}>{t('ctaNote')}</p>
-              <Link href="/sign-in" className={styles.secondary}>
-                {t('signIn')}
-              </Link>
             </div>
           </section>
 
-          <DemoInterview />
+          <section className={styles.demoSection} aria-labelledby="how-it-works-title">
+            <h2 id="how-it-works-title" className={styles.demoSectionTitle}>
+              {t('howItWorks')}
+            </h2>
+            <DemoInterview />
+          </section>
 
           {/* ---------------------------------------------- how the questions get written */}
           <section className={styles.band} aria-labelledby="mechanism-title">

@@ -40,6 +40,7 @@
 
 .wordmark:focus-visible,
 .navLink:focus-visible,
+.navCta:focus-visible,
 .footerLink:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -66,6 +67,25 @@
 
 .navLink:hover {
   color: var(--text);
+}
+
+/* Bordered, not `--primary`: the landing hero already carries the surface's one CTA fill
+   (DESIGN §2 rule 1), so this door-in reads as an action without a second orange fighting it. */
+.navCta {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-button);
+  transition: background-color var(--duration-default) var(--easing-default);
+}
+
+.navCta:hover {
+  background: var(--surface-sunken);
 }
 
 /* ------------------------------------------------------------------ footer */

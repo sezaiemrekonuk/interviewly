@@ -19,9 +19,8 @@
   "landing": {
     "hero": "Gerçeğinden önce mülakata hazırlan",
     "subhead": "İki mülakatçı, kendi ilanından yazılmış sorular ve her cevaba gerekçeli bir puan.",
-    "cta": "Hesap oluştur",
-    "ctaNote": "Ön izleme boyunca ücretsiz. Kart yok.",
-    "signIn": "Hesabın var mı? Giriş yap",
+    "cta": "Mülakata Başla",
+    "howItWorks": "Nasıl çalışır",
     "demo": {
       "title": "Sandalyeye otur",
       "lede": "Önce Ada sorar, sonra Turing. Vereceğin cevabı seç, puanlanışını izle. Hesap gerekmez, hiçbir şey kaydedilmez.",
@@ -859,6 +858,8 @@
   "nav": {
     "label": "Interviewly",
     "today": "Bugün",
+    "tryNow": "Hemen dene",
+    "signIn": "Giriş yap",
     "interviews": "Mülakatlar",
     "new": "Yeni mülakat",
     "profile": "Profil",
