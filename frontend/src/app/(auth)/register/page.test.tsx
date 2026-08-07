@@ -60,10 +60,13 @@ describe('register page', () => {
     const [url, init] = formCalls(fetchSpy)[0];
     expect(url).toBe('/api/auth/register');
     expect(init?.method).toBe('POST');
+    // `locale` is the form's own language (issue 76) — the verification mail is queued inside
+    // this request, so the choice has to travel with it rather than wait for the switcher.
     expect(JSON.parse(init?.body as string)).toEqual({
       email: 'someone@example.com',
       password: 'correct-horse',
       consent: true,
+      locale: 'en',
     });
   });
 

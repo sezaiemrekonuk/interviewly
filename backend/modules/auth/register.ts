@@ -8,15 +8,21 @@ import { logger } from '../../src/lib/logger';
 import { issueSessionForUser } from '../../src/lib/session';
 
 import { consentFields } from './consent';
+import { localeSchema } from './locale';
 import { publicUser } from './user-view';
 import { sendVerificationMail } from './verify-email';
 
 // `consent` is its own boolean rather than `z.literal(true)`: an unticked box is a distinct,
 // fixable refusal (CONSENT_REQUIRED), not the generic VALIDATION_ERROR a malformed body gets.
+//
+// `locale` is optional because the verification mail goes out inside this handler (issue 76):
+// waiting for the account to reach the switcher would send the one mail that gets a Turkish
+// visitor into their account in English. Absent, the column keeps its "en" default.
 const schema = z.object({
   email: z.string().email(),
   password: z.string(),
   consent: z.boolean().optional(),
+  locale: localeSchema.optional(),
 });
 
 export const register: RequestHandler = async (req, res) => {
@@ -30,7 +36,14 @@ export const register: RequestHandler = async (req, res) => {
 
   const password_hash = await hash(parsed.data.password);
   const user = await prisma.user
-    .create({ data: { email_lower, password_hash, ...consentFields() } })
+    .create({
+      data: {
+        email_lower,
+        password_hash,
+        ...consentFields(),
+        ...(parsed.data.locale ? { locale: parsed.data.locale } : {}),
+      },
+    })
     .catch((err) => {
       if ((err as { code?: string } | null)?.code === 'P2002') throw new ApiError('EMAIL_TAKEN');
       throw err;

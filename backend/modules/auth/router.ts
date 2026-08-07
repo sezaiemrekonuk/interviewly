@@ -6,6 +6,7 @@ import { authCapabilities } from './capabilities';
 import { requireAuth } from './middleware';
 import { loginLimiter, passwordResetLimiter, profilePatchLimiter, registerLimiter } from './rate-limit';
 import deleteMe from './delete-account';
+import { patchMyLocale } from './locale';
 import login from './login';
 import logout from './logout';
 import me from './me';
@@ -56,6 +57,10 @@ meRouter.get('/me', requireAuth, me);
 meRouter.get('/me/profile', requireAuth, getMyProfile);
 meRouter.patch('/me/profile', requireAuth, profilePatchLimiter, patchMyProfile);
 meRouter.post('/me/profile/complete', requireAuth, completeOnboarding);
+// Issue 76 — the account's language, for the surfaces the browser does not render (mail and
+// the interview). Shares `profilePatchLimiter`'s per-user budget: both are small authenticated
+// writes to the same row, and a switcher click is orders of magnitude rarer than a card save.
+meRouter.patch('/me/locale', requireAuth, profilePatchLimiter, patchMyLocale);
 // Issue 009 — KVKK/GDPR erasure. Unlimited on purpose: an erasure request is a right, and a
 // rate limit on it is a limit on exercising the right. It is idempotent in effect anyway —
 // the session it needs is revoked by the first call.

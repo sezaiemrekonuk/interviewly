@@ -206,6 +206,32 @@ export function useSignOut(): UseMutationResult<void, ApiError, void> {
   });
 }
 
+/**
+ * `PATCH /me/locale` (issue 76) — persists the switcher's choice on the account, which is
+ * where the mail worker and the interview generator read the language from. The cookie alone
+ * only ever reached UI copy.
+ *
+ * A refusal is deliberately not surfaced: the switcher has to keep working for a visitor with
+ * no session, and `UNAUTHENTICATED` there means "no row to write", not something they can act
+ * on. The cookie has already switched the interface by the time this resolves either way.
+ */
+export function useSaveLocale(): UseMutationResult<boolean, ApiError, string> {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (locale: string) => {
+      const result = await apiPatch('/me/locale', { locale });
+      if (!result.ok) {
+        if (result.code === 'UNAUTHENTICATED') return false;
+        throw new ApiError(result.code ?? 'UNKNOWN');
+      }
+      return true;
+    },
+    onSuccess: (saved) => {
+      if (saved) void client.invalidateQueries({ queryKey: queryKeys.me() });
+    },
+  });
+}
+
 /** `enabled=false` while `useRequireAuth` is still resolving — an anonymous 401 here is noise. */
 export function useProfile(enabled = true): UseQueryResult<ProfileResponse, ApiError> {
   return useQuery({
