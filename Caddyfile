@@ -17,6 +17,9 @@ http://localhost {
         rewrite * /{$S3_BUCKET:interviewly}{uri}
         reverse_proxy bucket:9000
     }
+    handle /{$S3_BUCKET:interviewly}/* {
+        reverse_proxy bucket:9000
+    }
     handle {
         reverse_proxy web:3000
     }

@@ -33,6 +33,13 @@ const s3 = new S3Client({
   credentials: { accessKeyId: config.S3_ACCESS_KEY, secretAccessKey: config.S3_SECRET_KEY },
 });
 
+const s3Public = new S3Client({
+  endpoint: config.PUBLIC_ORIGIN,
+  region: process.env.S3_REGION ?? 'us-east-1',
+  forcePathStyle: true,
+  credentials: { accessKeyId: config.S3_ACCESS_KEY, secretAccessKey: config.S3_SECRET_KEY },
+});
+
 // ponytail: one implementation, so a module-level binding swapped wholesale by `setStorage`
 // beats a DI container. The acceptance ring starts no bucket and replaces it in a Before hook.
 export let storage: Storage = {
@@ -52,7 +59,7 @@ export let storage: Storage = {
   // `signingDate` from the Clock seam, not wall time: the expiry the presigned URL carries is
   // what @AC-6 measures against the fixed clock.
   async signedUrl(key, ttlSeconds) {
-    return getSignedUrl(s3, new GetObjectCommand({ Bucket: config.S3_BUCKET, Key: key }), {
+    return getSignedUrl(s3Public, new GetObjectCommand({ Bucket: config.S3_BUCKET, Key: key }), {
       expiresIn: cappedTtl(ttlSeconds),
       signingDate: clock.now(),
     });
