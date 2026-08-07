@@ -66,8 +66,21 @@ describe('AppRail', () => {
       expect(details.contains(item)).toBe(true);
     }
     expect(details.contains(screen.getByRole('button', { name: messages.nav.signOut }))).toBe(true);
-    // On a shared handset "which account am I in" is the first thing the menu has to answer.
-    expect(details.contains(screen.getByText(USER.email))).toBe(true);
+    // On a shared handset "which account am I in" is the first thing the menu has to answer —
+    // the local part of the address, since this fixture has no `fullName` (§3.3 card 1). It
+    // now appears twice: on the always-visible trigger, and again inside the open panel.
+    for (const node of screen.getAllByText('admin')) {
+      expect(details.contains(node)).toBe(true);
+    }
+  });
+
+  it('shows the full name instead of the address when card 1 has one', () => {
+    const { details } = railFor('/dashboard', { ...USER, fullName: 'Ada Lovelace' });
+
+    for (const node of screen.getAllByText('Ada Lovelace')) {
+      expect(details.contains(node)).toBe(true);
+    }
+    expect(screen.queryByText('admin')).toBeNull();
   });
 
   it('starts closed and opens from the monogram alone, with no script of ours', async () => {
@@ -78,6 +91,26 @@ describe('AppRail', () => {
     expect(details.open).toBe(true);
     await userEvent.click(summary);
     expect(details.open).toBe(false);
+  });
+
+  it('closes on a click outside the panel', async () => {
+    const { details, summary } = railFor('/dashboard');
+
+    await userEvent.click(summary);
+    expect(details.open).toBe(true);
+
+    await userEvent.click(document.body);
+    expect(details.open).toBe(false);
+  });
+
+  it('stays open for a click inside the panel, on a nav link', async () => {
+    const { details, summary } = railFor('/dashboard');
+
+    await userEvent.click(summary);
+    // A real click on the link navigates (jsdom doesn't follow it), which is enough to prove
+    // the outside-click handler didn't fire first and close the panel out from under it.
+    await userEvent.click(screen.getByRole('link', { name: messages.nav.profile }));
+    expect(details.open).toBe(true);
   });
 
   it('names the disclosure, since the monogram inside it is decorative', () => {

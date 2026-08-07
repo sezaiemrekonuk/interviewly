@@ -63,7 +63,7 @@ export default function Home() {
             </div>
           </section>
 
-          <section className={styles.demoSection} aria-labelledby="how-it-works-title">
+          <section id="demo" className={styles.demoSection} aria-labelledby="how-it-works-title">
             <h2 id="how-it-works-title" className={styles.demoSectionTitle}>
               {t('howItWorks')}
             </h2>
@@ -71,7 +71,7 @@ export default function Home() {
           </section>
 
           {/* ---------------------------------------------- how the questions get written */}
-          <section className={styles.band} aria-labelledby="mechanism-title">
+          <section id="mechanism" className={styles.band} aria-labelledby="mechanism-title">
             <div className={styles.bandHead}>
               <h2 id="mechanism-title" className={styles.bandTitle}>
                 {t('mechanism.title')}
@@ -93,7 +93,7 @@ export default function Home() {
           </section>
 
           {/* ------------------------------------------------------------ voice, or text */}
-          <section className={styles.band} aria-labelledby="modes-title">
+          <section id="modes" className={styles.band} aria-labelledby="modes-title">
             <div className={styles.bandHead}>
               <h2 id="modes-title" className={styles.bandTitle}>
                 {t('modes.title')}
@@ -126,7 +126,7 @@ export default function Home() {
           </section>
 
           {/* --------------------------------------------------- what the report contains */}
-          <section className={styles.band} aria-labelledby="report-title">
+          <section id="report" className={styles.band} aria-labelledby="report-title">
             <div className={styles.bandHead}>
               <h2 id="report-title" className={styles.bandTitle}>
                 {t('report.title')}
@@ -170,7 +170,7 @@ export default function Home() {
           </section>
 
           {/* ------------------------------------------------------------------------ faq */}
-          <section className={styles.band} aria-labelledby="faq-title">
+          <section id="faq" className={styles.band} aria-labelledby="faq-title">
             <div className={styles.bandHead}>
               <h2 id="faq-title" className={styles.bandTitle}>
                 {t('faq.title')}

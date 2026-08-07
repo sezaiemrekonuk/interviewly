@@ -2,12 +2,16 @@
 
 import { useTranslations } from 'next-intl';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 import { apiGet } from '../../lib/api';
 import { DEFAULT_LANDING_PATH } from '../../lib/auth-redirect';
 
 import styles from './chrome.module.css';
+
+/** In document order, so the header reads the same sequence a visitor scrolls through. */
+const SECTIONS = ['demo', 'mechanism', 'modes', 'report', 'faq'] as const;
 
 /**
  * The authenticated half of the site header, which now renders on exactly three routes: the
@@ -24,9 +28,14 @@ import styles from './chrome.module.css';
  * are there. Signed out, the header instead offers the two doors in: sign in, and a bordered
  * "try now" — bordered rather than `--primary` because the landing hero already spends the
  * page's one CTA colour above the fold (DESIGN §2 rule 1).
+ *
+ * The section anchors are landing-only (plain `#id` links, no JS scroll library — the
+ * platform's own anchor scrolling plus `scroll-behavior: smooth` in `globals.css` does this),
+ * so they are gated on the route rather than shown everywhere the header itself renders.
  */
 export function HeaderNav() {
   const t = useTranslations('nav');
+  const pathname = usePathname();
   const [signedIn, setSignedIn] = useState(false);
 
   useEffect(() => {
@@ -39,9 +48,21 @@ export function HeaderNav() {
     };
   }, []);
 
+  const sectionLinks =
+    pathname === '/' ? (
+      <>
+        {SECTIONS.map((key) => (
+          <Link key={key} href={`#${key}`} className={styles.navLink}>
+            {t(`sections.${key}`)}
+          </Link>
+        ))}
+      </>
+    ) : null;
+
   if (!signedIn) {
     return (
       <>
+        {sectionLinks}
         <Link href="/sign-in" className={styles.navLink}>
           {t('signIn')}
         </Link>
@@ -53,8 +74,11 @@ export function HeaderNav() {
   }
 
   return (
-    <Link href={DEFAULT_LANDING_PATH} className={styles.navLink}>
-      {t('today')}
-    </Link>
+    <>
+      {sectionLinks}
+      <Link href={DEFAULT_LANDING_PATH} className={styles.navLink}>
+        {t('today')}
+      </Link>
+    </>
   );
 }

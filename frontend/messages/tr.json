@@ -860,6 +860,13 @@
     "today": "Bugün",
     "tryNow": "Hemen dene",
     "signIn": "Giriş yap",
+    "sections": {
+      "demo": "Demo",
+      "mechanism": "Nasıl çalışır",
+      "modes": "Modlar",
+      "report": "Rapor",
+      "faq": "SSS"
+    },
     "interviews": "Mülakatlar",
     "new": "Yeni mülakat",
     "profile": "Profil",

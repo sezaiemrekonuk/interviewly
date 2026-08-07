@@ -860,6 +860,13 @@
     "today": "Today",
     "tryNow": "Try now",
     "signIn": "Sign in",
+    "sections": {
+      "demo": "Demo",
+      "mechanism": "How it works",
+      "modes": "Modes",
+      "report": "Report",
+      "faq": "FAQ"
+    },
     "interviews": "Interviews",
     "new": "New interview",
     "profile": "Profile",

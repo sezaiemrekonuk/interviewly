@@ -51,32 +51,105 @@
 
 /* ------------------------------------------------------------------------------- account */
 
-/* A native <details>. On the rail proper it is not a disclosure at all: the summary is removed
-   and the panel is forced open, which is the flat column this has always been. The widget only
-   becomes a widget in the top bar below, where the row has no space for six more items. */
+/* A native <details>, at every width. Everything the account owns — identity, its three
+   surfaces, sign-out — lives behind one click on the monogram rather than as a permanently
+   visible block eating rail height; a screen open to a long report doesn't need Profile and
+   Settings competing with the nav for attention on every glance down at the rail. */
 .account {
+  position: relative;
   margin-block-start: auto;
   padding-block-start: 16px;
   border-block-start: 1px solid var(--rail-border);
 }
 
-/* Engines hide a closed <details> two different ways and both have to be beaten here: the
-   modern `::details-content` pseudo (content-visibility), and — in builds that predate it —
-   `display: none` on the children themselves, which the author rule on `.panel` outranks
-   whatever its specificity. Neither line is decoration; drop either and older or newer
-   browsers lose the whole account block on the desktop rail. */
-.account::details-content {
-  content-visibility: visible;
+/* The whole row is the target, not just the 28px chip: a name beside the monogram means
+   something to click on, and the raised background on hover — not only on `.summaryOn` — is
+   what tells a user before the first click that this area does anything at all. Below 60rem
+   there is no room for the name in the top bar, so `.summaryName` folds away there and the
+   trigger goes back to being the 44px square alone. */
+.summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 4px;
+  border-radius: var(--radius-button);
+  cursor: pointer;
+  list-style: none;
+  transition: background-color var(--duration-default) var(--easing-default);
 }
 
-.summary {
+.summary:hover {
+  background: var(--rail-raised);
+}
+
+.summary::-webkit-details-marker {
   display: none;
 }
 
+.summaryName {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--rail-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Something inside is the current page. Same raised block the nav uses for "you are here", so
+   the product still has one idea of it; the `aria-label` carries the same fact in words. */
+.summaryOn,
+.summaryOn:hover {
+  background: var(--rail-raised);
+}
+
+.summaryOn .summaryName {
+  font-weight: 600;
+  color: var(--rail-text);
+}
+
+/* Closed by default on every engine — no `::details-content` override forcing it open. Opened
+   by the `open` attribute alone, no script of ours. */
 .panel {
+  position: absolute;
+  z-index: 1;
+  display: none;
+  min-width: 200px;
+  padding: 8px;
+  background: var(--rail);
+  border: 1px solid var(--rail-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-soft);
+}
+
+.account[open] .panel {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  animation: accountPanelIn var(--duration-default) var(--easing-default);
+}
+
+/* Above the mobile breakpoint the rail is a column and the trigger sits near the bottom of
+   the viewport (`.rail` is now viewport-pinned, see shell.module.css) — a panel opening
+   downward there would run off-screen, so it opens upward from the monogram instead. */
+@media (width > 60rem) {
+  .panel {
+    inset-block-end: calc(100% + 8px);
+    inset-inline-start: 0;
+    transform-origin: bottom left;
+  }
+}
+
+@keyframes accountPanelIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .identity {
@@ -103,7 +176,7 @@
   border-radius: var(--radius-button);
 }
 
-.email {
+.name {
   overflow: hidden;
   font-size: 13px;
   color: var(--rail-text-muted);
@@ -182,7 +255,6 @@
   }
 
   .account {
-    position: relative;
     flex: none;
     margin-block-start: 0;
     margin-inline-start: auto;
@@ -190,46 +262,24 @@
     border-block-start: 0;
   }
 
-  /* The whole 44px square is the target; the 28px chip inside it is only what you see. The
-     default marker goes — a triangle beside a monogram reads as two controls. */
+  /* No room for the name beside the monogram in a top bar already sharing its row with three
+     nav items — the trigger goes back to being the 44px square alone here, same as the closed
+     desktop trigger, just without the name span. */
   .summary {
-    display: grid;
-    place-items: center;
     width: 44px;
-    height: 44px;
-    border-radius: var(--radius-button);
-    cursor: pointer;
-    list-style: none;
+    justify-content: center;
+    padding: 0;
   }
 
-  .summary::-webkit-details-marker {
+  .summaryName {
     display: none;
   }
 
-  /* Something inside is the current page. Same raised block the nav uses for "you are here",
-     so the product still has one idea of it; the `aria-label` carries the same fact in words. */
-  .summaryOn {
-    background: var(--rail-raised);
-  }
-
-  /* `display` rather than the pseudo, because an author `display: none` hides the panel on
-     every engine — including the ones whose `::details-content` this file forces visible for
-     the desktop rail two screens up. */
+  /* The trigger sits in the top bar here, so the panel opens downward beneath it instead of
+     upward as it does against the viewport-pinned desktop rail. */
   .panel {
-    position: absolute;
     inset-block-start: calc(100% + 8px);
     inset-inline-end: 0;
-    z-index: 1;
-    display: none;
-    min-width: 200px;
-    padding: 8px;
-    background: var(--rail);
-    border: 1px solid var(--rail-border);
-    border-radius: var(--radius-card);
-    box-shadow: var(--shadow-soft);
-  }
-
-  .account[open] .panel {
-    display: flex;
+    transform-origin: top right;
   }
 }

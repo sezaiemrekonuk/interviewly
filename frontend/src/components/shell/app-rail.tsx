@@ -3,6 +3,7 @@
 import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { useEffect, useRef } from 'react';
 
 import { useSignOut } from '../../lib/query';
 import type { SessionUser } from '../../lib/use-require-auth';
@@ -58,12 +59,30 @@ export function AppRail({ user }: { user: SessionUser | null }) {
   const pathname = usePathname();
   const router = useRouter();
   const signOut = useSignOut();
+  const accountRef = useRef<HTMLDetailsElement>(null);
 
-  const monogram = (user?.email ?? '?').slice(0, 1).toLocaleUpperCase(locale);
+  // What identifies the account in the panel and on the monogram: the name from card 1
+  // (§3.3) when it exists, else the address's local part — never the raw address as the
+  // "name", and never a placeholder there is no signal for.
+  const displayName = user?.fullName || (user?.email ?? '?').split('@')[0];
+  const monogram = displayName.slice(0, 1).toLocaleUpperCase(locale);
   const account = ACCOUNT.filter((item) => !('adminOnly' in item) || user?.role === 'admin');
   // Which account surface, if any, the user is looking at. Below 60rem these live behind the
   // monogram, so this is also what the closed disclosure has to announce.
   const here = account.find((item) => pathname === item.href);
+
+  // The one bit of script `<details>` doesn't give for free: a click anywhere outside the
+  // panel closes it, the way every other menu on the platform behaves. `mousedown` rather than
+  // `click` so this fires before a click *inside* the panel (e.g. a nav Link) triggers its own
+  // navigation — closing on the trailing `click` there would race the route change.
+  useEffect(() => {
+    function onPointerDown(event: PointerEvent) {
+      const node = accountRef.current;
+      if (node?.open && !node.contains(event.target as Node)) node.open = false;
+    }
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, []);
 
   async function endSession() {
     await signOut.mutateAsync();
@@ -96,18 +115,15 @@ export function AppRail({ user }: { user: SessionUser | null }) {
         })}
       </nav>
 
-      {/* The account, at the foot: who is signed in, the surfaces that belong to them, and the
-          way out. On the rail proper it is a flat list — the column has the room, and a menu
-          would hide the one control whose absence was the defect.
-
-          Below 60rem the rail is a top bar and there is no room: eight permanently-visible
-          items wrapped into three stacked rows and ate a fifth of a 390×844 phone before any
-          content. So the account collapses behind the monogram there, as a native <details>.
-          The platform's own disclosure is keyboard-complete with no JS, no focus trap and no
-          outside-click listener to leak, and the landing FAQ already uses one. Above 60rem
-          `app-rail.module.css` removes the summary and forces the panel open, so the desktop
-          rail is unchanged and its summary is not in the tab order or the a11y tree. */}
-      <details className={styles.account}>
+      {/* The account, behind one click on the monogram at every width: who is signed in, the
+          surfaces that belong to them, and the way out. A native <details> — keyboard-complete
+          with no focus trap. `app-rail.module.css` opens the panel downward under the top
+          bar's trigger below 60rem, and upward from the viewport-pinned desktop rail above it,
+          with a short scale-and-fade so the reveal isn't a hard cut. The one behaviour the
+          element doesn't give for free — closing on an outside click — is the `pointerdown`
+          listener above; everything else here is still markup, no focus trap and no state of
+          our own to get out of sync with `open`. */}
+      <details className={styles.account} ref={accountRef}>
         <summary
           className={cx(styles.summary, here && styles.summaryOn)}
           // The monogram is decorative, so without this the toggle has no name at all. When
@@ -118,17 +134,25 @@ export function AppRail({ user }: { user: SessionUser | null }) {
           <span className={styles.monogram} aria-hidden="true">
             {monogram}
           </span>
+          {/* Visible, not just in the `aria-label`: closed, this is the only place on the rail
+              that says who is signed in. `.summaryName` folds away below 60rem, where the
+              top bar has no room for it beside the three nav items. */}
+          <span className={styles.summaryName} aria-hidden="true">
+            {displayName}
+          </span>
         </summary>
 
         <div className={styles.panel}>
-          {/* The address is hidden beside the monogram on a phone but not lost: on a shared
-              handset "which account am I in" is the first question the menu has to answer. */}
+          {/* The name from card 1, or the address's local part when no card was filled: on a
+              shared handset "which account am I in" is the first question the menu has to
+              answer, and a raw address is a worse answer to it than a name would be. The full
+              address is still one hover away via the title. */}
           <div className={styles.identity}>
             <span className={styles.monogram} aria-hidden="true">
               {monogram}
             </span>
-            <span className={styles.email} title={user?.email}>
-              {user?.email}
+            <span className={styles.name} title={user?.email}>
+              {displayName}
             </span>
           </div>
 
