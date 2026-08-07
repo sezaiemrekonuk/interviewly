@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
+import { AuthShell } from '../../../components/auth/auth-shell';
 import styles from '../../../components/auth/auth.module.css';
 import { CredentialsForm, registerSchema } from '../../../components/auth/credentials-form';
 import { GoogleButton } from '../../../components/auth/google-button';
@@ -28,10 +29,7 @@ export default function RegisterPage() {
   const [consented, setConsented] = useState(false);
 
   return (
-    <section className={styles.card}>
-      <h1 className={styles.title}>{t('registerTitle')}</h1>
-      <p className={styles.subtitle}>{t('registerSubtitle')}</p>
-
+    <AuthShell rail="Register" title={t('registerTitle')} subtitle={t('registerSubtitle')}>
       <CredentialsForm
         endpoint="/auth/register"
         schema={registerSchema}
@@ -78,6 +76,6 @@ export default function RegisterPage() {
           {t('signIn')}
         </Link>
       </p>
-    </section>
+    </AuthShell>
   );
 }

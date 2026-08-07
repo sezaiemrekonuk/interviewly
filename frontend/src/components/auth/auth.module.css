@@ -1,32 +1,97 @@
 /*
- * Auth cards. Every value comes from the token registry — no literal hex, radius or
- * duration — and is authored in px so the token lint can see it (DESIGN §2, rule 8).
- * The controls themselves live in `components/ui`; what is left here is the card, its
- * heading pair, and the things that sit around the form.
+ * Auth wears the same split shell as every other screen (DESIGN §03): the rail makes the
+ * product's argument to someone who has never seen it, the working surface holds one form.
+ * No card, no gradient ground, no centred float — an entry screen is not a special case.
+ *
+ * Every value comes from the token registry — no literal hex, radius or duration — and is
+ * authored in px so the token lint can see it (DESIGN §2, rule 8).
  */
 
-.card {
+/* ------------------------------------------------- rail */
+
+/* `fit-content`, so the focus ring is the wordmark's shape and not the rail's width. */
+.markLink {
+  display: block;
+  width: fit-content;
+  border-radius: var(--radius-input);
+}
+
+.markLink:focus-visible {
+  outline: 2px solid var(--rail-text);
+  outline-offset: 2px;
+}
+
+/* Two `margin-top: auto` in one column split the free space: the argument sits low against
+   the wordmark, the closing line is pinned to the floor. */
+.railLede {
+  margin-top: auto;
+  font-family: var(--font-heading), Georgia, serif;
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+  color: var(--rail-text);
+}
+
+.railBody {
+  max-width: 34ch;
+  margin-top: 16px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--rail-text-muted);
+}
+
+.railFoot {
+  margin-top: auto;
+  padding-top: 28px;
+  font-size: 13px;
+  color: var(--rail-text-faint);
+}
+
+/* The rail turns into a bar under 60rem (shell.module.css). Three stacked paragraphs do not
+   fit a bar, and the two quiet ones are the first to go — the argument survives. */
+@media (max-width: 60rem) {
+  .railLede {
+    margin-top: 0;
+    font-size: 16px;
+  }
+
+  .railBody,
+  .railFoot {
+    display: none;
+  }
+}
+
+/* ------------------------------------------------- working surface */
+
+.center {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+}
+
+/* A credentials form is a short single column: wider than this and the fields start to read
+   as a table of two rows. */
+.column {
   width: 100%;
-  /* A credentials form is a short single column: narrower than the 480px entry panel. */
-  max-width: 416px;
-  padding: 32px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-card);
-  box-shadow: var(--shadow-soft);
+  max-width: 400px;
 }
 
 .title {
-  font-family: var(--font-heading), sans-serif;
+  font-family: var(--font-heading), Georgia, serif;
   font-size: 28px;
   font-weight: 600;
+  letter-spacing: -0.015em;
   color: var(--text);
 }
 
 .subtitle {
-  max-width: 65ch;
+  max-width: 60ch;
   margin-top: 8px;
-  font-size: 16px;
+  font-size: 14px;
+  line-height: 1.5;
   color: var(--text-muted);
 }
 
@@ -37,10 +102,16 @@
   margin-top: 24px;
 }
 
-/* The card's single CTA runs the full column — there is nothing to sit beside it. */
+/* The column's single CTA runs its full width — there is nothing to sit beside it. */
 .submit {
   width: 100%;
   margin-top: 4px;
+}
+
+/* A button that is the whole subject of the screen rather than the end of a form (the
+   verify-email resend) carries the gap the form would otherwise have given it. */
+.actions {
+  margin-top: 24px;
 }
 
 .banner {
@@ -97,14 +168,19 @@
   outline-offset: 2px;
 }
 
+/* Left-aligned with the form, not centred under it: the column has one edge and everything
+   in it hangs off that edge. */
 .footer {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  justify-content: center;
   margin-top: 20px;
-  font-size: 14px;
+  font-size: 13px;
   color: var(--text-muted);
+}
+
+.footerSep {
+  color: var(--border);
 }
 
 .footerLink {
@@ -124,8 +200,7 @@
 
 /* ------------------------------------------------- consent (issue 009) */
 
-/* Sits inside the form, directly above the submit, so it is read before it is answered.
-   px, not rem: the rest of this file is legacy (DESIGN §2 hard rule 8). */
+/* Sits inside the form, directly above the submit, so it is read before it is answered. */
 .consent {
   display: flex;
   flex-direction: column;

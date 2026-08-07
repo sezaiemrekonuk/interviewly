@@ -1,4 +1,4 @@
-import { act, screen, waitFor, type RenderResult } from '@testing-library/react';
+import { act, screen, waitFor, within, type RenderResult } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -99,7 +99,7 @@ async function renderPage(): Promise<RenderResult> {
   return result;
 }
 
-describe('profile page', () => {
+describe('/profile — what the interviewer knows about you', () => {
   beforeEach(() => {
     nav.push.mockReset();
     nav.replace.mockReset();
@@ -127,215 +127,104 @@ describe('profile page', () => {
     );
   });
 
-  it('renders the stored values of every card', async () => {
+  // Four tabs replaced by four sections: the whole answer to "what have I filled in" is on
+  // screen at once instead of two thirds of it being one arrow key away.
+  it('shows every section at once, each naming what it changes', async () => {
     stubFetch();
     await renderPage();
 
-    const user = userEvent.setup();
+    for (const section of ['identity', 'cv', 'education', 'interests'] as const) {
+      expect(
+        await screen.findByRole('heading', { name: messages.profile[section].title }),
+      ).toBeInTheDocument();
+      expect(screen.getByText(messages.profile[section].effect)).toBeInTheDocument();
+    }
+    expect(screen.queryByRole('tablist')).toBeNull();
+  });
 
-    expect(await screen.findByLabelText(messages.fields.fullNameLabel)).toHaveValue(
-      'Ada Lovelace',
-    );
-    expect(screen.getByLabelText(messages.fields.jobTitleLabel)).toHaveValue('Analyst');
+  it('renders the stored values without needing a tab opened first', async () => {
+    stubFetch();
+    await renderPage();
 
-    // Education reads as saved entries, not as open inputs — the form is behind Edit.
-    await user.click(screen.getByRole('tab', { name: new RegExp(messages.profile.tabs.education) }));
+    expect(await screen.findByDisplayValue('Ada Lovelace')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Analyst')).toBeInTheDocument();
     expect(screen.getByText('Cambridge')).toBeInTheDocument();
-    expect(screen.getByText('BSc, Mathematics')).toBeInTheDocument();
-    expect(screen.getByText('2015 – 2018')).toBeInTheDocument();
-    expect(screen.queryByLabelText(messages.fields.schoolLabel)).toBeNull();
-
-    await user.click(screen.getByRole('tab', { name: new RegExp(messages.profile.tabs.interests) }));
-    expect(screen.getByLabelText(messages.fields.interestsLabel)).toHaveValue(
-      'Analytical engines',
-    );
+    expect(screen.getByDisplayValue('Analytical engines')).toBeInTheDocument();
   });
 
-  // The A06 non-negotiable, from the edit surface: card 2's PATCH carries card 2 and nothing
-  // else, so saving education cannot take the name or the interests down with it.
-  it('saves one card without erasing the others, and the value survives a reload', async () => {
-    const stub = stubFetch();
+  it('saves the identity card and reports the outcome', async () => {
+    const { calls } = stubFetch();
     await renderPage();
 
-    const user = userEvent.setup();
-    await user.click(
-      await screen.findByRole('tab', { name: new RegExp(messages.profile.tabs.education) }),
-    );
-    // Confirming an entry is the save — the tab has no Save button of its own.
-    await user.click(screen.getByRole('button', { name: /Edit Cambridge/ }));
-    await user.clear(screen.getByLabelText(new RegExp(messages.fields.schoolLabel)));
-    await user.type(screen.getByLabelText(new RegExp(messages.fields.schoolLabel)), 'Oxford');
-    await user.click(screen.getByRole('button', { name: messages.fields.entrySave }));
+    const jobTitle = await screen.findByDisplayValue('Analyst');
+    await act(async () => {
+      await userEvent.clear(jobTitle);
+      await userEvent.type(jobTitle, 'Data lead');
+    });
+
+    const saves = screen.getAllByRole('button', { name: messages.profile.save });
+    await act(async () => {
+      await userEvent.click(saves[0]);
+    });
 
     await waitFor(() =>
-      expect(screen.getByRole('status')).toHaveTextContent(messages.profile.saved),
+      expect(
+        calls.some(
+          (c) =>
+            c.method === 'PATCH' &&
+            (c.body as { step: number; fields: { jobTitle: string } }).step === 1 &&
+            (c.body as { fields: { jobTitle: string } }).fields.jobTitle === 'Data lead',
+        ),
+      ).toBe(true),
     );
-
-    const patch = stub.calls.find((call) => call.method === 'PATCH');
-    expect(patch?.body).toEqual({
-      step: 2,
-      fields: {
-        education: [
-          {
-            school: 'Oxford',
-            degree: 'BSc',
-            field: 'Mathematics',
-            startYear: 2015,
-            endYear: 2018,
-          },
-        ],
-      },
-    });
-
-    // Merge held: the other two cards are still on the server's copy…
-    expect(stub.stored()).toMatchObject({
-      fullName: 'Ada Lovelace',
-      interestsText: 'Analytical engines',
-    });
-    // …and the profile was refetched, so what is on screen is what a reload would show.
-    const gets = stub.calls.filter(
-      (call) => call.url === '/api/me/profile' && call.method === 'GET',
-    );
-    expect(gets.length).toBeGreaterThan(1);
+    expect(await screen.findByText(messages.profile.saved)).toBeInTheDocument();
   });
 
-  it('clears a field by saving it empty', async () => {
-    const stub = stubFetch();
-    await renderPage();
-
-    const user = userEvent.setup();
-    await user.clear(await screen.findByLabelText(messages.fields.jobTitleLabel));
-    await user.click(screen.getByRole('button', { name: messages.profile.save }));
-
-    await waitFor(() => expect(stub.calls.some((call) => call.method === 'PATCH')).toBe(true));
-    const patch = stub.calls.find((call) => call.method === 'PATCH');
-    expect((patch?.body as { fields: { jobTitle: string } }).fields.jobTitle).toBe('');
-  });
-
-  // School is the only required field, so this is the one entry the form refuses.
-  it('refuses an entry with no school and never sends it', async () => {
-    const stub = stubFetch();
-    await renderPage();
-
-    const user = userEvent.setup();
-    await user.click(
-      await screen.findByRole('tab', { name: new RegExp(messages.profile.tabs.education) }),
-    );
-    await user.click(screen.getByRole('button', { name: messages.fields.addEducationRow }));
-    await user.type(screen.getByLabelText(messages.fields.degreeLabel), 'MSc');
-    await user.click(screen.getByRole('button', { name: messages.fields.entrySave }));
-
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      messages.fields.educationSchoolRequired,
-    );
-    expect(stub.calls.some((call) => call.method === 'PATCH')).toBe(false);
-  });
-
-  it('refuses a start year after the end year', async () => {
-    const stub = stubFetch();
-    await renderPage();
-
-    const user = userEvent.setup();
-    await user.click(
-      await screen.findByRole('tab', { name: new RegExp(messages.profile.tabs.education) }),
-    );
-    await user.click(screen.getByRole('button', { name: messages.fields.addEducationRow }));
-    await user.type(screen.getByLabelText(new RegExp(messages.fields.schoolLabel)), 'Somewhere');
-    await user.type(screen.getByLabelText(messages.fields.startYearLabel), '2020');
-    await user.type(screen.getByLabelText(messages.fields.endYearLabel), '2016');
-    await user.click(screen.getByRole('button', { name: messages.fields.entrySave }));
-
-    expect(await screen.findByRole('alert')).toHaveTextContent(messages.fields.educationYearOrder);
-    expect(stub.calls.some((call) => call.method === 'PATCH')).toBe(false);
-  });
-
-  it('removes an entry in two clicks and saves the shorter list', async () => {
-    const stub = stubFetch();
-    await renderPage();
-
-    const user = userEvent.setup();
-    await user.click(
-      await screen.findByRole('tab', { name: new RegExp(messages.profile.tabs.education) }),
-    );
-    await user.click(screen.getByRole('button', { name: /Remove Cambridge/ }));
-    expect(stub.calls.some((call) => call.method === 'PATCH')).toBe(false);
-
-    await user.click(screen.getByRole('button', { name: messages.fields.removeEntryAction }));
-
-    await waitFor(() => expect(stub.calls.some((call) => call.method === 'PATCH')).toBe(true));
-    expect(stub.calls.find((call) => call.method === 'PATCH')?.body).toEqual({
-      step: 2,
-      fields: { education: [] },
-    });
-  });
-
-  it('keeps the draft and shows the mapped code when a save is refused', async () => {
-    stubFetch({ patchStatus: 429 });
-    await renderPage();
-
-    const user = userEvent.setup();
-    await user.type(await screen.findByLabelText(messages.fields.fullNameLabel), '!');
-    await user.click(screen.getByRole('button', { name: messages.profile.save }));
-
-    const banner = await screen.findByRole('alert');
-    expect(banner).toHaveTextContent(messages.profile.saveFailed);
-    expect(banner).toHaveTextContent(messages.errors.RATE_LIMITED);
-    expect(screen.queryByText(/RATE_LIMITED/)).toBeNull();
-    expect(screen.getByLabelText(messages.fields.fullNameLabel)).toHaveValue('Ada Lovelace!');
-  });
-
-  it('adds and removes a hobby without touching the interests text', async () => {
-    const stub = stubFetch();
-    await renderPage();
-
-    const user = userEvent.setup();
-    await user.click(
-      await screen.findByRole('tab', { name: new RegExp(messages.profile.tabs.interests) }),
-    );
-    await user.type(screen.getByLabelText(messages.fields.hobbiesLabel), 'chess{Enter}');
-    await user.click(screen.getByRole('button', { name: messages.profile.save }));
-
-    await waitFor(() => expect(stub.calls.some((call) => call.method === 'PATCH')).toBe(true));
-    expect(stub.calls.find((call) => call.method === 'PATCH')?.body).toEqual({
-      step: 3,
-      fields: { hobbies: ['chess'], interestsText: 'Analytical engines' },
-    });
-  });
-
-  // Issue 009 (KVKK Art. 7 / GDPR Art. 17). It sits below the tabs, not in one: the rail is
-  // arrow-key navigable and every other panel ends in a Save.
-  it('erases the account behind a confirm and reloads onto the anonymous landing', async () => {
-    const stub = stubFetch();
-    const assign = vi.fn();
-    vi.stubGlobal('location', { ...window.location, assign });
-    await renderPage();
-
-    const user = userEvent.setup();
-    await user.click(
-      await screen.findByRole('button', { name: messages.profile.deleteAccountAction }),
-    );
-    // Confirm first: one click never destroys an account.
-    expect(stub.calls.every((c) => !(c.method === 'DELETE' && c.url === '/api/me'))).toBe(true);
-
-    await user.click(
-      screen.getByRole('button', { name: messages.profile.deleteAccountConfirmAction }),
-    );
-
-    await waitFor(() =>
-      expect(stub.calls.some((c) => c.method === 'DELETE' && c.url === '/api/me')).toBe(true),
-    );
-    // A full navigation, not a client-side one: HomeSwitch probes `/me` once, on mount.
-    await waitFor(() => expect(assign).toHaveBeenCalledWith('/'));
-  });
-
-  it('offers no Save on the CV tab — the upload is the write', async () => {
+  // The complaint that started this: erasure rendered outside the tabpanel, so it was on all
+  // four cards at once, at the foot of a screen about CVs and hobbies.
+  it('offers no account erasure anywhere on the profile', async () => {
     stubFetch();
     await renderPage();
 
-    const user = userEvent.setup();
-    await user.click(await screen.findByRole('tab', { name: new RegExp(messages.profile.tabs.cv) }));
+    await screen.findByDisplayValue('Ada Lovelace');
+    expect(screen.queryByTestId('delete-account')).toBeNull();
+  });
 
-    expect(screen.getByLabelText(messages.fields.cvLabel)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: messages.profile.save })).toBeNull();
+  // Account state belongs with the account. Verification used to sit in the dark nav rail on
+  // a different material, forty pixels from the address it describes; both are on /settings
+  // now, on one row. The rail still names who is signed in — that is wayfinding, not a field.
+  it('carries no verification state on the working surface', async () => {
+    stubFetch();
+    await renderPage();
+
+    await screen.findByDisplayValue('Ada Lovelace');
+    const work = screen.getByRole('main');
+    expect(within(work).queryByText('ada@example.com')).toBeNull();
+    expect(screen.queryByRole('link', { name: /verify/i })).toBeNull();
+  });
+
+  // The old meter ran on hardcoded weights and printed a percentage — editorial opinion in the
+  // costume of a measurement. A count is a fact; the ranking is a sentence we can defend.
+  it('counts the filled inputs instead of inventing a percentage', async () => {
+    // Name, role, education and interests are stored; the CV is not.
+    stubFetch();
+    await renderPage();
+
+    expect(await screen.findByText('4 of 5 inputs filled in.')).toBeInTheDocument();
+    expect(screen.getByText(/CV changes the questions more/)).toBeInTheDocument();
+    expect(screen.queryByText(/%/)).toBeNull();
+    // No bar either — the widest orange element in the product was this progress track.
+    expect(screen.queryByRole('progressbar', { hidden: true })).toBeNull();
+  });
+
+  it('reaches settings and sign-out from the rail', async () => {
+    stubFetch();
+    await renderPage();
+
+    expect(await screen.findByRole('link', { name: messages.nav.settings })).toHaveAttribute(
+      'href',
+      '/settings',
+    );
+    expect(screen.getByRole('button', { name: messages.nav.signOut })).toBeInTheDocument();
   });
 });

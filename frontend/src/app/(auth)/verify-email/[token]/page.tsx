@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
 
+import { AuthShell } from '../../../../components/auth/auth-shell';
 import styles from '../../../../components/auth/auth.module.css';
 import { apiPost } from '../../../../lib/api';
 import { firstRunPath } from '../../../../lib/first-run';
@@ -53,31 +54,30 @@ export default function ConfirmVerificationPage() {
     };
   }, [token]);
 
+  // A bare confirm state, in the same shell as the rest of auth: the working surface holds
+  // one sentence, and the rail still says what the visitor has just joined.
   if (outcome.state === 'pending') {
-    return (
-      <section className={styles.card}>
-        <h1 className={styles.title}>{t('verifyConfirming')}</h1>
-      </section>
-    );
+    return <AuthShell rail="Verify" title={t('verifyConfirming')} />;
   }
 
   if (outcome.state === 'ok') {
     return (
-      <section className={styles.card}>
-        <h1 className={styles.title}>{t('verifyConfirmedTitle')}</h1>
-        <p className={styles.subtitle}>{t('verifyConfirmedBody')}</p>
+      <AuthShell
+        rail="Verify"
+        title={t('verifyConfirmedTitle')}
+        subtitle={t('verifyConfirmedBody')}
+      >
         <p className={styles.footer}>
           <Link className={styles.footerLink} href={firstRunPath(outcome.user)}>
             {t('goToDashboard')}
           </Link>
         </p>
-      </section>
+      </AuthShell>
     );
   }
 
   return (
-    <section className={styles.card}>
-      <h1 className={styles.title}>{t('verifyFailedTitle')}</h1>
+    <AuthShell rail="Verify" title={t('verifyFailedTitle')}>
       {/* Expired and invalid are two codes for a reason: only one of them means a fresh
           link will help, and the registry copy is what says so. */}
       <p className={styles.banner} role="alert">
@@ -87,12 +87,13 @@ export default function ConfirmVerificationPage() {
         <Link className={styles.footerLink} href="/verify-email">
           {t('resend')}
         </Link>
-      </p>
-      <p className={styles.footer}>
+        <span className={styles.footerSep} aria-hidden="true">
+          ·
+        </span>
         <Link className={styles.footerLink} href="/sign-in">
           {t('backToSignIn')}
         </Link>
       </p>
-    </section>
+    </AuthShell>
   );
 }

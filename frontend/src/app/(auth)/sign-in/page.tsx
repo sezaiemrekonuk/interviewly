@@ -5,13 +5,14 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Suspense } from 'react';
 
+import { AuthShell } from '../../../components/auth/auth-shell';
 import styles from '../../../components/auth/auth.module.css';
 import { CredentialsForm, loginSchema } from '../../../components/auth/credentials-form';
 import { GoogleButton } from '../../../components/auth/google-button';
 import { safeReturnPath } from '../../../lib/auth-redirect';
 import { firstRunPath } from '../../../lib/first-run';
 
-function SignInCard() {
+function SignIn() {
   const t = useTranslations('auth');
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -23,10 +24,7 @@ function SignInCard() {
   const returnPath = safeReturnPath(explicitReturnPath);
 
   return (
-    <section className={styles.card}>
-      <h1 className={styles.title}>{t('signInTitle')}</h1>
-      <p className={styles.subtitle}>{t('signInSubtitle')}</p>
-
+    <AuthShell rail="SignIn" title={t('signInTitle')} subtitle={t('signInSubtitle')}>
       <CredentialsForm
         endpoint="/auth/login"
         schema={loginSchema}
@@ -39,19 +37,21 @@ function SignInCard() {
 
       <GoogleButton />
 
+      {/* Both ways out of this screen on one line: neither is the subject, and stacking
+          them gave two quiet links the weight of two sections. */}
       <p className={styles.footer}>
         <Link className={styles.footerLink} href="/forgot-password">
           {t('forgotPassword')}
         </Link>
-      </p>
-
-      <p className={styles.footer}>
+        <span className={styles.footerSep} aria-hidden="true">
+          ·
+        </span>
         <span>{t('noAccount')}</span>
         <Link className={styles.footerLink} href="/register">
           {t('register')}
         </Link>
       </p>
-    </section>
+    </AuthShell>
   );
 }
 
@@ -60,7 +60,7 @@ export default function SignInPage() {
   // boundary `next build` refuses to prerender the route at all.
   return (
     <Suspense fallback={null}>
-      <SignInCard />
+      <SignIn />
     </Suspense>
   );
 }

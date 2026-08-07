@@ -1,63 +1,28 @@
 /*
- * Onboarding cards. Entry surface: `--shadow-soft`, `--radius-panel`, gradient ground from
- * the layout. Authored in px so the token lint can actually see these values.
+ * Onboarding, on Direction B's split shell. The card on a gradient is gone: the rail carries
+ * the step and what it is for, and the working surface carries nothing but the fields — so
+ * the flow looks like the product it is the door to, not like a separate marketing surface.
  *
- * Wider than an auth card (480px, not 416px): this form carries a two-column grid, and a
- * credentials-width column is what pushed the education inputs past the padding.
+ * Only the working surface is styled here; the rail's own furniture is `shell.module.css`.
  */
 
-.card {
+.body {
   display: flex;
   flex-direction: column;
-  width: 100%;
-  max-width: 480px;
-  padding: 32px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-panel);
-  box-shadow: var(--shadow-soft);
-}
-
-/* A fixed slot, so the three poses (which are not the same height) never shift the card. */
-.mascotSlot {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 112px;
-  margin-bottom: 20px;
-}
-
-.progress {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-
-.title {
-  margin-top: 8px;
-  font-family: var(--font-heading), sans-serif;
-  font-size: 28px;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.subtitle {
-  max-width: 65ch;
-  margin-top: 8px;
-  font-size: 16px;
-  color: var(--text-muted);
+  gap: 24px;
+  /* A measure, not the full width of the surface: a name input 900px wide reads as a
+     mistake, and the education form is a two-column grid inside this column. */
+  max-width: 640px;
 }
 
 .form {
   display: flex;
   flex-direction: column;
   gap: 20px;
-  margin-top: 24px;
 }
 
 .banner {
   padding: 12px;
-  margin-top: 20px;
   font-size: 14px;
   color: var(--danger);
   background: var(--surface-sunken);
@@ -73,18 +38,24 @@
   display: flex;
   gap: 12px;
   align-items: center;
-  margin-top: 32px;
+  padding-block-start: 24px;
+  border-block-start: 1px solid var(--border);
 }
 
 .skip {
-  margin-left: auto;
+  margin-inline-start: auto;
+}
+
+/* The rail is 240px wide and an address is not: it truncates rather than wrapping to three
+   lines above the fold of a column that has one job. */
+.account {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (width <= 480px) {
-  .card {
-    padding: 24px;
-  }
-
   /* Continue keeps its own row at the bottom rather than shrinking to fit beside two
      text buttons. */
   .actions {

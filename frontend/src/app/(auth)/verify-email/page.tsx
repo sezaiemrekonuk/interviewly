@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 
+import { AuthShell } from '../../../components/auth/auth-shell';
 import styles from '../../../components/auth/auth.module.css';
 import { Button } from '../../../components/ui';
 import { apiPost } from '../../../lib/api';
@@ -62,27 +63,40 @@ export default function VerifyEmailPage() {
     setRemaining((result.payload as Partial<ResendResponse> | null)?.cooldownSeconds ?? 0);
   }
 
-  if (loading) return <p className={styles.subtitle}>{tCommon('loading')}</p>;
+  // The rail is already the truth while the session probe is out, so the wait costs the
+  // working surface only — no blank page, and no heading claimed before it is known which
+  // of the two states this account is in.
+  if (loading) {
+    return (
+      <AuthShell rail="Verify">
+        <p className={styles.subtitle}>{tCommon('loading')}</p>
+      </AuthShell>
+    );
+  }
 
   // Nothing to confirm: an account that arrived through Google is already verified.
   if (user?.emailVerifiedAt) {
     return (
-      <section className={styles.card}>
-        <h1 className={styles.title}>{t('verifyConfirmedTitle')}</h1>
-        <p className={styles.subtitle}>{t('verifyConfirmedBody')}</p>
+      <AuthShell
+        rail="Verify"
+        title={t('verifyConfirmedTitle')}
+        subtitle={t('verifyConfirmedBody')}
+      >
         <p className={styles.footer}>
           <Link className={styles.footerLink} href="/">
             {t('goToDashboard')}
           </Link>
         </p>
-      </section>
+      </AuthShell>
     );
   }
 
   return (
-    <section className={styles.card}>
-      <h1 className={styles.title}>{t('verifyPendingTitle')}</h1>
-      <p className={styles.subtitle}>{t('verifyPendingSubtitle')}</p>
+    <AuthShell
+      rail="Verify"
+      title={t('verifyPendingTitle')}
+      subtitle={t('verifyPendingSubtitle')}
+    >
       <p className={styles.subtitle}>{t('verifyPendingWhatNext')}</p>
 
       {errorCode && (
@@ -92,21 +106,23 @@ export default function VerifyEmailPage() {
       )}
       {sent && <p className={styles.subtitle}>{t('resendSent')}</p>}
 
-      <Button
-        className={styles.submit}
-        size="lg"
-        loading={busy}
-        disabled={remaining > 0}
-        onClick={resend}
-      >
-        {remaining > 0 ? t('resendIn', { seconds: remaining }) : t('resend')}
-      </Button>
+      <div className={styles.actions}>
+        <Button
+          className={styles.submit}
+          size="lg"
+          loading={busy}
+          disabled={remaining > 0}
+          onClick={resend}
+        >
+          {remaining > 0 ? t('resendIn', { seconds: remaining }) : t('resend')}
+        </Button>
+      </div>
 
       <p className={styles.footer}>
         <Link className={styles.footerLink} href="/">
           {t('continueWithoutVerifying')}
         </Link>
       </p>
-    </section>
+    </AuthShell>
   );
 }

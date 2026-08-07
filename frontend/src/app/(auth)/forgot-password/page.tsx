@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
+import { AuthShell } from '../../../components/auth/auth-shell';
 import styles from '../../../components/auth/auth.module.css';
 import { Button, Field, Input } from '../../../components/ui';
 import { apiPost } from '../../../lib/api';
@@ -49,23 +50,18 @@ export default function ForgotPasswordPage() {
 
   if (sent) {
     return (
-      <section className={styles.card}>
-        <h1 className={styles.title}>{t('forgotSentTitle')}</h1>
-        <p className={styles.subtitle}>{t('forgotSentBody')}</p>
+      <AuthShell rail="Forgot" title={t('forgotSentTitle')} subtitle={t('forgotSentBody')}>
         <p className={styles.footer}>
           <Link className={styles.footerLink} href="/sign-in">
             {t('backToSignIn')}
           </Link>
         </p>
-      </section>
+      </AuthShell>
     );
   }
 
   return (
-    <section className={styles.card}>
-      <h1 className={styles.title}>{t('forgotTitle')}</h1>
-      <p className={styles.subtitle}>{t('forgotSubtitle')}</p>
-
+    <AuthShell rail="Forgot" title={t('forgotTitle')} subtitle={t('forgotSubtitle')}>
       {errorCode && (
         <p className={styles.banner} role="alert">
           {messageFor(errorCode)}
@@ -91,6 +87,6 @@ export default function ForgotPasswordPage() {
           {t('backToSignIn')}
         </Link>
       </p>
-    </section>
+    </AuthShell>
   );
 }

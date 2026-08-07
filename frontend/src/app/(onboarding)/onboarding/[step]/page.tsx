@@ -4,7 +4,6 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { use, useEffect, useState } from 'react';
 
-import { Mascot } from '../../../../components/mascot';
 import {
   cardProblem,
   toDrafts,
@@ -19,6 +18,15 @@ import {
   type IdentityValues,
   type InterestsValues,
 } from '../../../../components/profile/profile-fields';
+import { Meter } from '../../../../components/shell/meter';
+import {
+  RailBlock,
+  RailFoot,
+  RailMark,
+  SplitShell,
+  WorkBody,
+  WorkTop,
+} from '../../../../components/shell/split-shell';
 import { Button } from '../../../../components/ui';
 import { apiPost } from '../../../../lib/api';
 import {
@@ -34,7 +42,7 @@ import { useRequireAuth } from '../../../../lib/use-require-auth';
 import styles from './onboarding.module.css';
 import { passedSteps } from './session-steps';
 
-const STEP_POSE = { 1: 'point', 2: 'think', 3: 'cheer' } as const;
+const TOTAL_STEPS = 3;
 
 interface Draft {
   identity?: IdentityValues;
@@ -199,72 +207,91 @@ export default function OnboardingStepPage({ params }: { params: Promise<{ step:
         ? `${t('saveFailed')} ${errorMessage(saveError)}`
         : null;
 
+  // Direction B's one shell: the rail says where in the flow this is and what the step is
+  // for, the working surface holds the fields and nothing else.
+  const rail = (
+    <>
+      <RailMark />
+
+      <RailBlock
+        label={t('progress', { step, total: TOTAL_STEPS })}
+        note={t(`step${step}Subtitle`)}
+      >
+        {/* Decorative: the label above it is the same fact in words (ui §4.4). */}
+        <Meter value={step} max={TOTAL_STEPS} tone="primary" decorative onRail />
+      </RailBlock>
+
+      {/* Which account is being set up. Two sign-ups in one browser is the whole reason. */}
+      <RailFoot>
+        <span className={styles.account}>{user?.email}</span>
+      </RailFoot>
+    </>
+  );
+
   return (
-    <section className={styles.card}>
-      <div className={styles.mascotSlot}>
-        <Mascot pose={STEP_POSE[step]} size={112} />
-      </div>
-      <p className={styles.progress}>{t('progress', { step, total: 3 })}</p>
-      <h1 className={styles.title}>{t(`step${step}Title`)}</h1>
-      <p className={styles.subtitle}>{t(`step${step}Subtitle`)}</p>
-
-      <div className={styles.form}>
-        {step === 1 && (
-          <IdentityFields
-            values={identity}
-            onChange={(patch) =>
-              setDraft((d) => ({ ...d, identity: { ...identity, ...patch } }))
-            }
-          />
-        )}
-
-        {step === 2 && (
-          <>
-            <EducationFields
-              rows={education}
-              onChange={(rows) => setDraft((d) => ({ ...d, education: rows }))}
+    <SplitShell rail={rail}>
+      <WorkTop title={t(`step${step}Title`)} />
+      <WorkBody className={styles.body}>
+        <div className={styles.form}>
+          {step === 1 && (
+            <IdentityFields
+              values={identity}
+              onChange={(patch) => setDraft((d) => ({ ...d, identity: { ...identity, ...patch } }))}
             />
-            {/* A06's `kind='cv'` upload — optional, and attached by `POST /uploads` itself
-                (the pointer on the user row, the text on `users.profile`), so it never travels
-                through the step-2 PATCH body and needs no Continue to persist. */}
-            <CvField
-              cv={cv}
-              uploading={uploadCvMutation.isPending}
-              error={cvError ? `${tFields('cvFailed')} ${errorMessage(cvError)}` : null}
-              onFile={(file) => void uploadCv(file)}
+          )}
+
+          {step === 2 && (
+            <>
+              <EducationFields
+                rows={education}
+                onChange={(rows) => setDraft((d) => ({ ...d, education: rows }))}
+              />
+              {/* A06's `kind='cv'` upload — optional, and attached by `POST /uploads` itself
+                  (the pointer on the user row, the text on `users.profile`), so it never travels
+                  through the step-2 PATCH body and needs no Continue to persist. */}
+              <CvField
+                cv={cv}
+                uploading={uploadCvMutation.isPending}
+                error={cvError ? `${tFields('cvFailed')} ${errorMessage(cvError)}` : null}
+                onFile={(file) => void uploadCv(file)}
+              />
+            </>
+          )}
+
+          {step === 3 && (
+            <InterestsFields
+              values={interests}
+              onChange={(patch) =>
+                setDraft((d) => ({ ...d, interests: { ...interests, ...patch } }))
+              }
             />
-          </>
+          )}
+        </div>
+
+        {saveMessage && (
+          <p className={styles.banner} role="alert">
+            {saveMessage}
+          </p>
         )}
 
-        {step === 3 && (
-          <InterestsFields
-            values={interests}
-            onChange={(patch) =>
-              setDraft((d) => ({ ...d, interests: { ...interests, ...patch } }))
-            }
-          />
-        )}
-      </div>
-
-      {saveMessage && (
-        <p className={styles.banner} role="alert">
-          {saveMessage}
-        </p>
-      )}
-
-      <div className={styles.actions}>
-        {step > 1 && (
-          <Button variant="ghost" size="lg" onClick={() => router.push(`/onboarding/${step - 1}`)}>
-            {t('back')}
+        <div className={styles.actions}>
+          {step > 1 && (
+            <Button
+              variant="ghost"
+              size="lg"
+              onClick={() => router.push(`/onboarding/${step - 1}`)}
+            >
+              {t('back')}
+            </Button>
+          )}
+          <Button variant="ghost" size="lg" className={styles.skip} onClick={skip}>
+            {t('skipForNow')}
           </Button>
-        )}
-        <Button variant="ghost" size="lg" className={styles.skip} onClick={skip}>
-          {t('skipForNow')}
-        </Button>
-        <Button size="lg" loading={saveCard.isPending} onClick={saveAndContinue}>
-          {step === 3 ? t('finish') : t('continueButton')}
-        </Button>
-      </div>
-    </section>
+          <Button size="lg" loading={saveCard.isPending} onClick={saveAndContinue}>
+            {step === 3 ? t('finish') : t('continueButton')}
+          </Button>
+        </div>
+      </WorkBody>
+    </SplitShell>
   );
 }

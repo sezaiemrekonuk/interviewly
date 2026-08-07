@@ -1,0 +1,206 @@
+/* Settings reads as a document of rows, not a grid of cards: every line is "one fact, and the
+ * control that changes it". The account's ending is the last thing on the page, set apart by a
+ * rule rather than by a colour — it is a right the user holds, not an alarm.
+ */
+
+/* §3.4's 880px reading measure, pinned to the working surface's left edge — not centred.
+   `WorkTop` sits outside `WorkBody` and is always left-aligned, so a centred body would put
+   the page's own title 200px left of everything it introduces. Left-aligned also keeps one
+   content edge across the four adjacent routes: dashboard and archive cap at 1120 because
+   they are tabular, settings and profile at 880 because a row whose control is a screen away
+   from the fact it changes stops being one row. */
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  max-width: 880px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+}
+
+.sectionTitle {
+  padding-block-end: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.sectionBody {
+  max-width: 65ch;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  align-items: center;
+  justify-content: space-between;
+  padding-block: 16px;
+  border-block-start: 1px solid var(--border);
+}
+
+.row:last-child {
+  border-block-end: 1px solid var(--border);
+}
+
+.rowMain {
+  min-width: 0;
+}
+
+.rowLabel {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.rowValue {
+  margin-block-start: 4px;
+  font-size: 16px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.rowNote {
+  max-width: 60ch;
+  margin-block-start: 4px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.rowOutcome {
+  margin-block-start: 8px;
+  font-size: 14px;
+  color: var(--success);
+}
+
+/* Verification state, on the row with the address it describes — where it should always have
+   been. It reads as a word either way; the colour is the second signal, never the only one. */
+.verified,
+.unverified {
+  margin-block-start: 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.verified {
+  color: var(--success);
+}
+
+.unverified {
+  color: var(--warning);
+}
+
+.rowAction,
+.link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--primary-deep);
+  border-radius: var(--radius-button);
+}
+
+.rowAction:hover,
+.link:hover {
+  text-decoration: underline;
+}
+
+.rowAction:focus-visible,
+.link:focus-visible,
+.dangerAction:focus-visible,
+.confirmInput:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  margin-block-start: 8px;
+}
+
+/* ------------------------------------------------------------------------------- erasure */
+
+.danger {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  margin-block-start: 32px;
+  padding: 20px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+}
+
+.dangerTitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--danger);
+}
+
+.dangerBody {
+  max-width: 65ch;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+.dangerError {
+  font-size: 14px;
+  color: var(--danger);
+}
+
+/* Typing the address is the guard, not a second click. Two clicks are muscle memory; an
+   address has to be read off the row above before it can be typed. */
+.confirmField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  max-width: 36ch;
+}
+
+.confirmLabel {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.confirmInput {
+  padding: 12px;
+  font-family: inherit;
+  font-size: 16px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-input);
+}
+
+.dangerAction {
+  min-height: 44px;
+  padding: 12px 20px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--danger);
+  background: var(--surface);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-button);
+  cursor: pointer;
+  transition: opacity var(--duration-default) var(--easing-default);
+}
+
+.dangerAction:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
