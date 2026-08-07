@@ -27,7 +27,7 @@ let uploadIds: Record<string, string> = {};
 let responses: Record<string, { status: number; body: unknown }> = {};
 
 Before({ tags: '@upload-ownership' }, function () {
-  uploadIds = { nonexistent: 'upl_no_such_upload_id_at_all' };
+  uploadIds = { nonexistent: `upl_${randomUUID()}` };
   responses = {};
 });
 
