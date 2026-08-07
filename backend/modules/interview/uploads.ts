@@ -3,9 +3,11 @@
  * so every dimension is bounded before anything parses it, and the declared MIME is never
  * believed on its own.
  *
- * Order is load-bearing: kind → hash → dedup short-circuit → magic bytes → page count →
- * extraction → text floor → store → row. Hashing before validation is what makes a
- * byte-identical re-upload free; a file that is already a row was already validated.
+ * Order is load-bearing: kind → hash → magic bytes → page count → extraction → text floor →
+ * store → row. Every upload walks the whole pipeline: the extracted text is the response, not
+ * a side effect, so a deduped file that skipped extraction would answer with no text at all.
+ * Dedup still happens, one step later — the `upsert` on the unique `sha256` resolves a repeat
+ * to the same row and `storage.put` rewrites the same key with the same bytes.
  *
  * A `cv` does one more thing before it answers (A06 @AC-32): it attaches itself to the
  * account. `users.cv_upload_id` is repointed and the extracted text is cached on
@@ -135,22 +137,10 @@ export const createUpload: RequestHandler = async (req, res, next) => {
 
     const filename = safeFilename(file.originalname);
 
+    // The dedup key is (owner, bytes): `uploads` is `@@unique([user_id, sha256])`. The same
+    // PDF sent twice by one user is one row; sent by two users it is two rows over one stored
+    // object, because a row an interview points at has to belong to whoever made the interview.
     const sha256 = createHash('sha256').update(file.buffer).digest('hex');
-    // `uploads.sha256` is globally `@unique` (F02, K12): the dedup key is the bytes, not
-    // (bytes, kind) or (bytes, user). The same PDF sent twice is one object; whoever
-    // references it records the role it played.
-    //
-    // A `cv` skips the short-circuit: the extracted text is not stored on `uploads`, only the
-    // bytes are, so a deduped CV would attach an id with no text behind it. It re-walks the
-    // pipeline to recover the text it has to cache. Nothing downstream duplicates — the
-    // `upsert` below resolves to the same row and `storage.put` rewrites the same key with
-    // the same bytes.
-    const existing = isCv ? null : await prisma.upload.findUnique({ where: { sha256 } });
-    if (existing) {
-      logger.info({ userId: req.user!.id, traceId: req.traceId, uploadId: existing.id }, 'UPLOAD_DEDUP');
-      res.status(201).json({ uploadId: existing.id });
-      return;
-    }
 
     // The declared MIME is attacker-controlled; the leading bytes are what the file is.
     if (file.mimetype !== 'application/pdf' || !file.buffer.subarray(0, 5).equals(PDF_MAGIC)) {
@@ -177,11 +167,10 @@ export const createUpload: RequestHandler = async (req, res, next) => {
     await storage.put(storageKey, file.buffer, file.mimetype);
 
     const row = await prisma.$transaction(async (tx) => {
-      // upsert, not create: two identical uploads racing past the findUnique above would make
-      // the second one a P2002 on the unique sha256 rather than the dedup hit it should be.
-      // It is also the whole dedup path for a `cv`, which never consulted the findUnique.
+      // upsert, not create: one user sending the same bytes twice — concurrently or a week
+      // apart — must resolve to the one row rather than a P2002 on the unique key.
       const upload = await tx.upload.upsert({
-        where: { sha256 },
+        where: { user_id_sha256: { user_id: req.user!.id, sha256 } },
         update: {
           // Re-uploading the same bytes under a new name renames what the profile shows.
           // The row is still one object — only the label the owner recognises it by moves.
@@ -216,7 +205,14 @@ export const createUpload: RequestHandler = async (req, res, next) => {
       'UPLOAD_STORED',
     );
 
-    res.status(201).json({ uploadId: row.id });
+    // A `listing` answers with its own text: `POST /interviews` stores `job_text` NOT NULL and
+    // every question is written from it, so an upload that returned only an id left the setup
+    // form asking the candidate to paste what the server had already parsed. Truncated at the
+    // prompt builder's ceiling — it would cut the block there anyway. A `cv` keeps its text
+    // server-side: `attachCv` has already cached it and the uploader never needs it back.
+    res
+      .status(201)
+      .json({ uploadId: row.id, ...(isCv ? {} : { text: text.trim().slice(0, MAX_BLOCK_CHARS) }) });
   } catch (err) {
     next(err);
   }

@@ -378,7 +378,11 @@ model Upload {
   storage_key String
   mime        String
   size_bytes  Int
-  sha256      String     @unique // K12 — dedup key is the bytes, not the kind
+  // K12 dedups on the bytes, but the row is one *user's* upload record, so the key is
+  // (owner, bytes) — see the `@@unique` below. A globally unique sha256 handed the second
+  // uploader of an identical file a row owned by the first, which `setup.ts`'s ownership
+  // check then refused: the upload answered 201 and the interview it was for was impossible.
+  sha256      String
   // The name the file had on the uploader's machine, sanitised. Display only — never a path
   // and never the storage key, which stays content-addressed. Nullable: every row written
   // before this column existed has none, and a deduped upload keeps whatever it was first
@@ -390,6 +394,9 @@ model Upload {
   cv_of      User[]      @relation("UserCv")
   interviews Interview[]
 
+  // One row per (owner, bytes). The bytes themselves are still stored once: `storage_key` is
+  // `uploads/<sha256>.pdf`, so two users' rows for an identical file address one object.
+  @@unique([user_id, sha256])
   @@index([user_id, kind]) // §3.3 — "this user's CV" without a table scan
   @@map("uploads")
 }

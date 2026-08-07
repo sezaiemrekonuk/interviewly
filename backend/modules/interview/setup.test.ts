@@ -261,6 +261,22 @@ describe('setupInterview uploadId ownership (issue #73)', () => {
     expect(created[0]).toMatchObject({ upload_id: null, job_source: 'paste' });
   });
 
+  it('takes an explicit hrQuestionCount instead of the 40/60 split', async () => {
+    const res = await setup({ targetQuestionCount: 12, hrQuestionCount: 3 });
+    expect(res.status).toBe(201);
+    // The split would have made this 5 + 7 — the caller's own shape wins.
+    expect(res.body).toMatchObject({ hrCount: 3, techCount: 9 });
+    expect(created[0]).toMatchObject({ target_question_count: 12, hr_question_count: 3 });
+  });
+
+  it('refuses an hrQuestionCount that leaves the technical round empty', async () => {
+    for (const hrQuestionCount of [6, 7]) {
+      const res = await setup({ targetQuestionCount: 6, hrQuestionCount });
+      expect({ hrQuestionCount, status: res.status }).toEqual({ hrQuestionCount, status: 422 });
+    }
+    expect(created).toHaveLength(0);
+  });
+
   it('answers 422 rather than 500 for every malformed body shape', async () => {
     // @AC "no request body can produce a 500 from setup.ts" — the ids are the new path, the
     // rest are the guards it was inserted between.
@@ -269,6 +285,8 @@ describe('setupInterview uploadId ownership (issue #73)', () => {
       { uploadId: '' },
       { jobText: undefined, uploadId: 'upl_a_listing' }, // uploadId with no text: #73 is not I11
       { targetQuestionCount: 999 },
+      { hrQuestionCount: 0 },
+      { hrQuestionCount: 999 },
       { mode: 'telepathy' },
     ]) {
       const res = await setup({ jobText: 'Backend Developer', ...body });

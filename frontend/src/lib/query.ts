@@ -469,12 +469,18 @@ export function useInterviewState(
   });
 }
 
-/** I03 body — occupation/language are NOT sent (API gap, STATE blocker); server infers nothing. */
+/**
+ * I03 body. Occupation and language are not sent and never were: the server classifies the
+ * occupation from the listing and takes the language off the session.
+ *
+ * `hrQuestionCount` is the custom shape only — omitted, the server applies its own 40/60 split.
+ */
 export interface CreateInterviewBody {
   mode: 'text' | 'voice';
   jobText?: string;
   uploadId?: string;
   targetQuestionCount: number;
+  hrQuestionCount?: number;
 }
 
 /** I03's 201 — no occupation/language/cluster back either. Round split only. */

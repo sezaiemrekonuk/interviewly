@@ -73,18 +73,22 @@ export const deleteMe: RequestHandler = async (req, res) => {
 
     const keys: string[] = [];
 
-    // The pointer above is now cleared, so the CV row is unreferenced *by this account*.
-    // It can still be referenced by someone else (`sha256` is unique, so identical bytes
-    // are one shared row) or by an interview that was created from the same file as its
-    // listing. Either would make the DELETE a RESTRICT violation, and either means the
-    // bytes are not this user's alone to erase.
+    // The pointer above is now cleared, so the CV row is unreferenced *by this account*. It
+    // can still be referenced by an interview created from the same file as its listing, which
+    // would make the DELETE a RESTRICT violation and means the bytes are not this user's alone
+    // to erase.
+    //
+    // Deleting the row and erasing the object are two decisions, not one. `uploads` is unique
+    // per (owner, bytes), so another account that uploaded a byte-identical file has its own
+    // row over the *same* content-addressed `storage_key` — erasing the object on this row's
+    // delete would empty a stranger's CV.
     if (cv) {
-      const stillOwned =
-        (await tx.user.count({ where: { cv_upload_id: cv.id } })) > 0 ||
-        (await tx.interview.count({ where: { upload_id: cv.id } })) > 0;
+      const stillOwned = (await tx.interview.count({ where: { upload_id: cv.id } })) > 0;
       if (!stillOwned) {
         await tx.upload.delete({ where: { id: cv.id } });
-        keys.push(cv.storage_key);
+        const shared =
+          (await tx.upload.count({ where: { storage_key: cv.storage_key } })) > 0;
+        if (!shared) keys.push(cv.storage_key);
       }
     }
 

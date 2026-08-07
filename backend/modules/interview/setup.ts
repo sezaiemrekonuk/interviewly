@@ -9,7 +9,7 @@ import { aiClient } from '../ai';
 
 import { applyTransition } from './machine';
 
-// Twice the largest shape the UI offers (`new/page.tsx` ROUND_SHAPES = [6, 8, 10]) and still a
+// Above the largest shape the UI offers (`new/page.tsx` LENGTHS tops out at 15) and still a
 // count one generation call can satisfy. Unbounded, a request body sized the provider call
 // directly — `generateRound` asks for the whole round at once (issue #98). Mirrored as a CHECK
 // constraint on `interviews.target_question_count` so a direct insert cannot bypass it.
@@ -20,6 +20,9 @@ const schema = z.object({
   jobText: z.string().trim().min(1).optional(),
   uploadId: z.string().min(1).optional(),
   targetQuestionCount: z.coerce.number().int().min(1).max(MAX_TARGET_QUESTION_COUNT),
+  // The custom shape: the caller sizes the HR half itself instead of taking the 40/60 split.
+  // Absent is the normal case and the only one the preset lengths ever send.
+  hrQuestionCount: z.coerce.number().int().min(1).max(MAX_TARGET_QUESTION_COUNT).optional(),
 });
 
 // Keyword → seeded occupation_clusters.key (prisma/seed.ts OCCUPATION_CLUSTERS). First
@@ -105,6 +108,17 @@ function split(target: number): { hrCount: number; techCount: number } {
   return { hrCount, techCount: target - hrCount };
 }
 
+/**
+ * The split, or the caller's own. An explicit `hrQuestionCount` must leave at least one
+ * question for the technical round: both rounds are generated, and a batch of zero is a
+ * provider call that asks for nothing and a round with no question to promote.
+ */
+function shape(target: number, hr: number | undefined): { hrCount: number; techCount: number } {
+  if (hr === undefined) return split(target);
+  if (hr >= target) throw new ApiError('VALIDATION_ERROR');
+  return { hrCount: hr, techCount: target - hr };
+}
+
 async function titleInterview(
   interviewId: string,
   jobText: string,
@@ -132,12 +146,12 @@ async function titleInterview(
 export const setupInterview: RequestHandler = async (req, res) => {
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) throw new ApiError('VALIDATION_ERROR');
-  const { mode, jobText, uploadId, targetQuestionCount } = parsed.data;
+  const { mode, jobText, uploadId, targetQuestionCount, hrQuestionCount } = parsed.data;
 
   if (!jobText && !uploadId) throw new ApiError('LISTING_REQUIRED');
-  // ponytail: upload-derived text handoff (extracted text passed back from POST /uploads)
-  // is I11's contract, not yet built. Until then an uploadId with no jobText has nothing to
-  // store in the NOT NULL job_text column, so it is a malformed request today.
+  // `POST /uploads` answers a listing with its extracted text (I11's handoff), so a caller
+  // holding an uploadId holds the text too. Without it there is nothing to store in the NOT
+  // NULL job_text column and nothing to write questions from.
   if (!jobText) throw new ApiError('VALIDATION_ERROR');
 
   // Issue #73: `uploadId` is the one id in this module that arrives in a body rather than as
@@ -157,7 +171,7 @@ export const setupInterview: RequestHandler = async (req, res) => {
   const cluster = clusterKey
     ? await prisma.occupationCluster.findUnique({ where: { key: clusterKey } })
     : null;
-  const { hrCount, techCount } = split(targetQuestionCount);
+  const { hrCount, techCount } = shape(targetQuestionCount, hrQuestionCount);
 
   // A transaction would NOT close the window between the read above and this insert: under
   // Read Committed a concurrent DELETE still commits in between, and only `SELECT … FOR SHARE`

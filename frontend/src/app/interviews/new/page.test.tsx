@@ -11,11 +11,13 @@ const nav = vi.hoisted(() => ({
   replace: vi.fn(),
   prefetch: vi.fn(),
   refresh: vi.fn(),
+  search: '',
 }));
 
 vi.mock('next/navigation', () => ({
   useRouter: () => nav,
   usePathname: () => '/interviews/new',
+  useSearchParams: () => new URLSearchParams(nav.search),
 }));
 
 import InterviewSetupPage from './page';
@@ -29,7 +31,14 @@ interface Call {
 }
 
 /** `/me` gates the page; `/interviews` is the one create under test. */
-function stubFetch(options: { createStatus?: number; createBody?: unknown; profileStatus?: number } = {}) {
+function stubFetch(
+  options: {
+    createStatus?: number;
+    createBody?: unknown;
+    profileStatus?: number;
+    uploadBody?: unknown;
+  } = {},
+) {
   const calls: Call[] = [];
   const spy = vi.fn(async (url: string, init?: RequestInit) => {
     const method = init?.method ?? 'GET';
@@ -44,11 +53,14 @@ function stubFetch(options: { createStatus?: number; createBody?: unknown; profi
       new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
     if (url === '/api/me') return json(200, { user: USER });
-    if (url === '/api/uploads') return json(201, { uploadId: 'up1' });
+    // I11 answers a listing with the text it parsed out of the PDF.
+    if (url === '/api/uploads') {
+      return json(201, options.uploadBody ?? { uploadId: 'up1', text: 'Backend engineer, Go' });
+    }
     if (url === '/api/interviews') {
       return json(
         options.createStatus ?? 201,
-        options.createBody ?? { interviewId: 'i1', hrCount: 3, techCount: 5 },
+        options.createBody ?? { interviewId: 'i1', hrCount: 4, techCount: 6 },
       );
     }
     // The profiling → hr_round transition setup fires between create and navigation (issue 53).
@@ -69,17 +81,20 @@ async function renderSetup() {
   await screen.findByRole('button', { name: messages.setup.start });
 }
 
+const listingPdf = () => new File(['%PDF-1.4'], 'listing.pdf', { type: 'application/pdf' });
+
 describe('interview setup page (W05)', () => {
   beforeEach(() => {
     nav.push.mockReset();
     nav.replace.mockReset();
+    nav.search = '';
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it('submits once and navigates to the room on success', async () => {
+  it('submits once and navigates to pre-join — voice is the default mode', async () => {
     const calls = stubFetch();
     const user = userEvent.setup();
     await renderSetup();
@@ -87,15 +102,17 @@ describe('interview setup page (W05)', () => {
     await user.type(screen.getByLabelText(messages.setup.listingPaste), 'Senior developer wanted');
     await user.click(screen.getByRole('button', { name: messages.setup.start }));
 
-    await waitFor(() => expect(nav.push).toHaveBeenCalledWith('/interviews/i1/room'));
+    await waitFor(() => expect(nav.push).toHaveBeenCalledWith('/interviews/i1/pre-join'));
 
     const creates = calls.filter((c) => c.url === '/api/interviews');
     expect(creates).toHaveLength(1);
     expect(creates[0].body).toMatchObject({
-      mode: 'text',
+      mode: 'voice',
       jobText: 'Senior developer wanted',
-      targetQuestionCount: 8,
+      targetQuestionCount: 10,
     });
+    // A preset never sizes the HR half itself — the server owns the split.
+    expect(creates[0].body).not.toHaveProperty('hrQuestionCount');
   });
 
   it('fires the profile transition between create and navigation (issue 53)', async () => {
@@ -106,7 +123,7 @@ describe('interview setup page (W05)', () => {
     await user.type(screen.getByLabelText(messages.setup.listingPaste), 'Senior developer wanted');
     await user.click(screen.getByRole('button', { name: messages.setup.start }));
 
-    await waitFor(() => expect(nav.push).toHaveBeenCalledWith('/interviews/i1/room'));
+    await waitFor(() => expect(nav.push).toHaveBeenCalled());
 
     const profile = calls.find((c) => c.url === '/api/interviews/i1/profile');
     expect(profile).toBeDefined();
@@ -132,16 +149,16 @@ describe('interview setup page (W05)', () => {
     expect(nav.push).not.toHaveBeenCalled();
   });
 
-  it('routes a voice interview to pre-join, not the room', async () => {
+  it('routes a text interview to the room, not pre-join', async () => {
     stubFetch();
     const user = userEvent.setup();
     await renderSetup();
 
     await user.type(screen.getByLabelText(messages.setup.listingPaste), 'Senior developer wanted');
-    await user.selectOptions(screen.getByLabelText(messages.setup.mode), 'voice');
+    await user.click(screen.getByRole('radio', { name: new RegExp(messages.setup.modeText) }));
     await user.click(screen.getByRole('button', { name: messages.setup.start }));
 
-    await waitFor(() => expect(nav.push).toHaveBeenCalledWith('/interviews/i1/pre-join'));
+    await waitFor(() => expect(nav.push).toHaveBeenCalledWith('/interviews/i1/room'));
   });
 
   it('shows DAILY_INTERVIEW_LIMIT inline without navigating', async () => {
@@ -186,61 +203,102 @@ describe('interview setup page (W05)', () => {
     expect(nav.push).not.toHaveBeenCalled();
   });
 
-  it('requires pasted text even when a listing PDF uploaded cleanly', async () => {
-    // I03 rejects `uploadId` with no `jobText` as VALIDATION_ERROR — extracted-text handoff
-    // is still I11's unbuilt contract. Sending it anyway spends a round trip to earn a
-    // confusing "the request is invalid" on a form the user filled in as designed.
+  it('fills the listing from the text the upload parsed out of the PDF', async () => {
     const calls = stubFetch();
     const user = userEvent.setup();
     await renderSetup();
 
-    await user.upload(
-      screen.getByLabelText(messages.setup.listingUpload),
-      new File(['%PDF-1.4'], 'listing.pdf', { type: 'application/pdf' }),
-    );
+    await user.upload(screen.getByLabelText(messages.setup.listingUpload), listingPdf());
+
+    const listing = await screen.findByLabelText(messages.setup.listingPaste);
+    await waitFor(() => expect(listing).toHaveValue('Backend engineer, Go'));
+
+    // No paste needed: the PDF alone is now a complete listing.
+    await user.click(screen.getByRole('button', { name: messages.setup.start }));
+    await waitFor(() => expect(nav.push).toHaveBeenCalled());
+    expect(calls.find((c) => c.url === '/api/interviews')?.body).toMatchObject({
+      uploadId: 'up1',
+      jobText: 'Backend engineer, Go',
+    });
+  });
+
+  it('still needs pasted text when the PDF carried no readable text', async () => {
+    // The id comes back without a `text` — nothing lands in the textarea and the guard fires
+    // here rather than spending a round trip on a VALIDATION_ERROR.
+    const calls = stubFetch({ uploadBody: { uploadId: 'up1' } });
+    const user = userEvent.setup();
+    await renderSetup();
+
+    await user.upload(screen.getByLabelText(messages.setup.listingUpload), listingPdf());
     await user.click(screen.getByRole('button', { name: messages.setup.start }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(messages.errors.LISTING_REQUIRED);
     expect(calls.filter((c) => c.url === '/api/interviews')).toHaveLength(0);
-    expect(nav.push).not.toHaveBeenCalled();
   });
 
-  it('sends the uploadId alongside the pasted text', async () => {
+  it('renders the round split for the selected preset length', async () => {
+    stubFetch();
+    const user = userEvent.setup();
+    await renderSetup();
+
+    // Medium (10) → hrCount = max(2, round(4)) = 4, techCount = 6 (I03 split).
+    expect(screen.getByText('4 HR + 6 technical questions')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('radio', { name: new RegExp(messages.setup.lengthFast) }));
+    // Fast (6) → hrCount = max(2, round(2.4)) = 2, techCount = 4.
+    expect(screen.getByText('2 HR + 4 technical questions')).toBeInTheDocument();
+  });
+
+  it('sends the custom shape as targetQuestionCount + hrQuestionCount', async () => {
     const calls = stubFetch();
     const user = userEvent.setup();
     await renderSetup();
 
-    await user.upload(
-      screen.getByLabelText(messages.setup.listingUpload),
-      new File(['%PDF-1.4'], 'listing.pdf', { type: 'application/pdf' }),
-    );
     await user.type(screen.getByLabelText(messages.setup.listingPaste), 'Senior developer wanted');
+    await user.click(screen.getByRole('radio', { name: messages.setup.lengthCustom }));
+
+    const hr = screen.getByLabelText(messages.setup.customHr);
+    const tech = screen.getByLabelText(messages.setup.customTech);
+    await user.clear(hr);
+    await user.type(hr, '3');
+    await user.clear(tech);
+    await user.type(tech, '9');
+
     await user.click(screen.getByRole('button', { name: messages.setup.start }));
 
-    await waitFor(() => expect(nav.push).toHaveBeenCalledWith('/interviews/i1/room'));
+    await waitFor(() => expect(nav.push).toHaveBeenCalled());
     expect(calls.find((c) => c.url === '/api/interviews')?.body).toMatchObject({
-      uploadId: 'up1',
-      jobText: 'Senior developer wanted',
+      targetQuestionCount: 12,
+      hrQuestionCount: 3,
     });
   });
 
-  it('renders the round split from hrCount/techCount', async () => {
-    stubFetch();
-    await renderSetup();
-
-    // Default target 8 → hrCount = max(2, round(3.2)) = 3, techCount = 5 (I03 split).
-    expect(screen.getByText('3 HR + 5 technical questions')).toBeInTheDocument();
-  });
-
-  it('claims no detected summary at all — the response carries none', async () => {
-    stubFetch();
+  it('refuses a custom shape over the ceiling without a round trip', async () => {
+    const calls = stubFetch();
     const user = userEvent.setup();
     await renderSetup();
 
-    // I03 returns `{ interviewId, hrCount, techCount }` and nothing else, so the screen shows
-    // no detected-summary affordance — not even a placeholder for one. The occupation the
-    // user types is never echoed back as a *detected* value either.
-    await user.type(screen.getByLabelText(messages.setup.occupation), 'Data Scientist');
-    expect(screen.queryAllByText(/detected/i)).toHaveLength(0);
+    await user.type(screen.getByLabelText(messages.setup.listingPaste), 'Senior developer wanted');
+    await user.click(screen.getByRole('radio', { name: messages.setup.lengthCustom }));
+
+    const tech = screen.getByLabelText(messages.setup.customTech);
+    await user.clear(tech);
+    await user.type(tech, '19');
+
+    await user.click(screen.getByRole('button', { name: messages.setup.start }));
+
+    await screen.findByRole('alert');
+    expect(calls.filter((c) => c.url === '/api/interviews')).toHaveLength(0);
+    expect(nav.push).not.toHaveBeenCalled();
+  });
+
+  it('prefills the listing from ?prefill=, with the escapes turned back into line breaks', async () => {
+    nav.search = `prefill=${encodeURIComponent('Backend engineer\\n\\nGo, Postgres')}`;
+    stubFetch();
+    await renderSetup();
+
+    expect(screen.getByLabelText(messages.setup.listingPaste)).toHaveValue(
+      'Backend engineer\n\nGo, Postgres',
+    );
   });
 });
