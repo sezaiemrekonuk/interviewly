@@ -53,7 +53,7 @@ export { StubAiClient } from './stub';
 export { PROMPT_NAMES, candidateVars, questionVars, reportVars, scoreVars } from './prompt-vars';
 export type { AiMethod } from './prompt-vars';
 
-export { costFor, DEFAULT_UNIT_KIND } from './cost';
+export { costFor, roundCostUsd, DEFAULT_UNIT_KIND } from './cost';
 export type { CallCost, TokenUsage } from './cost';
 
 export {

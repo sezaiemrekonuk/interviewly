@@ -23,8 +23,23 @@ models:
   # Voice is metered per minute but recorded in seconds — `per_minute_usd / 60` is the
   # per-unit rate. The `voice`/`worker` ledgers reconcile real usage against this row
   # (§3.5); it is listed here because §9.2 is repo-wide.
+  # S05 removes this row: speech (S04) meters TTS/STT against the two rows below, and the
+  # convai reconciliation that bills `conversational` is deleted in S05.
   elevenlabs/conversational:
     unit_kind: second
     input_per_1m_usd: 0
     output_per_1m_usd: 0
     per_minute_usd: 0.10
+  # Speech TTS is billed per character (S04, speech spec Cost table). `input_per_1m_usd` is the
+  # rate per 1M characters spoken; `units`/`unit_kind` on the row are `characters`/`character`.
+  elevenlabs/tts:
+    unit_kind: character
+    input_per_1m_usd: 180.00
+    output_per_1m_usd: 0
+  # Speech STT (Scribe) is billed per second of audio: `per_minute_usd / 60` per second, the
+  # same shape voice reconciliation uses. Row records `units`/`unit_kind` = seconds/`second`.
+  elevenlabs/stt:
+    unit_kind: second
+    input_per_1m_usd: 0
+    output_per_1m_usd: 0
+    per_minute_usd: 0.006667

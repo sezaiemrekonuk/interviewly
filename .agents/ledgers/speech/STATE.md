@@ -1,16 +1,21 @@
 # Speech — State
 
 Last updated: 2026-08-07
-Last session ended: **S03 complete.** Added `backend/modules/speech/stt.ts`
-(`uploadAudioMiddleware` + `submitAnswerAudio`) — `POST /interviews/:id/answers/audio`: guards
-(owner, voice mode, voice-capable state, `SPEECH_AUDIO_INVALID` on missing part, ceiling reused
-from `tts.ts`), multer memory upload with audio mime allow-list, `transcribe`, then the shared
-`advanceWithAnswer` via `answerInputSchema.safeParse` with `inputMode:'voice'`. Mounted in
-`router.ts` behind a `requirePublicOrigin` `router.use`; exported `VOICE_CAPABLE_STATES` from
-`tts.ts`; added `FakeSpeechProvider.transcribeEmptyNext()`. Wired speech AC-3/4/6/14 in
-`speech_turn.feature` + `speech.steps.ts`; unit tests in `stt.test.ts`. Verification: `@speech`
-acceptance 13/13 green, `speech/stt` unit 4/4 green, `answers` shows `voice` rows.
-Next: **S04** (per-call metering — wrap both provider calls in `withBudget`, opus tier).
+Last session ended: **S04 complete.** Added `backend/modules/speech/metering.ts`
+(`meterTts`/`meterStt` → shared `recordLlmCall`, one tx). Both provider calls now run inside
+`withBudget` in `tts.ts`/`stt.ts`: TTS bills `character`, STT bills `second`; a thrown provider
+bills nothing, a cache hit (before the wrap) bills nothing, and `BudgetExceeded` surfaces
+`BUDGET_EXCEEDED` + ends the interview `budget_exhausted`. `model-prices.yaml` ADDED
+`elevenlabs/tts`+`elevenlabs/stt` but **kept `elevenlabs/conversational`** (voice-reconcile still
+reads it; S05 deletes it — keeps the ring green). A review pass then fixed two money bugs the
+green suite missed: `reconcile.ts`'s redelivery no-op matched `provider` only, so a speech row
+made every later `post_call` webhook bill the convai session nothing (now keyed on `model` too,
+new @AC-7 scenario); and two concurrent first TTS requests for one question both paid, because
+the cache read sat before the lock (now re-read inside `withBudget`, with `storage.put` under the
+lock and a failed write serving the paid bytes instead of 500ing into a re-billed retry).
+Verification: speech unit 30/30, full unit 486/486, acceptance 104/104 (`@speech` 17/17,
+`@voice-reconciliation` 2/2), lint clean. Next: **S05** (delete convai/webhook/reconcile surface
++ `elevenlabs/conversational`, drop `voice_sessions`, prove ceiling still fires — opus tier).
 
 ## Execution protocol (follow exactly)
 
@@ -26,8 +31,9 @@ EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**S04** (per-call usage accounting: wrap both provider call sites in `withBudget`, write the
-`llm_calls` row and increment `spent_usd` in one transaction — opus tier)
+**S05** (remove the convai, webhook and reconciliation surface; delete `elevenlabs/conversational`;
+drop `voice_sessions`; prove `isPastCeiling`/`time_exhausted` still fires after its gate is gone
+— opus tier)
 
 ## Environment
 
@@ -71,7 +77,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | S01 | `SpeechProvider` seam, `FakeSpeechProvider`, env and error-code rewrite | | done | F01, F03, I15 |
 | S02 | TTS route: question audio, storage-cached, ceiling-checked | | done | S01, I03, I07 |
 | S03 | STT route: audio upload to Scribe to the guarded advance | | done | S01, I03, I06 |
-| S04 | Per-call usage accounting at both provider call sites | | todo | S02, S03, I08 |
+| S04 | Per-call usage accounting at both provider call sites | | done | S02, S03, I08 |
 | S05 | Remove the convai, webhook and reconciliation surface; drop `voice_sessions` | | todo | S02, S03, S04 |
 | S06 | Room turn loop: speak, VAD-record, upload, advance | | todo | S02, S03, W10 |
 | S07 | Pre-join on resume, mic-denied downgrade, transient-audio copy | | todo | S06, V03, W09 |

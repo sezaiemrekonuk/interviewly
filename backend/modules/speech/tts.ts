@@ -6,11 +6,13 @@ import { activeInterview } from '../../src/lib/db';
 import { config } from '../../src/lib/env';
 import { logger } from '../../src/lib/logger';
 import { storage } from '../../src/lib/storage';
+import { BudgetExceeded, withBudget } from '../interview/budget';
 import { applyTransition } from '../interview/machine';
 import { currentQuestionRow } from '../interview/state';
 import { prisma } from '../../src/lib/db';
 import { downgradeToText } from '../voice/downgrade';
 
+import { meterTts } from './metering';
 import { speechProvider } from './SpeechProvider';
 
 const VOICE_CAPABLE_STATES = new Set(['hr_round', 'tech_round']);
@@ -21,6 +23,15 @@ export function isPastSpeechCeiling(startedAt: Date | null): boolean {
   if (!startedAt) return false;
   const elapsed = (clock.now().getTime() - startedAt.getTime()) / 1000;
   return elapsed >= Math.min(config.VOICE_MAX_ROUND_SECONDS, config.VOICE_MAX_INTERVIEW_SECONDS);
+}
+
+/** The cached audio, or null on a miss — `storage.get` signals a miss by throwing (I12). */
+async function readCachedAudio(key: string): Promise<Buffer | null> {
+  try {
+    return await storage.get(key);
+  } catch {
+    return null;
+  }
 }
 
 async function resolveQuestionVoiceId(
@@ -65,37 +76,77 @@ export const serveQuestionSpeech: RequestHandler = async (req, res) => {
   if (!question) throw new ApiError('INVALID_STATE_TRANSITION');
 
   const key = `speech/${question.id}.mp3`;
-  try {
-    const cached = await storage.get(key);
+  const cached = await readCachedAudio(key);
+  if (cached) {
     logger.info(
       { traceId: req.traceId, interviewId: interview.id, questionId: question.id, cached: true },
       'SPEECH_TTS_SERVED',
     );
     res.status(200).type('audio/mpeg').send(cached);
     return;
-  } catch {
-    // cache miss: continue to provider
   }
 
   try {
     const voiceId = await resolveQuestionVoiceId(interview.id, index, interview.hr_question_count);
-    const spoken = await speechProvider.speak(question.text, {
-      voiceId,
-      language: interview.language,
+    const spoken = await withBudget(interview.id, async () => {
+      // I08 holds the advisory lock across the provider call AND the metering commit, so an
+      // interview already at its budget never reaches ElevenLabs and a concurrent call reads
+      // the charged total. meterTts writes the `llm_calls` row and increments `spent_usd` in
+      // one transaction; a `speak` that throws bills nothing.
+      //
+      // The cache is re-read HERE, under the lock: the miss above is not proof this audio is
+      // unpaid. Two first requests for the same question both miss, then serialise on the
+      // lock — without this the second one buys bytes the first already paid for. The store
+      // is written under the lock too, so the waiter's re-read is guaranteed to see it.
+      const raced = await readCachedAudio(key);
+      if (raced) return { audio: raced, characters: null, cached: true };
+
+      const result = await speechProvider.speak(question.text, {
+        voiceId,
+        language: interview.language,
+      });
+      await meterTts(interview.id, result.characters, req.traceId!);
+      // Already billed: a store that fails must not turn paid-for bytes into a 500 the
+      // candidate retries, because the retry buys them a second time. Serve them and log.
+      try {
+        await storage.put(key, result.audio, result.mime);
+      } catch (putErr) {
+        logger.warn(
+          { err: putErr, traceId: req.traceId, interviewId: interview.id, questionId: question.id },
+          'SPEECH_TTS_CACHE_WRITE_FAILED',
+        );
+      }
+      return { audio: result.audio, characters: result.characters, cached: false };
     });
-    await storage.put(key, spoken.audio, spoken.mime);
     logger.info(
       {
         traceId: req.traceId,
         interviewId: interview.id,
         questionId: question.id,
-        cached: false,
+        cached: spoken.cached,
         characters: spoken.characters,
       },
       'SPEECH_TTS_SERVED',
     );
     res.status(200).type('audio/mpeg').send(spoken.audio);
   } catch (err) {
+    if (err instanceof BudgetExceeded) {
+      logger.warn({ traceId: req.traceId, interviewId: interview.id }, 'BUDGET_EXHAUSTED');
+      // ADR-I32: a losing transition must not replace the caller's error — the request is a
+      // 402 whether or not this one is the request that moved the interview.
+      try {
+        await applyTransition(interview, 'evaluating', {
+          traceId: req.traceId!,
+          endedReason: 'budget_exhausted',
+        });
+      } catch (transitionErr) {
+        logger.error(
+          { err: transitionErr, traceId: req.traceId, interviewId: interview.id },
+          'INTERVIEW_END_FAILED',
+        );
+      }
+      throw new ApiError('BUDGET_EXCEEDED');
+    }
     if (err instanceof ApiError && err.code === 'VOICE_UNAVAILABLE') {
       await downgradeToText(interview, { traceId: req.traceId! });
       throw new ApiError('VOICE_UNAVAILABLE');

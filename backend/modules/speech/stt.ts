@@ -13,9 +13,11 @@ import { ApiError } from '../../src/lib/api-error';
 import { activeInterview } from '../../src/lib/db';
 import { logger } from '../../src/lib/logger';
 import { advanceWithAnswer, answerInputSchema } from '../interview/answers';
+import { BudgetExceeded, withBudget } from '../interview/budget';
 import { applyTransition } from '../interview/machine';
 import { currentQuestionRow } from '../interview/state';
 
+import { meterStt } from './metering';
 import { speechProvider } from './SpeechProvider';
 import { isPastSpeechCeiling, VOICE_CAPABLE_STATES } from './tts';
 
@@ -120,10 +122,39 @@ export const submitAnswerAudio: RequestHandler = async (req, res) => {
   const question = await currentQuestionRow(interview);
   if (!question || question.id !== questionId) throw new ApiError('QUESTION_NOT_CURRENT');
 
-  const { transcript, seconds } = await speechProvider.transcribe(file.buffer, {
-    mime: file.mimetype,
-    language: interview.language,
-  });
+  // I08 wraps the provider call: an interview already at its budget never reaches Scribe.
+  // meterStt writes the `second` `llm_calls` row and increments `spent_usd` in one
+  // transaction, under the lock; a `transcribe` that throws bills nothing.
+  let transcript: string;
+  let seconds: number;
+  try {
+    ({ transcript, seconds } = await withBudget(interview.id, async () => {
+      const result = await speechProvider.transcribe(file.buffer, {
+        mime: file.mimetype,
+        language: interview.language,
+      });
+      await meterStt(interview.id, result.seconds, req.traceId!);
+      return result;
+    }));
+  } catch (err) {
+    if (err instanceof BudgetExceeded) {
+      logger.warn({ traceId: req.traceId, interviewId: interview.id }, 'BUDGET_EXHAUSTED');
+      // ADR-I32: a losing transition must not replace the caller's error.
+      try {
+        await applyTransition(interview, 'evaluating', {
+          traceId: req.traceId!,
+          endedReason: 'budget_exhausted',
+        });
+      } catch (transitionErr) {
+        logger.error(
+          { err: transitionErr, traceId: req.traceId, interviewId: interview.id },
+          'INTERVIEW_END_FAILED',
+        );
+      }
+      throw new ApiError('BUDGET_EXCEEDED');
+    }
+    throw err;
+  }
   // The audio buffer is not referenced past this point (ADR-S07).
 
   // The transcript is untrusted provider output: it reaches `advanceWithAnswer` only through

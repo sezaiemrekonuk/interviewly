@@ -31,7 +31,11 @@ vi.mock('../interview/csrf', () => ({ requirePublicOrigin: function requirePubli
 // answers.ts's transitive deps are mocked only so `importActual` resolves cheaply — the real
 // `answerInputSchema` (a zod schema) is what the handler must validate the transcript against.
 vi.mock('../interview/adaptive', () => ({ promoteNextQuestion: vi.fn() }));
-vi.mock('../interview/budget', () => ({ withBudget: vi.fn(), BudgetExceeded: class extends Error {} }));
+vi.mock('../interview/budget', () => ({
+  withBudget: async (_id: string, fn: () => Promise<unknown>) => fn(),
+  BudgetExceeded: class extends Error {},
+}));
+vi.mock('./metering', () => ({ meterStt: vi.fn() }));
 vi.mock('../interview/generation', () => ({ ensureTechBatch: vi.fn() }));
 vi.mock('../interview/language', () => ({ trackLanguage: vi.fn() }));
 vi.mock('../interview/answers', async (orig) => {
