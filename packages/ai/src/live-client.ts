@@ -12,6 +12,7 @@ import { TIMEOUT_MS } from './AiClient';
 import type {
   AiClient,
   GenerateCandidatesArgs,
+  GenerateInterviewTitleArgs,
   GenerateReportArgs,
   GenerateRoundQuestionsArgs,
   ScoreAnswerArgs,
@@ -26,13 +27,16 @@ import {
   questionVars,
   reportVars,
   scoreVars,
+  titleVars,
 } from './prompt-vars';
 import {
   CandidateSchema,
+  InterviewTitleSchema,
   QuestionBatchSchema,
   ReportPayloadSchema,
   ScoresSchema,
   type Candidate,
+  type InterviewTitle,
   type QuestionBatch,
   type ReportPayload,
   type Scores,
@@ -87,6 +91,16 @@ export class LiveAiClient implements AiClient {
       candidateVars(args),
       z.array(CandidateSchema),
       TIMEOUT_MS.generateCandidates,
+      args.ctx,
+    );
+  }
+
+  generateInterviewTitle(args: GenerateInterviewTitleArgs): Promise<InterviewTitle> {
+    return this.call(
+      PROMPT_NAMES.generateInterviewTitle,
+      titleVars(args),
+      InterviewTitleSchema,
+      TIMEOUT_MS.generateInterviewTitle,
       args.ctx,
     );
   }

@@ -150,13 +150,14 @@ describe('PromptBuilder', () => {
 });
 
 describe('PromptRegistry', () => {
-  it('ships the four reserved prompt names, each resolvable and each on one provider', () => {
+  it('ships the five reserved prompt names, each resolvable and each on one provider', () => {
     const registry = loadPromptRegistry();
     expect(registry.names()).toEqual([
       'interview.answer.score',
       'interview.question.candidates',
       'interview.question.generate',
       'interview.report.generate',
+      'interview.title.generate',
     ]);
     expect(registry.providers()).toEqual(['openai']);
   });

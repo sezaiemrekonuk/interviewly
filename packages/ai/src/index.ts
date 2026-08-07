@@ -8,6 +8,7 @@ export type {
   AiClient,
   AiCtx,
   GenerateCandidatesArgs,
+  GenerateInterviewTitleArgs,
   GenerateReportArgs,
   GenerateRoundQuestionsArgs,
   ScoreAnswerArgs,
@@ -17,6 +18,8 @@ export { TIMEOUT_MS } from './AiClient';
 export {
   CandidateSchema,
   DifficultySchema,
+  INTERVIEW_TITLE_MAX,
+  InterviewTitleSchema,
   QuestionBatchSchema,
   QuestionKindSchema,
   QuestionSchema,
@@ -27,6 +30,7 @@ export {
 export type {
   Candidate,
   Difficulty,
+  InterviewTitle,
   Question,
   QuestionBatch,
   QuestionKind,
@@ -50,7 +54,14 @@ export { StubAiClient } from './stub';
 // compile the same prompt a client compiled internally — I04's acceptance steps assert on
 // the message an HTTP request produced. Re-deriving the mapping at the call site is exactly
 // the drift this module exists to prevent.
-export { PROMPT_NAMES, candidateVars, questionVars, reportVars, scoreVars } from './prompt-vars';
+export {
+  PROMPT_NAMES,
+  candidateVars,
+  questionVars,
+  reportVars,
+  scoreVars,
+  titleVars,
+} from './prompt-vars';
 export type { AiMethod } from './prompt-vars';
 
 export { costFor, roundCostUsd, DEFAULT_UNIT_KIND } from './cost';

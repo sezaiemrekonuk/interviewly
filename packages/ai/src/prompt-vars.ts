@@ -8,6 +8,7 @@
  */
 import type {
   GenerateCandidatesArgs,
+  GenerateInterviewTitleArgs,
   GenerateReportArgs,
   GenerateRoundQuestionsArgs,
   ScoreAnswerArgs,
@@ -18,6 +19,7 @@ export const PROMPT_NAMES = {
   generateReport: 'interview.report.generate',
   scoreAnswer: 'interview.answer.score',
   generateCandidates: 'interview.question.candidates',
+  generateInterviewTitle: 'interview.title.generate',
 } as const;
 
 export type AiMethod = keyof typeof PROMPT_NAMES;
@@ -50,6 +52,13 @@ export function scoreVars(args: ScoreAnswerArgs): Record<string, unknown> {
     question: args.question,
     transcript: args.transcript,
     candidateProfile: args.candidateProfile,
+  };
+}
+
+export function titleVars(args: GenerateInterviewTitleArgs): Record<string, unknown> {
+  return {
+    language: args.language,
+    jobListing: args.jobListing,
   };
 }
 

@@ -10,6 +10,7 @@ import type { AiCtx } from './prompt-builder';
 import type { LanguageDetection } from './detect-language';
 import type {
   Candidate,
+  InterviewTitle,
   QuestionBatch,
   ReportPayload,
   RoundType,
@@ -24,6 +25,7 @@ export const TIMEOUT_MS = {
   scoreAnswer: 15_000,
   generateCandidates: 15_000,
   generateReport: 90_000,
+  generateInterviewTitle: 8_000,
 } as const;
 
 export interface GenerateRoundQuestionsArgs {
@@ -54,6 +56,12 @@ export interface ScoreAnswerArgs {
   ctx: AiCtx;
 }
 
+export interface GenerateInterviewTitleArgs {
+  jobListing: string;
+  language: string;
+  ctx: AiCtx;
+}
+
 export interface GenerateCandidatesArgs {
   priorQuestion: string;
   priorScore: number;
@@ -73,6 +81,7 @@ export interface AiClient {
   scoreAnswer(args: ScoreAnswerArgs): Promise<Scores>;
   /** K4 hook: easier / same / harder, in that order. */
   generateCandidates(args: GenerateCandidatesArgs): Promise<Candidate[]>;
+  generateInterviewTitle(args: GenerateInterviewTitleArgs): Promise<InterviewTitle>;
   /** No LLM call, no `llm_calls` row, no network (ai AC-13). */
   detectLanguage(text: string, current: string): LanguageDetection;
 }
