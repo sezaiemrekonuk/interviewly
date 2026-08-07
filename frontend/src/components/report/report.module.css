@@ -75,6 +75,44 @@
   font-size: 16px;
 }
 
+/* ------------------------------------------------------- unavailable (issue 83) */
+
+/* Same panel geometry as the wait it replaces, so a report that never arrives does not
+   collapse the screen. --danger keys the left edge only; the copy stays body text. */
+.unavailable {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 24px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--danger);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-hairline);
+}
+
+.unavailableTitle {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.unavailableBody {
+  max-width: 65ch;
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.unavailableLink {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text);
+  text-decoration: underline;
+}
+
 /* -------------------------------------------------------------------- report */
 
 .report {
