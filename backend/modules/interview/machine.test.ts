@@ -41,8 +41,23 @@ describe('canTransition', () => {
     expect(canTransition('profiling', 'hr_round')).toBe(true);
     expect(canTransition('evaluating', 'completed')).toBe(true);
     expect(canTransition('evaluating', 'failed')).toBe(true);
-    expect(canTransition('completed', 'evaluating')).toBe(false);
     expect(canTransition('created', 'hr_round')).toBe(false);
+  });
+
+  // Issue 081 reopened the two edges this file used to pin shut: a report job lost after the
+  // interview left `evaluating` has no other way back, because `runReport` uses
+  // `evaluating → completed` as its CAS. `POST /admin/interviews/:id/report/requeue` is the
+  // only caller, and the duplicate-report guard lives there rather than here.
+  it('lets an admin requeue re-enter evaluation from a terminal state', () => {
+    expect(canTransition('completed', 'evaluating')).toBe(true);
+    expect(canTransition('failed', 'evaluating')).toBe(true);
+    // Recovery, not a restart: the requeue re-runs the report, never the interview.
+    expect(canTransition('completed', 'hr_round')).toBe(false);
+    expect(canTransition('completed', 'tech_round')).toBe(false);
+    expect(canTransition('failed', 'hr_round')).toBe(false);
+    expect(canTransition('failed', 'completed')).toBe(false);
+    expect(canTransition('abandoned', 'evaluating')).toBe(false);
+    expect(canTransition('evaluating', 'evaluating')).toBe(false);
   });
 
   it('pauses and resumes the HR round only', () => {
