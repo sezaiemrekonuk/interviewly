@@ -1,7 +1,5 @@
-import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { setWorldConstructor, World } from '@cucumber/cucumber';
-import { parse } from 'yaml';
 import {
   ModelPrices,
   PROMPT_NAMES,
@@ -10,6 +8,7 @@ import {
   StubAiClient,
   createPromptBuilder,
   loadModelPrices,
+  loadPromptRegistry,
   questionVars,
   resolveAiClient,
   type AiClient,
@@ -336,12 +335,19 @@ export class AiWorld extends World {
 
   // -------------------------------------------------------------- helpers
 
-  /** The system message exactly as it sits on disk — the byte-identity reference. */
+  /**
+   * The system message exactly as it sits on disk — the byte-identity reference.
+   *
+   * Resolved through the registry, the same call `PromptBuilder` makes, rather than by reading
+   * `<promptName>.prompt.yaml`. A prompt's identity is the `name`/`version` inside the file,
+   * not its filename: a K9 revision is a new file (`…generate.v2.prompt.yaml`) carrying the
+   * same `name`, so the filename guess read v1 while the builder compiled v2 and the assertion
+   * failed on a difference that was the revision itself, not an injection.
+   */
   templateSystemMessage(promptName: string): string {
-    const file = parse(readFileSync(join(PROMPTS_DIR, `${promptName}.prompt.yaml`), 'utf8')) as {
-      messages: { role: string; content: string }[];
-    };
-    const system = file.messages.find((m) => m.role === 'system');
+    const system = loadPromptRegistry(PROMPTS_DIR)
+      .resolve(promptName)
+      .messages.find((m) => m.role === 'system');
     if (!system) throw new Error(`prompt ${promptName} has no system message`);
     return system.content;
   }

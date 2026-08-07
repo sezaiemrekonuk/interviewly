@@ -159,21 +159,23 @@ Then('the returned uploadId differs from the first uploadId', function () {
   assert.notEqual(lastUploadId, firstUploadId);
 });
 
+// Both counts are scoped to the acting candidate: `uploads` is unique per (owner, bytes), so
+// the claim under test is "this candidate has one row for these bytes". Unscoped, they also
+// counted every earlier scenario's candidate, who uploaded the same fixture — an assertion
+// that passed only while dedup was global and would drift with the scenario order regardless.
 Then(
   'exactly one uploads record exists for that sha256',
   async function (this: AiWorld) {
     const count = await prisma.upload.count({
-      where: { sha256: sha256Of('valid-3-page-listing.pdf') },
+      where: { user_id: this.candidateId, sha256: sha256Of('valid-3-page-listing.pdf') },
     });
     assert.equal(count, 1);
   },
 );
 
 Then('a second uploads record exists for the new sha256', async function (this: AiWorld) {
-  // findFirst, not findUnique: `uploads` is unique per (owner, bytes) now, so the sha256 alone
-  // is no longer a unique key. This scenario has one candidate, so it is still one row.
   const row = await prisma.upload.findFirstOrThrow({
-    where: { sha256: sha256Of('another-valid-listing.pdf') },
+    where: { user_id: this.candidateId, sha256: sha256Of('another-valid-listing.pdf') },
   });
   assert.equal(row.id, lastUploadId);
   assert.notEqual(row.id, firstUploadId);
