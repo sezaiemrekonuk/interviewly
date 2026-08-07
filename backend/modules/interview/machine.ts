@@ -8,6 +8,7 @@
 import type { Interview, InterviewState } from '@prisma/client';
 
 import { ApiError } from '../../src/lib/api-error';
+import { clock } from '../../src/lib/clock';
 import { prisma } from '../../src/lib/db';
 import { logger } from '../../src/lib/logger';
 
@@ -47,6 +48,37 @@ export function canTransition(from: InterviewState, to: InterviewState): boolean
   return TRANSITIONS[from]?.includes(to) ?? false;
 }
 
+/**
+ * The states that mean *the interview is over*, and therefore stamp `ended_at`.
+ *
+ * Listed, not derived. This was `(TRANSITIONS[state]?.length ?? 0) === 0` — terminal means no
+ * outgoing edge — which reads well and is wrong, because `completed → evaluating` exists: the
+ * operational report-requeue edge above. One recovery edge silently un-terminalled the normal
+ * end of every interview, so `ended_at` stopped being written on `evaluating → completed` and
+ * `/admin/stats.averageDurationMs` went back to being structurally 0 — the exact defect the
+ * derivation was introduced to prevent.
+ *
+ * "Has no outgoing edge" and "is an ending" are different properties that happened to coincide
+ * until they didn't. `ASSERT_TERMINAL_HAS_NO_EDGE` below keeps the half of the derivation that
+ * was genuinely useful: a *new* state added with no way out must be added here too.
+ */
+const TERMINAL: ReadonlySet<InterviewState> = new Set<InterviewState>([
+  'completed',
+  'abandoned',
+  'failed',
+]);
+
+const isTerminal = (state: InterviewState): boolean => TERMINAL.has(state);
+
+/**
+ * Every state with no way out is an ending. The converse is deliberately not asserted — an
+ * ending may still carry a recovery edge, which is what broke the derived version.
+ */
+export const deadEndsMissingFromTerminal = (): InterviewState[] =>
+  (Object.keys(TRANSITIONS) as InterviewState[]).filter(
+    (state) => (TRANSITIONS[state]?.length ?? 0) === 0 && !TERMINAL.has(state),
+  );
+
 export async function applyTransition(
   interview: Interview,
   to: InterviewState,
@@ -57,12 +89,24 @@ export async function applyTransition(
   const from = interview.state;
   if (!canTransition(from, to)) throw new ApiError('INVALID_STATE_TRANSITION');
 
+  // Written with the state for `ended_reason`'s reason: a follow-up write would leave the
+  // interview terminal with a null duration for a moment, and `/admin/stats` averages over
+  // exactly that column. Not added to the WHERE — that clause is the CAS on `state` and
+  // nothing else; an extra predicate there would turn a re-stamp into a 409. The `state` CAS
+  // is already what stops two concurrent terminal transitions, so an `ended_at` that is
+  // somehow already set can only be an older one, and the older one is the true end.
+  const endedAt = isTerminal(to) && !interview.ended_at ? clock.now() : undefined;
+
   // ADR-I06's pattern, applied to the state column: `from` was read when the request resolved
   // its interview, so checking the table against it is a TOCTOU. The WHERE clause re-checks it
   // at write time, which is what makes the guard hold across concurrent requests and replicas.
   const { count } = await prisma.interview.updateMany({
     where: { id: interview.id, state: from },
-    data: { state: to, ...(ctx.endedReason ? { ended_reason: ctx.endedReason } : {}) },
+    data: {
+      state: to,
+      ...(ctx.endedReason ? { ended_reason: ctx.endedReason } : {}),
+      ...(endedAt ? { ended_at: endedAt } : {}),
+    },
   });
   if (count === 0) throw new ApiError('INVALID_STATE_TRANSITION');
 
@@ -70,6 +114,7 @@ export async function applyTransition(
   // moves to `hr_round`, then a failed generation pauses it) would re-read the old `from`.
   interview.state = to;
   if (ctx.endedReason) interview.ended_reason = ctx.endedReason;
+  if (endedAt) interview.ended_at = endedAt;
 
   logger.info(
     { traceId: ctx.traceId, interviewId: interview.id, from, to },

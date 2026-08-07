@@ -10,10 +10,12 @@ const SWEEP_STATES: InterviewState[] = ['profiling', 'hr_round', 'paused'];
 // leaves `SWEEP_STATES`, so the next tick continues where this one stopped.
 const SWEEP_BATCH_LIMIT = 500;
 
-// `applyTransition` takes an `Interview` but reads only `id`/`state` and writes back `state`
-// and `ended_reason` — the columns selected here. Selecting the whole row instead would drag
-// `job_text` and `candidate_profile` along for every candidate on every tick.
-type SweepCandidate = Pick<Interview, 'id' | 'state' | 'ended_reason'>;
+// `applyTransition` takes an `Interview` but reads only `id`/`state`/`ended_at` and writes back
+// `state`, `ended_reason` and `ended_at` — the columns selected here. Selecting the whole row
+// instead would drag `job_text` and `candidate_profile` along for every candidate on every tick.
+// `ended_at` earns its place because the transition will not re-stamp a row that already has
+// one, and an absent column here would read as "never ended".
+type SweepCandidate = Pick<Interview, 'id' | 'state' | 'ended_reason' | 'ended_at'>;
 
 const reasonOf = (cause: unknown): string =>
   cause instanceof Error ? cause.message : String(cause);
@@ -43,6 +45,7 @@ export async function sweepAbandoned(): Promise<void> {
       id: true,
       state: true,
       ended_reason: true,
+      ended_at: true,
     },
     orderBy: { created_at: 'asc' },
     take: SWEEP_BATCH_LIMIT,
