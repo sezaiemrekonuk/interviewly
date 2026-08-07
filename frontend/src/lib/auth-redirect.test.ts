@@ -6,7 +6,8 @@ describe('safeReturnPath', () => {
   // The landing path is the authed home at `/`; a `/dashboard` route has never existed, and
   // pointing here sent every sign-in to a 404.
   it('falls back to the authed landing surface', () => {
-    expect(DEFAULT_LANDING_PATH).toBe('/');
+    // `/` is marketing for everyone now; the briefing is its own route.
+    expect(DEFAULT_LANDING_PATH).toBe('/dashboard');
   });
 
   it('keeps a same-origin path', () => {

@@ -1,41 +1,39 @@
 'use client';
 
-import { Suspense, lazy, useEffect, useState, type ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
+import { useEffect, type ReactNode } from 'react';
 
 import { apiGet } from '../../lib/api';
-
-// Imported only once `/me` says 200: React Query, the list and its CSS stay out of the
-// anonymous landing's chunk (§8.1 JS budget, guarded by `app/page.test.tsx`).
-const AuthedHome = lazy(() => import('./authed-home').then((m) => ({ default: m.AuthedHome })));
+import { DEFAULT_LANDING_PATH } from '../../lib/auth-redirect';
 
 /**
- * `/` is two screens. Which one the visitor gets is a session fact only the API knows, so
- * the marketing page renders first and is replaced when the probe resolves — an anonymous
- * visitor, the common case, never waits on a request and never sees a skeleton.
+ * `/` is the marketing page, for everyone. A signed-in visitor is sent to their briefing.
  *
- * Deliberately `apiGet`, not `useMe()`: the same reason `chrome/header-nav.tsx` gives —
- * pulling the query client into this tree spends the budget on one boolean.
+ * This used to *swap* the tree: the marketing body rendered, `/me` was probed, and the whole
+ * page was replaced by a signed-in home once it answered. Because the probe starts false, an
+ * existing customer was shown the hero, "Create account" and "Free while in preview" on every
+ * single visit to the front door before the swap landed. A redirect has the same cost to an
+ * anonymous visitor — nothing, they are the branch that never fires — and does not pitch the
+ * product to people who already bought it.
+ *
+ * Deliberately `apiGet` rather than `useMe()`: the same reason `chrome/header-nav.tsx` gives.
+ * Pulling React Query into this tree spends the §8.1 JS budget on one boolean, and the landing
+ * demo below it is already the page's client weight.
  */
 export function HomeSwitch({ children }: { children: ReactNode }) {
-  const [signedIn, setSignedIn] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     let active = true;
     void apiGet<{ user: unknown }>('/me').then((result) => {
-      if (active) setSignedIn(result.ok);
+      // `replace`, not `push`: pressing back from the dashboard must leave the site rather
+      // than bounce through a redirect that fires again.
+      if (active && result.ok) router.replace(DEFAULT_LANDING_PATH);
     });
     return () => {
       active = false;
     };
-  }, []);
+  }, [router]);
 
-  if (!signedIn) return <>{children}</>;
-
-  // No fallback markup: the chunk resolves in the same tick the state flips in practice,
-  // and a skeleton that flashes for one frame is worse than nothing.
-  return (
-    <Suspense fallback={null}>
-      <AuthedHome />
-    </Suspense>
-  );
+  return <>{children}</>;
 }

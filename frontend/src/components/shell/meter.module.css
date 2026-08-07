@@ -1,0 +1,87 @@
+/* Every bar in this product — question progress, session timer, mic level, budget burn — is a
+ * native <progress>. The reason is the CSP: `style-src 'self' 'nonce-…'` drops style
+ * attributes, so the previous `style={{ width: `${n}%` }}` meters rendered at zero width in
+ * production while looking correct in dev. A progress element carries its value as a DOM
+ * property, needs no inline style, and is announced by screen readers for free.
+ */
+
+.meter {
+  appearance: none;
+  -webkit-appearance: none;
+  display: block;
+  width: 100%;
+  height: 4px;
+  border: 0;
+  border-radius: var(--radius-input);
+  overflow: hidden;
+  background: var(--surface-sunken);
+}
+
+/* Both vendor pseudo-elements are required: they cannot be combined into one rule, because a
+   selector list containing an unknown pseudo-element is discarded whole by every engine. */
+.meter::-webkit-progress-bar {
+  background: var(--surface-sunken);
+  border-radius: var(--radius-input);
+}
+.meter::-webkit-progress-value {
+  background: var(--text-muted);
+  border-radius: var(--radius-input);
+  transition: inline-size var(--duration-default) var(--easing-default);
+}
+.meter::-moz-progress-bar {
+  background: var(--text-muted);
+  border-radius: var(--radius-input);
+}
+
+.tall {
+  height: 8px;
+}
+
+/* On the rail, the track is a lightened hairline rather than the light-ground sunken tone. */
+.onRail {
+  background: var(--rail-border);
+}
+.onRail::-webkit-progress-bar {
+  background: var(--rail-border);
+}
+.onRail::-webkit-progress-value {
+  background: var(--rail-text-muted);
+}
+.onRail::-moz-progress-bar {
+  background: var(--rail-text-muted);
+}
+
+/* In-session signal — the interview room only. */
+.live::-webkit-progress-value {
+  background: var(--live);
+}
+.live::-moz-progress-bar {
+  background: var(--live);
+}
+
+/* The one thing moving, or the one thing to act on. */
+.primary::-webkit-progress-value {
+  background: var(--primary);
+}
+.primary::-moz-progress-bar {
+  background: var(--primary);
+}
+
+/* A ceiling was hit — over budget, out of time. */
+.danger::-webkit-progress-value {
+  background: var(--danger);
+}
+.danger::-moz-progress-bar {
+  background: var(--danger);
+}
+
+/* A live mic level retargets many times a second; easing it would lag behind the voice. */
+.instant::-webkit-progress-value {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .meter::-webkit-progress-value {
+    transition: none;
+  }
+}

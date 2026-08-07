@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useState } from 'react';
 
 import { MicCheck } from '@/components/pre-join/mic-check';
+import { RailMark, SplitShell, WorkBody, WorkTop } from '@/components/shell/split-shell';
 import { Button } from '@/components/ui';
 import { routeForError } from '@/lib/error-routing';
 import { useInterviewState } from '@/lib/query';
@@ -43,42 +44,44 @@ export default function PreJoinPage() {
     if (mode && mode !== 'voice') router.replace(room);
   }, [mode, router, room]);
 
-  if (!ready || stateQuery.isPending) {
-    return (
-      <main className={styles.ground}>
-        <section className={styles.panel} data-testid="pre-join-skeleton" aria-busy="true">
-          <div className={`${styles.bar} ${styles.barTitle}`} />
-          <div className={`${styles.bar} ${styles.barBody}`} />
+  // The rail says what this step is for and nothing else. It carries no fact about the
+  // interview: while the state is still loading there is none to carry that is true yet.
+  const rail = (
+    <>
+      <RailMark />
+      <p className={styles.railLead}>{t('subtitle')}</p>
+    </>
+  );
+
+  function body() {
+    if (!ready || stateQuery.isPending) {
+      return (
+        <div className={styles.pane} data-testid="pre-join-skeleton" aria-busy="true">
+          <div className={styles.panel}>
+            <div className={`${styles.bar} ${styles.barBody}`} />
+            <div className={`${styles.bar} ${styles.barTitle}`} />
+          </div>
           <div className={`${styles.bar} ${styles.barCta}`} />
-        </section>
-      </main>
-    );
-  }
-
-  if (queryErrorCode) {
-    return (
-      <main className={styles.ground}>
-        <section className={styles.panel}>
-          <p role="alert" className={styles.subtitle}>
-            {errorMessage(queryErrorCode)}
-          </p>
-        </section>
-      </main>
-    );
-  }
-
-  // Redirecting, or the state has not resolved a mode yet — never mount the mic in either.
-  if (mode !== 'voice') return null;
-
-  return (
-    <main className={styles.ground}>
-      <section className={styles.panel} data-testid="pre-join">
-        <div>
-          <h1 className={styles.title}>{t('title')}</h1>
-          <p className={styles.subtitle}>{t('subtitle')}</p>
         </div>
+      );
+    }
 
-        <MicCheck onStateChange={onStateChange} />
+    if (queryErrorCode) {
+      return (
+        <p role="alert" className={styles.error}>
+          {errorMessage(queryErrorCode)}
+        </p>
+      );
+    }
+
+    // Redirecting, or the state has not resolved a mode yet — never mount the mic in either.
+    if (mode !== 'voice') return null;
+
+    return (
+      <section className={styles.pane} data-testid="pre-join">
+        <div className={styles.panel}>
+          <MicCheck onStateChange={onStateChange} />
+        </div>
 
         {/* Unavailable removes the CTA rather than disabling it: there is nothing to grant. */}
         {mic === 'unavailable' ? null : (
@@ -95,6 +98,13 @@ export default function PreJoinPage() {
           </div>
         )}
       </section>
-    </main>
+    );
+  }
+
+  return (
+    <SplitShell rail={rail} width="wide">
+      <WorkTop title={t('title')} />
+      <WorkBody className={styles.body}>{body()}</WorkBody>
+    </SplitShell>
   );
 }

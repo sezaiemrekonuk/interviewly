@@ -13,72 +13,244 @@
     "profile": "Profil",
     "tagline": "Gerçeğinden önce mülakata hazırlan.",
     "privacy": "Gizlilik",
-    "terms": "Koşullar"
+    "terms": "Koşullar",
+    "admin": "Yönetim"
   },
   "landing": {
     "hero": "Gerçeğinden önce mülakata hazırlan",
-    "subhead": "Bir İK, bir teknik mülakatçı, gerçek bir sohbet ve her cevabına puanlı rapor.",
+    "subhead": "İki mülakatçı, kendi ilanından yazılmış sorular ve her cevaba gerekçeli bir puan.",
     "cta": "Hesap oluştur",
-    "ctaNote": "Önizlemede ücretsiz. Kart yok, kurulum yok.",
+    "ctaNote": "Ön izleme boyunca ücretsiz. Kart yok.",
     "signIn": "Hesabın var mı? Giriş yap",
-    "props": {
-      "practice": {
-        "title": "Rolüne özel sorular",
-        "body": "İlanı yapıştır ya da rolü yaz — sorular hazır bir listeden değil, oradan çıkar."
+    "demo": {
+      "title": "Sandalyeye otur",
+      "lede": "Önce Ada sorar, sonra Turing. Vereceğin cevabı seç, puanlanışını izle. Hesap gerekmez, hiçbir şey kaydedilmez.",
+      "rolePrompt": "Hazırlandığın rol",
+      "fromListing": "İlandan",
+      "ada": "Ada",
+      "turing": "Turing",
+      "roleHr": "İK mülakatçısı",
+      "roleTech": "Teknik mülakatçı",
+      "hasFloor": "Söz onda",
+      "roundWaiting": "Bekliyor",
+      "roundDone": "Tur bitti",
+      "asks": "{name} · {role}",
+      "yourTurn": "Sıra sende — vereceğin cevabı seç",
+      "youAnswered": "Cevabın",
+      "verdict": "{max} üzerinden {score} aldı. STAR uyumu %{percent}.",
+      "verdictPlain": "{max} üzerinden {score} aldı.",
+      "tryAgain": "Başka bir cevap seç",
+      "marked": "Puanlandı. Sekiz sorudan biri.",
+      "outOf": "/ {max}",
+      "star": "STAR %{percent}",
+      "axes": {
+        "score": "Puan",
+        "star": "STAR uyumu"
       },
-      "feedback": {
-        "title": "Her cevaba geri bildirim",
-        "body": "Her cevap, sorunun ölçtüğü kriterlere göre puanlanır."
+      "nextRound": "Teknik turu {name} alıyor",
+      "sampleNote": "Biçimi göstermek için yazılmış örnek soru ve cevaplar. Gerçek mülakat, yapıştırdığın ilandan yazılır.",
+      "report": {
+        "title": "Örnek raporun",
+        "meta": "{count} soru, iki tur",
+        "close": "Gerçek bir mülakat iki turda altı, sekiz ya da on soru sürer; rapora güçlü yanların, açıkların, puanlanmış her soru, tam döküm ve bir PDF eklenir.",
+        "cta": "Gerçeğini başlat",
+        "replay": "Başka bir cevap dene"
       },
-      "progress": {
-        "title": "Dönüp bakabileceğin bir rapor",
-        "body": "Güçlü yanların, eksiklerin ve tüm konuşma dökümü — mülakat bitince silinmiyor."
+      "roles": {
+        "frontend": {
+          "label": "Frontend geliştirici",
+          "listing": "Kıdemli Frontend Geliştirici — React, TypeScript, tasarım sistemleri. Bileşen kütüphanesi sende olacak.",
+          "hr": {
+            "question": "Tarihi kayan bir sürümü anlatın. Ne yaptınız?",
+            "answers": {
+              "a": "Tasarım sistemi geçişimiz, üç üründe ortak bir modal bozulunca iki hafta kaydı. Sürümü kimsenin beklemediği on iki bileşene indirdim, onları ilk tarihte çıkardım, kalanın yeni tarihini iki ürün liderine aynı öğleden sonra söyledim. O tarihi tutturduk ve bir sonraki kırılma sürüm gününden önce görünsün diye ürünler arası duman testi ekledim.",
+              "b": "Olabiliyor. Ekipçe konuştuk, neyin ters gittiğini bulduk ve bir dahakine daha iyi planladık.",
+              "c": "Açıkçası çeyreğin tamamı zordu. İki kişi ayrıldı, yol haritası iki kez değişti, tasarım ekibi de aynı anda altımızda token'ları yeniden kuruyordu. Herkes gerilmişti. Bence asıl sorun planlama süreci — tasarımlar oturmadan tarihe söz veriyoruz, bunu bir süredir söylüyorum."
+            },
+            "reasons": {
+              "a": "Durum, karar, kime söylediğin ve sonuç — üstüne olayın kendisinden uzun ömürlü bir düzeltme. Ada bir kez daha üstelerdi: kapsamı keserken neyden vazgeçtin, ürün liderleri gerçekten razı oldu mu?",
+              "b": "Burada sana ait bir şey yok. Bütün fiiller \"biz\", karar yok, sonuç yok; bu cevap herhangi bir şirketteki herhangi bir gecikmeye uyar. Ne yaptığını ve senin yüzünden neyin değiştiğini söyle.",
+              "c": "Bu bağlam, cevap değil. Ada ne yaptığını sordu; dört cümle sonra konu hâlâ çeyrek. Son satır sebebi de odanın dışına koyuyor; bir İK mülakatçısının dinlediği kısım tam olarak orası."
+            }
+          },
+          "tech": {
+            "question": "Bin satırlık bir liste, filtre kutusundaki her tuş vuruşunda yeniden çiziliyor. Önce nereye bakarsınız?",
+            "answers": {
+              "a": "Önce filtre state'i listenin üstünde mi diye bakarım — input ile satırlar aynı ebeveyni paylaşıyorsa her tuşta bin satır yeniden çizilir. Bir şeyi değiştirmeden önce flamegraph'ta doğrularım, sonra ya o state'i aşağı taşırım, ya satırı memoize ederim, ya da filtreyi geciktiririm. Satırlar gerçekten pahalıysa sanallaştırırım ama o ilk adım değil, son adım.",
+              "b": "Satır bileşenine React.memo eklerim, işe yarıyor mu bakarım.",
+              "c": "Yeniden çizimler genelde state'in yanlış yerde durmasıdır. Ebeveynin state'i değişince React bütün alt ağacı karşılaştırır ve bu karşılaştırma çocuk sayısıyla doğrusal olduğu için her satırın bedelini ödersin. Burada incelik de var — zamanlayıcı işi parçalara böler, dilimleme maliyetin bir kısmını gizler, eşzamanlı çizim ise tabloyu yeniden değiştirir."
+            },
+            "reasons": {
+              "a": "Önce ölç, sonra değiştir. Muhtemel sebebi adlandırdın, nasıl doğrulayacağını söyledin, üç düzeltmeyi sıraya koydun ve sanallaştırmayı ait olduğu yere, sona bıraktın. Turing şunu sorardı: state'i taşımakla memoize etmek arasında neye göre seçersin?",
+              "b": "Tahmin — hem de neyin yavaş olduğunu bilmeden herkesin uzandığı tahmin. Satır prop'ları her çizimde yeni nesneyse `memo` hiçbir şey yapmaz; bu hatanın ilk denemeden sağ çıkmasının olağan sebebi de budur.",
+              "c": "Doğru ama hedef dışı. Turing önce nereye bakacağını sordu, karşılık olarak reconciler'ı aldı. Derinlik iyi okunuyor; içinde pazartesi sabahı gerçekten atacağın tek bir adım yok."
+            }
+          }
+        },
+        "product": {
+          "label": "Ürün yöneticisi",
+          "listing": "Ürün Yöneticisi — B2B SaaS, kendi kendine büyüme. Aktivasyon ve ilk kullanım sende olacak.",
+          "hr": {
+            "question": "Yanlış çıkan bir kararınızı anlatın.",
+            "answers": {
+              "a": "Aktivasyon altı haftadır kıpırdamadığı için ilk kullanım kontrol listesini kaldırdım. İki hafta sonra kurulum talepleri yüzde kırk arttı — liste aktivasyonu yükseltmiyordu, kafa karışıklığını önlüyordu; ben yanlış şeyi ölçmüştüm. Bir bayrak arkasında geri getirdim, aslında neyi test ettiğimi yazdım ve artık bir yüzeyi, sessizce neyi ayakta tuttuğunu ölçmeden kaldırmıyorum.",
+              "b": "Çok oldu. Ders çıkarıp devam edersin — yavaş haklı olmaktansa hızlı yanılmayı tercih ederim.",
+              "c": "Entegrasyon pazarı kurmaya karar vermiştik. Geriye bakınca pazar henüz yoktu, satış talebi olduğundan fazla göstermişti, mühendislik bir çeyrek dedi, iki çeyrek sürdü. Elimizde daha iyi veri olsaydı hiç başlamazdık sanırım."
+            },
+            "reasons": {
+              "a": "Gerçek bir karar, ters yöne giden bir sayı ve bunun yüzünden edindiğin bir kural. Ada şunu sorardı: listenin önemli olduğunu sen kaldırmadan önce kim söylemişti, onunla ne yaptın?",
+              "b": "Slogan, cevap değil. Karar yok, sonuç yok, farklı yapacağın bir şey yok — üstelik \"hızlı yanılmak\" bir değer, örnek değil.",
+              "c": "Karar gerçek ama içinde sana ait hiçbir şey yok. Satış abartmış, mühendislik az tahmin etmiş, veri eksikmiş. Ada neyi yanlış yaptığını sordu — o an elindeki bilgiyle neyi farklı karara bağlardın, onu söyle."
+            }
+          },
+          "tech": {
+            "question": "İlk kullanım akışını yeniden yazdınız, çıktı ve aktivasyon yüzde sekiz düştü. Önce neye bakarsınız?",
+            "answers": {
+              "a": "Sayı gerçek mi ona. Ölçüm kodu yeniden yazımla birlikte çıkar, o yüzden olayın hâlâ tetiklendiğini ve aktivasyonun geçen haftakiyle aynı tanımlandığını doğrularım. Sonra düşüşü bölerim: sadece yeni kullanıcılar mı, herkes mi; tek kanal mı, hepsi mi; tek plan mı, hepsi mi. Sebebi genelde niteliksel çalışmadan önce segmentasyon söyler. Sonra kayan segmentte oturum kayıtları, geri alma kararı ise ancak ondan sonra.",
+              "b": "Geri alırım, sonra ne olduğunu araştırırım.",
+              "c": "Aktivasyon gecikmeli bir gösterge, dolayısıyla bir hafta sonraki yüzde sekiz gürültü olabilir — tepki vermeden önce güven aralığına bakmak gerekir. Mevsimsellik de var; ayrıca yeniden yazım huniden kimin geçtiğini değiştirdiği için ölçtüğün kitleyi de değiştirir, bu da temiz bir karşılaştırmayı hayli zorlaştırır."
+            },
+            "reasons": {
+              "a": "Üründen önce ölçümü kontrol ettin, tahminden önce segmentlere ayırdın. Geri almayı ilk değil son karar olarak adlandırman, bunu panikten ayıran şey. Turing üstelerdi: karar vermeden önce ne kadar süre çalışmasına izin verirsin?",
+              "b": "Sezgi makul, yöntem yok. Geri almak kanıtı yok eder; altı hafta sonra aynı yazımı, hangi parçasının zarar verdiğini bilmeden yeniden çıkarırsın.",
+              "c": "Hepsi doğru ve hiçbiri bir kontrol değil. Her cümle, sayının bir şey ifade etmiyor olabileceğinin gerekçesi. Turing önce ne yapacağını sordu."
+            }
+          }
+        },
+        "data": {
+          "label": "Veri analisti",
+          "listing": "Veri Analisti — ticari raporlama. SQL, dbt ve bolca paydaş.",
+          "hr": {
+            "question": "Birine sayısının yanlış olduğunu söylemek zorunda kaldığınız bir anı anlatın.",
+            "answers": {
+              "a": "Satış direktörümüz yönetim sunumlarında, yenilemeleri iki kez sayan bir dönüşüm oranı kullanıyordu. Oranı yeniden kurdum, faturalama dökümüyle karşılaştırdım ve iki sorguyu yan yana koyup kendisine bir sonraki toplantıdan sonra değil, öncesinde gittim. Bir gün bozuldu, sonra sunumdaki diğer üç metriği de denetlememi istedi. Artık sahibi olduğum her sayının yanına tanımını da yazıyorum.",
+              "b": "Kırmadan söyledim, doğru rakamı açıkladım. Anladı ve devam ettik.",
+              "c": "Bu sürekli oluyor. Paydaşların çoğu tanımlara bakmadan kendi sayısını BI aracından çekiyor, sonra iki kişi toplantıya iki farklı rakamla geliyor. Uzun süredir bir metrik katmanı için bastırıyorum — asıl çözüm o; analistlerin insanları tek tek düzeltmesi değil."
+            },
+            "reasons": {
+              "a": "Kişi, hata, nasıl doğruladığın, ne zaman söylediğin ve sonrasında değişen şey. Toplantıdan sonra değil öncesinde götürmen, hikâyeyi senin yapan ayrıntı.",
+              "b": "İçinde hiç sürtünme olmayan üç cümle. Ada zor bir konuşmayı sordu, iyi giden bir konuşmanın özetini aldı; bu, gerçeğini anlatmayanların verdiği versiyondur.",
+              "c": "Başka bir soruyu cevapladın — kurumda neyin bozuk olduğunu, senin ne yaptığını değil. Önerdiğin çözüm sağlam; Ada bir insanı nasıl idare ettiğini dinliyordu."
+            }
+          },
+          "tech": {
+            "question": "Günlük gelir panosunda bir gecede yüzde otuzluk sıçrama var. İlk saatinizi anlatın.",
+            "answers": {
+              "a": "Veri mi iş mi, önce ona. Dün ve önceki gün için ham satırlar üzerinde tek sorgu, arada model olmadan. Satır sayısı sıçradıysa yeniden çalışan bir işin eklediği kopyalara bakarım; satır sayısı sabit ve toplam kaydıysa ya gerçektir ya kur. Sonra son dbt çalışması ve o penceredeki şema değişiklikleri. Gerçek olduğunu kimseye söylemeden önce aynı sayıyı hattın dokunmadığı bir kaynaktan isterim — genelde faturalama dökümünden.",
+              "b": "Mühendislik ekibine hatta bir değişiklik oldu mu diye sorarım.",
+              "c": "Yüzde otuz normal sapmanın hayli dışında, yani neredeyse kesin gerçek büyüme değil yukarı akış sorunudur. Benim tecrübemde bunlar hemen her zaman mükerrer yüklemedir — başarısız bir iş yeniden denenir ve aynı yığını iki kez ekler. Bu varsayımdan başlar, geriye doğru çalışırım."
+            },
+            "reasons": {
+              "a": "Modellerden önce ham satır, toplamdan önce satır sayısı ve kimseye söylemeden önce ikinci bir kaynak. Cevapların çoğunun atladığı adım tam da sonuncusu. Turing şunu sorardı: beşinci dakikada, daha bilmezken CFO'ya ne diyorsun?",
+              "b": "Tek soru, başkasına, sonra bekliyorsun. Turing ilk saatini sordu, ilk dakikanı aldı.",
+              "c": "İyi bir tahmin de tahmindir. Tek sorgu çalıştırmadan bir sebebe bağlandın ve cevap, sayının gerçek olup olmadığını hiç kontrol etmiyor — gerçek çıkarsa o saat, doğru bir şeyin yanlış olduğunu ispatlamaya gidiyor."
+            }
+          }
+        }
       }
     },
-    "preview": {
-      "label": "Mülakatın ortasından",
-      "hrChip": "İK",
-      "hrQuestion": "Geciken bir projeyi anlatır mısınız? Ne yaptınız?",
-      "answer": "Kapsamı sürüm için gerekene indirdim ve aynı gün müşteriye söyledim.",
-      "techChip": "Teknik",
-      "techQuestion": "Bu sorgu on milyon satırda yavaşlıyor. Önce nereye bakarsınız?",
-      "score": "4 / 5 puan — kurgu net, sonucu da söyle"
+    "mechanism": {
+      "title": "Sorular senin ilanından çıkar",
+      "lede": "İş unvanı değiştirilmiş bir soru bankası değil. İlan; rol, kıdem ve teknoloji için okunur, iki tur da ilanın gerçekten istediği şeye göre yazılır.",
+      "steps": {
+        "listing": {
+          "title": "İlanı yapıştırırsın",
+          "body": "Gerçekten başvurduğun ilanı. Mülakatla birlikte saklanır, böylece aynı işe yeniden çalışmak için onu tekrar aramazsın."
+        },
+        "rounds": {
+          "title": "Önce Ada, sonra Turing",
+          "body": "Motivasyon, çatışma ve sahiplenme üzerine bir İK turu; ardından ilanın adını verdiği şeyler üzerine teknik tur. İki mülakatçı, iki görev, iki ses."
+        },
+        "report": {
+          "title": "Her cevap anında puanlanır",
+          "body": "Her cevaba beş üzerinden bir puan, STAR uyumu ve yazılı bir gerekçe. Sondaki rapor, çoktan alınmış ölçümleri toplar."
+        }
+      }
+    },
+    "modes": {
+      "title": "Sesli söyle ya da yaz",
+      "lede": "Kelimeler aynı. Gün gelince ters giden kısım, onları yüksek sesle söylemek.",
+      "voice": {
+        "title": "Sesli",
+        "body": "Gerçek bir konuşma. Ada ve Turing konuşur, sen sesli cevap verirsin, sen susunca sıradaki soru gelir. Odadan önce mikrofon kontrolü var, istersen altyazı da.",
+        "mute": "Sustur",
+        "captions": "Altyazı",
+        "leave": "Ayrıl"
+      },
+      "text": {
+        "title": "Yazılı",
+        "body": "Soruyu oku, cevabı yaz, gönder. Aynı mülakatçılar, aynı puanlama, mikrofon yok — ve otobüste de çalışır.",
+        "label": "Cevabın",
+        "placeholder": "Cevabını yaz",
+        "send": "Cevabı gönder"
+      }
+    },
+    "report": {
+      "title": "Sonunda eline geçen",
+      "lede": "Bir gece önce yeniden okuyacağın tek sayfa ve sende kalan bir PDF.",
+      "items": {
+        "score": {
+          "term": "Genel puan",
+          "def": "Beş üzerinden; İK ve teknik turlar ayrı puanlanır — üzerinde çalışabileceğin kısım, aradaki fark."
+        },
+        "rounds": {
+          "term": "İki turun özeti",
+          "def": "Her mülakatçının seni nasıl bulduğu, kendi cümleleriyle — ikisinin ayrıştığı yerler dahil."
+        },
+        "strengths": {
+          "term": "Güçlü yanlar ve açıklar",
+          "def": "Gerçek mülakattan önce üzerinde çalışacak kadar somut. Asla \"iletişimini geliştir\" değil."
+        },
+        "questions": {
+          "term": "Soru soru",
+          "def": "Sorulan her soru, aldığı puan ve o puanın yazılı gerekçesi."
+        },
+        "transcript": {
+          "term": "Tam döküm",
+          "def": "Sorulan her şey ve söylediğin her şey; mülakat bittikten sonra da durur, ne cevapladığını okuyabilirsin."
+        },
+        "pdf": {
+          "term": "PDF",
+          "def": "Aynı rapor, indirilebilir hâlde — ürünün dışında da yaşar."
+        }
+      }
+    },
+    "languages": {
+      "title": "İngilizce ve Türkçe, ikisi de kendi dilinde",
+      "lede": "Biri yazılıp öbürü çevrilmiş değil. Her mülakatçı, mülakatın dilinde sorar; rapor da o dilde gelir.",
+      "en": "English",
+      "tr": "Türkçe",
+      "enQuestion": "This query gets slow at ten million rows. Where do you look first?",
+      "trQuestion": "Bu sorgu on milyon satırda yavaşlıyor. Önce nereye bakarsınız?"
+    },
+    "faq": {
+      "title": "Başlamadan önce",
+      "items": {
+        "listing": {
+          "q": "İlanım yoksa ne olacak?",
+          "a": "Başlamak için bir ilan gerekiyor, çünkü sorular ondan yazılıyor. Hedeflediğin role ait herhangi bir ilanı yapıştır — başvurduğun bir iş olmak zorunda değil."
+        },
+        "voice": {
+          "q": "Sesli mülakat için bir şey kurmak gerekiyor mu?",
+          "a": "Mikrofon ve tarayıcı. Oda açılmadan önce cihaz kontrolü var, böylece mülakat başladıktan sonra sürpriz olmuyor."
+        },
+        "time": {
+          "q": "Bir mülakat ne kadar sürer?",
+          "a": "Altı, sekiz ya da on soru — kabaca on ile yirmi beş dakika. Duraklatıp geri dönebilirsin; mülakat kaldığı yeri korur."
+        },
+        "languages": {
+          "q": "Hangi diller?",
+          "a": "İngilizce ve Türkçe, ikisi de eksiksiz. Mülakat da rapor da hesabındaki dili izler."
+        },
+        "data": {
+          "q": "Cevaplarıma ne oluyor?",
+          "a": "Rapor sana geri alıntılayabilsin diye mülakatla birlikte saklanıyor. Bir mülakatı ya da hesabının tamamını istediğin an silebilirsin. Ayrıntı gizlilik metninde."
+        }
+      }
     },
     "closing": {
-      "line": "Bugün on dakika, o gün daha az sürpriz.",
-      "cta": "Pratiğe başla"
-    }
-  },
-  "home": {
-    "greeting": "Tekrar hoş geldin, {name}",
-    "greetingPlain": "Tekrar hoş geldin",
-    "newInterview": "Yeni mülakat başlat",
-    "historyTitle": "Mülakatların",
-    "loadMore": "Daha fazla göster",
-    "continue": "Devam et",
-    "viewReport": "Raporu aç",
-    "viewDetails": "Ayrıntıları gör",
-    "delete": "Sil",
-    "deleteLabel": "{occupation} mülakatını sil",
-    "deleteConfirm": "Bu mülakat silinsin mi?",
-    "deleteConfirmAction": "Sil",
-    "cancel": "Vazgeç",
-    "occupationUnknown": "Mülakat",
-    "state": {
-      "created": "Başlamadı",
-      "profiling": "Hazırlanıyor",
-      "hr_round": "İK turu",
-      "tech_round": "Teknik tur",
-      "paused": "Duraklatıldı",
-      "evaluating": "Puanlanıyor",
-      "completed": "Tamamlandı",
-      "abandoned": "Yarım kaldı",
-      "failed": "Tamamlanamadı"
-    },
-    "empty": {
-      "title": "Henüz mülakatın yok",
-      "body": "Rolü yaz, on dakika cevapla, raporu oku. Döngü bu kadar.",
-      "cta": "İlk mülakatını başlat"
+      "line": "Şimdi on dakika, o gün daha az sürpriz.",
+      "cta": "Çalışmaya başla"
     }
   },
   "mascot": {
@@ -131,7 +303,22 @@
     "resetDoneTitle": "Şifre güncellendi",
     "resetDoneBody": "Tüm cihazlarda oturumun kapandı. Yeni şifrenle giriş yap.",
     "consentLabel": "<privacy>Gizlilik Bildirimi</privacy>'ni ve <terms>Kullanım Koşulları</terms>'nı okudum, kabul ediyorum.",
-    "consentHint": "Profilinizi, özgeçmişinizi ve mülakat yanıtlarınızı yapay zekâ sağlayıcıları üzerinden işliyoruz. Bildirim bunun ne anlama geldiğini anlatıyor."
+    "consentHint": "Profilinizi, özgeçmişinizi ve mülakat yanıtlarınızı yapay zekâ sağlayıcıları üzerinden işliyoruz. Bildirim bunun ne anlama geldiğini anlatıyor.",
+    "railSignInLede": "Asıl mülakattan önce provasını yap.",
+    "railSignInBody": "Bir İK görüşmecisi, bir teknik görüşmeci, gerçek bir sohbet ve her cevaba puan.",
+    "railSignInFoot": "On dakika. Ön izleme boyunca ücretsiz.",
+    "railRegisterLede": "Asıl mülakattan önce provasını yap.",
+    "railRegisterBody": "Hedeflediğin rolü söyle, gerisini iki görüşmeci halletsin: biri deneyimini, diğeri teknik işi sorar. Her cevabın raporuyla geri gelir.",
+    "railRegisterFoot": "Kurulumu bir dakika, mülakatı on dakika. Ön izleme boyunca ücretsiz.",
+    "railForgotLede": "Kapıda kalmak geçicidir.",
+    "railForgotBody": "Hesaba bağlı adrese bir bağlantı gönderiyoruz. Tek kullanımlık, bir saat sonra geçersiz olur.",
+    "railForgotFoot": "Yeni şifreyi belirleyene kadar hiçbir şey değişmez.",
+    "railResetLede": "Yeni şifre, diğer tüm oturumları kapatır.",
+    "railResetBody": "Buna bu tarayıcı, giriş yaptığın telefon ve elinde eski bir oturum kalan her şey dahil.",
+    "railResetFoot": "Yenisiyle tekrar giriş yapacaksın.",
+    "railVerifyLede": "Tek bir bağlantı, adres senin olsun.",
+    "railVerifyBody": "Doğrulanmış adres, raporlarının sana ulaşmasını ve şifre sıfırlama bağlantısının geri dönmesini sağlar.",
+    "railVerifyFoot": "Bağlantı tek kullanımlık, bir süre sonra geçersiz olur."
   },
   "onboarding": {
     "progress": "Adım {step} / {total}",
@@ -195,49 +382,32 @@
     "sizeMb": "{value} MB"
   },
   "profile": {
-    "title": "Profilin",
-    "subtitle": "Buradaki her şey sorularını biçimlendirir. Değiştikçe güncelle.",
-    "monogramAlt": "Baş harfin",
-    "namePlaceholder": "Henüz ad yok",
-    "jobTitlePlaceholder": "Henüz unvan yok",
-    "emailVerified": "E-posta doğrulandı",
-    "emailUnverified": "E-posta doğrulanmadı",
-    "verifyEmail": "Doğrula",
-    "completeness": "{total} alanın {filled} tanesi dolu",
-    "tabs": {
-      "account": "Hesap",
-      "education": "Eğitim",
-      "interests": "İlgi alanları",
-      "cv": "Özgeçmiş"
+    "title": "Profil",
+    "lede": "Mülakatçıların ilk sorudan önce senin hakkında bildikleri bunlar. Burada ne kadar çok şey varsa sorular gerçek deneyimine o kadar yaklaşır — ve hiçbiri başkasına gösterilmez.",
+    "inputs": "{total} girdiden {filled} tanesi dolu.",
+    "inputsCv": "Soruları en çok değiştiren şey buradaki CV'n.",
+    "identity": {
+      "title": "Kimsin",
+      "effect": "Adın ve şu anki rolün. İK turu buradan açılır; teknik tur da zorluğunu unvanındaki kıdeme göre ayarlar."
     },
-    "status": {
-      "filled": "{filled} / {total}",
-      "entries": "{count} kayıt",
-      "none": "Henüz boş",
-      "added": "Eklendi",
-      "attached": "Yüklü"
+    "cv": {
+      "title": "CV'n",
+      "effect": "Tek başına en güçlü girdi. Teknik tur yazılırken metni okunur; böylece sorular ilandaki unvanı değil, gerçekten yaptığın işi izler."
     },
-    "accountTitle": "Hesap bilgilerin",
-    "accountBody": "Adın ve unvanın her mülakatın girişinde yer alır.",
-    "educationTitle": "Eğitim",
-    "educationBody": "En fazla beş kayıt. Teknik turun neye bakacağını buradan öğrenir.",
-    "interestsTitle": "İlgi alanları",
-    "interestsBody": "İK turu buradan açılır. Birkaç kelime yeter.",
-    "cvTitle": "Özgeçmiş",
-    "cvBody": "Tek PDF, bir kez okunur ve metin olarak saklanır. Yenisi eskisinin yerine geçer.",
-    "emailTitle": "Giriş e-postası",
-    "emailBody": "Giriş yaptığın adres bu. Şimdilik buradan değiştirilemiyor.",
+    "education": {
+      "title": "Eğitim",
+      "effect": "Nerede ve ne okuduğun. CV'n zayıfsa teknik tur buna yaslanır, güçlüyse temelleri atlar."
+    },
+    "interests": {
+      "title": "İlgi alanları",
+      "effect": "İş dışında ne yaptığın. İK turu açılış sorusunda ve motivasyon sorularında bunları kullanır."
+    },
     "save": "Kaydet",
     "saved": "Kaydedildi",
-    "saveFailed": "Kaydedilemedi.",
     "nothingToSave": "Kaydedilecek bir değişiklik yok",
+    "saveFailed": "Kaydedilemedi.",
     "loading": "Profilin yükleniyor",
-    "cancel": "Vazgeç",
-    "deleteAccountTitle": "Hesabımı sil",
-    "deleteAccountBody": "Profilin, özgeçmişin ve bütün mülakat kayıtların silinir. Bu işlem geri alınamaz.",
-    "deleteAccountAction": "Hesabımı sil",
-    "deleteAccountConfirm": "Hesabın ve içindeki her şey silinsin mi?",
-    "deleteAccountConfirmAction": "Evet, hepsini sil"
+    "cancel": "Vazgeç"
   },
   "setup": {
     "title": "Mülakatını hazırla",
@@ -254,7 +424,12 @@
     "modeVoice": "Sesli",
     "roundShape": "Soru sayısı",
     "roundSplit": "{hrCount} İK + {techCount} teknik soru",
-    "start": "Başla"
+    "start": "Başla",
+    "railNextLabel": "Sırada ne var",
+    "railStep1": "İlanı okuyup rolü belirliyoruz.",
+    "railStep2": "Önce İK turu, ardından teknik tur.",
+    "railStep3": "Her yanıt puanlanır, sonunda rapor seni bekler.",
+    "back": "Uygulamaya dön"
   },
   "preJoin": {
     "title": "Mikrofon kontrolü",
@@ -306,7 +481,25 @@
         "reconnecting": "Yeniden bağlanıyor",
         "lost": "Bağlantı kesildi"
       }
-    }
+    },
+    "roundLabel": "Tur",
+    "roundHr": "İK",
+    "roundTech": "Teknik",
+    "elapsedLabel": "Geçen süre",
+    "elapsedNote": "Bu odaya girdiğinden beri.",
+    "railLive": "Canlı",
+    "roomTitle": "Mülakat odası",
+    "hasFloor": "Şu anda {name} konuşuyor",
+    "viewLabel": "Görünüm",
+    "viewSpeaker": "Konuşmacı",
+    "viewGrid": "Izgara",
+    "captions": "Altyazı",
+    "stateOn": "açık",
+    "stateOff": "kapalı",
+    "transcriptToggle": "Döküm",
+    "leave": "Ayrıl",
+    "roleCandidate": "Aday",
+    "micLevel": "Mikrofon seviyesi"
   },
   "report": {
     "title": "Raporun",
@@ -331,7 +524,9 @@
     "star": "STAR %{percent}",
     "download": "PDF indir",
     "downloadNotReady": "PDF'in henüz hazır değil — birazdan tekrar dene.",
-    "downloadError": "İndirme bağlantısı alınamadı. Tekrar dene."
+    "downloadError": "İndirme bağlantısı alınamadı. Tekrar dene.",
+    "starNotApplicable": "STAR yok",
+    "starNote": "STAR, cevabı bir hikâye gibi kurup kurmadığını ölçer; teknik sorularda puanlanmaz."
   },
   "errors": {
     "PASSWORD_TOO_SHORT": "Şifre en az 10 karakter olmalı.",
@@ -386,27 +581,108 @@
     "CONSENT_REQUIRED": "Hesap oluşturmak için Gizlilik Bildirimi'ni ve Kullanım Koşulları'nı kabul edin."
   },
   "dashboard": {
-    "title": "Mülakatlarınız",
-    "loading": "Mülakatlarınız yükleniyor…",
-    "loadMore": "Daha fazla yükle",
-    "delete": "Sil",
-    "deleteLabel": "Bu mülakatı sil",
-    "startedOn": "{date} tarihinde başladı",
-    "noOccupation": "Başlıksız mülakat",
-    "empty": {
-      "title": "Henüz mülakat yok",
-      "body": "Bir mülakat oluşturun; raporuyla birlikte burada görünecek.",
-      "cta": "Mülakat başlat"
+    "title": "Bugün",
+    "greeting": "Seni görmek güzel, {name}",
+    "greetingPlain": "Seni görmek güzel",
+    "newInterview": "Yeni mülakat",
+    "loading": "Çalışmaların yükleniyor…",
+    "carryOn": {
+      "label": "Açık kaldı",
+      "at": "{state} aşamasında durdu. Cevapladıklarının hiçbiri kaybolmadı.",
+      "cta": "Devam et",
+      "untitled": "Mülakat"
     },
-    "outcome": {
+    "standing": {
+      "title": "Neredesin",
+      "none": "Henüz puanlanmış mülakat yok. İlk raporun, geri kalan her şeyin ölçüleceği çizgiyi belirler.",
+      "outOf": "/ {max}",
+      "best": "En iyi",
+      "scored": "Puanlanan",
+      "trend": "Son mülakatların, eskiden yeniye",
+      "trendLocked": "Eğri için {n} puanlanmış mülakat daha gerekiyor. İki nokta yön değildir.",
+      "delta": {
+        "up": "Öncekine göre +{n}",
+        "down": "Öncekine göre −{n}",
+        "flat": "Öncekiyle aynı"
+      }
+    },
+    "rounds": {
+      "title": "İK ve teknik",
+      "hr": "İK",
+      "tech": "Teknik",
+      "none": "Bir rapor geldiğinde tur puanların burada görünür.",
+      "noScore": "—",
+      "gap": "{round} turun {n} puan düşük. Çalışılacak tur bu.",
+      "even": "İki tur da aynı puanda. Zayıf taraf yok.",
+      "gapOne": "Tek mülakattan: İK {hr}, Teknik {tech}.",
+      "weakerLink": "En düşük {round} cevapların"
+    },
+    "focus": {
+      "title": "Bunlara çalış",
+      "seeAll": "Tüm sorular",
+      "none": "En düşük puan aldığın cevaplar, kırık puanın gerekçesiyle birlikte burada toplanacak.",
+      "open": "Raporu aç",
+      "outOf": "/ {max}",
+      "clear": "{ceiling} ve altına düşen cevabın yok. Zeminin sağlam — puanı kırılan bir cevap olduğunda burada görürsün."
+    },
+    "rhythm": {
+      "title": "Ne sıklıkta çalışıyorsun",
+      "none": "Son {weeks} haftada hiçbir şey yok.",
+      "summary": "Son {weeks} haftanın {active} haftasında toplam {total} mülakat."
+    },
+    "recent": {
+      "title": "Son oturumlar",
+      "seeAll": "Hepsini gör"
+    },
+    "session": {
+      "untitled": "Mülakat",
+      "continue": "Devam et",
+      "viewReport": "Rapor",
+      "viewTranscript": "Döküm",
+      "delete": "Sil",
+      "deleteLabel": "{occupation} mülakatını sil",
+      "deleteConfirm": "Bu mülakat silinsin mi?",
+      "deleteConfirmAction": "Sil",
+      "cancel": "Vazgeç",
+      "noScore": "Puan yok",
+      "outOf": "/ {max}",
+      "mode": {
+        "text": "Yazılı",
+        "voice": "Sesli"
+      }
+    },
+    "runway": {
+      "title": "Üç adım, sonra ilk mülakatın",
+      "lede": "Sorular senin ilanından ve seninle ilgili bildiklerimizden yazılıyor. Buradaki iki dakika, sana ne sorulacağını değiştirir.",
+      "done": "Tamam",
+      "steps": {
+        "profile": {
+          "title": "Kim olduğunu yaz",
+          "body": "Adın ve şu anki rolün. İK turu buradan açılıyor.",
+          "cta": "Doldur"
+        },
+        "cv": {
+          "title": "CV'ni ekle",
+          "body": "Teknik tur CV'ni okur; böylece sorular unvanını değil, gerçek deneyimini izler.",
+          "cta": "Yükle"
+        },
+        "first": {
+          "title": "Bir ilan yapıştır ve başla",
+          "body": "On ile yirmi beş dakika. Duraklatıp geri dönebilirsin.",
+          "cta": "İlk mülakatını başlat"
+        }
+      }
+    },
+    "state": {
+      "created": "Başlamadı",
+      "profiling": "Hazırlanıyor",
+      "hr_round": "İK turu",
+      "tech_round": "Teknik tur",
+      "paused": "Duraklatıldı",
+      "evaluating": "Puanlanıyor",
       "completed": "Tamamlandı",
-      "cut_short": "Yarıda kesildi",
-      "budget_exhausted": "Bütçe doldu",
-      "time_exhausted": "Süre doldu",
-      "abandoned": "Terk edildi",
-      "error": "Hatayla sonlandı",
-      "evaluating": "Değerlendiriliyor",
-      "inProgress": "Devam ediyor"
+      "abandoned": "Yarım kaldı",
+      "failed": "Tamamlanamadı"
     }
   },
   "admin": {
@@ -431,8 +707,12 @@
         "state": "Durum",
         "tokens": "Token",
         "cost": "Maliyet (USD)",
-        "flags": "Durum etiketi"
-      }
+        "flags": "Durum etiketi",
+        "id": "Mülakat"
+      },
+      "noUserJoin": "Kullanıcı sütunu yok: satır yalnızca ham bir hesap kimliği taşıyor ve onu bir kişiye çözecek uç nokta bulunmuyor.",
+      "unpriced": "bilinmiyor",
+      "ceilingPill": "Tavanda"
     },
     "stats": {
       "heading": "Platform istatistikleri",
@@ -447,7 +727,9 @@
       "empty": "Henüz veri yok",
       "completed": "Tamamlandı",
       "cutShort": "Yarıda kesildi",
-      "unfinished": "Bitmedi"
+      "unfinished": "Bitmedi",
+      "cutShortNote": "Her zaman sıfır: hiçbir kod yolu bitiş nedenini cut_short olarak yazmıyor.",
+      "weakestNote": "Yalnızca soru kimlikleri — uç nokta soru metnini döndürmüyor."
     },
     "state": {
       "created": "Oluşturuldu",
@@ -459,6 +741,45 @@
       "completed": "Tamamlandı",
       "abandoned": "Yarıda bırakıldı",
       "failed": "Başarısız"
+    },
+    "nav": {
+      "label": "Yönetim bölümleri",
+      "overview": "Genel bakış",
+      "interviews": "Mülakatlar",
+      "costs": "Maliyet",
+      "modelCalls": "Model çağrıları",
+      "sessions": "Oturumlar",
+      "users": "Kullanıcılar",
+      "queue": "Kuyruk",
+      "audit": "Denetim",
+      "back": "Uygulamaya dön"
+    },
+    "scope": {
+      "allTime": "Tüm zamanlar — iki uç nokta da tarih aralığı almıyor."
+    },
+    "spec": {
+      "modelCalls": "Her çağrı llm_calls tablosuna sağlayıcısı, modeli, gecikmesi ve yedeğe düşüşüyle yazılıyor ama hiçbir uç nokta bunları okumuyor. Tabloda başarı ya da hata sütunu da yok; yani hata oranı bu veriden türetilemiyor.",
+      "sessions": "Ses oturumları mülakat başına saklanıyor ve hiçbir uç nokta onları döndürmüyor; bu yüzden aktif ve yakın zamanlı oturumlar burada listelenemiyor.",
+      "users": "Kullanıcı uç noktası yok. Mülakat satırı yalnızca ham bir hesap kimliği taşıyor ve onu çözecek bir şey bulunmuyor; hesaplar listelenemiyor, yürüttükleri mülakatlarla eşleştirilemiyor.",
+      "queue": "Soru üretimi ve puanlama isteğin içinde çalışıyor, yani gösterilecek bir kuyruk yok — bu bölüm arka plan işçisini bekliyor.",
+      "audit": "Yönetim okumaları yalnızca sunucu günlüğüne düşüyor. Veritabanına denetim kaydı yazan bir şey yok, dolayısıyla burada gösterilecek bir geçmiş de yok.",
+      "filters": "Bunların hiçbiri henüz filtrelemiyor: iki uç nokta da mülakat imlecinden başka parametre almıyor.",
+      "byModel": "Model ve sağlayıcı bazında harcama, token sayısı ve gecikme llm_calls içinde duruyor ama hiçbir uç nokta bunları toplamıyor. Ses, mülakat başına bir kez dakika ücretiyle işleniyor ve aynı toplama giriyor; bu yüzden metin ile ses burada ayrıştırılamıyor."
+    },
+    "filters": {
+      "dateRange": "Son 30 gün",
+      "provider": "Sağlayıcı",
+      "mode": "Mod",
+      "search": "Mülakat veya e-posta ara"
+    },
+    "costs": {
+      "heading": "Harcama",
+      "total": "Toplam harcama, yüklenen satırlar",
+      "totalNote": "Burada yüklü {count} mülakattan toplandı, platformun tamamından değil: platform toplamını veren bir uç nokta yok ve hiçbiri tarih aralığı almıyor.",
+      "unpricedNote": "Bunların {count} tanesi token harcadı ama maliyet kaydetmedi. cost_usd NOT NULL ve modelin fiyat satırı yoksa 0 yazıyor; bu yüzden burada bilinmiyor olarak görünüyor ve toplamı olduğundan düşük göstermemek için dışarıda bırakılıyor.",
+      "byCluster": "Mesleğe göre harcama",
+      "byModel": "Modele göre harcama",
+      "noSpend": "Henüz harcama yok"
     }
   },
   "legal": {
@@ -534,5 +855,100 @@
         }
       ]
     }
+  },
+  "nav": {
+    "label": "Interviewly",
+    "today": "Bugün",
+    "interviews": "Mülakatlar",
+    "new": "Yeni mülakat",
+    "profile": "Profil",
+    "settings": "Ayarlar",
+    "admin": "Yönetim",
+    "signOut": "Çıkış yap",
+    "signingOut": "Çıkılıyor…",
+    "account": "Hesap",
+    "accountCurrent": "Hesap — {section}, bulunduğun sayfa"
+  },
+  "settings": {
+    "title": "Ayarlar",
+    "account": {
+      "title": "Hesap",
+      "emailLabel": "E-posta",
+      "verified": "Doğrulandı",
+      "unverified": "Henüz doğrulanmadı",
+      "verify": "Doğrula",
+      "passwordLabel": "Parola",
+      "passwordBody": "Parola, sıfırlama bağlantısıyla değiştirilir; böylece yeni parola, zaten giriş yapmış olduğun bir sayfaya hiç yazılmaz.",
+      "passwordAction": "Sıfırlama bağlantısı gönder",
+      "passwordSent": "Gönderdik. Gelen kutuna bak."
+    },
+    "preferences": {
+      "title": "Tercihler",
+      "languageLabel": "Dil",
+      "languageBody": "Arayüzü ve bir sonraki mülakatınla raporunun yazılacağı dili belirler. Devam eden bir mülakat başladığı dilde kalır."
+    },
+    "privacy": {
+      "title": "Gizlilik ve veri",
+      "body": "Mülakatların, cevapların ve CV'n, raporlar sana geri alıntılayabilsin diye saklanıyor. Bir mülakatı silmek onu kaldırır; hesabını silmek her şeyi kaldırır.",
+      "notice": "Gizlilik metni",
+      "terms": "Koşullar"
+    },
+    "erase": {
+      "title": "Hesabı sil",
+      "body": "Bu hesaptaki her mülakat, döküm, rapor ve CV kaldırılır. Geri alınamaz ve sonrasında hiçbirini kurtarmanın yolu yoktur.",
+      "confirmLabel": "Onaylamak için e-posta adresini yaz",
+      "action": "Hesabımı sil",
+      "erasing": "Siliniyor…"
+    }
+  },
+  "archive": {
+    "title": "Mülakatlar",
+    "viewLabel": "Çalışmalarını nasıl görmek istersin",
+    "views": {
+      "sessions": "Oturumlar",
+      "questions": "Sorular"
+    },
+    "loadMore": "Daha fazla",
+    "empty": {
+      "sessions": {
+        "title": "Burada henüz bir şey yok",
+        "body": "Yaptığın her mülakat saklanıyor — puanı, dökümü ve raporu. Bir tane başlat, burası dolsun.",
+        "cta": "Mülakat başlat"
+      }
+    },
+    "questions": {
+      "caption": "Cevapladığın her soru; puanı ve o puanın gerekçesiyle birlikte.",
+      "roundFilter": "Tur",
+      "allRounds": "İkisi de",
+      "sortBy": "Sırala",
+      "sorts": {
+        "recent": "En yeni",
+        "worst": "En kötüden"
+      },
+      "count": "{shown} soru",
+      "outOf": "/ {max}",
+      "noScore": "—",
+      "loadMore": "Daha fazla",
+      "columns": {
+        "question": "Soru",
+        "round": "Tur",
+        "score": "Puan",
+        "star": "STAR (sadece İK)",
+        "when": "Ne zaman",
+        "open": "Raporu aç"
+      },
+      "empty": {
+        "title": "Henüz cevaplanmış soru yok",
+        "body": "Bir mülakat puanlandığında sana sorulan her soru buraya düşer — sıralanabilir, yani en zayıf cevapların tek tıkla karşında."
+      },
+      "starNotApplicable": "yok",
+      "starNote": "STAR, cevabı bir hikâye gibi kurup kurmadığını ölçer; teknik sorularda puanlanmaz."
+    }
+  },
+  "notFound": {
+    "title": "Bu sayfa burada değil",
+    "body": "Silinmiş olabilir ya da bağlantı yanlış olabilir. Hesabında hiçbir şey değişmedi.",
+    "home": "Bugün'e git",
+    "interviews": "Mülakatların"
   }
 }

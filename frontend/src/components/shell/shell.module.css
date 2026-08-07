@@ -1,0 +1,205 @@
+/* Direction B's one shell: a fixed context column that says where you are and what is true
+ * right now, against a working surface that holds exactly one subject. Every screen uses it,
+ * so a user learns the product once. The two columns are different materials on purpose —
+ * a tint with a border does not read as a split at a squint.
+ */
+
+.shell {
+  display: grid;
+  grid-template-columns: var(--rail-width) minmax(0, 1fr);
+  min-height: 100vh;
+  background: var(--surface);
+}
+
+/* Rail width is a class, never an inline style: the CSP is `style-src 'self' 'nonce-…'`,
+   so a style attribute is dropped in production. */
+.narrow { --rail-width: 212px; }
+.default { --rail-width: 240px; }
+.wide { --rail-width: 340px; }
+
+.rail {
+  background: var(--rail);
+  color: var(--rail-text);
+  padding: 24px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.work {
+  background: var(--surface);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- rail pieces ---------- */
+
+.mark {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 24px;
+  color: var(--rail-text);
+}
+
+/* The glyph is drawn, not an asset: one fewer request, and it inherits currentColor so it
+   works on the rail and on a light ground without a second file. */
+.markGlyph {
+  width: 16px;
+  height: 20px;
+  flex: none;
+  border-radius: 1px;
+  background: currentColor;
+  position: relative;
+}
+.markGlyph::after {
+  content: "";
+  position: absolute;
+  inset: 4px 4px 4px 8px;
+  background: var(--rail);
+}
+
+.markText {
+  font-family: var(--font-heading), Georgia, serif;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.block {
+  padding: 16px 0;
+  border-block-start: 1px solid var(--rail-border);
+}
+.block:first-of-type {
+  padding-top: 0;
+  border-block-start: 0;
+}
+
+.label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--rail-text-faint);
+  margin-bottom: 8px;
+}
+
+.value {
+  font-family: var(--font-heading), Georgia, serif;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--rail-text);
+}
+
+.note {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--rail-text-faint);
+  margin-top: 8px;
+}
+
+.foot {
+  margin-top: auto;
+  padding-top: 16px;
+  border-block-start: 1px solid var(--rail-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--rail-text-faint);
+}
+
+/* ---------- working-surface header ---------- */
+
+.workTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 16px 24px;
+  border-block-end: 1px solid var(--border);
+}
+
+.workTitle {
+  font-family: var(--font-heading), Georgia, serif;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  color: var(--text);
+  margin: 0;
+}
+
+.workBody {
+  padding: 24px;
+  min-width: 0;
+}
+
+/* ---------- "specified, not yet built" ----------
+   One neutral convention for a scheduled gap. Never a warning colour: colouring these as
+   failures teaches the operator to ignore the real ones. */
+.spec {
+  display: inline-block;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border: 1px dotted var(--border);
+  border-radius: var(--radius-button);
+  padding: 4px;
+  white-space: nowrap;
+}
+.specOnRail {
+  color: var(--rail-text-faint);
+  border-color: var(--rail-border);
+}
+
+.hatch {
+  background: var(--spec-hatch);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-input);
+}
+
+@media (max-width: 60rem) {
+  .shell {
+    grid-template-columns: minmax(0, 1fr);
+    /* Both tracks are `auto` by default and `min-height: 100vh` stretches them to share the
+       slack, so on a short page the top bar grew to 263px of dark for 44px of content — the
+       viewport this breakpoint exists to save, spent on nothing. The bar takes its content;
+       the work takes the rest. */
+    grid-template-rows: auto 1fr;
+  }
+  .rail {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 16px;
+  }
+  .mark {
+    margin-bottom: 0;
+  }
+  /* Only one rail carries navigation *and* an account, and at 390 the word costs it the row:
+     110px of "Interviewly" against three nav items that need 250. The drawn glyph stays and is
+     still the link home. `:has(details)` is the cheapest true statement of "this is the app
+     rail" — the room, report, auth and admin rails have the width to spare and keep the word. */
+  .rail:has(details) .markText {
+    display: none;
+  }
+  .block {
+    padding: 0;
+    border-block-start: 0;
+  }
+  .foot {
+    margin-top: 0;
+    padding-top: 0;
+    border-block-start: 0;
+    margin-left: auto;
+  }
+}

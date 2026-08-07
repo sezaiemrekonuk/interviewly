@@ -1,0 +1,175 @@
+/* The shared vocabulary of the console's data panels — Overview (`stats-panel.tsx`) and
+ * Costs (`cost-panel.tsx`) both read this file. One column of blocks read top to bottom
+ * rather than a wall of equal tiles where nothing is the subject. Numbers are mono
+ * (`.tabular`), language is not.
+ */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.figure,
+.card {
+  padding: 16px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+}
+
+.eyebrow {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.figureValue {
+  margin: 8px 0 0;
+  font-size: 28px;
+  line-height: 1.1;
+  color: var(--text);
+}
+
+.title {
+  margin: 0 0 12px;
+  font-family: var(--font-heading), Georgia, serif;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Label and value share the first line; the bar spans both columns underneath, so the
+   figure is readable before the bar and the bar gives it shape. */
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+
+.rowLabel {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 14px;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowValue {
+  font-size: 14px;
+  color: var(--text);
+  text-align: end;
+}
+
+.rowMeter {
+  grid-column: 1 / -1;
+}
+
+.rowNote {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  align-items: start;
+  gap: 16px;
+}
+
+.note {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* ---------- Costs ---------- */
+
+/* The specified filter bar, drawn as a specification. Spans, never buttons: a control that
+   looks live and does nothing teaches the operator that the console lies. */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.chip {
+  padding: 4px 12px;
+  background: var(--spec-hatch);
+  border: 1px dotted var(--border);
+  border-radius: var(--radius-button);
+  font-size: 13px;
+  color: var(--text);
+}
+
+/* A block whose content does not exist yet. The sentence sits on a solid bed because muted
+   ink over the hatch's darker stripe misses AA. */
+.hatch {
+  padding: 16px;
+  background: var(--spec-hatch);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-input);
+}
+
+.hatchNote {
+  max-width: 72ch;
+  margin: 0;
+  padding: 12px;
+  background: var(--surface);
+  border-radius: var(--radius-input);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.big {
+  margin: 8px 0 0;
+  font-size: 40px;
+  line-height: 1.05;
+  color: var(--text);
+}

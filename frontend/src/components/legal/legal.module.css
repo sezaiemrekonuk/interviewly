@@ -1,75 +1,116 @@
 /*
- * The two legal surfaces (issue 009). One long read, so the column is narrower than the
- * 72rem chrome gutter and the measure is capped in `ch` — a policy nobody can read is the
- * same as no policy. Flat ground, --shadow-hairline: neither route is an entry surface.
+ * `/privacy` and `/terms` — the two documents. Not the split shell: these are a read, not a
+ * state, so they get a reading treatment instead of a context column.
+ *
+ * The measure is the whole design. A policy set to the 72rem chrome gutter is a policy
+ * nobody finishes, so the sheet is capped near 65 characters and the rhythm — eyebrow,
+ * title, lede, rule, numbered sections — is what makes it scannable without headings
+ * shouting.
  */
 
 .doc {
   max-width: 72rem;
-  padding: 0 24px 64px;
+  padding: 24px 24px 96px;
   margin: 0 auto;
 }
 
-.panel {
-  max-width: 68ch;
-  padding: 40px;
+/* A sheet on the flat ground, the same material as every other working surface. */
+.sheet {
+  max-width: 736px;
+  padding: 56px;
+  margin: 0 auto;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-panel);
   box-shadow: var(--shadow-hairline);
 }
 
-.title {
-  font-family: var(--font-heading), sans-serif;
-  font-size: 28px;
-  font-weight: 700;
-  line-height: 1.2;
+.head {
+  padding-bottom: 32px;
+  border-block-end: 1px solid var(--border);
 }
 
 .updated {
-  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.title {
+  margin-top: 12px;
+  font-family: var(--font-heading), Georgia, serif;
+  font-size: 40px;
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+
+/* The lede carries the summary of the document, so it sits a step above body copy. */
+.intro {
+  max-width: 60ch;
+  margin-top: 20px;
+  font-size: 20px;
+  line-height: 1.55;
+  color: var(--text);
+}
+
+.section {
+  margin-top: 40px;
+}
+
+/* The ordinal hangs beside the heading rather than above it, so a scan down the left edge
+   finds the clause numbers in one column. */
+.sectionHead {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+}
+
+.ordinal {
+  flex: none;
   font-size: 13px;
   color: var(--text-muted);
 }
 
-.intro {
-  margin-top: 20px;
-  font-size: 16px;
-  line-height: 1.6;
-}
-
-.section {
-  margin-top: 32px;
-}
-
 .heading {
-  font-family: var(--font-heading), sans-serif;
+  font-family: var(--font-heading), Georgia, serif;
   font-size: 20px;
   font-weight: 600;
   line-height: 1.3;
+  letter-spacing: -0.015em;
 }
 
+/* Full ink, not muted: this is the text the reader is here for, and 16/1.7 over 65ch is the
+   only reason a legal page gets read to the end. */
 .body {
-  margin-top: 8px;
+  max-width: 65ch;
+  margin-top: 12px;
   font-size: 16px;
   line-height: 1.7;
-  color: var(--text-muted);
+  color: var(--text);
 }
 
-.contact {
-  padding-block-start: 24px;
-  margin-top: 40px;
-  font-size: 14px;
-  color: var(--text-muted);
+.foot {
+  padding-top: 32px;
+  margin-top: 56px;
   border-block-start: 1px solid var(--border);
 }
 
-/* A text link, not a button: leaving a policy is not an action the surface promotes. */
+.contact {
+  max-width: 65ch;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
 .back {
   display: inline-block;
   margin-top: 24px;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text);
   border-radius: var(--radius-button);
   transition: color var(--duration-default) var(--easing-default);
@@ -85,7 +126,24 @@
 }
 
 @media (max-width: 640px) {
-  .panel {
+  .doc {
+    padding: 16px 16px 64px;
+  }
+
+  .sheet {
     padding: 24px;
+  }
+
+  .title {
+    font-size: 28px;
+  }
+
+  .intro {
+    font-size: 16px;
+  }
+
+  /* The ordinals stop earning their column once the heading wraps at every clause. */
+  .ordinal {
+    display: none;
   }
 }

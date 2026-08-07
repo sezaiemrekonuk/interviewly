@@ -23,6 +23,15 @@ body {
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Source Serif carries an opsz axis; let the browser size it optically. */
+  font-optical-sizing: auto;
+}
+
+/* Anything that lines up in a column — money, tokens, latency, ids, timers. Direction B
+   sets these in the mono face so a figure in a sentence weighs the same as one in a table. */
+.tabular {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
 }
 
 button,

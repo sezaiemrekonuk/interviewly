@@ -67,7 +67,9 @@ describe('sweepAbandoned', () => {
         OR: [{ started_at: null }, { started_at: { lt: cutoff } }],
         chat_messages: { none: { created_at: { gte: cutoff } } },
       },
-      select: { id: true, state: true, ended_reason: true },
+      // `ended_at` is read by `applyTransition`, which will not re-stamp a row that already
+      // carries one — an absent column here would read as "never ended".
+      select: { id: true, state: true, ended_reason: true, ended_at: true },
       orderBy: { created_at: 'asc' },
       take: 500,
     });

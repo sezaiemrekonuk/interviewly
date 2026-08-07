@@ -1,271 +1,454 @@
-/* Screen 1. Entry surface: gradient ground (ENTRY_ROUTES) + --shadow-soft, tokens only. */
+/*
+ * The anonymous landing.
+ *
+ * The page is an interview, so its rhythm is an interview's: a short band that says what this
+ * is, the stage (`components/home/landing.module.css`), then quiet documentary sections that
+ * only name what the visitor already watched happen. Density alternates deliberately — the
+ * stage is dark and loud, everything after it is a light document with hairline rules.
+ */
 
 .ground {
   min-height: 100vh;
-  padding: 0 0 64px;
-  background: var(--gradient-entry);
-  background-attachment: fixed;
+  padding-block-end: 64px;
+  background: var(--bg);
 }
 
-/* Each band carries the same 72rem × 24px gutter the chrome header uses, so the wordmark,
-   the hero and the value props share one left edge at every width. */
-.hero {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 40px;
-  align-items: center;
+/* One gutter for the whole page, so the wordmark, the headline, the stage and the closing
+   line share a left edge at every width. */
+.hero,
+.band,
+.langBand,
+.closing {
   max-width: 72rem;
-  padding: 0 24px;
-  margin: 64px auto 0;
+  padding-inline: 24px;
+  margin-inline: auto;
+}
+
+/* --------------------------------------------------------------------------------- hero */
+
+/* Deliberately short. The argument is the stage directly below it; a full-viewport hero here
+   would push the one thing worth seeing under the fold. Single column, because a right-hand
+   action column at this height is mostly empty space with a button floating in it. */
+.hero {
+  padding-block: 40px 24px;
 }
 
 .title {
-  max-width: 16ch;
-  font-family: var(--font-heading), sans-serif;
+  max-width: 24ch;
+  font-family: var(--font-heading), Georgia, serif;
   font-size: 56px;
-  font-weight: 700;
-  line-height: 1.05;
-  letter-spacing: -0.02em;
+  font-weight: 600;
+  line-height: 1.02;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
 }
 
 .subhead {
-  max-width: 52ch;
-  margin-top: 20px;
+  max-width: 56ch;
+  margin-block-start: 12px;
   font-size: 20px;
+  line-height: 1.4;
   color: var(--text-muted);
 }
 
-.actions {
+/* The CTA sits on the baseline of its own row with the note and the sign-in link beside it,
+   so the whole action costs one line rather than three. */
+.heroAct {
   display: flex;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: 8px 20px;
   align-items: center;
-  margin-top: 32px;
+  margin-block-start: 20px;
 }
 
+/* The page's single --primary. Flat and square-ish: the colour is the emphasis, not a lift. */
 .cta {
   display: inline-flex;
   align-items: center;
   min-height: 44px;
-  padding: 16px 28px;
+  padding: 12px 24px;
   font-size: 16px;
   font-weight: 600;
   color: var(--surface);
   background: var(--primary);
   border-radius: var(--radius-button);
-  box-shadow: var(--shadow-soft);
-  transition: opacity var(--duration-default) var(--easing-default);
+  transition: background-color var(--duration-default) var(--easing-default);
 }
 
 .cta:hover {
-  opacity: 0.92;
+  background: var(--primary-deep);
 }
 
 .cta:focus-visible,
-.closingCta:focus-visible {
+.closingCta:focus-visible,
+.secondary:focus-visible,
+.faqQuestion:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
 .secondary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   font-size: 14px;
   color: var(--text-muted);
+  border-radius: var(--radius-button);
+  transition: color var(--duration-default) var(--easing-default);
+}
+
+.secondary:hover {
+  color: var(--text);
   text-decoration: underline;
 }
 
 .note {
-  margin-top: 16px;
   font-size: 13px;
   color: var(--text-muted);
 }
 
-/* --------------------------------------------------------- hero right: mascot + vignette */
+/* -------------------------------------------------------------------------- shared bands */
 
-.showcase {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  align-items: center;
-  width: 340px;
+.band,
+.langBand {
+  padding-block: 48px;
+  border-block-start: 1px solid var(--border);
 }
 
-/*
- * The surface's one authored motion moment: the mascot arrives, once, and nothing on this
- * page moves again. `both` holds the from-state until the first frame so there is no flash
- * of the finished position.
- */
-.mascotSlot {
-  animation: arrive var(--duration-default) var(--easing-default) both;
+/* The rule belongs to the page gutter, so it is drawn by the band rather than by a wrapper
+   that would start 24px outside the text it separates. */
+.band + .band,
+.band + .langBand,
+.langBand + .band {
+  border-block-start: 1px solid var(--border);
 }
 
-@keyframes arrive {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
+.bandHead {
+  max-width: 62ch;
+  padding-block-end: 32px;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .mascotSlot {
-    animation: none;
-  }
-}
-
-/* The product in four lines: two personas ask, one answer, one score. */
-.preview {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: 100%;
-  padding: 20px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-card);
-  box-shadow: var(--shadow-soft);
-}
-
-.previewLabel {
-  font-size: 13px;
-  color: var(--text-muted);
-}
-
-.turn {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.persona {
-  display: inline-flex;
-  gap: 8px;
-  align-items: center;
-  align-self: flex-start;
-  padding: 4px 8px;
-  font-size: 13px;
+.bandTitle {
+  font-family: var(--font-heading), Georgia, serif;
+  font-size: 28px;
   font-weight: 600;
-  color: var(--text);
-  background: var(--surface-sunken);
-  border-radius: var(--radius-button);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
 }
 
-.personaDot {
-  width: 8px;
-  height: 8px;
-  border-radius: var(--radius-button);
-}
-
-/* Informational only — the two interviewers are told apart by the dot and by their label. */
-.personaHr .personaDot {
-  background: var(--accent);
-}
-
-.personaTech .personaDot {
-  background: var(--text);
-}
-
-.question {
-  font-size: 14px;
-  color: var(--text);
-}
-
-.answer {
-  padding-inline-start: 12px;
-  font-size: 14px;
+.bandLede {
+  margin-block-start: 8px;
+  font-size: 16px;
+  line-height: 1.5;
   color: var(--text-muted);
-  border-inline-start: 1px solid var(--border);
 }
 
-.scoreTag {
-  align-self: flex-start;
-  padding: 4px 8px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
-  background: var(--primary-soft);
-  border-radius: var(--radius-button);
-}
+/* ------------------------------------------------------------------------ how it works */
 
-/* ------------------------------------------------------------------ value props */
-
-/* One tall lead promise beside two supporting ones — not three clones of one card. */
-.props {
+.steps {
   display: grid;
-  grid-template-columns: 1.4fr 1fr;
-  gap: 16px;
-  max-width: 72rem;
-  padding: 0 24px;
-  margin: 64px auto 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 32px;
   list-style: none;
 }
 
-.prop {
+/* Numbered because the order is the mechanism: the listing has to be read before a question
+   can be written, and the report cannot exist before both rounds are answered. */
+.step {
+  padding-block-start: 16px;
+  border-block-start: 1px solid var(--border);
+}
+
+.stepIndex {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary-deep);
+}
+
+.stepTitle {
+  margin-block-start: 8px;
+  font-family: var(--font-heading), Georgia, serif;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.stepBody {
+  max-width: 40ch;
+  margin-block-start: 8px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+/* ------------------------------------------------------------------------ voice or text */
+
+.modes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+
+.modeVoice,
+.modeText {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+}
+
+/* Voice runs on the room's material, text on the working surface — the two modes are told
+   apart by the ground they are shown on, which is the difference the visitor will meet. */
+.modeVoice {
+  color: var(--rail-text);
+  background: var(--rail);
+  border-color: var(--rail);
+}
+
+.modeText {
+  background: var(--surface);
+}
+
+.modeTitle {
+  font-family: var(--font-heading), Georgia, serif;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.modeBody {
+  flex: 1 1 auto;
+  max-width: 42ch;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--rail-text-muted);
+}
+
+.modeText .modeBody {
+  color: var(--text-muted);
+}
+
+/* The room's own control bar, at rest — not an illustration of one. */
+.controlBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  background: var(--rail-raised);
+  border: 1px solid var(--rail-border);
+  border-radius: var(--radius-card);
+}
+
+.control,
+.controlLeave {
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid var(--rail-border);
+  border-radius: var(--radius-button);
+}
+
+.control {
+  color: var(--rail-text-muted);
+}
+
+.controlLeave {
+  margin-inline-start: auto;
+  color: var(--rail-text);
+}
+
+.composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 12px;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-card);
+}
+
+.composerLabel {
+  grid-column: 1 / -1;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.composerField {
+  padding: 12px;
+  font-size: 14px;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-input);
+}
+
+/* Drawn, not filled. This is a picture of the composer, and a picture of a button must not
+   wear the action colour — the page has exactly one --primary and it is the hero's. */
+.composerSend {
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-button);
+}
+
+/* ------------------------------------------------------------------- what comes back */
+
+/* A definition list, because the report is a document and this is its table of contents.
+   Cards here would describe a card grid the product does not have. */
+.anatomy {
+  display: flex;
+  flex-direction: column;
+}
+
+.anatomyRow {
+  display: grid;
+  grid-template-columns: minmax(0, 20ch) minmax(0, 1fr);
+  gap: 24px;
+  padding-block: 16px;
+  border-block-start: 1px solid var(--border);
+}
+
+.anatomyRow:last-child {
+  border-block-end: 1px solid var(--border);
+}
+
+.anatomyTerm {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.anatomyDef {
+  max-width: 60ch;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+/* ---------------------------------------------------------------------- two languages */
+
+.langPair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+
+.langCard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   padding: 24px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
-  box-shadow: var(--shadow-soft);
 }
 
-.propLead {
+.langTag {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* Serif and set large: this is the interviewer speaking, in both languages, and the point of
+   the section is that neither is a translation of the other. */
+.langQuote {
+  font-family: var(--font-heading), Georgia, serif;
+  font-size: 20px;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+/* -------------------------------------------------------------------------------- faq */
+
+.faq {
   display: flex;
   flex-direction: column;
-  grid-row: span 2;
-  padding: 32px;
 }
 
-/*
- * The two-row span buys height the two lines of copy cannot spend, so the remainder carries
- * the promise instead of nothing: a redacted job listing, the thing you paste. Decorative and
- * wordless on purpose — a pseudo-element, so there is no DOM, no copy and nothing for a screen
- * reader to read. `flex: 1` means it absorbs exactly the leftover, whatever the right column
- * makes the row.
- */
-.propLead::after {
-  flex: 1;
-  min-height: 104px;
-  margin-top: 24px;
+/* Native <details>: the platform ships a keyboard-complete disclosure widget, and a hand-built
+   accordion here would be JS on the anonymous landing for behaviour we already have. */
+.faqItem {
+  border-block-start: 1px solid var(--border);
+}
+
+.faqItem:last-child {
+  border-block-end: 1px solid var(--border);
+}
+
+.faqQuestion {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  padding-block: 16px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+
+.faqQuestion::-webkit-details-marker {
+  display: none;
+}
+
+/* The marker is drawn rather than typed so it can rotate; the row is still a real summary. */
+.faqQuestion::after {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
   content: '';
-  background-color: var(--surface-sunken);
-  background-image:
-    linear-gradient(var(--border) 0 0),
-    linear-gradient(var(--border) 0 0),
-    linear-gradient(var(--border) 0 0),
-    linear-gradient(var(--primary-soft) 0 0);
-  background-repeat: no-repeat;
-  background-position: 16px 22%, 16px 40%, 16px 58%, 16px 84%;
-  background-size: 64% 8px, 84% 8px, 46% 8px, 30% 16px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-card);
+  border-inline-end: 1.5px solid var(--text-muted);
+  border-block-end: 1.5px solid var(--text-muted);
+  transform: rotate(45deg) translate(-2px, -2px);
+  transition: transform var(--duration-default) var(--easing-default);
 }
 
-.propLeadTitle {
-  font-family: var(--font-heading), sans-serif;
-  font-size: 28px;
-  font-weight: 600;
-  line-height: 1.15;
-  letter-spacing: -0.01em;
+.faqItem[open] .faqQuestion::after {
+  transform: rotate(225deg) translate(-2px, -2px);
 }
 
-.propLeadBody {
-  max-width: 40ch;
-  margin-top: 12px;
-  font-size: 16px;
-  color: var(--text-muted);
-}
-
-.propTitle {
-  font-family: var(--font-heading), sans-serif;
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.propBody {
-  margin-top: 8px;
+.faqAnswer {
+  max-width: 65ch;
+  padding-block-end: 16px;
   font-size: 14px;
+  line-height: 1.6;
   color: var(--text-muted);
 }
 
-/* ------------------------------------------------------------------ closing band */
+/* A native <details> animating open, with no JS measuring anything. `interpolate-size` is
+   what makes height:auto interpolable and is Chromium-only today; everywhere else the panel
+   snaps open, which is the behaviour <details> has always had. Nothing is lost by that. */
+.faqItem::details-content {
+  height: 0;
+  overflow: clip;
+  transition:
+    height var(--duration-default) var(--easing-default),
+    content-visibility var(--duration-default) var(--easing-default) allow-discrete;
+}
+
+.faqItem[open]::details-content {
+  height: auto;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .faqItem {
+    interpolate-size: allow-keywords;
+  }
+}
+
+/* ---------------------------------------------------------------------- closing band */
 
 .closing {
   display: flex;
@@ -273,18 +456,17 @@
   gap: 16px;
   align-items: center;
   justify-content: space-between;
-  max-width: 72rem;
-  padding: 0 24px;
-  margin: 64px auto 0;
+  padding-block: 48px 0;
+  border-block-start: 1px solid var(--border);
 }
 
 .closingLine {
-  max-width: 40ch;
-  font-family: var(--font-heading), sans-serif;
+  max-width: 32ch;
+  font-family: var(--font-heading), Georgia, serif;
   font-size: 28px;
   font-weight: 600;
   line-height: 1.2;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
 }
 
 .closingCta {
@@ -298,7 +480,6 @@
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-button);
-  box-shadow: var(--shadow-soft);
   transition: background-color var(--duration-default) var(--easing-default);
 }
 
@@ -306,43 +487,70 @@
   background: var(--surface-sunken);
 }
 
-/* 390 px is the mobile reference width (ui §4.3). */
+/* One authored entrance for the documentary half of the page: each band resolves as it
+   enters. Tied to the reader's own scroll rather than to a timer.
+   Two gates, both deliberate: `@supports` because scroll-driven animation is still absent
+   from Firefox, and reduced-motion because entry motion must never be how meaning arrives.
+   Outside either gate the band is simply visible, which is the correct default. */
+@supports (animation-timeline: view()) {
+  @media not (prefers-reduced-motion: reduce) {
+    .band,
+    .langBand,
+    .closing {
+      animation: enter linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 40%;
+    }
+  }
+}
+
+/* 2px and a 2px blur, not a slide. The blur is what does the work — the distance is small
+   enough that nothing appears to move, so a reader mid-sentence is never dragged. */
+@keyframes enter {
+  from { opacity: 0; filter: blur(2px); transform: translateY(2px); }
+  to   { opacity: 1; filter: blur(0); transform: none; }
+}
+
+/* 390px is the mobile reference width (ui §4.3). */
 @media (width <= 48rem) {
+  .hero,
+  .band,
+  .langBand,
+  .closing {
+    padding-inline: 16px;
+  }
+
   .hero {
-    grid-template-columns: 1fr;
-    margin-top: 32px;
+    padding-block: 24px 20px;
   }
 
   .title {
     font-size: 40px;
   }
 
-  .showcase {
-    width: 100%;
+  .subhead {
+    font-size: 16px;
   }
 
-  .props {
-    grid-template-columns: 1fr;
-    margin-top: 32px;
+  .band,
+  .langBand {
+    padding-block: 32px;
   }
 
-  .propLead {
-    grid-row: auto;
-    padding: 24px;
+  .steps,
+  .modes,
+  .langPair {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
   }
 
-  /* Single column: the card is already content-height, so the filler has no gap to fill
-     and would only cost a screen of scroll. */
-  .propLead::after {
-    display: none;
-  }
-
-  .propLeadTitle {
-    font-size: 20px;
+  .anatomyRow {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
   }
 
   .closing {
-    margin-top: 32px;
+    padding-block: 32px 0;
   }
 
   .closingLine {

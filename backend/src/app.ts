@@ -13,6 +13,7 @@ import { requireAuth } from '../modules/auth/middleware';
 import authRouter, { meRouter } from '../modules/auth/router';
 import { mountTestSeam } from '../modules/auth/test-seam';
 import { listMyInterviews } from '../modules/interview/my-interviews';
+import { listMyQuestions } from '../modules/interview/my-questions';
 import interviewRouter from '../modules/interview/router';
 import { createUpload, uploadMiddleware } from '../modules/interview/uploads';
 import speechRouter from '../modules/speech/router';
@@ -55,6 +56,7 @@ app.get('/readyz', async (_req, res) => {
 app.use('/auth', authRouter);
 app.use('/', meRouter);
 app.get('/me/interviews', requireAuth, listMyInterviews);
+app.get('/me/questions', requireAuth, listMyQuestions);
 app.post('/uploads', requireAuth, uploadMiddleware, createUpload);
 app.use('/interviews', voiceRouter);
 app.use('/interviews', speechRouter);

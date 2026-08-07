@@ -148,6 +148,40 @@ describe('admin list + stats (W11)', () => {
     ).toBeInTheDocument();
   });
 
+  /**
+   * `cost_usd` is NOT NULL and stores 0 when the model has no price row, which is
+   * indistinguishable from free. Tokens burned with nothing charged is the unpriced case;
+   * nothing burned at all is genuinely nothing spent, and 0.000000 is the truth there.
+   */
+  it('reads an unpriced cost as unknown, but still prints a real zero', async () => {
+    stubFetch({
+      first: {
+        items: [
+          row({ costUsd: '0.000000', totalTokens: 900 }),
+          row({ id: 'i2', costUsd: '0.000000', totalTokens: 0 }),
+        ],
+        nextCursor: null,
+      },
+    });
+    await renderAdmin();
+
+    const rows = await screen.findAllByTestId('admin-interview-row');
+    expect(within(rows[0]).queryByText('0.000000')).not.toBeInTheDocument();
+    expect(rows[0].querySelector('[data-cost="unknown"]')).not.toBeNull();
+    expect(within(rows[1]).getByText('0.000000')).toBeInTheDocument();
+  });
+
+  it('flags only the interview sitting at its budget ceiling', async () => {
+    stubFetch({
+      first: { items: [row(), row({ id: 'i2', costUsd: '0.500000' })], nextCursor: null },
+    });
+    await renderAdmin();
+
+    const rows = await screen.findAllByTestId('admin-interview-row');
+    expect(rows[0]).not.toHaveAttribute('data-budget');
+    expect(rows[1]).toHaveAttribute('data-budget', 'ceiling');
+  });
+
   it('renders the stats exactly as the endpoint returned them', async () => {
     stubFetch({});
     await renderAdmin();
@@ -201,6 +235,42 @@ describe('admin list + stats (W11)', () => {
     expect(within(split).getByText(messages.admin.stats.completed).nextSibling).toHaveTextContent('0');
     // Per-occupation and weakest-questions both say it — a line, never a spinner.
     expect(screen.getAllByText(messages.admin.stats.empty)).toHaveLength(2);
+  });
+
+  it('costs totals the priced rows on screen and leaves the unpriced one out', async () => {
+    stubFetch({
+      first: {
+        items: [
+          row({ costUsd: '0.041200' }),
+          row({ id: 'i2', costUsd: '0.100000', occupationCluster: 'data' }),
+          row({ id: 'i3', costUsd: '0.000000', totalTokens: 900 }),
+        ],
+        nextCursor: null,
+      },
+    });
+    await renderAdmin();
+    await screen.findAllByTestId('admin-interview-row');
+
+    await act(async () => {
+      await userEvent.click(screen.getByTestId('admin-nav-costs'));
+    });
+
+    // Summed as integer micro-dollars, and the unpriced row is excluded rather than
+    // counted as free — 0.041200 + 0.100000, not 0.141200 out of three rows.
+    expect(screen.getByText('0.141200')).toBeInTheDocument();
+  });
+
+  it('a section with no endpoint renders its Spec placeholder, not an empty table', async () => {
+    stubFetch({});
+    await renderAdmin();
+    await screen.findAllByTestId('admin-interview-row');
+
+    await act(async () => {
+      await userEvent.click(screen.getByTestId('admin-nav-users'));
+    });
+
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('admin-interview-row')).not.toBeInTheDocument();
   });
 
   it('a non-admin sees the not-authorized card and no table, and asks for no admin data', async () => {

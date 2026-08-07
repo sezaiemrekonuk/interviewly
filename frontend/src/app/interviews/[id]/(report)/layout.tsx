@@ -1,23 +1,15 @@
 import type { ReactNode } from 'react';
 
-import styles from '../../../../components/chrome/chrome.module.css';
-import { SiteFooter } from '../../../../components/chrome/footer';
-import { SiteHeader } from '../../../../components/chrome/header';
-
 /**
- * The report gets the chrome; the room, its sibling at `[id]/room`, must not. A route group
- * is what separates them — a layout at `[id]/` would wrap both, and App Router gives a
- * nested layout no way to opt out of its parent. `(report)` changes no URL: this still
- * serves `/interviews/[id]`.
+ * The report is a full-bleed split shell now, like the room and the console, so it takes no
+ * site chrome: a dark context column that starts below a header and stops above a footer is
+ * not the shell. The rail carries its own way back instead.
  *
- * Flat `--bg` ground, never the entry gradient (ui §4.2, AC-4a).
+ * The `(report)` group still earns its keep — it is what lets this page have a layout at all
+ * without `[id]/room`, its sibling, inheriting one. A pass-through today is a place to hang
+ * report-only metadata tomorrow. `(report)` changes no URL: this still serves
+ * `/interviews/[id]`.
  */
 export default function InterviewReportLayout({ children }: { children: ReactNode }) {
-  return (
-    <div className={styles.flatShell}>
-      <SiteHeader />
-      <div className={styles.shellBody}>{children}</div>
-      <SiteFooter />
-    </div>
-  );
+  return children;
 }

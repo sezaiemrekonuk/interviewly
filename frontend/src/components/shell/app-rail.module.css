@@ -1,0 +1,235 @@
+/* Navigation on the rail. The raised block marks the current item — the same convention the
+ * admin console already uses for its sections, so the product has one idea of "you are here".
+ */
+
+.markLink {
+  display: block;
+  border-radius: var(--radius-button);
+  color: inherit;
+}
+
+.markLink:focus-visible,
+.navItem:focus-visible,
+.summary:focus-visible,
+.accountLink:focus-visible,
+.signOut:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 12px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--rail-text-muted);
+  border-radius: var(--radius-button);
+  transition:
+    background-color var(--duration-default) var(--easing-default),
+    color var(--duration-default) var(--easing-default);
+}
+
+.navItem:hover {
+  color: var(--rail-text);
+  background: var(--rail-raised);
+}
+
+.navItemOn,
+.navItemOn:hover {
+  font-weight: 600;
+  color: var(--rail-text);
+  background: var(--rail-raised);
+}
+
+/* ------------------------------------------------------------------------------- account */
+
+/* A native <details>. On the rail proper it is not a disclosure at all: the summary is removed
+   and the panel is forced open, which is the flat column this has always been. The widget only
+   becomes a widget in the top bar below, where the row has no space for six more items. */
+.account {
+  margin-block-start: auto;
+  padding-block-start: 16px;
+  border-block-start: 1px solid var(--rail-border);
+}
+
+/* Engines hide a closed <details> two different ways and both have to be beaten here: the
+   modern `::details-content` pseudo (content-visibility), and — in builds that predate it —
+   `display: none` on the children themselves, which the author rule on `.panel` outranks
+   whatever its specificity. Neither line is decoration; drop either and older or newer
+   browsers lose the whole account block on the desktop rail. */
+.account::details-content {
+  content-visibility: visible;
+}
+
+.summary {
+  display: none;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.identity {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 12px 12px;
+  min-width: 0;
+}
+
+/* A monogram, not an avatar: nothing on this account holds a picture, and a grey silhouette
+   is a placeholder pretending to be data. */
+.monogram {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--rail-text);
+  background: var(--rail-raised);
+  border: 1px solid var(--rail-border);
+  border-radius: var(--radius-button);
+}
+
+.email {
+  overflow: hidden;
+  font-size: 13px;
+  color: var(--rail-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.accountLink {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 12px;
+  font-size: 14px;
+  color: var(--rail-text-muted);
+  border-radius: var(--radius-button);
+  transition:
+    background-color var(--duration-default) var(--easing-default),
+    color var(--duration-default) var(--easing-default);
+}
+
+.accountLink:hover {
+  color: var(--rail-text);
+  background: var(--rail-raised);
+}
+
+.accountLinkOn,
+.accountLinkOn:hover {
+  font-weight: 600;
+  color: var(--rail-text);
+  background: var(--rail-raised);
+}
+
+/* Ending a session is not destructive and is not styled as though it were: no --danger, no
+   confirm. It is the ordinary way to leave, and it has been missing for the whole product. */
+.signOut {
+  min-height: 44px;
+  padding: 8px 12px;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--rail-text-faint);
+  text-align: start;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-button);
+  cursor: pointer;
+  transition: color var(--duration-default) var(--easing-default);
+}
+
+.signOut:hover {
+  color: var(--rail-text);
+  text-decoration: underline;
+}
+
+.signOut:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+/* Below 60rem the shell turns the rail into a top bar. One row: wordmark, the three primary
+   items, monogram — everything the account owns goes behind the monogram. */
+@media (width <= 60rem) {
+  /* `flex-basis: 0` is what keeps the bar on one line. A wrapping flex container breaks lines
+     on each item's *content* width, so a nav measured at its full 250-odd px pushes itself to
+     a second row before it is ever given the chance to shrink. At zero basis it never causes
+     a break; it takes the space left over and scrolls inside it if a locale needs more. */
+  .nav {
+    flex: 1 1 0;
+    min-width: 0;
+    flex-direction: row;
+    overflow-x: auto;
+  }
+
+  .navItem {
+    flex: none;
+    padding: 8px;
+  }
+
+  .account {
+    position: relative;
+    flex: none;
+    margin-block-start: 0;
+    margin-inline-start: auto;
+    padding-block-start: 0;
+    border-block-start: 0;
+  }
+
+  /* The whole 44px square is the target; the 28px chip inside it is only what you see. The
+     default marker goes — a triangle beside a monogram reads as two controls. */
+  .summary {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-button);
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .summary::-webkit-details-marker {
+    display: none;
+  }
+
+  /* Something inside is the current page. Same raised block the nav uses for "you are here",
+     so the product still has one idea of it; the `aria-label` carries the same fact in words. */
+  .summaryOn {
+    background: var(--rail-raised);
+  }
+
+  /* `display` rather than the pseudo, because an author `display: none` hides the panel on
+     every engine — including the ones whose `::details-content` this file forces visible for
+     the desktop rail two screens up. */
+  .panel {
+    position: absolute;
+    inset-block-start: calc(100% + 8px);
+    inset-inline-end: 0;
+    z-index: 1;
+    display: none;
+    min-width: 200px;
+    padding: 8px;
+    background: var(--rail);
+    border: 1px solid var(--rail-border);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .account[open] .panel {
+    display: flex;
+  }
+}

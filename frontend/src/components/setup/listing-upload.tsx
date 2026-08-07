@@ -10,9 +10,9 @@ import { useErrorMessage } from '../../lib/use-error-message';
 import styles from './setup.module.css';
 
 /**
- * The listing is the setup screen's subject: a labelled textarea in its own glowing block,
- * with the PDF offered underneath as a clearly separate alternative — never docked against
- * the input as a bare "Choose File".
+ * The listing is the setup screen's subject: a labelled textarea that leads the form, with the
+ * PDF offered underneath as a clearly separate alternative — never docked against the input as
+ * a bare "Choose File".
  */
 export function ListingUpload({
   onUploaded,
@@ -51,21 +51,19 @@ export function ListingUpload({
 
   return (
     <div className={styles.listing}>
-      <div className={styles.glow}>
-        {/* No `required` asterisk: the hint says what the text is for and the submit guard
-            names the miss (`LISTING_REQUIRED`) where the failure happens. */}
-        <Field label={t('listingPaste')} hint={t('listingHint')}>
-          {(control) => (
-            <Textarea
-              {...control}
-              className={styles.textarea}
-              rows={7}
-              disabled={locked}
-              onChange={(event) => onJobText(event.target.value)}
-            />
-          )}
-        </Field>
-      </div>
+      {/* No `required` asterisk: the hint says what the text is for and the submit guard
+          names the miss (`LISTING_REQUIRED`) where the failure happens. */}
+      <Field label={t('listingPaste')} hint={t('listingHint')}>
+        {(control) => (
+          <Textarea
+            {...control}
+            className={styles.textarea}
+            rows={7}
+            disabled={locked}
+            onChange={(event) => onJobText(event.target.value)}
+          />
+        )}
+      </Field>
 
       <div className={styles.alt}>
         <hr className={styles.rule} />

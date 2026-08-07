@@ -1,36 +1,283 @@
-/* Report surface: flat --bg, --shadow-hairline only, no gradient, no mascot (ui §4.2).
-   A result surface, so the hierarchy does the work: 40 figure / 28 title / 20 section / 16 body. */
+/* Screen 12 — the report, rebuilt into Direction B's split shell.
+ *
+ * The rail states the one number and carries the PDF; the working surface is a single
+ * reading column — impression, rounds, strengths and improvements, the per-question rows,
+ * then the transcript. The stack of cards this replaced gave eight boxes equal weight and
+ * left the score competing with the download button for the eye.
+ *
+ * Every bar is <Meter>, never a width in a style attribute: the CSP (`style-src 'self'
+ * 'nonce-…'`) drops style attributes, so those render empty in production.
+ */
 
-.page {
+/* ---------------------------------------------------------------------- rail */
+
+.railFigure {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  margin: 0;
+}
+
+/* The one figure on the screen. Serif, because Direction B keeps the heading face for
+   titles and figures and never lets it near dense data. */
+.railScore {
+  font-family: var(--font-heading), Georgia, serif;
+  font-size: 40px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--rail-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.railScoreMax {
+  font-size: 14px;
+  color: var(--rail-text-faint);
+}
+
+.railMeter {
+  margin-top: 12px;
+}
+
+/* The screen's only action, on its own rule so it reads as an action and not as part of
+   the score above it. */
+.download {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  /* The chrome shell already fills the viewport; a second 100dvh here just adds a scrollbar. */
-  max-width: 880px;
-  margin: 0 auto;
-  padding: 24px 16px 32px;
+  gap: 8px;
+  padding-top: 16px;
+  border-block-start: 1px solid var(--rail-border);
+}
+
+.downloadButton {
+  width: 100%;
+}
+
+.downloadNote {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--rail-text-muted);
+}
+
+/* The report has no chrome, so the rail carries its own way back — same shape as the
+   console's. */
+.back {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 24px;
+  padding: 8px 0;
+  font-size: 13px;
+  color: var(--rail-text-muted);
+  transition: color var(--duration-default) var(--easing-default);
+}
+
+.back:hover {
+  color: var(--rail-text);
+}
+
+.back:focus-visible {
+  outline: 2px solid var(--rail-text);
+  outline-offset: 2px;
+}
+
+/* --------------------------------------------------------------- work surface */
+
+.body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 32px;
+  background: var(--bg);
+}
+
+/* One column, capped: the per-question rows are dense, and a dense list run to 1600px is
+   a list nobody reads across. */
+.report {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  max-width: 76ch;
+}
+
+/* Informational, so `--accent` and not `--primary`: this states the scope of the scoring, it
+   does not ask for anything. Orange means "do this now" (§2 rule 1) and the report's only
+   action is the PDF on the rail — which is bordered, so this screen carries no orange at all. */
+.earlyEnd {
+  max-width: 70ch;
+  margin: 0;
+  padding: 12px 16px;
+  font-size: 14px;
+  line-height: 1.5;
   color: var(--text);
-  background: var(--bg);
+  background: var(--surface-sunken);
+  border-radius: var(--radius-input);
+  border-inline-start: 2px solid var(--accent);
 }
 
-.skeleton {
-  min-height: 100dvh;
-  background: var(--bg);
+/* The verdict. One sentence in the heading face at the top of the column, because it is
+   the thing the candidate came to read. */
+.impression {
+  max-width: 46ch;
+  margin: 0;
+  font-family: var(--font-heading), Georgia, serif;
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
 }
 
-/* ---------------------------------------------------------------- wait state */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
 
-/* Not a spinner: the panel holds the height the report will take, states honestly how long
-   it should be, and the 60s ceiling replaces it in place with a recovery. */
+/* An eyebrow over a rule, not a 20px title with a coloured tab: at this density the label
+   only has to name the block, and the rule does the separating. */
+.sectionTitle {
+  margin: 0;
+  padding-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border-block-end: 1px solid var(--border);
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Ruled rows rather than bordered cards: a stack of boxes inside a bordered panel is the
+   frame-within-a-frame this rebuild removes. Label and score share the first line, the bar
+   spans both columns under them, so the number reads before its shape. */
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 16px;
+  align-items: baseline;
+  padding: 16px 0;
+  border-block-end: 1px solid var(--border);
+}
+
+.row:last-child {
+  border-block-end: 0;
+}
+
+.rowTitle,
+.questionText {
+  margin: 0;
+  font-family: var(--font-heading), Georgia, serif;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+}
+
+.rowScore {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  text-align: end;
+  white-space: nowrap;
+}
+
+.rowMeter {
+  grid-column: 1 / -1;
+}
+
+.rowBody {
+  grid-column: 1 / -1;
+  max-width: 70ch;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.rowNote,
+.star {
+  grid-column: 1 / -1;
+  max-width: 70ch;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+/* The footnote under the question list: what "STAR n/a" means on a technical row. Muted and
+   13px because it explains the rows rather than joining them. */
+.starNote {
+  max-width: 70ch;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.bullets {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding-inline-start: 20px;
+}
+
+.bullets li {
+  max-width: 70ch;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+/* `components/room/transcript.tsx` is reused verbatim and carries a room-only
+   `border-inline-start` for its side-panel position. The wrapper supplies the other three
+   edges, so at the foot of a document it reads as a panel rather than as one missing three
+   sides. */
+.transcriptWrap {
+  display: flex;
+  flex-direction: column;
+  max-width: 76ch;
+  overflow: hidden;
+  border-block: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  border-inline-end: 1px solid var(--border);
+}
+
+/* ----------------------------------------------------------------- wait state */
+
+/* Not a spinner: the panel holds the height the report will take, says honestly how long it
+   should be, and the 60 s ceiling replaces it in place with a recovery. */
 .wait {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding: 32px 20px;
+  max-width: 65ch;
+  padding: 24px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius-panel);
+  border-radius: var(--radius-card);
   box-shadow: var(--shadow-hairline);
+}
+
+.waitTitle {
+  margin: 0;
+  font-family: var(--font-heading), Georgia, serif;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.waitHint {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-muted);
 }
 
 .waitLines {
@@ -42,31 +289,22 @@
 .waitLine {
   height: 12px;
   background: var(--surface-sunken);
-  border-radius: var(--radius-button);
+  border-radius: var(--radius-input);
 }
 
 .waitLineShort {
   width: 48%;
 }
 
-.waitTitle {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-}
-
-.waitHint {
-  max-width: 65ch;
-  margin: 0;
-  font-size: 14px;
-  color: var(--text-muted);
-}
-
+/* The one place --danger is earned on this screen: past the ceiling nothing is coming on
+   its own, so this is the only thing that should read as needing attention. */
 .waitTimedOut {
-  padding: 20px;
-  background: var(--surface-sunken);
+  max-width: 65ch;
+  padding: 24px;
+  background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius-panel);
+  border-radius: var(--radius-card);
+  border-inline-start: 2px solid var(--danger);
 }
 
 .waitTimedOutText {
@@ -78,7 +316,7 @@
 /* ------------------------------------------------------- unavailable (issue 83) */
 
 /* Same panel geometry as the wait it replaces, so a report that never arrives does not
-   collapse the screen. --danger keys the left edge only; the copy stays body text. */
+   collapse the screen. --danger keys the leading edge only; the copy stays body text. */
 .unavailable {
   display: flex;
   flex-direction: column;
@@ -87,7 +325,7 @@
   padding: 24px 20px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-left: 4px solid var(--danger);
+  border-inline-start: 4px solid var(--danger);
   border-radius: var(--radius-panel);
   box-shadow: var(--shadow-hairline);
 }
@@ -286,96 +524,52 @@
   line-height: 1.5;
 }
 
-.note {
-  max-width: 70ch;
-  margin: 0;
-  font-size: 14px;
-  color: var(--text-muted);
+/* -------------------------------------------------------------- load / failure */
+
+/* The shell's silhouette, so the dark column is not something that appears only once both
+   reads land. */
+.skeleton {
+  min-height: 100vh;
+  background: linear-gradient(90deg, var(--rail) 0 240px, var(--bg) 240px);
 }
 
-/* ------------------------------------------------------------------ narrative */
-
-.narrative {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-
-/* Two tints, not two walls of colour: what went well is success-tinted, what to work on is
-   primary-tinted. Both stay legible body text on a near-white bed. */
-.block {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-card);
-}
-
-.blockStrengths {
-  background: color-mix(in srgb, var(--success) 10%, var(--surface));
-  border-color: color-mix(in srgb, var(--success) 28%, var(--border));
-}
-
-.blockImprovements {
-  background: var(--primary-soft);
-  border-color: color-mix(in srgb, var(--primary) 16%, var(--border));
-}
-
-.blockList {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 0 0 0 20px;
-  margin: 0;
-}
-
-.blockList li {
-  max-width: 70ch;
-  font-size: 16px;
-  line-height: 1.5;
-}
-
-/* ------------------------------------------------------------------ questions */
-
-.questionHead {
-  display: flex;
-  gap: 12px;
-  align-items: baseline;
-  justify-content: space-between;
-}
-
-.questionText {
-  max-width: 70ch;
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-  line-height: 1.4;
-}
-
-.star {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-muted);
+.ground {
+  min-height: 100vh;
+  padding: 24px;
+  background: var(--bg);
 }
 
 .error {
   max-width: 70ch;
-  margin: 0;
+  margin: 96px auto 0;
+  padding: 16px;
   font-size: 14px;
-  color: var(--danger);
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  border-inline-start: 2px solid var(--danger);
+}
+
+/* The shell turns its rail into a row at this width; the rule above the PDF and the margin
+   above the back link are column rhythm and have to go with it. */
+@media (max-width: 60rem) {
+  .skeleton {
+    background: var(--bg);
+  }
+
+  .download {
+    padding-top: 0;
+    border-block-start: 0;
+  }
+
+  .back {
+    margin-top: 0;
+  }
 }
 
 @media (max-width: 480px) {
-  .page {
-    padding: 16px 12px 24px;
-  }
-
-  .narrative {
-    grid-template-columns: 1fr;
-  }
-
   .impression {
-    font-size: 16px;
+    font-size: 20px;
   }
 }

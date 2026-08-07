@@ -1,34 +1,75 @@
+/* Design token registry — Direction B ("Split"), 2026-08-06.
+ *
+ * The token NAMES are unchanged from the previous system on purpose: every surface in
+ * src/** already reads them, so re-pointing the values moves the whole app onto the new
+ * palette in one step instead of leaving it half-migrated. Structure (the split shell,
+ * the stage, square corners) lands surface by surface after this.
+ *
+ * Every pair in ui-checks/contrast.test.ts clears AA 4.5:1; the tightest is
+ * --text-muted over --surface-sunken at 4.68:1. Do not lighten --text-muted or deepen
+ * --surface-sunken without re-running that test.
+ */
 :root {
-  /* Colours */
-  --bg:              #FBF9F6;
-  --surface:         #FFFFFF;
-  --surface-sunken:  #F4F2EE;
-  --text:            #111436;
-  --text-muted:      #646884;   /* darkened from spec #6B6F8D — see F01 Notes: contrast floor */
-  --primary:         #C94D00;   /* darkened from spec #FF6100 — see F01 Notes: contrast floor */
-  --primary-soft:    #FFF1E8;
-  --accent:          #6F76F1;
-  --live:            #12873D;   /* darkened from spec #16A34A — see F01 Notes: contrast floor */
-  --success:         #10B981;
-  --warning:         #F59E0B;
-  --danger:          #C62A20;   /* darkened from spec #EF4444 — 3.6:1 on --bg failed the AA floor */
-  --border:          #E8E4DE;
+  /* Ground — a neutral biased toward the indigo, never a pure grey */
+  --bg:              #F1F2F7;
+  --surface:         #FBFBFD;
+  --surface-sunken:  #E7E9F1;
 
-  /* Entry-surface gradient (ui §4.2 — closed route list) */
-  --grad-lavender:   #EFE9FF;
-  --grad-cream:      #FBF9F6;
-  --grad-peach:      #FFE8D6;
-  --gradient-entry:  linear-gradient(160deg, var(--grad-lavender) 0%, var(--grad-cream) 52%, var(--grad-peach) 100%);
+  /* Ink */
+  --text:            #12131C;
+  --text-muted:      #565C71;   /* 4.68:1 on --stage, the darkest ground — the system's floor */
 
-  /* Radius */
-  --radius-panel:    24px;
-  --radius-card:     16px;
-  --radius-input:    12px;
-  --radius-button:   999px;
+  /* Brand */
+  --primary:         #B2400A;   /* the one action colour; white on it is 5.78:1 */
+  --primary-soft:    #FBEFE7;
+  --accent:          #4046CC;   /* informational, chart series, focus ring */
 
-  /* Shadow — two tiers, nothing else */
-  --shadow-hairline: 0 1px 2px rgba(17,20,54,.06);
-  --shadow-soft:     0 8px 24px -12px rgba(17,20,54,.12);
+  /* Semantic */
+  --live:            #0C6F33;   /* in-session only; white on it is 6.29:1 */
+  --success:         #0E7A3A;
+  --warning:         #8A5A00;
+  --danger:          #B52519;   /* 5.34:1 as 13px copy on the sunken bed */
+  --border:          #CBCEDD;
+
+  /* The context column — a different material, not a tint of the surface */
+  --rail:            #191B2B;
+  --rail-raised:     #232640;
+  --rail-border:     #343954;
+  --rail-text:       #F2F3F9;
+  --rail-text-muted: #A9AECB;
+  --rail-text-faint: #8A90B4;
+
+  /* The interview stage: the ground the participant tiles sit on */
+  --stage:           #D5D8E7;
+
+  /* Deepened brand, for text on light where the fill tone is too bright */
+  --primary-deep:    #8F3407;
+  --accent-deep:     #383DB0;
+
+  /* Chart series — all clear AA as text on --surface */
+  --series-1:        #4046CC;
+  --series-2:        #B2400A;
+  --series-3:        #186972;
+  --series-4:        #63389A;
+  --series-5:        #0E6E33;
+  --series-6:        #7A4E00;
+
+  /* "Specified, not yet built" — one neutral convention, never a warning colour */
+  --spec-hatch:      repeating-linear-gradient(135deg, #DDDFEA 0 5px, #F1F2F7 5px 11px);
+
+  /* The entry gradient and its three stops are gone. Every surface now carries the split
+     shell, whose ground is the rail against the working surface; there is no route left
+     that painted a wash. `ui-checks/grounds.test.ts` guards against it coming back. */
+
+  /* Radius — near-square. A track or a tile with a big radius stops reading as one. */
+  --radius-panel:    6px;
+  --radius-card:     3px;
+  --radius-input:    2px;
+  --radius-button:   2px;
+
+  /* Shadow — two tiers, nothing else. Used for genuine lift off the working surface. */
+  --shadow-hairline: 0 1px 2px rgba(18,19,28,.07), 0 10px 26px -14px rgba(18,19,28,.30);
+  --shadow-soft:     0 2px 3px rgba(18,19,28,.05), 0 30px 60px -26px rgba(18,19,28,.42);
 
   /* Motion */
   --duration-default: 200ms;

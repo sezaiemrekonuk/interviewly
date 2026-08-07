@@ -1,12 +1,15 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useState } from 'react';
 
+import { ReportRail } from '../../../../components/report/report-rail';
 import { ReportUnavailable } from '../../../../components/report/report-unavailable';
 import { ReportView } from '../../../../components/report/report-view';
 import { ReportWait } from '../../../../components/report/report-wait';
 import { Transcript } from '../../../../components/room/transcript';
+import { SplitShell, WorkBody, WorkTop } from '../../../../components/shell/split-shell';
 import { routeForError } from '../../../../lib/error-routing';
 import { useInterviewState, useReport } from '../../../../lib/query';
 import { useErrorMessage } from '../../../../lib/use-error-message';
@@ -26,6 +29,7 @@ import styles from '../../../../components/report/report.module.css';
 export default function InterviewReportPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const t = useTranslations('report');
   const errorMessage = useErrorMessage();
   const { user, loading: authLoading } = useRequireAuth();
 
@@ -54,7 +58,7 @@ export default function InterviewReportPage() {
 
   if (errorCode) {
     return (
-      <main className={styles.page}>
+      <main className={styles.ground}>
         <p role="alert" className={styles.error}>
           {errorMessage(errorCode)}
         </p>
@@ -66,24 +70,40 @@ export default function InterviewReportPage() {
   const room = stateQuery.data;
   if (!room) return null;
 
+  // `SplitShell` renders the working surface as the page's <main>, so the testid goes on the
+  // wrapper — the same shape the room uses.
   return (
-    <main className={styles.page} data-testid="interview-report">
-      {report ? (
-        <ReportView
-          interviewId={id}
-          payload={report.payload}
-          endedReason={room.endedReason}
-          turns={room.transcript}
-        />
-      ) : room.state === 'failed' || room.state === 'abandoned' ? (
-        // Read before the wait, so a terminal interview never spends 60s pretending (issue 83).
-        <ReportUnavailable state={room.state} />
-      ) : (
-        <ReportWait onTimeout={onTimeout} />
-      )}
+    <div data-testid="interview-report">
+      <SplitShell
+        rail={
+          <ReportRail
+            interviewId={id}
+            mode={room.mode}
+            score={report?.payload.overall_score ?? null}
+          />
+        }
+      >
+        <WorkTop title={t('title')} />
+        <WorkBody className={styles.body}>
+          {report ? (
+            <ReportView
+              payload={report.payload}
+              endedReason={room.endedReason}
+              turns={room.transcript}
+            />
+          ) : room.state === 'failed' || room.state === 'abandoned' ? (
+            // Read before the wait, so a terminal interview never spends 60s pretending (issue 83).
+            <ReportUnavailable state={room.state} />
+          ) : (
+            <ReportWait onTimeout={onTimeout} />
+          )}
 
-      {/* W06's read-only transcript, reused verbatim — never a second renderer. */}
-      <Transcript turns={room.transcript} />
-    </main>
+          {/* W06's read-only transcript, reused verbatim — never a second renderer. */}
+          <div className={styles.transcriptWrap}>
+            <Transcript turns={room.transcript} />
+          </div>
+        </WorkBody>
+      </SplitShell>
+    </div>
   );
 }

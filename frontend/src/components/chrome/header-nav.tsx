@@ -5,19 +5,25 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
 import { apiGet } from '../../lib/api';
+import { DEFAULT_LANDING_PATH } from '../../lib/auth-redirect';
 
 import styles from './chrome.module.css';
 
 /**
- * The authenticated half of the header. Deliberately *not* `useMe()`: the header renders
- * on the landing page, and pulling React Query into that tree spends the §8.1 JS budget on
- * one boolean. A refused `/me` is not an error here — the link simply is not shown.
+ * The authenticated half of the site header, which now renders on exactly three routes: the
+ * marketing landing and the two legal pages. Everywhere else the rail carries navigation
+ * (`components/shell/app-rail.tsx`), including sign-out — the control this file used to
+ * explain the absence of.
  *
- * No sign-out control: `frontend/src/lib` ships no sign-out helper and no `POST /auth/logout`
- * exists yet. Building the auth call here would put session logic in the chrome.
+ * Deliberately *not* `useMe()`: this renders on the anonymous landing, and pulling React Query
+ * into that tree spends the §8.1 JS budget on one boolean. A refused `/me` is not an error
+ * here — the link simply is not shown.
+ *
+ * One link, not three. A signed-in visitor reading the privacy notice needs the way back into
+ * the product; everything else they might want is on the rail once they are there.
  */
 export function HeaderNav() {
-  const t = useTranslations('chrome');
+  const t = useTranslations('nav');
   const [signedIn, setSignedIn] = useState(false);
 
   useEffect(() => {
@@ -32,17 +38,9 @@ export function HeaderNav() {
 
   if (!signedIn) return null;
 
-  // History lives on `/` (W08), which the wordmark already goes to; the nav keeps the two
-  // things the wordmark cannot say. `/profile` is here because it is the only door to it —
-  // onboarding redirects away once it is complete (issue 75).
   return (
-    <>
-      <Link href="/interviews/new" className={styles.navLink}>
-        {t('newInterview')}
-      </Link>
-      <Link href="/profile" className={styles.navLink}>
-        {t('profile')}
-      </Link>
-    </>
+    <Link href={DEFAULT_LANDING_PATH} className={styles.navLink}>
+      {t('today')}
+    </Link>
   );
 }

@@ -5,10 +5,24 @@
  *
  * Only edges that stay illegal once I07 fills the table are asserted here, so growing the
  * table is an addition and never an edit to this file.
+ *
+ * The second half pins `ended_at`, which no scenario can see: `/admin/stats.averageDurationMs`
+ * averages over the column and reads 0 whether it is unwritten or genuinely empty, so the only
+ * place the write is observable is the `updateMany` argument itself.
  */
-import { describe, expect, it } from 'vitest';
+import type { Interview } from '@prisma/client';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { canTransition } from './machine';
+type Update = { where: Record<string, unknown>; data: Record<string, unknown> };
+const updateMany = vi.fn(async (_args: Update) => ({ count: 1 }));
+
+vi.mock('../../src/lib/db', () => ({ prisma: { interview: { updateMany } } }));
+// Imported by machine.ts for the fan-out and the report enqueue; both construct Redis clients
+// from `config` at import time, and this unit has no env.
+vi.mock('./sse', () => ({ publishStateChanged: vi.fn(), enqueueReport: vi.fn() }));
+vi.mock('./language', () => ({ clearLanguageStreak: vi.fn() }));
+
+const { applyTransition, canTransition, deadEndsMissingFromTerminal } = await import('./machine');
 
 describe('canTransition', () => {
   it('allows the round handover and the end of the interview', () => {
@@ -83,5 +97,68 @@ describe('canTransition', () => {
     expect(canTransition('completed', 'abandoned')).toBe(false);
     expect(canTransition('failed', 'abandoned')).toBe(false);
     expect(canTransition('abandoned', 'abandoned')).toBe(false);
+  });
+});
+
+const row = (over: Partial<Interview> = {}): Interview =>
+  ({ id: 'itv_1', state: 'evaluating', ended_reason: null, ended_at: null, ...over }) as Interview;
+
+/** The `data` the one write was called with — the only place `ended_at` is observable. */
+const written = () => updateMany.mock.calls[0][0].data;
+
+describe('applyTransition', () => {
+  beforeEach(() => updateMany.mockClear());
+
+  it('stamps ended_at entering each terminal state', async () => {
+    for (const [from, to] of [
+      ['evaluating', 'completed'],
+      ['evaluating', 'failed'],
+      ['hr_round', 'abandoned'],
+    ] as const) {
+      updateMany.mockClear();
+      await applyTransition(row({ state: from }), to, { traceId: 't' });
+      expect(written().ended_at, `${from} → ${to}`).toBeInstanceOf(Date);
+    }
+  });
+
+  it('leaves ended_at alone on a transition that is not the end', async () => {
+    await applyTransition(row({ state: 'hr_round' }), 'tech_round', { traceId: 't' });
+    expect(written()).not.toHaveProperty('ended_at');
+  });
+
+  // The retry case: a terminal row re-transitioned would otherwise move the end of the
+  // interview forward, inflating averageDurationMs by however long the retry took.
+  it('does not overwrite an ended_at that is already set', async () => {
+    const interview = row({ ended_at: new Date('2026-01-01T00:00:00.000Z') });
+    await applyTransition(interview, 'completed', { traceId: 't' });
+
+    expect(written()).not.toHaveProperty('ended_at');
+    expect(interview.ended_at).toEqual(new Date('2026-01-01T00:00:00.000Z'));
+  });
+
+  // The WHERE is the CAS that makes concurrent transitions safe (ADR-I06); `ended_at` must ride
+  // in `data` and never narrow it, or a re-stamp becomes a spurious 409.
+  it('keeps the concurrency guard on state alone', async () => {
+    await applyTransition(row(), 'completed', { traceId: 'trace-1' });
+    expect(updateMany.mock.calls[0][0].where).toEqual({ id: 'itv_1', state: 'evaluating' });
+  });
+
+  it('writes the end reason and the end time together', async () => {
+    const interview = row({ state: 'hr_round' });
+    await applyTransition(interview, 'abandoned', { traceId: 't', endedReason: 'abandoned' });
+
+    expect(written()).toMatchObject({ state: 'abandoned', ended_reason: 'abandoned' });
+    expect(written().ended_at).toBeInstanceOf(Date);
+    // The caller's copy is refreshed for the same reason `state` is: a second transition in
+    // one request would otherwise re-stamp off a stale null.
+    expect(interview.ended_at).toEqual(written().ended_at);
+  });
+
+  // The half of the old derivation worth keeping. `TERMINAL` is a list now, because
+  // `completed → evaluating` (the report-requeue edge) made "no outgoing edge" the wrong
+  // definition — but a *new* state added with no way out must still be added to the list, and
+  // forgetting is exactly how `ended_at` stopped being written the first time.
+  it('has no dead-end state missing from the terminal list', () => {
+    expect(deadEndsMissingFromTerminal()).toEqual([]);
   });
 });

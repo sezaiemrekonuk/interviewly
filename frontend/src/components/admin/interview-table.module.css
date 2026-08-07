@@ -1,4 +1,7 @@
-/* Admin compact density (DESIGN §5 W11): flat surface, hairline rules, no zebra, no gradient. */
+/* Admin density: flat surface, hairline rules, no zebra, no gradient. The only red on the
+ * screen is a row at its budget ceiling — spend one attention colour and the operator's eye
+ * still works when it appears.
+ */
 
 .card {
   background: var(--surface);
@@ -8,12 +11,25 @@
   overflow: hidden;
 }
 
+.head {
+  padding: 16px 16px 12px;
+}
+
 .heading {
   margin: 0;
-  padding: 16px 16px 12px;
-  font-size: 14px;
+  font-family: var(--font-heading), Georgia, serif;
+  font-size: 16px;
   font-weight: 600;
   color: var(--text);
+}
+
+/* The missing user join, stated once where the missing column would be. */
+.note {
+  margin: 4px 0 0;
+  max-width: 72ch;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-muted);
 }
 
 /* The table scrolls inside its own box so the page body never scrolls sideways at 390px. */
@@ -43,8 +59,8 @@
   position: sticky;
   top: 0;
   z-index: 1;
-  background: var(--surface);
-  padding: 12px 16px;
+  background: var(--surface-sunken);
+  padding: 8px 16px;
   font-size: 13px;
   font-weight: 600;
   color: var(--text-muted);
@@ -54,13 +70,37 @@
 }
 
 .table td {
-  padding: 12px 16px;
+  padding: 8px 16px;
   border-block-end: 1px solid var(--border);
   white-space: nowrap;
+  vertical-align: middle;
 }
 
 .table tbody tr:last-child td {
   border-block-end: none;
+}
+
+/* At its ceiling: a rule on the inline edge plus the faintest wash. The row still reads as
+   a row — this is "look here", not "everything is broken". The rule is reserved on every
+   row and only coloured on this one, or the flagged row would sit 2px off the others. */
+.table tbody td:first-child {
+  border-inline-start: 2px solid transparent;
+}
+
+.table tbody tr[data-budget='ceiling'] {
+  background: color-mix(in srgb, var(--danger) 7%, var(--surface));
+}
+
+.table tbody tr[data-budget='ceiling'] td:first-child {
+  border-inline-start-color: var(--danger);
+}
+
+.id {
+  max-width: 128px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  color: var(--text-muted);
 }
 
 .occupation {
@@ -70,23 +110,61 @@
 }
 
 .num {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
+  text-align: end;
+}
+
+/* An unpriced cost is not a number, so it is not set like one. */
+.num[data-cost='unknown'] {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.pill {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: var(--radius-button);
+  background: var(--surface-sunken);
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+/* Still in session. Not an alarm — a different fact from "needs attention". */
+.pill[data-live] {
+  background: color-mix(in srgb, var(--live) 10%, var(--surface));
+  color: var(--live);
+}
+
+/* Not `display: flex` — a flex <td> drops out of the table's column algorithm and the
+   whole column stops lining up. Two pills only ever need the gap between them. */
+.flags span + span {
+  margin-inline-start: 8px;
 }
 
 /* A soft delete is a fact, not an error — --surface-sunken, never --danger. */
 .deletedPill {
   display: inline-block;
-  padding: 4px 12px;
+  padding: 4px 8px;
   border-radius: var(--radius-button);
   background: var(--surface-sunken);
   font-size: 13px;
   color: var(--text-muted);
 }
 
+.ceilingPill {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: var(--radius-button);
+  background: color-mix(in srgb, var(--danger) 12%, var(--surface));
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--danger);
+}
+
 .empty {
   margin: 0;
-  padding: 24px 16px 32px;
+  padding: 8px 16px 32px;
   font-size: 14px;
   color: var(--text-muted);
 }

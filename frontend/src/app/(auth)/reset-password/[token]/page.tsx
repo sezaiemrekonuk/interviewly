@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
+import { AuthShell } from '../../../../components/auth/auth-shell';
 import styles from '../../../../components/auth/auth.module.css';
 import { Button, Field, Input } from '../../../../components/ui';
 import { apiPost } from '../../../../lib/api';
@@ -65,25 +66,20 @@ export default function ResetPasswordPage() {
 
   if (done) {
     return (
-      <section className={styles.card}>
-        <h1 className={styles.title}>{t('resetDoneTitle')}</h1>
-        {/* Every session died with the password write, this browser's included — saying so
-            is the difference between "signed out" reading as a bug and as the point. */}
-        <p className={styles.subtitle}>{t('resetDoneBody')}</p>
+      /* Every session died with the password write, this browser's included — saying so
+         is the difference between "signed out" reading as a bug and as the point. */
+      <AuthShell rail="Reset" title={t('resetDoneTitle')} subtitle={t('resetDoneBody')}>
         <p className={styles.footer}>
           <Link className={styles.footerLink} href="/sign-in">
             {t('signIn')}
           </Link>
         </p>
-      </section>
+      </AuthShell>
     );
   }
 
   return (
-    <section className={styles.card}>
-      <h1 className={styles.title}>{t('resetTitle')}</h1>
-      <p className={styles.subtitle}>{t('resetSubtitle')}</p>
-
+    <AuthShell rail="Reset" title={t('resetTitle')} subtitle={t('resetSubtitle')}>
       {errorCode && (
         <p className={styles.banner} role="alert">
           {messageFor(errorCode)}
@@ -127,6 +123,6 @@ export default function ResetPasswordPage() {
           {t('sendResetLink')}
         </Link>
       </p>
-    </section>
+    </AuthShell>
   );
 }

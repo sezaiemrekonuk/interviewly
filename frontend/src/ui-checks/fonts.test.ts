@@ -9,9 +9,12 @@ import * as fontkit from 'fontkit';
 import { describe, expect, it } from 'vitest';
 
 const ROOT = join(__dirname, '..', '..');
+// Direction B ships three roles — display, interface, data. Copy can land in any of them
+// (a figure is serif, a table cell is mono), so all three must cover the full message set.
 const FONTS = {
-  inter: join(ROOT, 'public', 'fonts', 'inter-latin.woff2'),
-  outfit: join(ROOT, 'public', 'fonts', 'outfit-latin.woff2'),
+  'source-serif': join(ROOT, 'public', 'fonts', 'source-serif-latin.woff2'),
+  'public-sans': join(ROOT, 'public', 'fonts', 'public-sans-latin.woff2'),
+  'jetbrains-mono': join(ROOT, 'public', 'fonts', 'jetbrains-mono-latin.woff2'),
 };
 
 function messageChars(file: string): Set<string> {
@@ -36,7 +39,7 @@ function cmapCodepoints(path: string): Set<number> {
 
 describe('webfont cmap covers every message character (#66)', () => {
   for (const [name, path] of Object.entries(FONTS)) {
-    it(`${name}-latin.woff2 has every codepoint used in tr.json and en.json`, () => {
+    it(`${name} has every codepoint used in tr.json and en.json`, () => {
       const covered = cmapCodepoints(path);
       const used = new Set([...messageChars('tr.json'), ...messageChars('en.json')]);
       const missing = [...used].filter((ch) => {

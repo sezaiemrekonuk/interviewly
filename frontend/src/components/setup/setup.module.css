@@ -1,31 +1,11 @@
-/* The listing block — setup's centrepiece. Entry surface, so --shadow-soft is permitted;
-   the glow below is decoration and never stands in for the focus ring (ui §4.4). */
+/* The listing block — setup's centrepiece. Direction B drops the warm halo that used to sit
+   behind the textarea: the working surface holds one subject, so the input leads by size and
+   position rather than by decoration. */
 
 .listing {
   display: flex;
   flex-direction: column;
   gap: 20px;
-}
-
-/* At-rest glow: a static warm halo behind the input, present before focus and unaffected by
-   reduced motion because it never animates. The control keeps its own outline on focus. */
-.glow {
-  position: relative;
-}
-
-.glow::before {
-  position: absolute;
-  inset: -12px;
-  z-index: 0;
-  content: '';
-  background: radial-gradient(120% 130% at 50% 0%, var(--primary-soft) 0%, transparent 72%);
-  border-radius: var(--radius-panel);
-  pointer-events: none;
-}
-
-.glow > * {
-  position: relative;
-  z-index: 1;
 }
 
 .textarea {
@@ -48,6 +28,6 @@
 
 .error {
   margin: 0;
-  font-size: 14px;
+  font-size: 13px;
   color: var(--danger);
 }
