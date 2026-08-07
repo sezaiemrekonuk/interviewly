@@ -3,6 +3,7 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
+import { ReportUnavailable } from '../../../../components/report/report-unavailable';
 import { ReportView } from '../../../../components/report/report-view';
 import { ReportWait } from '../../../../components/report/report-wait';
 import { Transcript } from '../../../../components/room/transcript';
@@ -74,6 +75,9 @@ export default function InterviewReportPage() {
           endedReason={room.endedReason}
           turns={room.transcript}
         />
+      ) : room.state === 'failed' || room.state === 'abandoned' ? (
+        // Read before the wait, so a terminal interview never spends 60s pretending (issue 83).
+        <ReportUnavailable state={room.state} />
       ) : (
         <ReportWait onTimeout={onTimeout} />
       )}
