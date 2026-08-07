@@ -16,6 +16,24 @@ export const prisma =
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
 
+/**
+ * The ready report, joined onto the list rather than fetched per row. `reports` is a LIST on
+ * the relation (a re-run appends), so the newest ready one is the interview's score; anything
+ * queued or failed carries no payload worth reading and is filtered out here instead of being
+ * unpacked by every caller.
+ *
+ * Carried by `userInterviews` unconditionally: the alternative is an opt-in flag, which makes
+ * the row type a union for the one other caller (an erasure assertion that only counts rows).
+ */
+const readyReport = {
+  reports: {
+    where: { status: 'ready' as const },
+    orderBy: { created_at: 'desc' as const },
+    take: 1,
+    select: { payload: true },
+  },
+};
+
 /** Non-deleted interviews for a user, newest first, paginated. */
 export async function userInterviews(
   userId: string,
@@ -25,6 +43,7 @@ export async function userInterviews(
     where: { user_id: userId, deleted_at: null },
     orderBy: { created_at: 'desc' },
     take: opts?.limit ?? 20,
+    include: readyReport,
     ...(opts?.cursor ? { cursor: { id: opts.cursor }, skip: 1 } : {}),
   });
 }
