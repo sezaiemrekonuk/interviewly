@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "Interviewly — Start Interview from LinkedIn",
+  "version": "1.0.0",
+  "description": "Adds a Start Interview button next to Apply/Save on LinkedIn job listings, prefilling Interviewly with the job text.",
+  "permissions": ["storage"],
+  "host_permissions": ["https://www.linkedin.com/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://www.linkedin.com/jobs/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_page": "options.html"
+}

@@ -1,0 +1,23 @@
+.interviewly-start-btn {
+  position: fixed;
+  top: 72px;
+  right: 24px;
+  z-index: 2147483647;
+  display: inline-flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 20px;
+  border-radius: 20px;
+  border: 1px solid #0a66c2;
+  background: #0a66c2;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+}
+
+.interviewly-start-btn:hover {
+  background: #004182;
+  border-color: #004182;
+}
