@@ -1,7 +1,9 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { AiError, type AiLogger } from './errors';
 import { MAX_BLOCK_CHARS, PromptBuilder, createPromptBuilder } from './prompt-builder';
-import { PromptRegistry, loadPromptRegistry } from './registry';
+import { PROMPTS_DIR, PromptRegistry, loadPromptRegistry } from './registry';
 import { loadInjectionPatterns } from './config';
 import { StubAiClient } from './stub';
 
@@ -109,6 +111,59 @@ describe('PromptBuilder', () => {
       const block = /<job_listing>([\s\S]*?)<\/job_listing>/.exec(userText(built));
       expect(block?.[1]).toHaveLength(expected);
       expect(events.filter((e) => e.event === 'LISTING_TRUNCATED')).toHaveLength(cuts);
+    }
+  });
+
+  it('emits AI_PROMPT_BUILDER_DEBUG per message with the prompt fullname and interview id', () => {
+    const { logger, events } = capturing();
+    const built = new PromptBuilder(loadPromptRegistry(), loadInjectionPatterns(), logger).build({
+      promptName: 'interview.question.generate',
+      vars: baseVars(),
+      ctx,
+    });
+    const debug = events.filter((e) => e.event === 'AI_PROMPT_BUILDER_DEBUG');
+    expect(debug).toHaveLength(built.messages.length);
+    expect(debug.map((e) => e.fields.content)).toEqual(built.messages.map((m) => m.content));
+    for (const line of debug) {
+      expect(line.fields.promptName).toBe('interview.question.generate');
+      expect(line.fields.interviewId).toBe(ctx.interviewId);
+      expect(line.fields.traceId).toBe(ctx.traceId);
+      expect(line.fields.promptUuid).toBe(built.promptUuid);
+      expect(line.fields.promptVersion).toBe(built.promptVersion);
+      expect(line.fields.promptMessages).toEqual(built.messages);
+    }
+  });
+
+  it('attaches the whole prompt yaml, verbatim, to every debug line', () => {
+    const { logger, events } = capturing();
+    new PromptBuilder(loadPromptRegistry(), loadInjectionPatterns(), logger).build({
+      promptName: 'interview.title.generate',
+      vars: { language: 'en', jobListing: 'Backend engineer.' },
+      ctx,
+    });
+    const onDisk = readFileSync(
+      join(PROMPTS_DIR, 'interview.title.generate.prompt.yaml'),
+      'utf8',
+    );
+    const debug = events.filter((e) => e.event === 'AI_PROMPT_BUILDER_DEBUG');
+    expect(debug).toHaveLength(2);
+    for (const line of debug) expect(line.fields.promptYaml).toBe(onDisk);
+  });
+
+  it('names every prompt file on the fly, never from a static table', () => {
+    const registry = loadPromptRegistry();
+    for (const name of registry.names()) {
+      const { logger, events } = capturing();
+      const template = registry.resolve(name);
+      const vars = Object.fromEntries(
+        [...template.messages.map((m) => m.content).join('\n').matchAll(/\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g)].map(
+          ([, field]) => [field, 'x'],
+        ),
+      );
+      new PromptBuilder(registry, loadInjectionPatterns(), logger).build({ promptName: name, vars, ctx });
+      const debug = events.filter((e) => e.event === 'AI_PROMPT_BUILDER_DEBUG');
+      expect(debug.length).toBeGreaterThan(0);
+      expect(new Set(debug.map((e) => e.fields.promptName))).toEqual(new Set([template.name]));
     }
   });
 

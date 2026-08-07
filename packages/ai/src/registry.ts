@@ -21,6 +21,7 @@ const PromptFileSchema = z.object({
   provider: z.string().min(1),
   model: z.string().min(1),
   params: z.record(z.unknown()).default({}),
+  source: z.string().optional(),
   messages: z
     .array(
       z.object({
@@ -79,6 +80,9 @@ export function loadPromptRegistry(dir: string = PROMPTS_DIR): PromptRegistry {
   const files = readdirSync(dir)
     .filter((f) => f.endsWith('.prompt.yaml'))
     .sort()
-    .map((f) => PromptFileSchema.parse(parse(readFileSync(join(dir, f), 'utf8'))));
+    .map((f) => {
+      const source = readFileSync(join(dir, f), 'utf8');
+      return PromptFileSchema.parse({ ...parse(source), source });
+    });
   return new PromptRegistry(files);
 }

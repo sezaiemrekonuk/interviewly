@@ -104,6 +104,7 @@ export const serveQuestionSpeech: RequestHandler = async (req, res) => {
       const result = await speechProvider.speak(question.text, {
         voiceId,
         language: interview.language,
+        ctx: { interviewId: interview.id, traceId: req.traceId! },
       });
       await meterTts(interview.id, result.characters, req.traceId!);
       // Already billed: a store that fails must not turn paid-for bytes into a 500 the

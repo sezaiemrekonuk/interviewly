@@ -7,6 +7,7 @@ import { ApiError, httpStatusFor } from './lib/api-error';
 import { config } from './lib/env';
 import { logger } from './lib/logger';
 import { liveness, readiness } from './lib/probes';
+import { runWithRequestContext } from './lib/request-context';
 
 import adminRouter from '../modules/admin/router';
 import { requireAuth } from '../modules/auth/middleware';
@@ -26,7 +27,18 @@ app.use(express.json());
 app.use(cookieParser());
 app.use((req, _res, next) => {
   req.traceId = randomUUID();
-  next();
+  // `req.path`, never `originalUrl`: a query string carries verification and reset tokens,
+  // and this object is folded into every log line the request goes on to write.
+  runWithRequestContext(
+    {
+      traceId: req.traceId,
+      userAgent: req.get('user-agent'),
+      ip: req.ip,
+      method: req.method,
+      path: req.path,
+    },
+    next,
+  );
 });
 
 // Liveness: no dependency checks (a Postgres/Redis blip must not restart-loop a live

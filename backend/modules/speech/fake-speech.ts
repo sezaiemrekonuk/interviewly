@@ -1,4 +1,4 @@
-import type { SpeechProvider } from './SpeechProvider';
+import type { SpeechCtx, SpeechProvider } from './SpeechProvider';
 import { ApiError } from '../../src/lib/api-error';
 
 // Fixed short MP3 header — enough for tests to assert a non-empty buffer with mpeg mime.
@@ -23,7 +23,7 @@ export class FakeSpeechProvider implements SpeechProvider {
 
   async speak(
     text: string,
-    _opts: { voiceId: string; language: string },
+    _opts: { voiceId: string; language: string; ctx: SpeechCtx },
   ): Promise<{ audio: Buffer; mime: string; characters: number }> {
     this.speakCalls += 1;
     if (this._failNext) {
