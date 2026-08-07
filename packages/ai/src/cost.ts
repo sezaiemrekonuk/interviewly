@@ -43,14 +43,18 @@ export function costFor(
     (input / 1_000_000) * price.input_per_1m_usd +
     (output / 1_000_000) * price.output_per_1m_usd;
 
-  return { units, unitKind: price.unit_kind, costUsd: round6(costUsd) };
+  return { units, unitKind: price.unit_kind, costUsd: roundCostUsd(costUsd) };
 }
 
 /**
  * `llm_calls.cost_usd` is `Decimal(12,6)`. Rounding here keeps the number we log, the number
  * we return and the number the database stores identical, rather than letting Postgres
  * quietly truncate a longer float into a total that no longer adds up.
+ *
+ * Exported because the non-token meters price their own units — speech bills characters and
+ * seconds, not tokens (S04) — and a second copy of this rounding is a second place for the
+ * stored and logged number to drift apart.
  */
-function round6(value: number): number {
+export function roundCostUsd(value: number): number {
   return Math.round(value * 1_000_000) / 1_000_000;
 }

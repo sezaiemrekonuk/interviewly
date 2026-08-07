@@ -49,6 +49,32 @@ Then('no interview is created', async function (this: AiWorld) {
   assert.equal(count, 0);
 });
 
+/**
+ * The bound has to hold at the table too, not only in the Zod schema — a schema is a property
+ * of one handler, and issue #98's ceiling has to survive anything else that learns to insert an
+ * interview. `interviews_target_question_count_range` is the CHECK the migration adds.
+ */
+Then(
+  'the database refuses a direct insert of {int} target questions',
+  async function (this: AiWorld, count: number) {
+    await assert.rejects(
+      prisma.interview.create({
+        data: {
+          user_id: this.candidateId,
+          mode: 'text',
+          job_text: 'Direct insert probing the check constraint.',
+          job_source: 'paste',
+          occupation: 'Backend Developer',
+          language: 'en',
+          target_question_count: count,
+          hr_question_count: 2,
+        },
+      }),
+      (err: Error) => /interviews_target_question_count_range/.test(err.message),
+    );
+  },
+);
+
 Then('the interview state is {string}', async function (this: AiWorld, state: string) {
   const interview = await prisma.interview.findUniqueOrThrow({
     where: { id: this.interviewId },

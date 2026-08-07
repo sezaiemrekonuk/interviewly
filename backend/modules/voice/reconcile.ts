@@ -25,7 +25,7 @@ export interface ReconcileOpts {
 }
 
 export interface ReconcileResult {
-  /** false when an `elevenlabs` row already existed — the redelivery no-op (K10). */
+  /** false when an `elevenlabs/conversational` row already existed — the redelivery no-op (K10). */
   reconciled: boolean;
 }
 
@@ -46,6 +46,11 @@ function voiceCostUsd(seconds: number): number | null {
  * The existence check runs INSIDE the transaction on purpose: ElevenLabs may deliver the
  * post-call webhook more than once, and checking outside reopens the double-write race the
  * redelivery causes — two jobs would both read "no row" and both insert.
+ *
+ * It matches on `model` as well as `provider`: since S04 the same interview also carries
+ * `elevenlabs/tts` and `elevenlabs/stt` rows from the speech path, and a provider-only match
+ * would read one of those as "already reconciled" and silently bill the conversational
+ * session nothing. Only a `conversational` row is this job's own redelivery.
  */
 export async function reconcileVoiceUsage(
   interviewId: string,
@@ -59,7 +64,7 @@ export async function reconcileVoiceUsage(
 
   const result = await prisma.$transaction(async (tx) => {
     const existing = await tx.llmCall.findFirst({
-      where: { interview_id: interviewId, provider: PROVIDER },
+      where: { interview_id: interviewId, provider: PROVIDER, model: MODEL },
       select: { id: true },
     });
     if (existing) return null;

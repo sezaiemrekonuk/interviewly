@@ -15,3 +15,15 @@ Feature: Voice usage is reconciled after the call
     When the same post-call reconciliation webhook is delivered again
     Then no additional llm_calls row is written
     And the interview spent_usd is unchanged
+
+  # S04 put `elevenlabs/tts` and `elevenlabs/stt` rows on the same interviews this job bills.
+  # The redelivery no-op keys on provider AND model, or the speech row reads as "already
+  # reconciled" and the conversational session is billed nothing at all.
+  @voice-reconciliation @voice @AC-7
+  Scenario: A speech usage row does not mask the conversational session
+    Given an interview ran a voice round for 240 seconds
+    And the interview already holds an elevenlabs speech usage row
+    And the interview spent_usd before reconciliation is recorded
+    When ElevenLabs posts the post-call reconciliation webhook reporting 240 seconds
+    Then the worker writes exactly one llm_calls row for model "conversational"
+    And the interview spent_usd increases by the reconciled voice cost

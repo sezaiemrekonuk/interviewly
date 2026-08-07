@@ -70,6 +70,13 @@ vi.mock('./budget', () => ({
     if (budgetSpent.value) throw new BudgetExceeded();
     return fn();
   },
+  // The tech batch's ceiling (budget.test.ts owns what it does when it refuses). Never reached
+  // from `tech_round`, where these scenarios run — it is here because the module is mocked whole.
+  withBudgetOrEnd: async (_interview: Interview, fn: () => Promise<unknown>) => {
+    calls.push('withBudgetOrEnd');
+    if (budgetSpent.value) throw new BudgetExceeded();
+    return fn();
+  },
 }));
 
 const { advanceWithAnswer } = await import('./answers');

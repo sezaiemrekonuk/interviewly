@@ -256,6 +256,8 @@ model Interview {
   occupation_cluster_id String?
   language              String
   candidate_profile     Json? // §3.3 — merged snapshot, never `{}`
+  // 1..20, enforced by the `interviews_target_question_count_range` CHECK constraint (issue
+  // #98) — Prisma cannot express it, so it lives in the migration and is repeated in setup.ts.
   target_question_count Int
   hr_question_count     Int
   state                 InterviewState @default(created)
@@ -336,7 +338,9 @@ model Answer {
 
 model Report {
   id             String       @id @default(cuid())
-  interview_id   String
+  /// Unique (issue 082): one report per interview, so a retried job upserts instead of
+  /// adding a second row.
+  interview_id   String       @unique
   status         ReportStatus @default(queued)
   payload        Json? // K15 Zod schema
   pdf_key        String?
@@ -363,6 +367,8 @@ model ReportQuestion {
   report   Report   @relation(fields: [report_id], references: [id], onDelete: Restrict)
   question Question @relation(fields: [question_id], references: [id], onDelete: Restrict)
 
+  /// Issue 082: a question is scored once per report, so a concurrent rewrite cannot double it.
+  @@unique([report_id, question_id])
   @@map("report_questions")
 }
 

@@ -1,6 +1,7 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { DEFAULT_LANDING_PATH } from '../../../../lib/auth-redirect';
 import { MockEventSource, installEventSourceMock } from '../../../../test/event-source-mock';
 import { messages, renderWithProviders } from '../../../../test/render';
 
@@ -303,5 +304,59 @@ describe('report + transcript (W07)', () => {
     expect(await screen.findByTestId('report-download-error')).toHaveTextContent(
       messages.report.downloadError,
     );
+  });
+
+  // Issue 83. `failed` and `abandoned` used to fall into the generating beat and sit there
+  // past its ceiling, advising a refresh that can never help. No timers are advanced here:
+  // the panel has to be the first paint, not a recovery from the wait.
+  const terminal = (state: string) => ({
+    reports: [{ interviewId: 'i1', state, report: null }],
+    states: [interviewState({ state })],
+  });
+
+  it('renders the failure panel on first paint for a dead-lettered report', async () => {
+    stubFetch(terminal('failed'));
+    await renderReport();
+
+    const panel = screen.getByTestId('report-unavailable');
+    expect(panel).toHaveAttribute('role', 'alert');
+    expect(panel).toHaveTextContent(messages.report.failedTitle);
+    expect(screen.queryByTestId('report-wait')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: messages.report.backToInterviews })).toHaveAttribute(
+      'href',
+      DEFAULT_LANDING_PATH,
+    );
+  });
+
+  it('says the interview was never finished for abandoned', async () => {
+    stubFetch(terminal('abandoned'));
+    await renderReport();
+
+    expect(screen.getByTestId('report-unavailable')).toHaveTextContent(
+      messages.report.abandonedTitle,
+    );
+    expect(screen.queryByTestId('report-wait')).not.toBeInTheDocument();
+  });
+
+  it('still waits while the interview is evaluating', async () => {
+    stubFetch({
+      reports: [{ interviewId: 'i1', state: 'evaluating', report: null }],
+      states: [interviewState({ state: 'evaluating' })],
+    });
+    await renderReport();
+
+    expect(screen.getByTestId('report-wait')).toBeInTheDocument();
+    expect(screen.queryByTestId('report-unavailable')).not.toBeInTheDocument();
+  });
+
+  it('renders a report that landed even if the state still reads failed', async () => {
+    stubFetch({
+      reports: [{ interviewId: 'i1', state: 'failed', report: { status: 'ready', payload: payload() } }],
+      states: [interviewState({ state: 'failed' })],
+    });
+    await renderReport();
+
+    expect(screen.getByText('Solid, structured answers.')).toBeInTheDocument();
+    expect(screen.queryByTestId('report-unavailable')).not.toBeInTheDocument();
   });
 });

@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { ApiError } from '../../src/lib/api-error';
 import { prisma } from '../../src/lib/db';
 
+import { withBudgetOrEnd } from './budget';
 import { generateRound } from './generation';
 import { applyTransition } from './machine';
 
@@ -129,7 +130,10 @@ export async function startHrRound(
   // request fails with INVALID_STATE_TRANSITION before the LLM call is ever made.
   const state = await applyTransition(updated, 'hr_round', ctx);
 
-  await generateRound(updated, 'hr', ctx);
+  // I08's ceiling, on the first generation as well as the second (issue #98). This is the
+  // larger of the two calls, so a budget that guarded only the tech batch was a ceiling with a
+  // hole in it. An interview already out of budget here ends rather than 500ing.
+  await withBudgetOrEnd(updated, () => generateRound(updated, 'hr', ctx), ctx);
 
   return state;
 }
