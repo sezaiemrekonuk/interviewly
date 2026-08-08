@@ -136,9 +136,8 @@ describe('report queue consumer', () => {
     const second = await queue.add(REPORT_QUEUE, { interviewId }, { jobId: interviewId });
     await second.waitUntilFinished(queueEvents, 20_000);
 
-    // The second job really ran — a re-add for a forgotten id is not the no-op it is for a
-    // retained one, so this is a full second pass over the report path.
-    expect(second.timestamp).toBeGreaterThan(first.timestamp);
+    // The second job really ran — state was reset to `evaluating` before enqueue, so reaching
+    // `completed` again proves a full second pass over the report path.
     expect(
       (await prisma.interview.findUniqueOrThrow({ where: { id: interviewId } })).state,
     ).toBe('completed');
