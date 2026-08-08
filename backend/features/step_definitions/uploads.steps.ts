@@ -151,6 +151,20 @@ Then(
   },
 );
 
+// The fixture's own sentence, not merely a non-empty string: an endpoint answering with the
+// filename, the storage key or `''` would satisfy a length check and still leave the setup
+// form with nothing to put in `job_text`.
+Then("the response carries the listing's own extracted text", function (this: AiWorld) {
+  const text = this.lastBody?.text;
+  assert.equal(typeof text, 'string', `no text in body: ${JSON.stringify(this.lastBody)}`);
+  assert.match(text as string, /PostgreSQL-backed services/);
+});
+
+Then('the response carries no text', function (this: AiWorld) {
+  assert.ok(this.lastBody?.uploadId, `body: ${JSON.stringify(this.lastBody)}`);
+  assert.equal(this.lastBody?.text, undefined, `a cv answered with its text`);
+});
+
 Then('the returned uploadId equals the first uploadId', function () {
   assert.equal(lastUploadId, firstUploadId);
 });
