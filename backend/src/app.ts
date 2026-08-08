@@ -23,6 +23,13 @@ import voiceDowngradeRouter from '../modules/voice/downgrade';
 
 export const app = express();
 
+// Issue 68: without this, `req.ip` is Caddy's container address and every IP-keyed limiter
+// in A01 shares one bucket — three registrations anywhere lock out the whole internet.
+// The hop count, never `true`: `1` reads the entry one hop from our socket, so a client that
+// prepends its own X-Forwarded-For cannot rotate its rate-limit key. Bump the number if a
+// second proxy layer is ever added in front of Caddy (Caddyfile is the only hop today).
+app.set('trust proxy', 1);
+
 app.use(express.json());
 app.use(cookieParser());
 app.use((req, _res, next) => {
