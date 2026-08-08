@@ -16,16 +16,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const calls: string[] = [];
 
-vi.mock('../../src/lib/db', () => ({
-  prisma: {
+// The advance and the turn run inside one interactive transaction (#70), so what these
+// scenarios need from `$transaction` is a client to hand the callback. Whether the boundary
+// actually rolls back is a database question, and `answers.integration.test.ts` asks it.
+vi.mock('../../src/lib/db', () => {
+  const tx = {
     interview: { updateMany: vi.fn(async () => ({ count: 1 })) },
-    // The turn's two writes are built eagerly into the `$transaction` array, so both
-    // delegates have to exist even though the array itself is not what is under test.
     answer: { create: vi.fn(async () => ({ id: 'ans_1' })) },
     chatMessage: { create: vi.fn(async () => ({})) },
-    $transaction: async () => [{ id: 'ans_1' }, {}],
-  },
-}));
+  };
+  return { prisma: { ...tx, $transaction: (fn: (c: typeof tx) => unknown) => fn(tx) } };
+});
 
 const warn = vi.fn();
 vi.mock('../../src/lib/logger', () => ({
