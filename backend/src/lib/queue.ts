@@ -19,6 +19,17 @@ export const REPORT_QUEUE = 'report';
 export const REPORT_JOB_OPTIONS = {
   attempts: 3,
   backoff: { type: 'exponential', delay: 1000 },
+  // Issue #72: with no retention every job ever run stayed in Redis forever, and the queues are
+  // the only unbounded key space in there — every other key is written with an EX.
+  //
+  // Bounded by age and count rather than `true`, because the retained id is also what makes
+  // `jobId = interviewId` refuse a duplicate enqueue. A day is far longer than any re-entry
+  // that dedup is meant to catch; past it the guarantee is the database's, not Redis' — a
+  // unique `reports.interview_id` and the create-only write in `report-run.ts`.
+  removeOnComplete: { age: 24 * 3600, count: 1000 },
+  // Kept longer on purpose: a failed job is the dead-letter record, and with LOG_TRANSPORT
+  // stdout it is the only durable trace of an interview that never produced a report.
+  removeOnFail: { age: 7 * 24 * 3600, count: 1000 },
 } satisfies JobsOptions;
 
 export const reportQueue = new Queue(REPORT_QUEUE, {

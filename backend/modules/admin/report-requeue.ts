@@ -98,10 +98,13 @@ export const requeueReport: RequestHandler = async (req, res, next) => {
     }
 
     // Then the queue, as an inseparable pair, and never a `remove` without the `add` after it.
-    // `jobId = interviewId` means BullMQ refuses an `add` for an id it still remembers, and the
-    // queue retains completed and failed jobs forever (issue 031) — so a bare re-add is a
-    // silent no-op, including the one `applyTransition` just fired on its way into
-    // `evaluating`. The retained job has to be cleared before the real enqueue lands.
+    // `jobId = interviewId` means BullMQ refuses an `add` for an id it still remembers — so a
+    // bare re-add is a silent no-op, including the one `applyTransition` just fired on its way
+    // into `evaluating`. The retained job has to be cleared before the real enqueue lands.
+    //
+    // Retention is bounded now (issue #72), not forever, but the `remove` is no less required:
+    // this endpoint exists for interviews that failed recently, which is exactly when the job
+    // is still inside the window.
     await reportQueue.remove(interviewId);
     await enqueueReport(interviewId, { traceId: req.traceId! });
 

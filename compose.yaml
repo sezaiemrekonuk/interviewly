@@ -17,6 +17,13 @@ services:
 
   cache:
     image: redis:7-alpine
+    # An explicit ceiling, and deliberately still `noeviction` (issue #72). BullMQ needs it:
+    # evicting a queue key loses jobs instead of degrading, and the non-queue keys here are all
+    # written with an EX, so nothing is safely disposable. The real bound on growth is the job
+    # retention in `backend/src/lib/queue.ts`; this is the backstop that keeps an unexpected
+    # growth path from taking the host down rather than one container. Raise it for a busy
+    # deployment — with nothing set, Redis grows until the machine says no.
+    command: ["redis-server", "--maxmemory", "512mb", "--maxmemory-policy", "noeviction"]
     volumes:
       - redisdata:/data
     healthcheck:
