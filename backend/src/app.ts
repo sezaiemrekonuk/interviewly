@@ -28,7 +28,12 @@ export const app = express();
 // The hop count, never `true`: `1` reads the entry one hop from our socket, so a client that
 // prepends its own X-Forwarded-For cannot rotate its rate-limit key. Bump the number if a
 // second proxy layer is ever added in front of Caddy (Caddyfile is the only hop today).
-app.set('trust proxy', 1);
+// TRUST_PROXY is configurable so operators can set it to `false` (or `0`) when port 4000
+// is reachable without the edge proxy (compose.dev.yaml exposes it directly), preventing
+// clients from spoofing X-Forwarded-For and rotating their rate-limit bucket.
+const rawTrustProxy = config.TRUST_PROXY;
+const trustProxyNum = Number(rawTrustProxy);
+app.set('trust proxy', isNaN(trustProxyNum) ? rawTrustProxy : trustProxyNum);
 
 app.use(express.json());
 app.use(cookieParser());
