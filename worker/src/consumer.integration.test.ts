@@ -118,6 +118,35 @@ describe('report queue consumer', () => {
     await first.waitUntilFinished(queueEvents, 20_000);
   }, 25_000);
 
+  it('writes no second report once the finished job has been trimmed', async () => {
+    const interviewId = await seedEvaluatingInterview();
+
+    const first = await queue.add(REPORT_QUEUE, { interviewId }, { jobId: interviewId });
+    await first.waitUntilFinished(queueEvents, 20_000);
+
+    // What bounded retention (#72) does on its own once the window closes. The test above
+    // asserts the dedup that the *retained* id provides; this asserts what is left when it is
+    // gone, because a re-add for a forgotten id really does enqueue a second run.
+    await queue.remove(interviewId);
+    expect(await queue.getJob(interviewId)).toBeUndefined();
+
+    // Where a requeue puts the interview back before re-enqueuing (`report-requeue.ts`).
+    await prisma.interview.update({ where: { id: interviewId }, data: { state: 'evaluating' } });
+
+    const second = await queue.add(REPORT_QUEUE, { interviewId }, { jobId: interviewId });
+    await second.waitUntilFinished(queueEvents, 20_000);
+
+    // The second job really ran — state was reset to `evaluating` before enqueue, so reaching
+    // `completed` again proves a full second pass over the report path.
+    expect(
+      (await prisma.interview.findUniqueOrThrow({ where: { id: interviewId } })).state,
+    ).toBe('completed');
+
+    // The guarantee is the database's, not the queue's: unique `reports.interview_id` plus the
+    // create-only write in `report-run.ts`. Trimming a job id must not be able to reach it.
+    expect(await prisma.report.count({ where: { interview_id: interviewId } })).toBe(1);
+  }, 45_000);
+
   it('stores the rendered PDF and points reports.pdf_key at it', async () => {
     const interviewId = await seedEvaluatingInterview();
 
