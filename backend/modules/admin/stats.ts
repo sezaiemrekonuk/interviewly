@@ -24,11 +24,12 @@ export const getAdminStats: RequestHandler = async (req, res, next) => {
           where: { occupation_cluster_id: { not: null } },
           select: { occupation: true, occupation_cluster: { select: { key: true } } },
         }),
-        // weakestQuestions: plain relational, no jsonb (db AC-12)
+        // weakestQuestions: plain relational, no jsonb (db AC-12). The question text comes
+        // from the relation — an id is not a label anyone can read (issue 143).
         prisma.reportQuestion.findMany({
           orderBy: [{ score: 'asc' }, { question_id: 'asc' }],
           take: 5,
-          select: { question_id: true, score: true },
+          select: { question_id: true, score: true, question: { select: { text: true } } },
         }),
       ]);
 
@@ -75,7 +76,11 @@ export const getAdminStats: RequestHandler = async (req, res, next) => {
       unfinished,
       totalTokens,
       perOccupation,
-      weakestQuestions: weakest.map((q) => ({ questionId: q.question_id, score: q.score })),
+      weakestQuestions: weakest.map((q) => ({
+        questionId: q.question_id,
+        text: q.question.text,
+        score: q.score,
+      })),
     });
   } catch (err) {
     next(err);

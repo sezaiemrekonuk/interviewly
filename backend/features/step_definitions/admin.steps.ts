@@ -179,6 +179,56 @@ Then('its cost is unchanged', function (this: AiWorld) {
 
 const DURATION_MS = 90_000;
 
+/** Issue 143: the text `/admin/stats` must return next to the score, not the question's id. */
+const WEAKEST_QUESTION_TEXT = 'Tell me about a deadline you missed.';
+
+async function seedScoredQuestion(interviewId: string): Promise<void> {
+  // The seeded personas are an F02 fixture, not something this ring owns — take whichever
+  // one is there and only build a stand-in when the seed has not run.
+  const persona =
+    (await prisma.persona.findFirst()) ??
+    (await prisma.persona.create({
+      data: {
+        role: 'hr',
+        name: 'Acceptance HR',
+        voice_id: 'test',
+        avatar_set: {},
+        system_prompt: 'test',
+      },
+    }));
+
+  const round = await prisma.interviewRound.create({
+    data: { interview_id: interviewId, type: 'hr', persona_id: persona.id, status: 'done' },
+  });
+  const question = await prisma.question.create({
+    data: {
+      round_id: round.id,
+      order_index: 0,
+      text: WEAKEST_QUESTION_TEXT,
+      kind: 'behavioral',
+      difficulty: 'easy',
+      topic: 'ownership',
+    },
+  });
+  const report = await prisma.report.create({
+    data: {
+      interview_id: interviewId,
+      status: 'ready',
+      prompt_uuid: randomUUID(),
+      prompt_version: 1,
+    },
+  });
+  await prisma.reportQuestion.create({
+    data: {
+      report_id: report.id,
+      question_id: question.id,
+      score: 0,
+      reason: 'No example given.',
+      star_adherence: '0.10',
+    },
+  });
+}
+
 Given('a non-admin user has a session', async function (this: AiWorld) {
   const agg = await prisma.llmCall.aggregate({ _sum: { input_tokens: true, output_tokens: true } });
   this.tokenBaseline = (agg._sum.input_tokens ?? 0) + (agg._sum.output_tokens ?? 0);
@@ -195,7 +245,7 @@ Given('a non-admin user has a session', async function (this: AiWorld) {
   const now = new Date();
 
   // completed interview with timestamps — contributes to averageDurationMs + perOccupation
-  await prisma.interview.create({
+  const completed = await prisma.interview.create({
     data: {
       user_id: userId,
       mode: 'text',
@@ -212,6 +262,11 @@ Given('a non-admin user has a session', async function (this: AiWorld) {
       ended_at: now,
     },
   });
+
+  // A scored question on that interview, so weakestQuestions is not vacuously empty and the
+  // text it now ships (issue 143) is assertable. Needs the whole round → question → report
+  // chain, since `report_questions` is a leaf of it.
+  await seedScoredQuestion(completed.id);
 
   // soft-deleted interview — must appear in admin list (K11)
   const deleted = await prisma.interview.create({
@@ -296,7 +351,7 @@ interface AdminStats {
   unfinished: number;
   totalTokens: number;
   perOccupation: unknown[];
-  weakestQuestions: unknown[];
+  weakestQuestions: { questionId: string; text: string; score: number }[];
 }
 
 Then('averageDurationMs is computed from completed interviews', function (this: AiWorld) {
@@ -321,6 +376,15 @@ Then(
     );
     assert.ok(Array.isArray(body.perOccupation), 'perOccupation missing');
     assert.ok(Array.isArray(body.weakestQuestions), 'weakestQuestions missing');
+    // Issue 143: every row carries the question text, not just its id. The fixture scored a
+    // question, so an empty list here would make the loop below pass on nothing.
+    assert.ok(body.weakestQuestions.length > 0, 'weakestQuestions must not be empty');
+    for (const q of body.weakestQuestions) {
+      assert.ok(
+        typeof q.text === 'string' && q.text.length > 0,
+        `weakestQuestions row must carry the question text, got ${JSON.stringify(q)}`,
+      );
+    }
     // at least one cluster row since we seeded completed interviews with a cluster
     assert.ok(body.perOccupation.length > 0, 'perOccupation must not be empty');
   },

@@ -85,6 +85,14 @@
   white-space: nowrap;
 }
 
+/* A question is a sentence, not a label: truncating it to one line hides the half that
+   tells the operator which question it is. */
+.rowLabelWrap {
+  overflow: visible;
+  line-height: 1.4;
+  white-space: normal;
+}
+
 .rowValue {
   font-size: 14px;
   color: var(--text);
