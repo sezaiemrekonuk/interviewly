@@ -2,9 +2,9 @@
  * `POST /interviews/:id/answers` — the K2 progression step (§3.8, ADR-I06).
  *
  * One request does four things in order: guard that the answer targets the current question,
- * advance `current_index` atomically, write the turn, then hand the round over. The order is
- * the contract — the advance is what proves the caller won the race, so nothing is written
- * before it and the handover runs only for the caller that did.
+ * advance `current_index` and write the turn in one transaction, then hand the round over.
+ * The order is the contract — the advance is what proves the caller won the race, so nothing
+ * is written before it and the handover runs only for the caller that did.
  */
 import type { Interview, InterviewState } from '@prisma/client';
 import type { AiClient } from '@interviewly/ai';
@@ -60,22 +60,27 @@ export async function advanceWithAnswer(
     throw new ApiError('QUESTION_NOT_CURRENT');
   }
 
-  // ADR-I06: the advance IS the guard. Two requests can read the same `current_index`; the
-  // WHERE clause lets exactly one of them write, and the loser changes nothing at all.
-  const { count } = await prisma.interview.updateMany({
-    where: { id: interview.id, current_index: expected },
-    data: { current_index: expected + 1 },
-  });
-  if (count === 0) throw new ApiError('QUESTION_NOT_CURRENT');
-
   const answeredAt = clock.now();
   // Server clock, both ends: `asked_at` was stamped when state.ts delivered the question.
   const durationMs = question.asked_at
     ? answeredAt.getTime() - question.asked_at.getTime()
     : null;
 
-  const [answer] = await prisma.$transaction([
-    prisma.answer.create({
+  // The advance and the turn are ONE commit (#70). Split across two, a crash in between left
+  // `current_index` moved with no answer row — and the CAS below then refused the resubmit,
+  // so the answer was unrecoverable.
+  //
+  // ADR-I06 is unchanged by the move: the advance is still the guard. Two requests can read
+  // the same `current_index`, the WHERE clause still lets exactly one of them write, and the
+  // loser now rolls back instead of merely returning early.
+  const answer = await prisma.$transaction(async (tx) => {
+    const { count } = await tx.interview.updateMany({
+      where: { id: interview.id, current_index: expected },
+      data: { current_index: expected + 1 },
+    });
+    if (count === 0) throw new ApiError('QUESTION_NOT_CURRENT');
+
+    const created = await tx.answer.create({
       data: {
         question_id: question.id,
         transcript: data.transcript,
@@ -84,16 +89,17 @@ export async function advanceWithAnswer(
         answered_at: answeredAt,
         duration_ms: durationMs,
       },
-    }),
-    prisma.chatMessage.create({
+    });
+    await tx.chatMessage.create({
       data: {
         interview_id: interview.id,
         role: 'user',
         content: data.transcript,
         trace_id: traceId,
       },
-    }),
-  ]);
+    });
+    return created;
+  });
 
   logger.info(
     { traceId, interviewId: interview.id, questionId: question.id, durationMs },
