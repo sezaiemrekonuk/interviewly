@@ -57,6 +57,11 @@ const schema = z.object({
   S3_ACCESS_KEY:               z.string(),
   S3_SECRET_KEY:               z.string(),
   SIGNED_URL_TTL:              z.coerce.number().default(300),
+  // Hop count passed to Express `trust proxy`. Default 1 = one Caddy hop in front of the
+  // API. Set to `false` (or `0`) when running the API directly without the edge proxy — i.e.
+  // in the dev compose where port 4000 is exposed — so clients cannot spoof X-Forwarded-For.
+  // Named presets ('loopback', 'linklocal', 'uniquelocal') and CIDR ranges are also accepted.
+  TRUST_PROXY:                 emptyAsUnset(z.string().default('1')),
   AI_ENABLED:                  zBoolean(true),
   BUDGET_USD_TEXT:             z.coerce.number().default(0.50),
   MAX_INTERVIEWS_PER_USER_PER_DAY: z.coerce.number().default(5),

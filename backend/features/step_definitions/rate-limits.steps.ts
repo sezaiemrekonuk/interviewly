@@ -65,47 +65,59 @@ When('the fixed clock moves past the rolling 24 hour window', function () {
 // ------------------------------------------------------------------------------- @AC-13
 
 /**
- * The `<key>` column is the scenario's actor label, not an assertion: sign-in and register
- * are keyed by IP (A01) and every acceptance request arrives from loopback, so honouring the
- * literal `203.0.113.10` would mean trusting `X-Forwarded-For` — a spoofable bypass of the
- * very limiter under test. `Before` (server.ts) drops `ratelimit:*` per scenario, so each row
- * still gets its own window.
+ * The `<key>` column is real for the two IP-keyed rows (`sign-in`, `register`). Issue 68 landed `app.set('trust proxy', 1)`,
+ * so `req.ip` is now the forwarded address — sending `203.0.113.10` here is not a bypass of
+ * the limiter under test but the exact header Caddy puts on a request from that client. (The
+ * `interview-start` row is still keyed by the signed-in user id, not this string.) `Before` (server.ts) drops
+ * `ratelimit:*` per scenario, so each row still gets its own window.
+ *
+ * Only Caddy can set this in production: `1` is a hop count, so a client that prepends its own
+ * X-Forwarded-For still keys off the address Caddy appends. `backend/src/app-trust-proxy.test.ts`
+ * is what asserts that.
  */
+const asClient = (key: string): Record<string, string> => ({ 'x-forwarded-for': key });
+
 const ACTIONS: Record<
   string,
   {
     windowMs: number;
     /** Puts `count` hits in the window without asserting anything about them. */
-    arrange: (world: AiWorld, count: number) => Promise<void>;
-    perform: (world: AiWorld) => Promise<void>;
+    arrange: (world: AiWorld, count: number, key: string) => Promise<void>;
+    perform: (world: AiWorld, key: string) => Promise<void>;
   }
 > = {
   register: {
     windowMs: HOUR,
-    arrange: async (world, count) => {
-      for (let i = 0; i < count; i += 1) await ACTIONS.register.perform(world);
+    arrange: async (world, count, key) => {
+      for (let i = 0; i < count; i += 1) await ACTIONS.register.perform(world, key);
     },
-    perform: async (world) => {
-      await world.httpPost('/auth/register', {
-        email: `limit-${randomUUID()}@example.com`,
-        password: PASSWORD,
-        consent: true,
-      });
+    perform: async (world, key) => {
+      await world.httpPost(
+        '/auth/register',
+        { email: `limit-${randomUUID()}@example.com`, password: PASSWORD, consent: true },
+        asClient(key),
+      );
     },
   },
   'sign-in': {
     windowMs: 60_000,
-    arrange: async (world, count) => {
+    arrange: async (world, count, key) => {
       signedInEmail = `signin-${randomUUID()}@example.com`;
-      await world.httpPost('/auth/register', { email: signedInEmail, password: PASSWORD, consent: true });
+      // The account this row signs in as. Registered from the same client address, which the
+      // register budget (3/hour) has room for — this row only spends login's.
+      await world.httpPost(
+        '/auth/register',
+        { email: signedInEmail, password: PASSWORD, consent: true },
+        asClient(key),
+      );
       assert.equal(world.lastStatus, 201, `register: ${JSON.stringify(world.lastBody)}`);
       for (let i = 0; i < count; i += 1) {
-        await ACTIONS['sign-in'].perform(world);
+        await ACTIONS['sign-in'].perform(world, key);
         assert.equal(world.lastStatus, 200, `login ${i + 1}: ${JSON.stringify(world.lastBody)}`);
       }
     },
-    perform: async (world) => {
-      await world.httpPost('/auth/login', { email: signedInEmail, password: PASSWORD });
+    perform: async (world, key) => {
+      await world.httpPost('/auth/login', { email: signedInEmail, password: PASSWORD }, asClient(key));
     },
   },
   // Seeded through the production counter rather than by making 10 real starts: the daily
@@ -131,7 +143,7 @@ function action(name: string): (typeof ACTIONS)[string] {
 
 Given(
   '{int} successful {string} requests exist for {string} in the current window',
-  async function (this: AiWorld, count: number, name: string, _key: string) {
+  async function (this: AiWorld, count: number, name: string, key: string) {
     const spec = action(name);
     currentWindowMs = spec.windowMs;
     // Only interview-start needs a session; the other two rows are public endpoints.
@@ -141,14 +153,14 @@ Given(
       assert.equal(this.lastStatus, 201, `register: ${JSON.stringify(this.lastBody)}`);
       this.candidateId = (this.lastBody?.user as { id: string }).id;
     }
-    await spec.arrange(this, count);
+    await spec.arrange(this, count, key);
   },
 );
 
 When(
   'I perform another {string} request for {string}',
-  async function (this: AiWorld, name: string, _key: string) {
-    await action(name).perform(this);
+  async function (this: AiWorld, name: string, key: string) {
+    await action(name).perform(this, key);
   },
 );
 

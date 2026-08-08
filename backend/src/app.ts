@@ -23,6 +23,21 @@ import voiceDowngradeRouter from '../modules/voice/downgrade';
 
 export const app = express();
 
+// Issue 68: without this, `req.ip` is Caddy's container address and every IP-keyed limiter
+// in A01 shares one bucket — three registrations anywhere lock out the whole internet.
+// The hop count, never `true`: `1` reads the entry one hop from our socket, so a client that
+// prepends its own X-Forwarded-For cannot rotate its rate-limit key. Bump the number if a
+// second proxy layer is ever added in front of Caddy (Caddyfile is the only hop today).
+// TRUST_PROXY is configurable so operators can set it to `false` (or `0`) when port 4000
+// is reachable without the edge proxy (compose.dev.yaml exposes it directly), preventing
+// clients from spoofing X-Forwarded-For and rotating their rate-limit bucket.
+const rawTrustProxy = config.TRUST_PROXY;
+const trustProxyNum = Number(rawTrustProxy);
+// Express does not recognise the string 'false' as a preset — it must be the boolean false.
+// Number('0') === 0 (falsy → disables), Number('false') === NaN → use the boolean.
+const trustProxyValue = rawTrustProxy === 'false' ? false : isNaN(trustProxyNum) ? rawTrustProxy : trustProxyNum;
+app.set('trust proxy', trustProxyValue);
+
 app.use(express.json());
 app.use(cookieParser());
 app.use((req, _res, next) => {
