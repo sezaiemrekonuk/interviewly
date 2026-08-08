@@ -7,7 +7,7 @@
  */
 import type { RoundType } from '@interviewly/ai';
 import type { InterviewState } from '@prisma/client';
-import type { RequestHandler } from 'express';
+import type { RequestHandler, Response } from 'express';
 
 import { redis } from '../auth/rate-limit';
 import { logger } from '../../src/lib/logger';
@@ -95,6 +95,21 @@ export async function enqueueReport(interviewId: string, ctx: { traceId: string 
 }
 
 /**
+ * Every open stream, so a shutdown can end them (#70).
+ *
+ * `server.close()` stops accepting connections and then waits for the responses still in
+ * flight — and an SSE response is in flight until the client goes away, which on a deploy it
+ * has no reason to do. Without this the drain never completes on its own and every stop runs
+ * out the hard timeout instead.
+ */
+const openStreams = new Set<Response>();
+
+/** Ends every open stream. EventSource reconnects, so a client lands on the next replica. */
+export function closeEventStreams(): void {
+  for (const res of openStreams) res.end();
+}
+
+/**
  * `GET /interviews/:id/events` — behind `requireAuth` and `router.param('id', resolveInterview)`,
  * so a non-owner is 404 `INTERVIEW_NOT_FOUND` and never reaches this handler.
  */
@@ -110,6 +125,7 @@ export const streamInterviewEvents: RequestHandler = async (req, res) => {
     'X-Accel-Buffering': 'no',
   });
   res.flushHeaders();
+  openStreams.add(res);
 
   // ponytail: one Redis connection per open stream. ioredis puts a connection into subscriber
   // mode exclusively, so the shared client cannot carry this, and a single shared subscriber
@@ -125,6 +141,7 @@ export const streamInterviewEvents: RequestHandler = async (req, res) => {
   await subscriber.subscribe(channel);
 
   res.on('close', () => {
+    openStreams.delete(res);
     res.end();
     void subscriber.quit();
   });
