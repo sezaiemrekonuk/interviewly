@@ -33,7 +33,10 @@ export const app = express();
 // clients from spoofing X-Forwarded-For and rotating their rate-limit bucket.
 const rawTrustProxy = config.TRUST_PROXY;
 const trustProxyNum = Number(rawTrustProxy);
-app.set('trust proxy', isNaN(trustProxyNum) ? rawTrustProxy : trustProxyNum);
+// Express does not recognise the string 'false' as a preset — it must be the boolean false.
+// Number('0') === 0 (falsy → disables), Number('false') === NaN → use the boolean.
+const trustProxyValue = rawTrustProxy === 'false' ? false : isNaN(trustProxyNum) ? rawTrustProxy : trustProxyNum;
+app.set('trust proxy', trustProxyValue);
 
 app.use(express.json());
 app.use(cookieParser());
