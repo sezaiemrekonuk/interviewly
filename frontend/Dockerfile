@@ -26,6 +26,16 @@ RUN --mount=type=cache,target=/root/.npm \
 
 FROM deps AS build
 COPY . .
+# Next inlines NEXT_PUBLIC_* into the client bundle during this RUN, so they have to be set
+# HERE. compose's `env_file` reaches the runtime container only, which is why the built image
+# used the source fallbacks no matter what `.env` held (issue 141). compose.yaml passes these
+# as build args and fails loudly when one is unset.
+ARG NEXT_PUBLIC_ASSETS_PREFIX=/assets
+ARG NEXT_PUBLIC_MASCOT_SHA256=86be52bdb7547413cafb3ed175a806a798c65de98b40849e0b974c47d187de65
+ARG NEXT_PUBLIC_DEFAULT_LOCALE=en
+ENV NEXT_PUBLIC_ASSETS_PREFIX=${NEXT_PUBLIC_ASSETS_PREFIX} \
+    NEXT_PUBLIC_MASCOT_SHA256=${NEXT_PUBLIC_MASCOT_SHA256} \
+    NEXT_PUBLIC_DEFAULT_LOCALE=${NEXT_PUBLIC_DEFAULT_LOCALE}
 ENV NODE_ENV=production
 RUN npm run -w frontend build
 RUN test -f frontend/.next/standalone/frontend/server.js
