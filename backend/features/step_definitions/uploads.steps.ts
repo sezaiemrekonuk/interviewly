@@ -157,7 +157,7 @@ Then(
 Then("the response carries the listing's own extracted text", function (this: AiWorld) {
   const text = this.lastBody?.text;
   assert.equal(typeof text, 'string', `no text in body: ${JSON.stringify(this.lastBody)}`);
-  assert.match(text as string, /PostgreSQL-backed services/);
+  assert.match(text as string, /PostgreSQL-backed\s+services/);
 });
 
 Then('the response carries no text', function (this: AiWorld) {
