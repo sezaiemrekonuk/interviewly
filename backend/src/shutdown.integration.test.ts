@@ -11,7 +11,8 @@
  * parked on the socket waiting for the rest of the body — no artificial slow route needed, and
  * the 404 that comes back is proof enough that the connection was drained rather than dropped.
  *
- * NOT part of `npm test` — needs Postgres, Redis, and a free port. See answers.integration.test.ts.
+ * NOT part of `npm test` — needs Postgres, Redis and a free port. See answers.integration.test.ts.
+ */
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { connect, createServer, type Socket } from 'node:net';
