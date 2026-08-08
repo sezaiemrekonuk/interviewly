@@ -7,7 +7,7 @@
  */
 import type { RoundType } from '@interviewly/ai';
 import type { InterviewState } from '@prisma/client';
-import type { RequestHandler } from 'express';
+import type { RequestHandler, Response } from 'express';
 
 import { redis } from '../auth/rate-limit';
 import { logger } from '../../src/lib/logger';
@@ -95,6 +95,21 @@ export async function enqueueReport(interviewId: string, ctx: { traceId: string 
 }
 
 /**
+ * Every open stream, so a shutdown can end them (#70).
+ *
+ * `server.close()` stops accepting connections and then waits for the responses still in
+ * flight — and an SSE response is in flight until the client goes away, which on a deploy it
+ * has no reason to do. Without this the drain never completes on its own and every stop runs
+ * out the hard timeout instead.
+ */
+const openStreams = new Set<Response>();
+
+/** Ends every open stream. EventSource reconnects, so a client lands on the next replica. */
+export function closeEventStreams(): void {
+  for (const res of openStreams) res.end();
+}
+
+/**
  * `GET /interviews/:id/events` — behind `requireAuth` and `router.param('id', resolveInterview)`,
  * so a non-owner is 404 `INTERVIEW_NOT_FOUND` and never reaches this handler.
  */
@@ -110,24 +125,35 @@ export const streamInterviewEvents: RequestHandler = async (req, res) => {
     'X-Accel-Buffering': 'no',
   });
   res.flushHeaders();
+  const subscriber = redis.duplicate();
+  let closed = false;
+  const cleanup = () => {
+    if (closed) return;
+    closed = true;
+    openStreams.delete(res);
+    if (!res.destroyed && !res.writableEnded) res.end();
+    void subscriber.quit();
+  };
+  res.once('close', cleanup);
+  openStreams.add(res);
 
   // ponytail: one Redis connection per open stream. ioredis puts a connection into subscriber
   // mode exclusively, so the shared client cannot carry this, and a single shared subscriber
   // would need an in-process channel → response map plus refcounted unsubscribe. Build that
   // the day concurrent rooms outgrow the connection pool.
-  const subscriber = redis.duplicate();
   subscriber.on('message', (_channel, payload) => {
     // `quit()` below is async, so a message can still land between the disconnect and the
     // connection actually closing — writing it would be ERR_STREAM_WRITE_AFTER_END.
-    if (res.writableEnded) return;
+    if (res.destroyed || res.writableEnded) return;
     res.write(`event: ${eventNameFor(payload)}\ndata: ${payload}\n\n`);
   });
-  await subscriber.subscribe(channel);
-
-  res.on('close', () => {
-    res.end();
-    void subscriber.quit();
-  });
+  try {
+    await subscriber.subscribe(channel);
+  } catch (err) {
+    if (closed) return;
+    cleanup();
+    throw err;
+  }
 };
 
 export default streamInterviewEvents;

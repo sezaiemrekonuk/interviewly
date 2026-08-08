@@ -66,6 +66,9 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     env_file: [.env]
+    # Above the API's own 10s drain ceiling, so Docker waits for the process to finish
+    # in-flight requests instead of SIGKILLing it mid-answer (#70).
+    stop_grace_period: 15s
     depends_on:
       db:
         condition: service_healthy
