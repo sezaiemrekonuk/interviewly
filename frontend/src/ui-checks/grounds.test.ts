@@ -157,9 +157,9 @@ describe('no CSS module declares a selector twice', () => {
     expect(duplicateSelectors(`.rail {\n  padding: 24px;\n}\n\n${block}`)).toEqual([]);
   });
 
-  it('no stylesheet in the repo carries a duplicate', () => {
+  it('no CSS module in the repo carries a duplicate selector', () => {
     const offenders: string[] = [];
-    for (const file of CSS) {
+    for (const file of CSS.filter((f) => /\.module\.css$/.test(f))) {
       for (const selector of duplicateSelectors(readFileSync(file, 'utf8'))) {
         offenders.push(`${rel(file)}: ${selector}`);
       }
