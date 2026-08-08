@@ -6,12 +6,13 @@
  * models rollback would only be asserting that the stub rolls back. So the claim is made
  * against a real Postgres, where the advance either survives the failed insert or does not.
  *
- * NOT part of `npm test` — needs Postgres. Same as the worker's integration files:
+ * NOT part of `npm test` — needs Postgres. `npm run test:integration` also runs the worker’s
+ * `*.integration.test.ts`, so it needs Redis too. Same as the worker's integration files:
  *
- *   docker compose -f compose.yaml -f compose.dev.yaml up -d db
+ *   docker compose -f compose.yaml -f compose.dev.yaml up -d db cache
  *   export DATABASE_URL=postgresql://interviewly:interviewly@localhost:5432/interviewly
+ *   export REDIS_URL=redis://localhost:6380
  *   npm run test:integration
- */
 import { randomUUID } from 'node:crypto';
 
 import type { Interview, Question } from '@prisma/client';
