@@ -13,7 +13,7 @@
  * why at the top of the file (an ops tool must not need SESSION_SECRET to seed a bucket).
  */
 import { readFileSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
@@ -29,9 +29,18 @@ describe('S3_REGION', () => {
 describe('src/lib environment access', () => {
   it('reads process.env in env.ts only', () => {
     const dir = __dirname;
-    const offenders = readdirSync(dir)
-      .filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts') && f !== 'env.ts')
-      .filter((f) => /process\.env\b/.test(readFileSync(join(dir, f), 'utf8')));
+
+    const walk = (d: string): string[] =>
+      readdirSync(d, { withFileTypes: true }).flatMap((e) =>
+        e.isDirectory() ? walk(join(d, e.name)) : [join(d, e.name)],
+      );
+
+    const offenders = walk(dir)
+      .filter((p) => (p.endsWith('.ts') || p.endsWith('.js')))
+      .filter((p) => !p.endsWith('.test.ts') && !p.endsWith('.test.js'))
+      .filter((p) => p !== join(dir, 'env.ts') && p !== join(dir, 'env.js'))
+      .filter((p) => /process\.env\b/.test(readFileSync(p, 'utf8')))
+      .map((p) => relative(dir, p));
 
     expect(offenders).toEqual([]);
   });
