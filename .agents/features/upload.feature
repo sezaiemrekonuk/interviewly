@@ -39,7 +39,7 @@ Feature: PDF upload validation
     When I upload "valid-3-page-listing.pdf" to POST "/uploads" with kind "listing"
     Then the response status is 201
     And the response carries the listing's own extracted text
-    When I upload "another-valid-listing.pdf" to POST "/uploads" with kind "cv"
+    When I upload "cv-20000-chars.pdf" to POST "/uploads" with kind "cv"
     Then the response status is 201
     And the response carries no text
 
