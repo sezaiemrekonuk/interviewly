@@ -575,8 +575,8 @@
     "ENV_VALIDATION_FAILED": "Sunucu yapılandırması eksik.",
     "VOICE_UNAVAILABLE": "Bu mülakatta sesli mod kullanılamıyor. Metin moduyla devam et.",
     "VOICE_SESSION_EXPIRED": "Sesli oturumun süresi doldu. Yeniden başlat.",
-    "SPEECH_AUDIO_INVALID": "Ses dosyası okunamadı. Lütfen tekrar kayıt yapın.",
-    "SPEECH_TRANSCRIPTION_FAILED": "Transkripsiyon başarısız. Lütfen tekrar deneyin veya yanıtınızı yazın.",
+    "SPEECH_AUDIO_INVALID": "Ses dosyası okunamadı. Tekrar kayıt yap.",
+    "SPEECH_TRANSCRIPTION_FAILED": "Transkripsiyon başarısız. Tekrar dene ya da cevabını yaz.",
     "AVATAR_STATE_INCOMPLETE": "Persona avatar seti eksik.",
     "AVATAR_KEY_MISMATCH": "Persona avatar anahtarı içerikle eşleşmiyor.",
     "MASCOT_POSE_INCOMPLETE": "Maskot poz seti eksik.",
@@ -587,7 +587,7 @@
     "CV_TRUNCATED": "Özgeçmişin uzun olduğu için kısaltıldı.",
     "PROFILE_DOB_STRIPPED": "Doğum tarihi çıkarılan profilden kaldırıldı.",
     "UNKNOWN": "Beklenmeyen bir hata oluştu.",
-    "CONSENT_REQUIRED": "Hesap oluşturmak için Gizlilik Bildirimi'ni ve Kullanım Koşulları'nı kabul edin."
+    "CONSENT_REQUIRED": "Hesap oluşturmak için Gizlilik Bildirimi'ni ve Kullanım Koşulları'nı kabul et."
   },
   "dashboard": {
     "title": "Bugün",
