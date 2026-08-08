@@ -30,22 +30,23 @@ describe('LocaleSwitcher', () => {
   // page's `<html lang>` — whichever page it is. Each must name its own language for the
   // screen reader (issue 137), so both directions are checked.
   it.each(['en', 'tr'] as const)('marks each button with its own language on a %s page', (page) => {
+    const pageMessages = page === 'en' ? messages : trMessages;
     render(
-      <NextIntlClientProvider locale={page} messages={page === 'en' ? messages : trMessages}>
-        <QueryClientProvider client={new QueryClient()}>
+      <NextIntlClientProvider locale={page} messages={pageMessages}>
+        <QueryClientProvider
+          client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+        >
           <LocaleSwitcher />
         </QueryClientProvider>
       </NextIntlClientProvider>,
     );
 
-    expect(screen.getByRole('button', { name: messages.common.localeEnglish })).toHaveAttribute(
-      'lang',
-      'en',
-    );
-    expect(screen.getByRole('button', { name: messages.common.localeTurkish })).toHaveAttribute(
-      'lang',
-      'tr',
-    );
+    expect(
+      screen.getByRole('button', { name: pageMessages.common.localeEnglish }),
+    ).toHaveAttribute('lang', 'en');
+    expect(
+      screen.getByRole('button', { name: pageMessages.common.localeTurkish }),
+    ).toHaveAttribute('lang', 'tr');
   });
 
   it('writes the cookie and persists the choice on the account (issue 76)', async () => {
