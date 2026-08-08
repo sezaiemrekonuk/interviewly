@@ -3,6 +3,7 @@
 // No secrets, PII, tokens, or PDF content in any log call.
 import pino from 'pino';
 
+import { config } from './env';
 import { requestContext } from './request-context';
 
 function serialisable(value: unknown): unknown {
@@ -26,20 +27,20 @@ export function foldFields(args: unknown[]): unknown[] {
 }
 
 export const logger = pino({
-  level: process.env.LOG_LEVEL ?? 'info',
+  level: config.LOG_LEVEL,
   hooks: {
     logMethod(args, method) {
       return method.apply(this, foldFields(args) as Parameters<typeof method>);
     },
   },
-  ...(process.env.LOG_TRANSPORT === 'elastic'
+  ...(config.LOG_TRANSPORT === 'elastic'
     ? {
         transport: {
           targets: [
             { target: 'pino/file', options: { destination: 1 } },
             {
               target: 'pino-elasticsearch',
-              options: { node: process.env.ELASTICSEARCH_URL, index: 'interviewly-%{DATE}' },
+              options: { node: config.ELASTICSEARCH_URL, index: 'interviewly-%{DATE}' },
             },
           ],
         },
