@@ -3,6 +3,8 @@ import { strict as assert } from 'node:assert';
 import { PrismaClient } from '@prisma/client';
 import type { Prisma } from '@prisma/client';
 
+import { config } from './env';
+
 // User-facing modules MUST call userInterviews() or activeInterview(), never
 // prisma.interview.findMany directly. Soft-delete is baked in here (K13).
 //
@@ -14,7 +16,7 @@ const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 export const prisma =
   globalForPrisma.prisma ?? new PrismaClient({ log: ['warn', 'error'] });
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+if (config.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
 
 /**
  * The ready report, joined onto the list rather than fetched per row. `reports` is a LIST on

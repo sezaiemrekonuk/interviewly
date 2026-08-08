@@ -56,6 +56,9 @@ const schema = z.object({
   S3_PUBLIC_PREFIX:            z.string().default('/assets'),
   S3_ACCESS_KEY:               z.string(),
   S3_SECRET_KEY:               z.string(),
+  // MinIO ignores the region entirely; real S3 fails at request time on a wrong one.
+  // The default must stay in step with prisma/seed.ts, which reads process.env by design.
+  S3_REGION:                   z.string().default('us-east-1'),
   SIGNED_URL_TTL:              z.coerce.number().default(300),
   // Hop count passed to Express `trust proxy`. Default 1 = one Caddy hop in front of the
   // API. Set to `false` (or `0`) when running the API directly without the edge proxy — i.e.

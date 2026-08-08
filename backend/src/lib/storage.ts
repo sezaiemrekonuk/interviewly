@@ -28,14 +28,14 @@ export interface Storage {
 // forcePathStyle: MinIO serves path-style only. Same client shape as prisma/seed.ts.
 const s3 = new S3Client({
   endpoint: config.S3_ENDPOINT,
-  region: process.env.S3_REGION ?? 'us-east-1',
+  region: config.S3_REGION,
   forcePathStyle: true,
   credentials: { accessKeyId: config.S3_ACCESS_KEY, secretAccessKey: config.S3_SECRET_KEY },
 });
 
 const s3Public = new S3Client({
   endpoint: config.PUBLIC_ORIGIN,
-  region: process.env.S3_REGION ?? 'us-east-1',
+  region: config.S3_REGION,
   forcePathStyle: true,
   credentials: { accessKeyId: config.S3_ACCESS_KEY, secretAccessKey: config.S3_SECRET_KEY },
 });
