@@ -28,6 +28,21 @@ Feature: PDF upload validation
     Then the response status is 201
     And the response carries an upload id with kind "listing"
 
+  # Issue #78: the endpoint parsed the listing, spent the text on the length gate and dropped
+  # it. `POST /interviews` needs `job_text` NOT NULL, so an upload-only setup was refused and
+  # the form asked the candidate to paste what the server had already read. The `cv` half is
+  # the deliberate opposite: `attachCv` caches that text server-side, so its uploader is
+  # answered with an id alone and the CV never travels back over the wire.
+  @upload @backend @AC-14
+  Scenario: A listing upload answers with the text it parsed, a CV does not
+    Given I am signed in as a candidate
+    When I upload "valid-3-page-listing.pdf" to POST "/uploads" with kind "listing"
+    Then the response status is 201
+    And the response carries the listing's own extracted text
+    When I upload "cv-20000-chars.pdf" to POST "/uploads" with kind "cv"
+    Then the response status is 201
+    And the response carries no text
+
   @upload @db @AC-3
   Scenario: A byte-identical PDF reuses the stored upload instead of duplicating it
     Given I am signed in as a candidate
