@@ -6,43 +6,31 @@
  * models rollback would only be asserting that the stub rolls back. So the claim is made
  * against a real Postgres, where the advance either survives the failed insert or does not.
  *
- * NOT part of `npm test` — needs Postgres. `npm run test:integration` also runs the worker’s
- * `*.integration.test.ts`, so it needs Redis too. Same as the worker's integration files:
+ * Nothing is mocked. The failing write is provoked with real data, on the real path.
+ *
+ * NOT part of `npm test` — needs Postgres. `npm run test:integration` runs the worker's
+ * integration files too, and those need Redis, so bring both up:
  *
  *   docker compose -f compose.yaml -f compose.dev.yaml up -d db cache
  *   export DATABASE_URL=postgresql://interviewly:interviewly@localhost:5432/interviewly
  *   export REDIS_URL=redis://localhost:6380
  *   npm run test:integration
+ */
 import { randomUUID } from 'node:crypto';
 
 import type { Interview, Question } from '@prisma/client';
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
 import { prisma } from '../../src/lib/db';
 
-/**
- * The one seam these scenarios need, and only the first one uses it: a question row the guard
- * accepts and Postgres does not. Handing the handler an id that was never inserted makes
- * `answers.question_id` trip its foreign key *after* the advance has run — a real constraint
- * violation from inside the transaction, which is the failure the issue describes. Left null
- * for the concurrency scenario, where the real lookup runs.
- */
-const seam = vi.hoisted(() => ({ question: null as Question | null }));
-vi.mock('./state', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./state')>();
-  return {
-    ...actual,
-    currentQuestionRow: (interview: Parameters<typeof actual.currentQuestionRow>[0]) =>
-      seam.question ? Promise.resolve(seam.question) : actual.currentQuestionRow(interview),
-  };
-});
-
-const { advanceWithAnswer } = await import('./answers');
+import { advanceWithAnswer } from './answers';
 
 // Parked mid-technical-round: no ADR-I22 batch and no handover fire on this turn, so the
 // only thing under test is the write itself.
 const HR_COUNT = 2;
 const INDEX = 3;
+
+const DAY = 24 * 60 * 60 * 1000;
 
 let userId: string;
 let personaId: string;
@@ -65,11 +53,7 @@ beforeAll(async () => {
   personaId = persona.id;
 });
 
-afterEach(() => {
-  seam.question = null;
-});
-
-async function seed(): Promise<{ interview: Interview; question: Question }> {
+async function seed(askedAt: Date): Promise<{ interview: Interview; question: Question }> {
   const interview = await prisma.interview.create({
     data: {
       user_id: userId,
@@ -98,7 +82,7 @@ async function seed(): Promise<{ interview: Interview; question: Question }> {
       kind: 'technical',
       difficulty: 'medium',
       topic: 'sql-indexes',
-      asked_at: new Date(),
+      asked_at: askedAt,
     },
   });
 
@@ -117,20 +101,23 @@ const reread = (id: string): Promise<Interview> =>
 
 describe('advanceWithAnswer against Postgres', () => {
   it('rolls the advance back when the answer insert fails', async () => {
-    const { interview, question } = await seed();
-    const missing = `qst_${randomUUID()}`;
-    seam.question = { ...question, id: missing };
+    // `duration_ms` is derived from `asked_at`, and `answers.duration_ms` is an INT4. A
+    // question delivered 60 days ago makes it ~5.2e9, past the 2147483647 ceiling, so the
+    // insert fails on conversion — after the advance has already run inside the transaction.
+    // A genuine write failure, provoked by data alone, with no seam in front of Prisma.
+    const { interview, question } = await seed(new Date(Date.now() - 60 * DAY));
 
-    await expect(submit(interview, missing)).rejects.toThrow();
+    await expect(submit(interview, question.id)).rejects.toThrow();
 
     // The whole of #70: with the advance on its own commit this row read 4, the answer did
     // not exist, and the CAS then refused every resubmit of the same question.
     expect((await reread(interview.id)).current_index).toBe(INDEX);
+    expect(await prisma.answer.count({ where: { question_id: question.id } })).toBe(0);
     expect(await prisma.chatMessage.count({ where: { interview_id: interview.id } })).toBe(0);
   }, 30_000);
 
   it('lets exactly one of two concurrent submits through (ADR-I06)', async () => {
-    const { interview, question } = await seed();
+    const { interview, question } = await seed(new Date());
 
     const results = await Promise.allSettled([
       submit(interview, question.id),
