@@ -65,10 +65,10 @@ When('the fixed clock moves past the rolling 24 hour window', function () {
 // ------------------------------------------------------------------------------- @AC-13
 
 /**
- * The `<key>` column is real for all three rows. Issue 68 landed `app.set('trust proxy', 1)`,
+ * The `<key>` column is real for the two IP-keyed rows (`sign-in`, `register`). Issue 68 landed `app.set('trust proxy', 1)`,
  * so `req.ip` is now the forwarded address — sending `203.0.113.10` here is not a bypass of
- * the limiter under test but the exact header Caddy puts on a request from that client, and
- * A01's IP rows finally exercise the key they are written against. `Before` (server.ts) drops
+ * the limiter under test but the exact header Caddy puts on a request from that client. (The
+ * `interview-start` row is still keyed by the signed-in user id, not this string.) `Before` (server.ts) drops
  * `ratelimit:*` per scenario, so each row still gets its own window.
  *
  * Only Caddy can set this in production: `1` is a hop count, so a client that prepends its own
