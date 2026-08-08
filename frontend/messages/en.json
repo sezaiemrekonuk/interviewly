@@ -557,6 +557,8 @@
     "LISTING_REQUIRED": "Add a job listing to start an interview.",
     "CSRF_ORIGIN_MISMATCH": "Request blocked. Use the app normally.",
     "NOT_READY": "Service is not ready yet. Try again in a moment.",
+    "REPORT_ALREADY_EXISTS": "This interview already has a report.",
+    "REPORT_JOB_RUNNING": "A report for this interview is already being prepared.",
     "UPLOAD_TOO_LARGE": "File must be under 10 MB.",
     "UNSUPPORTED_MEDIA_TYPE": "Only PDF files are accepted.",
     "UPLOAD_TOO_MANY_PAGES": "PDF must be 30 pages or fewer.",
