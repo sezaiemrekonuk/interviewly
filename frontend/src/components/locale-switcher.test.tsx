@@ -1,7 +1,10 @@
-import { screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import trMessages from '../../messages/tr.json';
 import { formCalls, stubFetch } from '../test/fetch';
 import { messages, renderWithProviders } from '../test/render';
 
@@ -21,6 +24,28 @@ describe('LocaleSwitcher', () => {
     nav.refresh.mockReset();
     vi.unstubAllGlobals();
     document.cookie = 'NEXT_LOCALE=; path=/; max-age=0';
+  });
+
+  // The labels are endonyms in both message files, so one button is always foreign to the
+  // page's `<html lang>` — whichever page it is. Each must name its own language for the
+  // screen reader (issue 137), so both directions are checked.
+  it.each(['en', 'tr'] as const)('marks each button with its own language on a %s page', (page) => {
+    render(
+      <NextIntlClientProvider locale={page} messages={page === 'en' ? messages : trMessages}>
+        <QueryClientProvider client={new QueryClient()}>
+          <LocaleSwitcher />
+        </QueryClientProvider>
+      </NextIntlClientProvider>,
+    );
+
+    expect(screen.getByRole('button', { name: messages.common.localeEnglish })).toHaveAttribute(
+      'lang',
+      'en',
+    );
+    expect(screen.getByRole('button', { name: messages.common.localeTurkish })).toHaveAttribute(
+      'lang',
+      'tr',
+    );
   });
 
   it('writes the cookie and persists the choice on the account (issue 76)', async () => {

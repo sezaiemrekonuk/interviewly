@@ -15,6 +15,10 @@ import styles from './locale-switcher.module.css';
  *
  * Rendered as a segmented pill: the short code carries the visual, the full language name
  * carries the accessible name, and `aria-pressed` carries the state (never colour alone).
+ *
+ * Both labels are endonyms (§4), so on either page one of them is foreign to `<html lang>`:
+ * each button declares its own `lang` so a screen reader says "Türkçe" with Turkish phonemes
+ * (WCAG 3.1.2).
  */
 export function LocaleSwitcher() {
   const t = useTranslations('common');
@@ -46,6 +50,7 @@ export function LocaleSwitcher() {
             key={locale}
             type="button"
             onClick={() => select(locale)}
+            lang={locale}
             aria-pressed={isActive}
             aria-label={label[locale]}
             className={isActive ? `${styles.segment} ${styles.segmentActive}` : styles.segment}
