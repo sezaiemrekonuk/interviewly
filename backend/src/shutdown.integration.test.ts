@@ -59,9 +59,15 @@ interface Api {
 
 async function startApi(): Promise<Api> {
   const port = await freePort();
-  // `tsx` rather than the built image: this asserts the source in this diff, and the CI job
-  // that runs it never builds `dist/`.
-  const proc = spawn('npx', ['tsx', 'backend/src/index.ts'], {
+  // `node --import tsx`, never `npx tsx`: `npx` is a wrapper process, so the SIGTERM below
+  // would kill the wrapper and leave the API orphaned — the test then reads the wrapper's
+  // death as the API failing to drain. (It reproduced on CI and not locally, because whether
+  // npx forwards the signal or execs depends on the platform.) `process.execPath` is the node
+  // binary this suite is already running under, so the signal lands on the API itself.
+  //
+  // From source rather than the built image: this asserts the code in this diff, and the CI
+  // job that runs it never builds `dist/`.
+  const proc = spawn(process.execPath, ['--import', 'tsx', 'backend/src/index.ts'], {
     cwd: repoRoot,
     env: { ...process.env, API_PORT: String(port) },
   });
