@@ -735,8 +735,7 @@
       "completed": "Tamamlandı",
       "cutShort": "Yarıda kesildi",
       "unfinished": "Bitmedi",
-      "cutShortNote": "Her zaman sıfır: hiçbir kod yolu bitiş nedenini cut_short olarak yazmıyor.",
-      "weakestNote": "Yalnızca soru kimlikleri — uç nokta soru metnini döndürmüyor."
+      "cutShortNote": "Her zaman sıfır: hiçbir kod yolu bitiş nedenini cut_short olarak yazmıyor."
     },
     "state": {
       "created": "Oluşturuldu",

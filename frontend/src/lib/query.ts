@@ -102,7 +102,7 @@ export interface AdminStatsResponse {
   unfinished: number;
   totalTokens: number;
   perOccupation: { cluster: string; label: string; count: number }[];
-  weakestQuestions: { questionId: string; score: number }[];
+  weakestQuestions: { questionId: string; text: string; score: number }[];
 }
 
 export function useAdminStats(enabled = true): UseQueryResult<AdminStatsResponse, ApiError> {

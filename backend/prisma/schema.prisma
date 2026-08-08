@@ -368,6 +368,9 @@ model ReportQuestion {
 
   /// Issue 082: a question is scored once per report, so a concurrent rewrite cannot double it.
   @@unique([report_id, question_id])
+  /// Issue 143: the admin weakest-questions query is `ORDER BY score ASC, question_id ASC
+  /// LIMIT 5`; both columns keep it an index scan instead of a full scan plus sort.
+  @@index([score, question_id])
   @@map("report_questions")
 }
 

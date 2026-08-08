@@ -735,8 +735,7 @@
       "completed": "Completed",
       "cutShort": "Cut short",
       "unfinished": "Unfinished",
-      "cutShortNote": "Always zero: no code path writes cut_short as an ended reason.",
-      "weakestNote": "Question ids only — the endpoint does not return the question text."
+      "cutShortNote": "Always zero: no code path writes cut_short as an ended reason."
     },
     "state": {
       "created": "Created",

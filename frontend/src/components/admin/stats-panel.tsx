@@ -111,27 +111,24 @@ export function StatsPanel({ stats }: { stats: AdminStatsResponse }) {
           {stats.weakestQuestions.length === 0 ? (
             <p className={styles.empty}>{t('stats.empty')}</p>
           ) : (
-            <>
-              {/* The endpoint returns the id and the score, nothing else. Printing the id
-                  alone and calling it a question is what this line exists to correct. */}
-              <p className={styles.note}>{t('stats.weakestNote')}</p>
-              <ul className={styles.rows} data-testid="admin-weakest">
-                {stats.weakestQuestions.map((question) => (
-                  <li className={styles.row} key={question.questionId}>
-                    <span className={`${styles.rowLabel} tabular`}>{question.questionId}</span>
-                    <span className={`${styles.rowValue} tabular`}>
-                      {format.number(question.score)}
-                    </span>
-                    <Meter
-                      className={styles.rowMeter}
-                      value={question.score}
-                      max={SCORE_MAX}
-                      decorative
-                    />
-                  </li>
-                ))}
-              </ul>
-            </>
+            <ul className={styles.rows} data-testid="admin-weakest">
+              {stats.weakestQuestions.map((question) => (
+                <li className={styles.row} key={question.questionId}>
+                  <span className={`${styles.rowLabel} ${styles.rowLabelWrap}`}>
+                    {question.text}
+                  </span>
+                  <span className={`${styles.rowValue} tabular`}>
+                    {format.number(question.score)}
+                  </span>
+                  <Meter
+                    className={styles.rowMeter}
+                    value={question.score}
+                    max={SCORE_MAX}
+                    decorative
+                  />
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       </div>

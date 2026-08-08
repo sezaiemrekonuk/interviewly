@@ -52,7 +52,9 @@ const STATS = {
   unfinished: 4,
   totalTokens: 84210,
   perOccupation: [{ cluster: 'software', label: 'Backend engineer', count: 9 }],
-  weakestQuestions: [{ questionId: 'q-sql-joins', score: 1 }],
+  weakestQuestions: [
+    { questionId: 'q-sql-joins', text: 'Explain the difference between an inner and an outer join.', score: 1 },
+  ],
 };
 
 const ZEROED = {
@@ -195,7 +197,10 @@ describe('admin list + stats (W11)', () => {
     expect(within(split).getByText(messages.admin.stats.unfinished).nextSibling).toHaveTextContent('4');
 
     expect(within(screen.getByTestId('admin-occupations')).getByText('9')).toBeInTheDocument();
-    expect(within(screen.getByTestId('admin-weakest')).getByText('q-sql-joins')).toBeInTheDocument();
+    // The question text, never the cuid: an id tells the operator nothing (issue 143).
+    const weakest = within(screen.getByTestId('admin-weakest'));
+    expect(weakest.getByText(STATS.weakestQuestions[0].text)).toBeInTheDocument();
+    expect(weakest.queryByText('q-sql-joins')).not.toBeInTheDocument();
   });
 
   it('loads the next page from nextCursor, never an offset', async () => {
@@ -235,6 +240,9 @@ describe('admin list + stats (W11)', () => {
     expect(within(split).getByText(messages.admin.stats.completed).nextSibling).toHaveTextContent('0');
     // Per-occupation and weakest-questions both say it — a line, never a spinner.
     expect(screen.getAllByText(messages.admin.stats.empty)).toHaveLength(2);
+    // Named, not just counted: the weakest list is the one issue 143 rebuilt, and its empty
+    // branch has to stay a line rather than an empty <ul>.
+    expect(screen.queryByTestId('admin-weakest')).not.toBeInTheDocument();
   });
 
   it('costs totals the priced rows on screen and leaves the unpriced one out', async () => {
