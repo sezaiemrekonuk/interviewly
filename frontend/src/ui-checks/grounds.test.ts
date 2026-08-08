@@ -90,7 +90,13 @@ function duplicateSelectors(source: string): string[] {
       continue;
     }
     if (char !== '{') {
-      head += char;
+      if (depth === 0) head += char;
+      continue;
+    }
+
+    if (depth !== 0) {
+      depth += 1;
+      head = '';
       continue;
     }
 
