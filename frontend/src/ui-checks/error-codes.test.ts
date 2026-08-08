@@ -46,16 +46,18 @@ function misfiledCodes(messages: object): string[] {
   return walk(messages, []);
 }
 
-// Both assertions below are vacuously true if the parse returns nothing — "errors covers the
-// registry" holds trivially for an empty set. A moved file or a reformatted registry would
-// therefore turn this suite green while checking nothing, so the parse asserts a floor first.
-const REGISTRY_FLOOR = 48;
+// Guard against a broken parse: this suite becomes meaningless if we cannot find the registry
+// marker or at least one known code in the parsed result.
+const REGISTRY_SENTINELS = ['PASSWORD_TOO_SHORT', 'CONSENT_REQUIRED'];
 
 describe('error codes', () => {
   const expected = [...registryCodes(), ...FRONTEND_ONLY].sort();
 
   it('reads the registry it is asserting against', () => {
-    expect(registryCodes().length).toBeGreaterThanOrEqual(REGISTRY_FLOOR);
+    expect(REGISTRY_SOURCE).toContain('ERROR_CODES = {');
+    const codes = registryCodes();
+    expect(codes.length).toBeGreaterThan(0);
+    for (const code of REGISTRY_SENTINELS) expect(codes).toContain(code);
   });
 
   it.each([
