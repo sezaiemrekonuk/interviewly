@@ -102,6 +102,15 @@ services:
     build:
       context: .
       dockerfile: frontend/Dockerfile
+      # `env_file` below is runtime-only; NEXT_PUBLIC_* are inlined at build time, so they
+      # have to arrive as build args or the image ships the fallbacks in the source. `:?` is
+      # the loud failure issue 141 asked for: a key documented in .env.example but missing
+      # from .env stops the build with this message instead of silently baking in the wrong
+      # asset digest, which no test or healthcheck would catch.
+      args:
+        NEXT_PUBLIC_ASSETS_PREFIX: ${NEXT_PUBLIC_ASSETS_PREFIX:?missing from .env — copy it from .env.example}
+        NEXT_PUBLIC_MASCOT_SHA256: ${NEXT_PUBLIC_MASCOT_SHA256:?missing from .env — copy it from .env.example}
+        NEXT_PUBLIC_DEFAULT_LOCALE: ${NEXT_PUBLIC_DEFAULT_LOCALE:?missing from .env — copy it from .env.example}
     env_file: [.env]
     environment:
       HOSTNAME: "0.0.0.0"
