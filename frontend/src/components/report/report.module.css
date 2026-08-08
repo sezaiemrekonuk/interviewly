@@ -359,72 +359,11 @@
   gap: 24px;
 }
 
-.header {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 24px 20px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-panel);
-  box-shadow: var(--shadow-hairline);
-}
-
-.title {
-  margin: 0;
-  font-family: var(--font-heading), sans-serif;
-  font-size: 28px;
-  font-weight: 600;
-}
-
-/* The score is a designed figure, not a number in a sentence: big Outfit numeral, its
-   denominator beside it, the label above, and the verdict directly under. */
-.score {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.scoreLabel {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-muted);
-}
-
-.scoreFigure {
-  display: flex;
-  gap: 8px;
-  align-items: baseline;
-  margin: 0;
-}
-
-/* Size and weight carry the figure, not colour: the report has no primary action, so it has
-   no orange (DESIGN §2 rule 1). */
-.scoreNumber {
-  font-family: var(--font-heading), sans-serif;
-  font-size: 40px;
-  font-weight: 600;
-  line-height: 1.1;
-  font-variant-numeric: tabular-nums;
-}
-
-.scoreMax {
-  font-size: 20px;
-  color: var(--text-muted);
-}
-
 .impression {
   max-width: 65ch;
   margin: 0;
   font-size: 20px;
   line-height: 1.4;
-}
-
-.downloadRow {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  align-items: flex-start;
 }
 
 .downloadNote {
@@ -468,53 +407,6 @@
   content: '';
   background: var(--accent);
   border-radius: var(--radius-button);
-}
-
-.rounds,
-.questions {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 0;
-  margin: 0;
-  list-style: none;
-}
-
-.round,
-.question {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 16px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-card);
-  box-shadow: var(--shadow-hairline);
-}
-
-.roundHead {
-  display: flex;
-  gap: 12px;
-  align-items: baseline;
-  justify-content: space-between;
-}
-
-.roundTitle {
-  margin: 0;
-  font-family: var(--font-heading), sans-serif;
-  font-size: 20px;
-  font-weight: 600;
-}
-
-/* A score reads as a fact, so it sits in a sunken chip rather than borrowing a status hue. */
-.scoreChip {
-  flex: none;
-  padding: 4px 12px;
-  font-size: 13px;
-  font-weight: 600;
-  background: var(--surface-sunken);
-  border-radius: var(--radius-button);
-  font-variant-numeric: tabular-nums;
 }
 
 .body {
