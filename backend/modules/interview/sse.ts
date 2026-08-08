@@ -125,26 +125,35 @@ export const streamInterviewEvents: RequestHandler = async (req, res) => {
     'X-Accel-Buffering': 'no',
   });
   res.flushHeaders();
+  const subscriber = redis.duplicate();
+  let closed = false;
+  const cleanup = () => {
+    if (closed) return;
+    closed = true;
+    openStreams.delete(res);
+    if (!res.destroyed && !res.writableEnded) res.end();
+    void subscriber.quit();
+  };
+  res.once('close', cleanup);
   openStreams.add(res);
 
   // ponytail: one Redis connection per open stream. ioredis puts a connection into subscriber
   // mode exclusively, so the shared client cannot carry this, and a single shared subscriber
   // would need an in-process channel → response map plus refcounted unsubscribe. Build that
   // the day concurrent rooms outgrow the connection pool.
-  const subscriber = redis.duplicate();
   subscriber.on('message', (_channel, payload) => {
     // `quit()` below is async, so a message can still land between the disconnect and the
     // connection actually closing — writing it would be ERR_STREAM_WRITE_AFTER_END.
-    if (res.writableEnded) return;
+    if (res.destroyed || res.writableEnded) return;
     res.write(`event: ${eventNameFor(payload)}\ndata: ${payload}\n\n`);
   });
-  await subscriber.subscribe(channel);
-
-  res.on('close', () => {
-    openStreams.delete(res);
-    res.end();
-    void subscriber.quit();
-  });
+  try {
+    await subscriber.subscribe(channel);
+  } catch (err) {
+    if (closed) return;
+    cleanup();
+    throw err;
+  }
 };
 
 export default streamInterviewEvents;

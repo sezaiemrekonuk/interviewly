@@ -6,12 +6,73 @@
  * `redis` and the BullMQ queues are constructed at import time from `config`, which this unit
  * has no env for and no use for; the module is imported for two pure functions.
  */
-import { describe, expect, it, vi } from 'vitest';
+import { EventEmitter } from 'node:events';
 
-vi.mock('../auth/rate-limit', () => ({ redis: { publish: vi.fn(), duplicate: vi.fn() } }));
-vi.mock('../../src/lib/queue', () => ({ REPORT_QUEUE: 'report', reportQueue: { add: vi.fn() } }));
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { eventNameFor, QUESTIONS_READY, STATE_CHANGED } = await import('./sse');
+const m = vi.hoisted(() => ({
+  duplicate: vi.fn(),
+  publish: vi.fn(),
+  queueAdd: vi.fn(),
+  loggerError: vi.fn(),
+  loggerInfo: vi.fn(),
+}));
+
+vi.mock('../auth/rate-limit', () => ({ redis: { publish: m.publish, duplicate: m.duplicate } }));
+vi.mock('../../src/lib/queue', () => ({ REPORT_QUEUE: 'report', reportQueue: { add: m.queueAdd } }));
+vi.mock('../../src/lib/logger', () => ({
+  logger: { error: m.loggerError, info: m.loggerInfo },
+}));
+
+const { closeEventStreams, eventNameFor, QUESTIONS_READY, STATE_CHANGED, streamInterviewEvents } =
+  await import('./sse');
+
+beforeEach(() => {
+  m.duplicate.mockReset();
+  m.publish.mockReset();
+  m.queueAdd.mockReset();
+  m.loggerError.mockReset();
+  m.loggerInfo.mockReset();
+});
+
+afterEach(() => {
+  closeEventStreams();
+});
+
+class FakeResponse extends EventEmitter {
+  destroyed = false;
+  writableEnded = false;
+  writeHead = vi.fn();
+  flushHeaders = vi.fn();
+  write = vi.fn();
+  end = vi.fn(() => {
+    this.writableEnded = true;
+    this.emit('close');
+  });
+}
+
+function mockSubscriber(
+  subscribe: () => Promise<void> = async () => undefined,
+): {
+  handlers: Map<string, (...args: unknown[]) => void>;
+  subscriber: {
+    on: ReturnType<typeof vi.fn>;
+    subscribe: ReturnType<typeof vi.fn>;
+    quit: ReturnType<typeof vi.fn>;
+  };
+} {
+  const handlers = new Map<string, (...args: unknown[]) => void>();
+  const subscriber = {
+    on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
+      handlers.set(event, handler);
+      return subscriber;
+    }),
+    subscribe: vi.fn(subscribe),
+    quit: vi.fn(async () => undefined),
+  };
+  m.duplicate.mockReturnValue(subscriber);
+  return { handlers, subscriber };
+}
 
 describe('eventNameFor', () => {
   it('names a questions-ready payload by its type', () => {
@@ -43,5 +104,41 @@ describe('eventNameFor', () => {
     expect(eventNameFor('not json')).toBe(STATE_CHANGED);
     expect(eventNameFor('')).toBe(STATE_CHANGED);
     expect(eventNameFor('null')).toBe(STATE_CHANGED);
+  });
+});
+
+describe('streamInterviewEvents', () => {
+  it('cleans up if the stream closes before subscribe finishes', async () => {
+    let resolveSubscribe!: () => void;
+    const subscribed = new Promise<void>((resolve) => {
+      resolveSubscribe = resolve;
+    });
+    const { subscriber } = mockSubscriber(() => subscribed);
+    const res = new FakeResponse();
+
+    const pending = streamInterviewEvents({ interview: { id: 'itv_1' } } as never, res as never);
+
+    res.destroyed = true;
+    res.emit('close');
+    expect(subscriber.quit).toHaveBeenCalledTimes(1);
+    expect(res.end).not.toHaveBeenCalled();
+
+    resolveSubscribe();
+    await pending;
+    expect(subscriber.quit).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores messages after the response is destroyed', async () => {
+    const { handlers, subscriber } = mockSubscriber();
+    const res = new FakeResponse();
+
+    await streamInterviewEvents({ interview: { id: 'itv_1' } } as never, res as never);
+
+    res.destroyed = true;
+    handlers.get('message')?.('interview:events:itv_1', '{"to":"tech_round"}');
+    expect(res.write).not.toHaveBeenCalled();
+
+    res.emit('close');
+    expect(subscriber.quit).toHaveBeenCalledTimes(1);
   });
 });
