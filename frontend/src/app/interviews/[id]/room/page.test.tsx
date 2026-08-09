@@ -229,8 +229,9 @@ describe('interview room, text mode (W06)', () => {
 
     expect(screen.getByTestId('question-waiting')).toHaveTextContent(messages.room.waiting);
     expect(screen.queryByTestId('answer-composer')).not.toBeInTheDocument();
-    // Both personas' sets are warmed in the beat before the handover.
-    expect(document.querySelectorAll('link[rel="preload"][as="image"]').length).toBe(3);
+    // Nothing is warmed: the tiles draw the speaker as bars, so an avatar preload could only
+    // ever expire unused (issue 126).
+    expect(document.querySelectorAll('link[rel="preload"][as="image"]').length).toBe(0);
   });
 
   it('renders the answered turns from state and leaves the report to W07', async () => {

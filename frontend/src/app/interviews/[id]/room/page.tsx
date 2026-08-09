@@ -4,7 +4,6 @@ import { useParams, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
 
-import { AvatarPreload } from '../../../../components/avatar';
 import { AnswerComposer } from '../../../../components/room/answer-composer';
 import { PersonaTiles } from '../../../../components/room/persona-tiles';
 import { QuestionPanel } from '../../../../components/room/question-panel';
@@ -193,21 +192,16 @@ useEffect(() => {
     }
   }
 
+  // No avatar warming in the waiting beat: the tiles draw the speaker as CSS bars, so nothing
+  // here requests an avatar object and every preload hint expired unused (issue 126).
   const tiles = (
-    <>
-      <PersonaTiles
-        personas={room.personas}
-        activeId={activeId}
-        activeState={avatarState}
-        layout={voiceMode ? 'stage' : 'strip'}
-        candidate={voiceMode ? { level: voice.micLevel, muted: voice.muted } : null}
-      />
-
-      {/* The waiting beat is where both sets are warmed — the handover must not fetch. */}
-      {room.currentQuestion ? null : (
-        <AvatarPreload sets={room.personas.map((persona) => persona.avatarSet)} />
-      )}
-    </>
+    <PersonaTiles
+      personas={room.personas}
+      activeId={activeId}
+      activeState={avatarState}
+      layout={voiceMode ? 'stage' : 'strip'}
+      candidate={voiceMode ? { level: voice.micLevel, muted: voice.muted } : null}
+    />
   );
 
   // The waiting panel is the truth right up until it is not — past `STALLED_AFTER_MS` it

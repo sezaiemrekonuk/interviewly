@@ -48,8 +48,8 @@ describe('CSP: no inline style attributes', () => {
   // completeness) shipped rendering at zero width. Dynamic sizing goes through
   // components/shell/meter.tsx or a class variant.
   const KNOWN_DEAD = new Set([
-    // Rendered by nothing: only AvatarPreload is imported from this module, and the room no
-    // longer displays avatars at all. Slated for deletion — see the redesign notes.
+    // Imported by nothing since AvatarPreload went (issue 126) — the room draws its speaker
+    // as CSS bars now. Slated for deletion — see the redesign notes.
     'components/avatar.tsx',
   ]);
 
