@@ -25,12 +25,12 @@ const infoMock = vi.mocked(logger.info);
 
 const payload: ReportPayload = {
   overall_impression: 'Solid backend fundamentals.',
-  overall_score: 4,
+  overall_score: 80,
   strengths: ['Clear STAR structure', 'Concrete examples'],
   improvements: ['Quantify impact', 'Name the trade-offs'],
-  rounds: [{ type: 'hr', score: 4, summary: 'Motivated.' }],
+  rounds: [{ type: 'hr', score: 80, summary: 'Motivated.' }],
   questions: [
-    { question_id: 'q-1', score: 4, reason: 'Named the index.', star_adherence: 0.8 },
+    { question_id: 'q-1', score: 80, reason: 'Named the index.', star_adherence: 0.8 },
   ],
   language: 'en',
 };

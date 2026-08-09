@@ -47,7 +47,7 @@ Before that: **W07 done — the demo path is closed** (land → … → room →
 not patched, it is another ledger's file. **`useInterviewEvents` now invalidates the
 `['interview',id]` prefix**, not the state key, so one nudge covers both reads; the room is
 unaffected and its `queryKey` param sketch was dropped. `ReportPayload` is **snake_case verbatim**
-(`overall_score` int 0..5, `improvements` not "gaps") per `packages/ai/src/schemas.ts`. Poll
+(`overall_score` int 0..100, `improvements` not "gaps") per `packages/ai/src/schemas.ts`. Poll
 fallback = `useReport(id, poll)` 5 s, off at `<ReportWait onTimeout>`'s 60 s ceiling.
 Ring: frontend 170, root 280.
 

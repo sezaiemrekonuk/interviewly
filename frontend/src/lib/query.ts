@@ -601,7 +601,7 @@ export function useSubmitAudioAnswer(
 /**
  * K15 `reports.payload`, verbatim — snake_case because the backend stores what the model
  * returned and `ReportPayloadSchema` (`packages/ai/src/schemas.ts`) gates those exact keys.
- * Every score is an integer 0..5. Renamed here and the read silently drifts from the gate.
+ * Every score is an integer 0..100. Renamed here and the read silently drifts from the gate.
  */
 export interface ReportPayload {
   overall_impression: string;

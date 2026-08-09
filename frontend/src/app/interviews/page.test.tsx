@@ -36,7 +36,7 @@ function question(over: Record<string, unknown> = {}) {
     text: 'Tell me about a deadline you missed.',
     answeredAt: '2026-08-01T10:00:00.000Z',
     durationMs: 40_000,
-    score: 3,
+    score: 60,
     reason: 'Named the cause but not the fix.',
     starAdherence: 0.6,
     answerScores: null,
@@ -179,22 +179,22 @@ describe('/interviews — the archive', () => {
   it('sorts worst first and puts unscored rows last', async () => {
     await renderAt('view=questions&sort=worst', {
       questions: [
-        question({ questionId: 'q1', score: 4, text: 'Four' }),
+        question({ questionId: 'q1', score: 80, text: 'Eighty' }),
         question({ questionId: 'q2', score: null, starAdherence: null, text: 'Unscored' }),
-        question({ questionId: 'q3', score: 1, text: 'One' }),
+        question({ questionId: 'q3', score: 20, text: 'Twenty' }),
       ],
     });
 
     await screen.findByRole('table');
-    expect(questionTexts()).toEqual(['One', 'Four', 'Unscored']);
+    expect(questionTexts()).toEqual(['Twenty', 'Eighty', 'Unscored']);
   });
 
   // STAR is a behavioural-story rubric. The backend scores it 0 on a technical question because
-  // it never applied, and "0%" beside a 4/5 reads as broken scoring or an unnamed disaster.
+  // it never applied, and "0%" beside an 80 reads as broken scoring or an unnamed disaster.
   it('shows no STAR percentage on a technical row, and says why', async () => {
     await renderAt('view=questions', {
       questions: [
-        question({ questionId: 'q2', roundType: 'tech', score: 4, starAdherence: 0, text: 'Idempotent worker?' }),
+        question({ questionId: 'q2', roundType: 'tech', score: 80, starAdherence: 0, text: 'Idempotent worker?' }),
       ],
     });
 

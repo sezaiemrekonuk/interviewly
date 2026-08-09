@@ -53,7 +53,7 @@ const STATS = {
   totalTokens: 84210,
   perOccupation: [{ cluster: 'software', label: 'Backend engineer', count: 9 }],
   weakestQuestions: [
-    { questionId: 'q-sql-joins', text: 'Explain the difference between an inner and an outer join.', score: 1 },
+    { questionId: 'q-sql-joins', text: 'Explain the difference between an inner and an outer join.', score: 20 },
   ],
 };
 

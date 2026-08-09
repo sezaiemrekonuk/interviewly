@@ -5,12 +5,12 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 import type { MyQuestion } from '../../lib/query';
+import { SCORE_MAX, scoreBand } from '../../lib/score';
 
 import styles from './question-table.module.css';
 
 const cx = (...names: Array<string | false | undefined>) => names.filter(Boolean).join(' ');
 
-const SCORE_MAX = 5;
 const ROUNDS = ['all', 'hr', 'tech'] as const;
 const SORTS = ['recent', 'worst'] as const;
 
@@ -155,7 +155,7 @@ export function QuestionTable({
                   ) : (
                     <span
                       className={cx(styles.score, 'tabular')}
-                      data-band={row.score <= 2 ? 'low' : row.score === 3 ? 'mid' : 'high'}
+                      data-band={scoreBand(row.score)}
                     >
                       {row.score}
                       <span className={styles.outOf}>{t('outOf', { max: SCORE_MAX })}</span>

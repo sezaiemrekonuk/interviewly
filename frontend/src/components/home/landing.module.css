@@ -477,7 +477,7 @@
   white-space: nowrap;
 }
 
-/* "/ 5" beside the figure — quieter than the number it qualifies, so the number reads first. */
+/* "/ 100" beside the figure — quieter than the number it qualifies, so the number reads first. */
 .axisUnit {
   padding-inline-start: 4px;
   font-weight: 400;
