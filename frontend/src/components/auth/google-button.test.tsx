@@ -41,6 +41,20 @@ describe('GoogleButton', () => {
     });
   });
 
+  // Issue 110: an OAuth button is recognised by its mark, not its words. The mark is
+  // decoration on top of the label, so it must not reach the accessibility tree.
+  it('carries the Google mark without touching the accessible name', async () => {
+    stubCapabilities(true);
+    const { container } = renderWithProviders(<GoogleButton />);
+
+    const link = await screen.findByRole('link', { name: messages.auth.googleButton });
+    const mark = container.querySelector('svg');
+    expect(link).toContainElement(mark);
+    expect(mark).toHaveAttribute('aria-hidden', 'true');
+    // The four-colour G, not a monochrome stand-in.
+    expect(container.querySelectorAll('svg path')).toHaveLength(4);
+  });
+
   it('renders nothing at all when Google is not configured', async () => {
     const fetchSpy = stubCapabilities(false);
     const { container } = renderWithProviders(<GoogleButton />);

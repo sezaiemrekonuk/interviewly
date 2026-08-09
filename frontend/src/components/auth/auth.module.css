@@ -147,6 +147,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Google's sign-in guidance: the mark keeps clear space on either side and never crowds
+     the label. 12px on a 48px control sits inside that. */
+  gap: 12px;
   min-height: 48px;
   padding: 12px 16px;
   font-size: 16px;
@@ -157,6 +160,14 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-button);
   transition: background var(--duration-default) var(--easing-default);
+}
+
+/* 18px is Google's specified mark size for a button this height. `flex-shrink: 0` so a long
+   translated label never squashes the logo out of proportion. */
+.googleMark {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
 }
 
 .google:hover {
