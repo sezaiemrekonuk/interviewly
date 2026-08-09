@@ -246,7 +246,12 @@ export const googleCallback: RequestHandler = async (req, res) => {
     throw err;
   }
 
-  res.redirect(302, `${config.PUBLIC_ORIGIN}/dashboard`);
+  // `/`, not a landing path chosen here (issue #80). `/` applies the K8.7 first-run rule
+  // client-side (`lib/first-run.ts`, via `home-switch.tsx`) — the same rule the password
+  // sign-in uses. Sending Google users straight to the signed-in home skipped onboarding
+  // entirely, and their profile stayed empty forever; re-deriving the rule in this handler
+  // would have given it a second home to drift from.
+  res.redirect(302, `${config.PUBLIC_ORIGIN}/`);
 };
 
 async function fetchIdentity(
