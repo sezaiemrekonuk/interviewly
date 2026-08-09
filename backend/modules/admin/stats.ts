@@ -1,5 +1,6 @@
 import type { RequestHandler } from 'express';
 
+import { recordAudit } from '../../src/lib/audit';
 import { prisma } from '../../src/lib/db';
 import { logger } from '../../src/lib/logger';
 
@@ -133,6 +134,14 @@ export const getAdminStats: RequestHandler = async (req, res, next) => {
       occupationGroups,
       new Map(clusters.map((c) => [c.id, c.key])),
     );
+
+    // Issue 86: an aggregate over every user's interviews is still a read of their data.
+    await recordAudit(prisma, {
+      actorUserId: req.user!.id,
+      action: 'admin.stats_read',
+      subjectType: 'interview_stats',
+      traceId: req.traceId,
+    });
 
     logger.info({ traceId: req.traceId }, 'ADMIN_STATS_READ');
 

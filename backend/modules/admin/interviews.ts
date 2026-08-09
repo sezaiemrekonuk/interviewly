@@ -1,5 +1,6 @@
 import type { RequestHandler } from 'express';
 
+import { recordAudit } from '../../src/lib/audit';
 import { prisma } from '../../src/lib/db';
 import { logger } from '../../src/lib/logger';
 import { decodeCursor, encodeCursor, pageLimit } from '../interview/cursor';
@@ -47,6 +48,18 @@ export const listAllInterviews: RequestHandler = async (req, res, next) => {
       totalTokens: tokensFor.get(row.id) ?? 0,
       costUsd: row.spent_usd.toFixed(6),
     }));
+
+    // Issue 86: this endpoint reads every user's interviews, so the read is itself the
+    // privileged act. One row per request, not per interview — the page is the subject, and
+    // `subject_id` is null for exactly that reason. No transaction: a read has nothing to be
+    // atomic with.
+    await recordAudit(prisma, {
+      actorUserId: req.user!.id,
+      action: 'admin.interviews_read',
+      subjectType: 'interview_list',
+      traceId: req.traceId,
+      metadata: { count: items.length },
+    });
 
     logger.info({ traceId: req.traceId, count: items.length }, 'ADMIN_INTERVIEWS_LISTED');
 
