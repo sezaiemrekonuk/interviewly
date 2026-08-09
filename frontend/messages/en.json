@@ -8,7 +8,8 @@
     "noFileChosen": "No file selected",
     "clearFile": "Remove",
     "showPassword": "Show",
-    "hidePassword": "Hide"
+    "hidePassword": "Hide",
+    "skipToContent": "Skip to content"
   },
   "chrome": {
     "newInterview": "New interview",

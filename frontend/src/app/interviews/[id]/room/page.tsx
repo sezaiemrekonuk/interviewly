@@ -131,7 +131,7 @@ useEffect(() => {
 
   if (queryErrorCode) {
     return (
-      <main className={styles.room}>
+      <main id="content" tabIndex={-1} className={styles.room}>
         <div className={styles.errorCard}>
           <p role="alert" className={styles.error}>
             {errorMessage(queryErrorCode)}

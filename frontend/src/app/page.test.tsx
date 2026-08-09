@@ -189,6 +189,22 @@ describe('landing (screen 1)', () => {
     );
   });
 
+  // Issue 96: `<header>`/`<footer>` used to sit inside `<main>`, which leaves a screen-reader
+  // user with no banner and no contentinfo to jump between — and there was no skip link, so
+  // reaching the content past the section anchors cost six Tab presses on every navigation.
+  it('exposes the three landmarks and a skip link into main', () => {
+    renderWithIntl(<Home />);
+
+    const main = screen.getByRole('main');
+    expect(screen.getByRole('banner')).toBeInTheDocument();
+    expect(screen.getByRole('contentinfo')).toBeInTheDocument();
+    // Siblings, not descendants — the nesting is what suppressed the landmarks.
+    expect(main).not.toContainElement(screen.getByRole('banner'));
+    expect(main).not.toContainElement(screen.getByRole('contentinfo'));
+    // And the target the skip link names actually exists on this page.
+    expect(main).toHaveAttribute('id', 'content');
+  });
+
   it('pulls no React Query into the landing tree (§8.1 JS budget)', () => {
     const source = readFileSync(join(__dirname, 'page.tsx'), 'utf8');
     expect(source).not.toContain('@tanstack/react-query');

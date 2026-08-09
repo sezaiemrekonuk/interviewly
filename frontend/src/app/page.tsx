@@ -49,7 +49,7 @@ export default function Home() {
     <>
       <SiteHeader />
 
-      <main className={styles.ground}>
+      <main id="content" tabIndex={-1} className={styles.ground}>
         <HomeSwitch>
           {/* Deliberately short — headline, subhead, one CTA. The argument is the stage
               directly below, and a full-height hero would put it under the fold. */}

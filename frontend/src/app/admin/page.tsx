@@ -96,7 +96,7 @@ export default function AdminPage() {
   // route exists and that they were bounced off it (error-routing.ts, `not-authorized`).
   if (user.role !== 'admin' || refusal) {
     return (
-      <main className={styles.ground}>
+      <main id="content" tabIndex={-1} className={styles.ground}>
         <div className={styles.forbidden} role="alert" data-testid="admin-forbidden">
           <h1 className={styles.forbiddenTitle}>{t('forbidden.title')}</h1>
           <p className={styles.forbiddenBody}>{t('forbidden.body')}</p>

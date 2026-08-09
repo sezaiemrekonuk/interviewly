@@ -58,7 +58,7 @@ export default function InterviewReportPage() {
 
   if (errorCode) {
     return (
-      <main className={styles.ground}>
+      <main id="content" tabIndex={-1} className={styles.ground}>
         <p role="alert" className={styles.error}>
           {errorMessage(errorCode)}
         </p>
@@ -70,7 +70,7 @@ export default function InterviewReportPage() {
   const room = stateQuery.data;
   if (!room) return null;
 
-  // `SplitShell` renders the working surface as the page's <main>, so the testid goes on the
+  // `SplitShell` renders the working surface as the page's <main id="content" tabIndex={-1}>, so the testid goes on the
   // wrapper — the same shape the room uses.
   return (
     <div data-testid="interview-report">

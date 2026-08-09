@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages, getTranslations } from "next-intl/server";
 import "./globals.css";
 import { Providers } from "./providers";
+import { SkipLink } from "../components/chrome/skip-link";
 import { SITE_NAME, SITE_ORIGIN } from "../lib/site";
 
 // Direction B's three roles. Self-hosted woff2 because the CSP is `default-src 'self'`;
@@ -86,6 +87,8 @@ export default async function RootLayout({
     >
       <body>
         <NextIntlClientProvider locale={locale} messages={messages}>
+          {/* First in the body, so it is the first Tab stop on every page (issue 96). */}
+          <SkipLink />
           <Providers>{children}</Providers>
         </NextIntlClientProvider>
       </body>
