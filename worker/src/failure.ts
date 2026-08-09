@@ -53,9 +53,10 @@ export async function handleDeadLetter(interviewId: string, cause: unknown): Pro
     return;
   }
 
-  // `updateMany`, not `update`: I09 creates the row (already `ready`) inside its own transaction,
-  // so the usual dead-letter has no row at all to mark — the interview state is the durable
-  // signal there. `status: { not: 'ready' }` keeps a report that did land out of it.
+  // `updateMany`, not `update`: there is normally a row here now — issue #123 opens one when
+  // the job is enqueued — but a job from before that, or one whose row was removed, must still
+  // dead-letter cleanly rather than throwing on a missing record. `status: { not: 'ready' }`
+  // keeps a report that did land out of it.
   await prisma.report.updateMany({
     where: { interview_id: interviewId, status: { not: 'ready' } },
     data: { status: 'failed' },

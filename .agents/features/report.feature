@@ -81,7 +81,7 @@ Feature: Report availability
     Then the response status is 200
     And the interview state is "evaluating"
     When the report job fails until its retry budget is exhausted
-    And the interview is dead-lettered with no report row
+    And the interview is dead-lettered with no report
     Then the interview state is "failed"
     When an admin requeues the report for the interview
     Then the response status is 202

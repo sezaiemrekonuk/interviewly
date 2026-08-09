@@ -132,7 +132,13 @@ When('the report job runs', async function (this: AiWorld) {
 // ---------------------------------------------------------------- then
 
 Then('no report payload is stored for the interview', async function (this: AiWorld) {
-  assert.equal(await prisma.report.count({ where: { interview_id: this.interviewId } }), 0);
+  // The step's own name is the property, and it is the one that survives issue #123: the
+  // invalid branch stores nothing readable. What changed is that the row now exists and says
+  // `failed`, where before its absence was the only signal — and an absence cannot tell a
+  // failed report apart from one that was never started.
+  const row = await prisma.report.findFirst({ where: { interview_id: this.interviewId } });
+  assert.equal(row?.payload ?? null, null, 'the invalid branch must store no payload');
+  assert.notEqual(row?.status, 'ready', 'a refused payload must not leave a ready report');
 });
 
 // `an "…" event is emitted` is ai-provider.steps.ts's regex over `world.events`, which is why
