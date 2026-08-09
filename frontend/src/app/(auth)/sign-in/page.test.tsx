@@ -76,16 +76,40 @@ describe('sign-in page', () => {
   });
 
   // A02 redirects the two K8 refusals to `/sign-in?error=<CODE>`; the browser arrives with
-  // no form interaction at all, so the banner has to come up on mount.
-  it('shows the OAuth refusal carried in ?error= on mount', async () => {
-    nav.search = 'error=ADMIN_MUST_USE_PASSWORD';
-    stubFetch(200, {});
-    renderWithProviders(<SignInPage />);
+  // no form interaction at all, so the message has to come up on mount.
+  //
+  // Issue 139: and it has to come up *at the Google button*. Both codes are reachable only
+  // through the OAuth flow and both recover by using the password form, so rendering them
+  // above that form marked the control that would have worked.
+  it.each(['ADMIN_MUST_USE_PASSWORD', 'ACCOUNT_LINK_REQUIRES_PASSWORD'])(
+    'puts the OAuth-only refusal %s beside the Google button, not above the form',
+    async (code) => {
+      nav.search = `error=${code}`;
+      stubFetch(200, {});
+      const { container } = renderWithProviders(<SignInPage />);
 
-    expect(
-      await screen.findByText(messages.errors.ADMIN_MUST_USE_PASSWORD),
-    ).toBeInTheDocument();
-    expect(screen.queryByText(/ADMIN_MUST_USE_PASSWORD/)).toBeNull();
+      const message = await screen.findByText(
+        messages.errors[code as keyof typeof messages.errors],
+      );
+      expect(message).toHaveAttribute('role', 'alert');
+      expect(screen.queryByText(new RegExp(code))).toBeNull();
+
+      // Position, not just presence: the message must follow the form, and the banner slot
+      // above it must be empty. `.banner` is the element this used to render into.
+      const form = container.querySelector('form')!;
+      expect(form.compareDocumentPosition(message) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(container.querySelector('[class*="banner"]')).toBeNull();
+    },
+  );
+
+  it('still renders a non-OAuth code as the form banner', async () => {
+    nav.search = 'error=RATE_LIMITED';
+    stubFetch(200, {});
+    const { container } = renderWithProviders(<SignInPage />);
+
+    const message = await screen.findByText(messages.errors.RATE_LIMITED);
+    const form = container.querySelector('form')!;
+    expect(form.compareDocumentPosition(message) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
   });
 
   // Issue 60: `GET /auth/google` on a deployment with no client credentials now redirects

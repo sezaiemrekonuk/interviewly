@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl';
 
 import { API_BASE } from '../../lib/api';
 import { useAuthCapabilities } from '../../lib/query';
+import { useErrorMessage } from '../../lib/use-error-message';
 
 import styles from './auth.module.css';
 
@@ -59,14 +60,35 @@ function GoogleMark() {
   );
 }
 
-export function GoogleButton({ disabled = false }: { disabled?: boolean }) {
+export function GoogleButton({
+  disabled = false,
+  errorCode = null,
+}: {
+  disabled?: boolean;
+  /**
+   * A refusal this control caused, as an error code — `ADMIN_MUST_USE_PASSWORD` and
+   * `ACCOUNT_LINK_REQUIRES_PASSWORD` arrive on `/sign-in?error=` after the OAuth redirect.
+   * It belongs here rather than above the credentials form, which is the control that would
+   * have worked and the one the message names as the recovery (issue 139).
+   */
+  errorCode?: string | null;
+}) {
   const t = useTranslations('auth');
+  const errorMessage = useErrorMessage();
   const { data } = useAuthCapabilities();
+
+  const refusal = errorCode ? (
+    <p className={styles.googleError} role="alert">
+      {errorMessage(errorCode)}
+    </p>
+  ) : null;
 
   // Fails closed on purpose, and covers the pending fetch as well as a refused one: an
   // unanswered "can this deployment do Google?" is not a yes, and a dead control is worse
-  // than a missing one here.
-  if (!data?.oauth.google) return null;
+  // than a missing one here. The refusal still shows: it explains a redirect that already
+  // happened, so swallowing it because the button is now hidden would leave the visitor
+  // with nothing at all.
+  if (!data?.oauth.google) return refusal;
 
   return (
     <>
@@ -80,6 +102,7 @@ export function GoogleButton({ disabled = false }: { disabled?: boolean }) {
         <GoogleMark />
         {t('googleButton')}
       </a>
+      {refusal}
     </>
   );
 }

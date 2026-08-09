@@ -5,8 +5,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
-import { apiGet } from '../../lib/api';
 import { DEFAULT_LANDING_PATH } from '../../lib/auth-redirect';
+import { probeSignedIn } from '../../lib/session-probe';
 
 import styles from './chrome.module.css';
 
@@ -21,7 +21,8 @@ const SECTIONS = ['demo', 'mechanism', 'modes', 'report', 'faq'] as const;
  *
  * Deliberately *not* `useMe()`: this renders on the anonymous landing, and pulling React Query
  * into that tree spends the §8.1 JS budget on one boolean. A refused `/me` is not an error
- * here — the link simply is not shown.
+ * here — the link simply is not shown. The probe is shared with `home/home-switch.tsx`, which
+ * needs the same answer in the same tree (`lib/session-probe.ts`, issue 130).
  *
  * One link, not three, when signed in. A signed-in visitor reading the privacy notice needs
  * the way back into the product; everything else they might want is on the rail once they
@@ -40,8 +41,8 @@ export function HeaderNav() {
 
   useEffect(() => {
     let active = true;
-    void apiGet<{ user: unknown }>('/me').then((result) => {
-      if (active) setSignedIn(result.ok);
+    void probeSignedIn().then((ok) => {
+      if (active) setSignedIn(ok);
     });
     return () => {
       active = false;
