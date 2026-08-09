@@ -57,9 +57,10 @@ describe('requireAuth session slide', () => {
     userFindUnique.mockClear();
   });
 
-  it('writes nothing for a second request inside the threshold', async () => {
-    const { run, cookie, next } = call(storedSession(MINUTE));
-    await run;
+it('writes nothing for a second request inside the threshold', async () => {
+  const insideThreshold = Math.max(1, Math.floor(Math.min(MINUTE, SESSION_SLIDE_THRESHOLD_MS / 2)));
+  const { run, cookie, next } = call(storedSession(insideThreshold));
+  await run;
 
     expect(next).toHaveBeenCalledWith();
     expect(sessionUpdate).not.toHaveBeenCalled();
