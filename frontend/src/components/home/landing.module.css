@@ -720,3 +720,11 @@
     font-size: 40px;
   }
 }
+
+/* The untyped remainder of a sentence that is still arriving (issue 237). It lays out and
+   wraps exactly as the finished text will, so the demo's height is decided on the first frame
+   instead of a second later — `display: none` would not reserve the space, and a `min-height`
+   would be a constant that a copy change could silently invalidate. */
+.pending {
+  visibility: hidden;
+}
