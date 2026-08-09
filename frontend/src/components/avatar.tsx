@@ -105,26 +105,3 @@ export function Avatar({
     />
   );
 }
-
-/**
- * Both personas' full sets, warmed during the waiting beat (ui §3.6) — the handover to the
- * technical persona must not be the first time its images are fetched.
- */
-export function AvatarPreload({ sets }: { sets: AvatarSet[] }) {
-  const hrefs = [
-    ...new Set(
-      sets.flatMap((set) =>
-        Object.values(set)
-          .filter((key): key is string => Boolean(key))
-          .map((key) => `${ASSET_PREFIX}/${key}`),
-      ),
-    ),
-  ];
-  return (
-    <>
-      {hrefs.map((href) => (
-        <link key={href} rel="preload" as="image" href={href} />
-      ))}
-    </>
-  );
-}
