@@ -111,13 +111,29 @@ export function CredentialsForm({
         </p>
       )}
 
-      <form className={styles.form} onSubmit={handleSubmit(onSubmit)} noValidate>
+      {/* Locked while in flight: an edit mid-request produces an error about the value that
+          was sent, next to the different value now on screen. `aria-busy` so the pending
+          state is announced, not only drawn on the button. */}
+      <form
+        className={styles.form}
+        onSubmit={handleSubmit(onSubmit)}
+        aria-busy={isSubmitting || undefined}
+        noValidate
+      >
         <Field
           label={t('emailLabel')}
           id="email"
           error={errors.email?.message && messageFor(errors.email.message)}
         >
-          {(control) => <Input {...control} type="email" autoComplete="email" {...register('email')} />}
+          {(control) => (
+            <Input
+              {...control}
+              type="email"
+              autoComplete="email"
+              disabled={isSubmitting}
+              {...register('email')}
+            />
+          )}
         </Field>
 
         <Field
@@ -130,6 +146,7 @@ export function CredentialsForm({
               {...control}
               type="password"
               autoComplete={endpoint === '/auth/register' ? 'new-password' : 'current-password'}
+              disabled={isSubmitting}
               {...register('password')}
             />
           )}
