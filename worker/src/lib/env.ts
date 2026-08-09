@@ -19,7 +19,7 @@ const boolFromEnv = (fallback: boolean) =>
  */
 const portFromEnv = (fallback: number) =>
   z.preprocess(
-    (value) => (value === undefined || value === '' ? fallback : value),
+    (value) => (value === undefined || String(value).trim() === '' ? fallback : value),
     z.coerce.number().int().positive(),
   );
 
