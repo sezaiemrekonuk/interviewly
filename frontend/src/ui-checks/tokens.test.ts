@@ -3,7 +3,7 @@
 // the registry. Asserts the *shipped* values (F01 darkened text-muted/primary/live for AA),
 // not the ui-spec literals.
 import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const ROOT = join(__dirname, '..', '..');
@@ -112,12 +112,27 @@ const SCAN_FILES = [...collectSourceFiles(SRC_DIR), GLOBALS_CSS].filter((f) => {
   }
 });
 
+/**
+ * Third-party brand colours, which are not design decisions and must never enter the token
+ * registry — Google's mark is Google's, fixed by their sign-in branding guidelines, and
+ * re-pointing it at `--primary` would be a trademark violation rather than a theme.
+ *
+ * Deliberately keyed to the exact hexes and the one file: a stray `#fff` in `google-button.tsx`
+ * still fails, and a Google hex anywhere else does too.
+ */
+const BRAND_HEX_EXEMPTIONS: Record<string, Set<string>> = {
+  'components/auth/google-button.tsx': new Set(['#EA4335', '#4285F4', '#FBBC05', '#34A853']),
+};
+
 describe('no stray literals outside the token registry', () => {
   it('no raw colour hex in src/** or globals.css', () => {
     const violations: string[] = [];
     for (const file of SCAN_FILES) {
       const content = readFileSync(file, 'utf8');
+      const rel = relative(SRC_DIR, file).replaceAll('\\', '/');
+      const exempt = BRAND_HEX_EXEMPTIONS[rel];
       for (const match of content.matchAll(/#[0-9a-fA-F]{3,8}\b/g)) {
+        if (exempt?.has(match[0])) continue;
         violations.push(`${file}: ${match[0]}`);
       }
     }
