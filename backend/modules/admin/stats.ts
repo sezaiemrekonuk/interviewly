@@ -80,7 +80,7 @@ export const getAdminStats: RequestHandler = async (req, res, next) => {
               WHERE "started_at" IS NOT NULL AND "ended_at" IS NOT NULL
             ) AS duration_count,
             COALESCE(SUM(
-              EXTRACT(EPOCH FROM ("ended_at" - "started_at")) * 1000
+              ROUND(EXTRACT(EPOCH FROM ("ended_at" - "started_at")) * 1000)
             ) FILTER (
               WHERE "started_at" IS NOT NULL AND "ended_at" IS NOT NULL
             ), 0)::bigint AS duration_sum_ms,
