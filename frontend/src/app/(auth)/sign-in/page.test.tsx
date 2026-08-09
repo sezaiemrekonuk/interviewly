@@ -2,7 +2,7 @@ import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { formCalls, stubFetch } from '../../../test/fetch';
+import { formCalls, jsonResponse, stubFetch } from '../../../test/fetch';
 import { messages, renderWithProviders } from '../../../test/render';
 
 const nav = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn(), search: '' }));
@@ -125,6 +125,44 @@ describe('sign-in page', () => {
       await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/dashboard'));
     },
   );
+
+  // Issue 113 — the spec's loading state is "submit button in-flight, fields locked". An
+  // editable field mid-request means the error that lands describes the value that was sent,
+  // next to the different value now on screen.
+  it('locks both fields while the request is in flight and frees them on the error', async () => {
+    let answer: (response: Response) => void = () => {};
+    const inFlight = new Promise<Response>((resolve) => {
+      answer = resolve;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string | URL) =>
+        String(url) === '/api/auth/capabilities'
+          ? jsonResponse(200, { oauth: { google: true } })
+          : inFlight,
+      ),
+    );
+    renderWithProviders(<SignInPage />);
+
+    const email = screen.getByLabelText(messages.auth.emailLabel);
+    const password = screen.getByLabelText(messages.auth.passwordLabel);
+    await fillAndSubmit('someone@example.com', 'wrong-password');
+
+    await waitFor(() => expect(email).toBeDisabled());
+    expect(password).toBeDisabled();
+    expect(email.closest('form')).toHaveAttribute('aria-busy', 'true');
+
+    answer(jsonResponse(401, { error: { code: 'INVALID_CREDENTIALS' } }));
+
+    // Editable again on the failure path, not only on success, and still carrying what the
+    // visitor typed — otherwise the correction starts from an empty form.
+    expect(await screen.findByText(messages.errors.INVALID_CREDENTIALS)).toBeInTheDocument();
+    expect(email).toBeEnabled();
+    expect(password).toBeEnabled();
+    expect(email).toHaveValue('someone@example.com');
+    expect(password).toHaveValue('wrong-password');
+    expect(email.closest('form')).not.toHaveAttribute('aria-busy');
+  });
 
   it('offers the forgot-password and register links', () => {
     stubFetch(200, {});
