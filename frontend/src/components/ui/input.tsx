@@ -47,7 +47,7 @@ export function Input({
       {control}
       <button
         type="button"
-        key={generated}
+        id={generated}
         className={styles.inputAction}
         // Not `aria-pressed`: the name already says what the next press does, and a toggle
         // that announces both state and action reads as two contradictory facts.
