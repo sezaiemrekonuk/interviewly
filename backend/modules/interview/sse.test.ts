@@ -24,8 +24,15 @@ vi.mock('../../src/lib/logger', () => ({
   logger: { error: m.loggerError, info: m.loggerInfo },
 }));
 
-const { closeEventStreams, eventNameFor, QUESTIONS_READY, STATE_CHANGED, streamInterviewEvents } =
-  await import('./sse');
+const {
+  closeEventStreams,
+  eventNameFor,
+  HEARTBEAT_FRAME,
+  HEARTBEAT_MS,
+  QUESTIONS_READY,
+  STATE_CHANGED,
+  streamInterviewEvents,
+} = await import('./sse');
 
 beforeEach(() => {
   m.duplicate.mockReset();
@@ -37,6 +44,7 @@ beforeEach(() => {
 
 afterEach(() => {
   closeEventStreams();
+  vi.useRealTimers();
 });
 
 class FakeResponse extends EventEmitter {
@@ -140,5 +148,61 @@ describe('streamInterviewEvents', () => {
 
     res.emit('close');
     expect(subscriber.quit).toHaveBeenCalledTimes(1);
+  });
+
+  // Issue 133. A room sits quiet between questions, and silence is what every proxy and NAT
+  // on the path reaps. The frames are comments, so they must not reach the client as events.
+  describe('heartbeat', () => {
+    it('writes a comment frame on an idle stream, inside any 30s window', async () => {
+      vi.useFakeTimers();
+      mockSubscriber();
+      const res = new FakeResponse();
+
+      await streamInterviewEvents({ interview: { id: 'itv_1' } } as never, res as never);
+      expect(res.write).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(30_000);
+
+      expect(HEARTBEAT_MS).toBeLessThanOrEqual(30_000);
+      expect(res.write).toHaveBeenCalledTimes(1);
+      expect(res.write).toHaveBeenCalledWith(HEARTBEAT_FRAME);
+      // A comment, not an event: `use-interview-events.ts` would otherwise refetch on a tick.
+      expect(HEARTBEAT_FRAME.startsWith(':')).toBe(true);
+      expect(HEARTBEAT_FRAME).not.toContain('event:');
+    });
+
+    it('stops on disconnect — no write lands after the response ends', async () => {
+      vi.useFakeTimers();
+      mockSubscriber();
+      const res = new FakeResponse();
+
+      await streamInterviewEvents({ interview: { id: 'itv_1' } } as never, res as never);
+      vi.advanceTimersByTime(HEARTBEAT_MS);
+      expect(res.write).toHaveBeenCalledTimes(1);
+
+      res.emit('close');
+      // Well past several more intervals: a surviving timer would write after `end()`, which
+      // is ERR_STREAM_WRITE_AFTER_END on a real response.
+      vi.advanceTimersByTime(HEARTBEAT_MS * 5);
+
+      expect(res.write).toHaveBeenCalledTimes(1);
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('leaves event delivery alone', async () => {
+      vi.useFakeTimers();
+      const { handlers } = mockSubscriber();
+      const res = new FakeResponse();
+
+      await streamInterviewEvents({ interview: { id: 'itv_1' } } as never, res as never);
+      handlers.get('message')?.('interview:events:itv_1', '{"to":"tech_round"}');
+      vi.advanceTimersByTime(HEARTBEAT_MS);
+
+      expect(res.write).toHaveBeenNthCalledWith(
+        1,
+        `event: ${STATE_CHANGED}\ndata: {"to":"tech_round"}\n\n`,
+      );
+      expect(res.write).toHaveBeenNthCalledWith(2, HEARTBEAT_FRAME);
+    });
   });
 });
