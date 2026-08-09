@@ -252,6 +252,50 @@ describe('onboarding step page', () => {
     expect(screen.queryByLabelText(messages.fields.fullNameLabel)).toBeNull();
   });
 
+  // Issue 77. The "passed" memory used to be module state, which a page load wipes — so F5
+  // on step 2 re-derived the resume guard and bounced the visitor back to the card they had
+  // just deliberately skipped. That is what made optional fields feel mandatory.
+  describe('a skipped step survives a reload', () => {
+    it.each([
+      ['2', [1], {}],
+      ['3', [1, 2], { fullName: 'Ada' }],
+    ])('stays on step %s after F5', async (step, skipped, profile) => {
+      stubFetch({ profile });
+      // What Skip does, on each card left behind on the way here.
+      for (const s of skipped) passedSteps.add(s);
+
+      // The actual reload: a page load throws the module graph away and builds a new one, so
+      // module state starts empty while `sessionStorage` does not. Re-rendering the module
+      // already in memory would pass either way and prove nothing.
+      vi.resetModules();
+      const { default: AfterReload } = await import('./page');
+
+      await act(async () => {
+        renderWithProviders(
+          <Suspense fallback={null}>
+            <AfterReload params={Promise.resolve({ step })} />
+          </Suspense>,
+        );
+      });
+
+      expect(
+        await screen.findByRole('button', { name: messages.onboarding.skipForNow }),
+      ).toBeInTheDocument();
+      expect(nav.replace).not.toHaveBeenCalled();
+    });
+
+    it('still guards a cold deep link from a new tab', async () => {
+      stubFetch({ profile: { fullName: 'Ada' } });
+      // A new tab starts with empty sessionStorage — nothing was skipped *here*, so the
+      // server's answer about where this account resumes is binding again.
+      passedSteps.clear();
+
+      await renderStep('3');
+
+      await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/onboarding/2'));
+    });
+  });
+
   // Issue 127: a hand-edited segment used to clamp to step 1 and render it while the address
   // bar still said `/onboarding/9`, so the URL could not be bookmarked or shared.
   it.each(['9', '0', 'abc', '1.0'])('sends the out-of-range step %s to /onboarding/1', async (step) => {

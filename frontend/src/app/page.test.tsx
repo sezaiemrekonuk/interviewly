@@ -194,14 +194,20 @@ describe('landing (screen 1)', () => {
     expect(source).not.toContain('@tanstack/react-query');
     expect(source).not.toContain('./providers');
 
-    // The gate is the boundary: a plain `/me` probe and a redirect. Nothing signed-in is
-    // imported into this tree at all any more, lazily or otherwise.
-    const gate = readFileSync(
-      join(__dirname, '..', 'components', 'home', 'home-switch.tsx'),
-      'utf8',
-    );
-    expect(gate).not.toContain('@tanstack/react-query');
-    expect(gate).toContain('DEFAULT_LANDING_PATH');
+    // The gate is the boundary: a shared `/me` probe and a redirect. Nothing signed-in is
+    // imported into this tree at all, lazily or otherwise — including through the two modules
+    // it does reach for, which is where a React Query import would sneak in unnoticed.
+    for (const path of [
+      ['components', 'home', 'home-switch.tsx'],
+      ['lib', 'session-probe.ts'],
+      ['lib', 'first-run.ts'],
+    ]) {
+      const source = readFileSync(join(__dirname, '..', ...path), 'utf8');
+      expect({ path, hasQuery: source.includes('@tanstack/react-query') }).toEqual({
+        path,
+        hasQuery: false,
+      });
+    }
   });
 });
 
@@ -214,11 +220,18 @@ describe('landing — a visitor who is already signed in', () => {
     replace.mockClear();
   });
 
-  it('is redirected to the briefing instead of being shown the signup pitch', async () => {
+  // Issue 80: `/` applies the K8.7 first-run rule rather than sending every session to one
+  // landing path. Sending them all to the signed-in home is what let a Google user — who
+  // arrives here after the callback — skip onboarding entirely and keep an empty profile.
+  it.each([
+    ['who has not finished onboarding', { onboardingCompletedAt: null, interviewCount: 0 }, '/onboarding/1'],
+    ['with no interviews yet', { onboardingCompletedAt: 'now', interviewCount: 0 }, '/interviews/new'],
+    ['who is fully set up', { onboardingCompletedAt: 'now', interviewCount: 3 }, DEFAULT_LANDING_PATH],
+  ])('sends a visitor %s to %s', async (_name, account, destination) => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () =>
-        new Response(JSON.stringify({ user: { id: 'u1', email: 'a@b.c' } }), {
+        new Response(JSON.stringify({ user: { id: 'u1', email: 'a@b.c', ...account } }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         }),
@@ -229,7 +242,7 @@ describe('landing — a visitor who is already signed in', () => {
       renderWithIntl(<Home />);
     });
 
-    await waitFor(() => expect(replace).toHaveBeenCalledWith(DEFAULT_LANDING_PATH));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(destination));
   });
 
   // Issue 130: the header and the redirect gate each probed `/me` for themselves, so the

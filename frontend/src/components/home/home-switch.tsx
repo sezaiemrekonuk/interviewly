@@ -3,8 +3,8 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, type ReactNode } from 'react';
 
-import { DEFAULT_LANDING_PATH } from '../../lib/auth-redirect';
-import { probeSignedIn } from '../../lib/session-probe';
+import { firstRunPath } from '../../lib/first-run';
+import { probeSession } from '../../lib/session-probe';
 
 /**
  * `/` is the marketing page, for everyone. A signed-in visitor is sent to their briefing.
@@ -26,10 +26,15 @@ export function HomeSwitch({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true;
-    void probeSignedIn().then((ok) => {
-      // `replace`, not `push`: pressing back from the dashboard must leave the site rather
+    void probeSession().then((user) => {
+      // `replace`, not `push`: pressing back from the destination must leave the site rather
       // than bounce through a redirect that fires again.
-      if (active && ok) router.replace(DEFAULT_LANDING_PATH);
+      //
+      // `firstRunPath`, not a constant: this is the same K8.7 rule the password sign-in
+      // applies, so a signed-in visitor who never finished onboarding is sent there instead
+      // of to a signed-in home they cannot use yet. Sending every session to one landing
+      // path is what let Google users skip onboarding entirely (issue 80).
+      if (active && user) router.replace(firstRunPath(user));
     });
     return () => {
       active = false;

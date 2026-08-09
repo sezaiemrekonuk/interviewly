@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 import { DEFAULT_LANDING_PATH } from '../../lib/auth-redirect';
-import { probeSignedIn } from '../../lib/session-probe';
+import { probeSession } from '../../lib/session-probe';
 
 import styles from './chrome.module.css';
 
@@ -41,8 +41,8 @@ export function HeaderNav() {
 
   useEffect(() => {
     let active = true;
-    void probeSignedIn().then((ok) => {
-      if (active) setSignedIn(ok);
+    void probeSession().then((user) => {
+      if (active) setSignedIn(Boolean(user));
     });
     return () => {
       active = false;

@@ -1,6 +1,7 @@
 'use client';
 
 import { apiGet } from './api';
+import type { SessionUser } from './use-require-auth';
 
 /**
  * One `/me` per landing render, shared by the two components that independently need the
@@ -17,13 +18,19 @@ import { apiGet } from './api';
  * — a resolved value kept here would outlive a sign-out and leave the header claiming the
  * visitor is still signed in. Concurrent mounts are the whole defect; nothing else is.
  */
-let inFlight: Promise<boolean> | null = null;
+let inFlight: Promise<SessionUser | null> | null = null;
 
-export function probeSignedIn(): Promise<boolean> {
-  inFlight ??= apiGet<{ user: unknown }>('/me')
+/**
+ * Resolves the session user, or `null` when there is none. The user rather than a boolean
+ * because `/` has to route on it: a signed-in visitor who has not finished onboarding belongs
+ * on onboarding, not on the signed-in home (issue 80), and that rule lives in `first-run.ts`
+ * and needs the account to apply.
+ */
+export function probeSession(): Promise<SessionUser | null> {
+  inFlight ??= apiGet<{ user: SessionUser }>('/me')
     // `apiGet` resolves for every outcome including transport failure, so there is no
     // rejection path to clear — but `finally` covers one appearing later regardless.
-    .then((result) => result.ok)
+    .then((result) => (result.ok ? (result.data?.user ?? null) : null))
     .finally(() => {
       inFlight = null;
     });
