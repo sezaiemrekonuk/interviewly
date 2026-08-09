@@ -54,7 +54,7 @@ devlog is the precedent for how to record that honestly.
 |---|---|---|---|---|---|
 | GET | `/interviews/:id/questions/:index/speech` | `requireAuth`, owner | — | `audio/mpeg` bytes | `FORBIDDEN`, `QUESTION_NOT_CURRENT`, `INVALID_STATE_TRANSITION`, `VOICE_SESSION_EXPIRED`, `VOICE_UNAVAILABLE` |
 | POST | `/interviews/:id/answers/audio` | `requireAuth`, `requirePublicOrigin`, owner | multipart, one `audio` part | `{ state, nextIndex }` | `UPLOAD_TOO_LARGE`, `UNSUPPORTED_MEDIA_TYPE`, `SPEECH_AUDIO_INVALID`, `SPEECH_TRANSCRIPTION_FAILED`, + the above |
-| POST | `/interviews/:id/voice/downgrade` | `requireAuth`, owner | `{}` | `{ mode: 'text' }` | `INVALID_STATE_TRANSITION` |
+| POST | `/interviews/:id/voice/downgrade` | `requireAuth`, `requirePublicOrigin`, owner | `{}` | `{}` (200) | `INTERVIEW_NOT_FOUND`, `FORBIDDEN` |
 
 The third one already exists and is untouched by this ledger (`modules/voice/session.ts:116`).
 
@@ -115,9 +115,9 @@ S05 deleted `webhook-auth.ts`'s original; `speech_turn.feature` @AC-6 is what ho
 | `frontend/src/lib/use-mic-permission.ts:60` | the `AnalyserNode` RMS loop — the VAD signal |
 | `frontend/src/lib/voice/device-check.ts` | written, tested, unimported (#107) |
 | `frontend/src/lib/voice/active-speaker.ts` | written, tested, unimported (#107) |
-| `frontend/src/lib/voice/downgrade.ts:7` | written, unimported — zero call sites (#87) |
+| `frontend/src/lib/voice/downgrade.ts:7` | `voiceDowngrade`; called by `use-voice-session.ts` (S06) and pre-join (S07) |
 | `frontend/src/components/room/voice-controls.tsx` | mute, mic meter, status chip; S09 adds the timer, S10 the error copy |
-| `frontend/src/components/home/interview-row.tsx:76-80` | the unconditional Continue link S07 makes mode-aware |
+| `frontend/src/components/dashboard/modules.tsx:44` | `resumeHref` — the mode branch behind Continue. There is no `components/home/`|
 | `frontend/src/app/interviews/new/page.tsx:35` | `useState<'text' \| 'voice'>('text')` — the default S08 flips |
 | `packages/ai/config/model-prices.yaml` | `elevenlabs/tts` + `elevenlabs/stt`; S05 deleted `elevenlabs/conversational` |
 

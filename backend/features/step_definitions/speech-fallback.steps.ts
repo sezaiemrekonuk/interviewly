@@ -140,6 +140,15 @@ When('the fake speech provider serves a question without error', async function 
 });
 
 /**
+ * S07's trigger: the browser could not get a microphone, so the room is never entered and the
+ * client posts the V03 downgrade instead. `resetEvents` so the emitted event is this call's.
+ */
+When('the candidate cannot grant a microphone at pre-join', async function (this: AiWorld) {
+  this.resetEvents();
+  await this.httpPost(`/interviews/${this.interviewId}/voice/downgrade`, {});
+});
+
+/**
  * The downgrade is one-directional (§3.8): the speech route is `voice`-only, so asking it for
  * audio from `text` is an illegal transition, not a transient outage. Same assertion the mint
  * carried before ADR-S01 removed it.
@@ -168,6 +177,15 @@ Then(
     );
   },
 );
+
+// Scoped to `provider: 'elevenlabs'`: question generation has already billed its own rows by
+// the time an interview exists, so "no llm_calls at all" would assert the wrong thing.
+Then('no elevenlabs llm_calls row exists for the interview', async function (this: AiWorld) {
+  const rows = await prisma.llmCall.findMany({
+    where: { interview_id: this.interviewId, provider: 'elevenlabs' },
+  });
+  assert.equal(rows.length, 0, `expected no elevenlabs spend, got ${rows.map((r) => r.model).join(', ')}`);
+});
 
 Then('the interview mode becomes {string}', async function (this: AiWorld, mode: string) {
   assert.equal((await interviewRow(this)).mode, mode);

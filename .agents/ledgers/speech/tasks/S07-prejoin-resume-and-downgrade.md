@@ -47,17 +47,18 @@ pre-join copy to tell the truth about where the answer audio goes.
 - `frontend/messages/{en,tr}.json` — the pre-join copy.
 
 ## Steps
-- [ ] **1. Test red** — a denied `getUserMedia` at pre-join produces a `mode='text'` interview
+- [x] **1. Test red** — a denied `getUserMedia` at pre-join produces a `mode='text'` interview
   with zero `llm_calls` rows; a voice interview resumed from history lands on `/pre-join`, not
   `/room`. See both red.
-- [ ] **2. Denied and unavailable both call `voiceDowngrade`**, then route to the room in text
+- [x] **2. Denied and unavailable both call `voiceDowngrade`**, then route to the room in text
   mode with a line saying what happened. `errors.VOICE_UNAVAILABLE` copy already exists in both
   locales (`messages/{en,tr}.json:273`) and has never been shown.
-- [ ] **3. Resume branch** — `interview.mode === 'voice' ? '/pre-join' : '/room'` in
-  `interview-row.tsx`.
-- [ ] **4. Transient-audio copy** — rewrite the pre-join privacy line in both locales per
+- [x] **3. Resume branch** — `interview.mode === 'voice' ? '/pre-join' : '/room'` in
+  `interview-row.tsx`. *(Already shipped by W08 as `modules.tsx:44` `resumeHref`; covered by a
+  test that this session proved can fail.)*
+- [x] **4. Transient-audio copy** — rewrite the pre-join privacy line in both locales per
   ADR-S07.
-- [ ] **5. Unit test** — the mode branch on the history row; the downgrade call on both mic
+- [x] **5. Unit test** — the mode branch on the history row; the downgrade call on both mic
   failure states.
 
 ## Definition of done
@@ -75,3 +76,35 @@ Expected: tests green; the grep shows the definition plus at least one call site
 `app/interviews/[id]/pre-join/`.
 
 ## Notes
+
+**What exists now.** Pre-join owns the downgrade: `mic === 'denied' | 'unavailable'` on a
+`voice` interview calls `voiceDowngrade(id)` once (a `useRef` latch, not state — `setMic` renders
+again before the POST resolves), then enables the CTA and prints `errors.VOICE_UNAVAILABLE` under
+it (`pre-join/page.tsx:53-64,101-117`). The `unavailable` branch no longer removes the CTA. A
+failed downgrade renders its own code in a `role="alert"` and leaves the CTA disabled.
+
+**The state query is deliberately NOT invalidated.** The existing effect redirects when
+`mode !== 'voice'`, so refreshing the cache would bounce to the room and swallow the line
+explaining why voice went away. The room refetches `/state` itself and sees `text`.
+
+**Stale anchors, corrected in REFERENCE.md:**
+- There is no `components/home/interview-row.tsx`. The Continue link is `SessionCard` in
+  `components/dashboard/modules.tsx:434`, and its `resumeHref` (line 44) *already* branched on
+  mode — W08 shipped step 3. It had no test; `components/dashboard/modules.test.tsx` now covers
+  the row and `CarryOn`. Mutating `resumeHref` to a constant `'room'` was run and reddens 2 of 3.
+- `voiceDowngrade` was not call-site-free: S06 wired two in `use-voice-session.ts:246,253`.
+- `POST /:id/voice/downgrade` answers `{}`, not `{ mode: 'text' }`, and enforces
+  `requirePublicOrigin`.
+
+**Verification quirk:** `npm run -w frontend test -- pre-join home/interview-row` — the
+`home/interview-row` filter matches no file, so the command exercises the pre-join suite only
+(7 passed). The row's own tests were run as `-- dashboard/modules` (3 passed).
+
+**AC-10 is now an acceptance scenario**, not just jsdom: `speech_fallback.feature` @AC-10 drives
+`POST /voice/downgrade` off a voice interview parked on question 1 and asserts `mode = text`,
+the `VOICE_DOWNGRADED_TO_TEXT` event, and zero `provider = 'elevenlabs'` `llm_calls` rows. The
+new steps live in `speech-fallback.steps.ts`.
+
+**For S10:** the pre-join failure line reads `errors.VOICE_UNAVAILABLE` through `useErrorMessage`,
+the same map S10 branches in the room. `unavailable.body` copy changed from "start a text
+interview instead" to "continue this interview in text mode" — it describes the downgrade now.

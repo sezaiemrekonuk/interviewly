@@ -443,7 +443,7 @@
   },
   "preJoin": {
     "title": "Mikrofon kontrolü",
-    "subtitle": "Mikrofona izin verin ve girişinizi doğrulayın. Bu ekranda hiçbir kayıt alınmaz.",
+    "subtitle": "Mikrofona izin verin ve girişinizi doğrulayın. Bu ekranda hiçbir kayıt alınmaz. Mülakat sırasında yanıt sesiniz yazıya dökülmek üzere gönderilir ve saklanmaz — yalnızca metni saklanır.",
     "deviceLabel": "Mikrofon",
     "deviceFallback": "Mikrofon {n}",
     "prompt": "Mikrofon izni bekleniyor…",
@@ -460,7 +460,7 @@
     },
     "unavailable": {
       "title": "Mikrofon bulunamadı",
-      "body": "Bir mikrofon bağlayıp sayfayı yenileyin veya metin modunda mülakat başlatın."
+      "body": "Bir mikrofon bağlayıp sayfayı yenileyin veya bu mülakata metin modunda devam edin."
     }
   },
   "room": {
