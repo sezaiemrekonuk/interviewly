@@ -163,7 +163,7 @@ export function QuestionTable({
                   )}
                 </td>
                 {/* STAR is a behavioural-story rubric. The backend scores it 0 on a technical
-                    question because it never applied, and "0%" beside a 4/5 and a praising
+                    question because it never applied, and "0%" beside an 80 and a praising
                     reason reads as either broken scoring or an unnamed disaster. Not applicable
                     is a third state, distinct from `noScore`'s "not scored yet". */}
                 <td className={cx(styles.numeric, 'tabular')}>
