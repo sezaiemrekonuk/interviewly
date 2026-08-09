@@ -94,7 +94,7 @@ function stubFetch(options: {
 
 // `params` is a promise the page unwraps with `use()`, so the first render suspends —
 // the act() wrapper is what lets React resume before any assertion runs.
-async function renderStep(step: '1' | '2' | '3'): Promise<RenderResult> {
+async function renderStep(step: string): Promise<RenderResult> {
   let result!: RenderResult;
   await act(async () => {
     result = renderWithProviders(
@@ -250,5 +250,26 @@ describe('onboarding step page', () => {
 
     await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/interviews/new'));
     expect(screen.queryByLabelText(messages.fields.fullNameLabel)).toBeNull();
+  });
+
+  // Issue 127: a hand-edited segment used to clamp to step 1 and render it while the address
+  // bar still said `/onboarding/9`, so the URL could not be bookmarked or shared.
+  it.each(['9', '0', 'abc', '1.0'])('sends the out-of-range step %s to /onboarding/1', async (step) => {
+    stubFetch({});
+    await renderStep(step);
+
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/onboarding/1'));
+    // Not merely redirected — the card must not flash on the way out either.
+    expect(screen.queryByLabelText(messages.fields.fullNameLabel)).toBeNull();
+  });
+
+  it.each(['1', '2', '3'])('leaves the real step %s alone', async (step) => {
+    stubFetch({ profile: { fullName: 'Ada', education: [{ school: 'Cambridge' }] } });
+    await renderStep(step);
+
+    // The Skip control is on every card, so it is the one "this step rendered" assertion
+    // that does not have to branch on which card it is.
+    expect(await screen.findByRole('button', { name: messages.onboarding.skipForNow })).toBeInTheDocument();
+    expect(nav.replace).not.toHaveBeenCalled();
   });
 });

@@ -67,8 +67,10 @@ function isEmptyCard(card: ProfileCard): boolean {
 
 export default function OnboardingStepPage({ params }: { params: Promise<{ step: string }> }) {
   const { step: stepParam } = use(params);
-  const stepNumber = Number(stepParam);
-  const step: 1 | 2 | 3 = stepNumber === 1 || stepNumber === 2 || stepNumber === 3 ? stepNumber : 1;
+  // The segment itself, not `Number(segment)`: `1.0` and `01` also parse to a valid step and
+  // would render step 1 under a URL nobody can bookmark. Only the three literals are a step.
+  const validStep = stepParam === '1' || stepParam === '2' || stepParam === '3';
+  const step: 1 | 2 | 3 = validStep ? (Number(stepParam) as 1 | 2 | 3) : 1;
   const t = useTranslations('onboarding');
   const tFields = useTranslations('fields');
   const errorMessage = useErrorMessage();
@@ -107,6 +109,13 @@ export default function OnboardingStepPage({ params }: { params: Promise<{ step:
   const mustResume = resumeStep !== null && resumeStep < step && !passedSteps.has(resumeStep);
 
   useEffect(() => {
+    // A hand-edited step is not a step. This needs no profile, but it does wait for the
+    // session: an anonymous visitor belongs to useRequireAuth's redirect, and racing it
+    // would drop the returnPath that brings them back here.
+    if (!validStep) {
+      if (user) router.replace('/onboarding/1');
+      return;
+    }
     if (!data) return;
 
     // Completed onboarding is terminal — step 1 is never re-shown (A06 idempotence).
@@ -116,7 +125,7 @@ export default function OnboardingStepPage({ params }: { params: Promise<{ step:
     }
 
     if (mustResume) router.replace(`/onboarding/${resumeStep}`);
-  }, [data, mustResume, resumeStep, router]);
+  }, [validStep, user, data, mustResume, resumeStep, router]);
 
   async function uploadCv(file: File) {
     setCvError(null);
@@ -196,7 +205,7 @@ export default function OnboardingStepPage({ params }: { params: Promise<{ step:
 
   // A redirect from the effect above is a navigation, not a render: a completed account or
   // a too-far deep-link must never flash the card on its way out.
-  const leaving = Boolean(data?.onboardingCompletedAt) || mustResume;
+  const leaving = !validStep || Boolean(data?.onboardingCompletedAt) || mustResume;
   if (authLoading || isPending || !data || leaving) return null;
 
   // The two card-local problems carry their own sentence; an API code is looked up instead.
