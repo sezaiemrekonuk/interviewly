@@ -1,3 +1,21 @@
+# A client closing a long-lived SSE stream is normal — every room unmount does it — but
+# `reverse_proxy` reports it as `warn: aborting with incomplete response` with a full header
+# dump, one per closed stream. That buries real proxy warnings in the one log an operator reads
+# first (issue 134).
+#
+# Split rather than silenced: a genuine upstream failure is logged by `http.log.error`, a
+# different logger, which keeps the default level here. Only `reverse_proxy`'s own channel is
+# raised to ERROR, so a dial failure still prints and a hung-up client does not.
+{
+    log default {
+        exclude http.handlers.reverse_proxy
+    }
+    log proxy {
+        include http.handlers.reverse_proxy
+        level ERROR
+    }
+}
+
 http://localhost {
     handle_path /api/* {
         # SSE lives at /api/interviews/:id/events, so the no-buffering guarantee belongs

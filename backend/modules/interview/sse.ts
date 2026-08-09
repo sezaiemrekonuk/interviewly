@@ -15,6 +15,17 @@ import { REPORT_QUEUE, reportQueue } from '../../src/lib/queue';
 
 export const EVENT_CHANNEL_PREFIX = 'interview:events:';
 
+/**
+ * SSE keep-alive. A comment frame — clients drop `:` lines without dispatching an event, so
+ * this is invisible to `use-interview-events.ts` and cannot be mistaken for a state change.
+ *
+ * 25s so at least one lands inside any 30s idle window: the edge relies on Caddy's defaults
+ * today (`Caddyfile` sets no read timeout), and every NAT between it and the browser has its
+ * own. Exported so the test asserts the same number the handler writes.
+ */
+export const HEARTBEAT_MS = 25_000;
+export const HEARTBEAT_FRAME = ': ping\n\n';
+
 export const STATE_CHANGED = 'INTERVIEW_STATE_CHANGED';
 /**
  * The second event, and the reason there is a `type` on the wire at all.
@@ -126,10 +137,24 @@ export const streamInterviewEvents: RequestHandler = async (req, res) => {
   });
   res.flushHeaders();
   const subscriber = redis.duplicate();
+
+  // A quiet stream is the normal case — an interview sits between questions for minutes — and
+  // silence is indistinguishable from a dead connection to every proxy and NAT on the path.
+  // A comment frame is the SSE keep-alive: clients ignore `:` lines, so this costs the room
+  // nothing and gives intermediaries a reason not to reap the socket.
+  const heartbeat = setInterval(() => {
+    if (res.destroyed || res.writableEnded) return;
+    res.write(HEARTBEAT_FRAME);
+  }, HEARTBEAT_MS);
+  // The response outlives the request by design; an unref'd timer must not be what keeps the
+  // process alive during a drain (#70).
+  heartbeat.unref();
+
   let closed = false;
   const cleanup = () => {
     if (closed) return;
     closed = true;
+    clearInterval(heartbeat);
     openStreams.delete(res);
     if (!res.destroyed && !res.writableEnded) res.end();
     void subscriber.quit();
