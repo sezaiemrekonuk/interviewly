@@ -12,6 +12,9 @@ import { config } from './env';
 export const SESSION_COOKIE = 'session';
 
 const sessionTtlMs = config.SESSION_TTL_DAYS * 24 * 60 * 60 * 1000;
+if (sessionTtlMs <= 0) {
+  throw new Error('SESSION_TTL_DAYS must be > 0');
+}
 
 /**
  * How far behind the stored expiry has to fall before `requireAuth` slides it. Sliding on
@@ -22,7 +25,10 @@ const sessionTtlMs = config.SESSION_TTL_DAYS * 24 * 60 * 60 * 1000;
  * a fixed hour would be most of the window, so an active session could reach its own expiry
  * before earning a slide.
  */
-export const SESSION_SLIDE_THRESHOLD_MS = Math.min(60 * 60 * 1000, sessionTtlMs / 24);
+export const SESSION_SLIDE_THRESHOLD_MS = Math.max(
+  1,
+  Math.min(60 * 60 * 1000, sessionTtlMs / 24),
+);
 
 function cookieOptions() {
   return {
