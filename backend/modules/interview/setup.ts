@@ -15,11 +15,22 @@ import { applyTransition } from './machine';
 // constraint on `interviews.target_question_count` so a direct insert cannot bypass it.
 const MAX_TARGET_QUESTION_COUNT = 20;
 
+// The floor `split()` already assumes. Its HR half is `max(2, …)`, so a target of 1 made
+// `techCount` negative — a round size the generator then asks the provider for (issue #176).
+// 2 rather than 3: `machine.ts` carries `hr_round → evaluating` precisely so `target 2 → hr 2,
+// tech 0` can end, and that shape must stay reachable. Mirrored as a CHECK constraint relating
+// `hr_question_count` to `target_question_count` so a direct insert cannot bypass it.
+const MIN_TARGET_QUESTION_COUNT = 2;
+
 const schema = z.object({
   mode: z.enum(['voice', 'text']),
   jobText: z.string().trim().min(1).optional(),
   uploadId: z.string().min(1).optional(),
-  targetQuestionCount: z.coerce.number().int().min(1).max(MAX_TARGET_QUESTION_COUNT),
+  targetQuestionCount: z.coerce
+    .number()
+    .int()
+    .min(MIN_TARGET_QUESTION_COUNT)
+    .max(MAX_TARGET_QUESTION_COUNT),
   // The custom shape: the caller sizes the HR half itself instead of taking the 40/60 split.
   // Absent is the normal case and the only one the preset lengths ever send.
   hrQuestionCount: z.coerce.number().int().min(1).max(MAX_TARGET_QUESTION_COUNT).optional(),
@@ -103,6 +114,8 @@ export function classify(jobText: string): { occupation: string; clusterKey: str
 }
 
 // hrCount = max(2, round(target * 0.4)), techCount = target - hrCount (non-negotiable split).
+// Total over the accepted domain and only there: `target >= 2` is what keeps the `max(2, …)`
+// floor from exceeding the target and driving techCount negative (issue #176).
 function split(target: number): { hrCount: number; techCount: number } {
   const hrCount = Math.max(2, Math.round(target * 0.4));
   return { hrCount, techCount: target - hrCount };

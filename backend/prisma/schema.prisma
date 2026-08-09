@@ -259,6 +259,8 @@ model Interview {
   // 1..20, enforced by the `interviews_target_question_count_range` CHECK constraint (issue
   // #98) — Prisma cannot express it, so it lives in the migration and is repeated in setup.ts.
   target_question_count Int
+  // 0..target_question_count, enforced by the `interviews_hr_question_count_range` CHECK
+  // constraint (issue #176) — the companion #98 could not add until the split had a floor.
   hr_question_count     Int
   state                 InterviewState @default(created)
   current_index         Int            @default(0)

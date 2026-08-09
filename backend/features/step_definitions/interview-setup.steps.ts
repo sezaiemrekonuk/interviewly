@@ -75,6 +75,32 @@ Then(
   },
 );
 
+/**
+ * The lower end of the same bound (issue #176), and the constraint #98 could not add until the
+ * split had a floor: `interviews_hr_question_count_range` relates the two columns instead of
+ * bounding either alone, so no writer can store an HR half larger than the interview.
+ */
+Then(
+  'the database refuses a direct insert of {int} HR questions for {int} target questions',
+  async function (this: AiWorld, hrCount: number, targetCount: number) {
+    await assert.rejects(
+      prisma.interview.create({
+        data: {
+          user_id: this.candidateId,
+          mode: 'text',
+          job_text: 'Direct insert probing the check constraint.',
+          job_source: 'paste',
+          occupation: 'Backend Developer',
+          language: 'en',
+          target_question_count: targetCount,
+          hr_question_count: hrCount,
+        },
+      }),
+      (err: Error) => /interviews_hr_question_count_range/.test(err.message),
+    );
+  },
+);
+
 Then('the interview state is {string}', async function (this: AiWorld, state: string) {
   const interview = await prisma.interview.findUniqueOrThrow({
     where: { id: this.interviewId },
