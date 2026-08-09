@@ -7,7 +7,7 @@ import { apiGet } from './api';
  * answer: the header's sign-in link and the signed-in redirect. Both used to ask for
  * themselves, so every load of the app's most-visited page made two identical probes — two
  * 401s and two red console lines anonymously, two authenticated requests (each a Postgres
- * write, issue 131) signed in (issue 130).
+ * write) signed in (issue 130).
  *
  * Deliberately *not* `useMe()`: React Query stays out of the anonymous landing chunk, which
  * is the reason both call sites hand-rolled this in the first place (§8.1 JS budget).
