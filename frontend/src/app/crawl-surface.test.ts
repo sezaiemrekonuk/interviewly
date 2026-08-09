@@ -20,13 +20,40 @@ describe('robots.txt', () => {
     return Array.isArray(value) ? value[0] : value;
   };
 
-  it('disallows every private surface', () => {
+  it('disallows every private surface, at the path Next actually serves', () => {
     const disallow = rules().disallow;
     const listed = Array.isArray(disallow) ? disallow : [disallow];
 
     for (const route of PRIVATE_ROUTES) {
-      expect({ route, listed: listed.includes(`${route}/`) }).toEqual({ route, listed: true });
+      // The bare path, not `${route}/`. robots.txt matching is a prefix test, so a rule with a
+      // trailing slash covers `/admin/foo` and misses `/admin` — the URL Next serves — which
+      // left every one of these crawlable while the file looked correct. The first version of
+      // this test asserted the slashed form and so agreed with the bug.
+      expect({ route, listed: listed.includes(route) }).toEqual({ route, listed: true });
     }
+  });
+
+  it('blocks the bare path, the slashed path and everything under it', () => {
+    const disallow = rules().disallow;
+    const listed = (Array.isArray(disallow) ? disallow : [disallow]).filter(Boolean) as string[];
+    // What a crawler actually does with the file: does any rule prefix-match this URL?
+    const blocked = (path: string) => listed.some((rule) => path.startsWith(rule));
+
+    for (const route of PRIVATE_ROUTES) {
+      for (const path of [route, `${route}/`, `${route}/anything/deeper`]) {
+        expect({ path, blocked: blocked(path) }).toEqual({ path, blocked: true });
+      }
+    }
+    // And the public surface is not caught by any of them.
+    for (const route of PUBLIC_ROUTES) {
+      expect({ route, blocked: blocked(route) }).toEqual({ route, blocked: false });
+    }
+  });
+
+  it('names a hostname in `host`, which takes no scheme', () => {
+    const { host } = robots();
+    expect(host).toBe(new URL(SITE_ORIGIN).host);
+    expect(host).not.toMatch(/^https?:/);
   });
 
   it('points at an absolute sitemap on this deployment, not a relative path', () => {

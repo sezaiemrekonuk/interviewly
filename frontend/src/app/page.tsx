@@ -8,6 +8,17 @@ import { HomeSwitch } from '../components/home/home-switch';
 
 import styles from './page.module.css';
 
+import type { Metadata } from 'next';
+
+/**
+ * The landing page's own canonical. The root layout deliberately sets none — a canonical
+ * inherited by every route is how `/privacy` and `/terms` came to claim they were duplicates
+ * of this page — so each public route declares its own.
+ */
+export const metadata: Metadata = {
+  alternates: { canonical: '/' },
+};
+
 /*
  * THESIS — This page is an interview, not a page about one. It refuses the category's
  * arrangement (hero, three feature cards, testimonial band, CTA) and the product's own previous
