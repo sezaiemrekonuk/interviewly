@@ -12,6 +12,11 @@ import { SITE_NAME } from '../lib/site';
  * from `styles/tokens.css` (DESIGN.md §2 — "a literal outside that file is a defect, not a
  * shortcut"), and only code can read the registry. The description is translated for the same
  * reason the metadata is.
+ *
+ * One file at one address, above the `[locale]` segment — a manifest is referenced by a single
+ * `<link rel="manifest">` and cannot be two documents. `getLocale()` therefore resolves to the
+ * default locale here rather than to the reader's (issue 91): there is no locale segment to
+ * read and the middleware does not rewrite a path with an extension.
  */
 export default async function manifest(): Promise<MetadataRoute.Manifest> {
   const locale = await getLocale();

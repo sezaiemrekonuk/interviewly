@@ -1,9 +1,9 @@
 'use client';
 
 import { useFormatter, useNow, useTranslations } from 'next-intl';
-import Link from 'next/link';
 import { useState } from 'react';
 
+import { Link } from '../../i18n/navigation';
 import { useDeleteInterview, type MyInterview, type MyQuestion } from '../../lib/query';
 import { SCORE_MAX, scoreBand } from '../../lib/score';
 import { useErrorMessage } from '../../lib/use-error-message';

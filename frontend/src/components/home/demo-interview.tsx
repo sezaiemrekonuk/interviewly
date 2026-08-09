@@ -1,9 +1,9 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { Link } from '../../i18n/navigation';
 import { Meter } from '../shell/meter';
 import {
   DEMO_CHOICES,

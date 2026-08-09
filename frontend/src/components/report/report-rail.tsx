@@ -1,8 +1,8 @@
 'use client';
 
-import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 
+import { Link } from '../../i18n/navigation';
 import { DEFAULT_LANDING_PATH } from '../../lib/auth-redirect';
 import { useReportDownload } from '../../lib/query';
 import { SCORE_MAX } from '../../lib/score';

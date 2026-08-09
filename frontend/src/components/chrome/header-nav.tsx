@@ -1,10 +1,9 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
+import { Link, usePathname } from '../../i18n/navigation';
 import { DEFAULT_LANDING_PATH } from '../../lib/auth-redirect';
 import { probeSession } from '../../lib/session-probe';
 

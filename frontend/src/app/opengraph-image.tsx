@@ -16,6 +16,10 @@ export const contentType = 'image/png';
  * Type-only, deliberately: the mascot artwork is a 1×1 placeholder today (issue 125), and a
  * card built around a missing illustration would be worse than one built around the sentence
  * the product actually leads with.
+ *
+ * Above the `[locale]` segment, so `getLocale()` resolves to the default locale (issue 91).
+ * That is what a scraper saw anyway — it arrives with no cookie and never had a locale to
+ * negotiate from — and one card at one address is what both languages' metadata points at.
  */
 export default async function Image() {
   const locale = await getLocale();

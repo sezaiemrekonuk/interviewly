@@ -1,5 +1,7 @@
 import type { MetadataRoute } from 'next';
 
+import { getPathname } from '../i18n/navigation';
+import { locales } from '../lib/locales';
 import { PRIVATE_ROUTES, SITE_ORIGIN } from '../lib/site';
 
 /**
@@ -21,7 +23,18 @@ export default function robots(): MetadataRoute.Robots {
       // NOT `/admin` — which is the URL Next actually serves, so the trailing-slash form left
       // every one of these routes crawlable. Without it the prefix covers the bare path, the
       // slashed path and everything under it.
-      disallow: [...PRIVATE_ROUTES],
+      //
+      // Once per locale, because each one is a real address since issue 91: `/dashboard` and
+      // `/tr/dashboard` are two URLs, and a rule naming only the first leaves the Turkish half
+      // of the signed-in app crawlable. `getPathname` collapses the duplicate for whichever
+      // locale owns the bare path.
+      disallow: [
+        ...new Set(
+          PRIVATE_ROUTES.flatMap((route) =>
+            locales.map((locale) => getPathname({ href: route, locale })),
+          ),
+        ),
+      ],
     },
     sitemap: `${SITE_ORIGIN}/sitemap.xml`,
     // A hostname, not an origin: the non-standard `Host` directive takes no scheme.
