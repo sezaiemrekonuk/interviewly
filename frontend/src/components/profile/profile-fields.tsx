@@ -514,6 +514,8 @@ export interface CvFieldProps {
   /** A resolved message, or null. The caller looks the error code up. */
   error: string | null;
   onFile: (file: File) => void;
+  /** A pick the size guard refused, by code — the caller renders it like an upload failure. */
+  onReject: (code: 'UPLOAD_TOO_LARGE') => void;
 }
 
 const BYTES_PER_KB = 1024;
@@ -524,7 +526,7 @@ const BYTES_PER_MB = BYTES_PER_KB * BYTES_PER_KB;
  * no Save beside it and needs no Continue to persist. Holding the returned id in page state
  * instead is what made "CV received" a lie the moment the page reloaded (issue 62).
  */
-export function CvField({ cv, uploading, error, onFile }: CvFieldProps) {
+export function CvField({ cv, uploading, error, onFile, onReject }: CvFieldProps) {
   const t = useTranslations('fields');
   const format = useFormatter();
 
@@ -575,6 +577,7 @@ export function CvField({ cv, uploading, error, onFile }: CvFieldProps) {
               // endpoint takes it back off.
               if (file) onFile(file);
             }}
+            onReject={onReject}
           />
         )}
       </Field>

@@ -95,6 +95,35 @@ describe('<FileInput>', () => {
     );
   });
 
+  // Issue 140: the server refuses over 10 MB, but only after the browser has streamed the
+  // whole file. The guard is a courtesy — the server checks are still the boundary.
+  it('refuses a file over the limit without handing it to the caller', () => {
+    const onFile = vi.fn();
+    const onReject = vi.fn();
+    renderWithIntl(<FileInput onFile={onFile} onReject={onReject} maxBytes={8} />);
+    const input = screen.getByLabelText(new RegExp(messages.common.chooseFile));
+
+    fireEvent.change(input, { target: { files: [new File(['%PDF-1.4 too big'], 'big.pdf')] } });
+
+    expect(onReject).toHaveBeenCalledWith('UPLOAD_TOO_LARGE');
+    expect(onFile).toHaveBeenCalledWith(null);
+    expect(onFile).not.toHaveBeenCalledWith(expect.objectContaining({ name: 'big.pdf' }));
+    // The picker is reset too, so re-picking the same file fires a fresh change event.
+    expect(screen.getByText(messages.common.noFileChosen)).toBeInTheDocument();
+  });
+
+  it('accepts a file at the limit — the cap is a ceiling, not a fence', () => {
+    const onFile = vi.fn();
+    const onReject = vi.fn();
+    renderWithIntl(<FileInput onFile={onFile} onReject={onReject} maxBytes={8} />);
+    const input = screen.getByLabelText(new RegExp(messages.common.chooseFile));
+
+    fireEvent.change(input, { target: { files: [new File(['%PDF-1.4'], 'exact.pdf')] } });
+
+    expect(onReject).not.toHaveBeenCalled();
+    expect(onFile).toHaveBeenCalledWith(expect.objectContaining({ name: 'exact.pdf' }));
+  });
+
   it('names the chosen file and clears it back to the empty hint', () => {
     const onFile = vi.fn();
     renderWithIntl(<FileInput onFile={onFile} />);
