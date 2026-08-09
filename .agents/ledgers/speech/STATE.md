@@ -1,15 +1,14 @@
 # Speech — State
 
 Last updated: 2026-08-09
-Last session ended: **S06 complete.** `use-voice-session.ts` is the turn loop:
-`{ enabled, turn, vad }` in, `beat`/`recording`/`stop()`/`error`/`retry()` out. Play the
-question, record on the mic `use-mic-permission` already owns (the single audio graph, and the
-VAD source), stop after 2 s of silence **once speech was heard**, upload through the new
-`useSubmitAudioAnswer` sibling, refetch. Media type is sent bare — `;codecs=opus` is not in
-`stt.ts`'s allow-list. Playback failure downgrades; every other failure has a code and a Retry.
-`resolveActiveSpeaker` now lights the tile (#107's second orphan). Rebased onto `716245b`;
-verification 21/21, `new WebSocket` grep clean, lint + typecheck, unit 654, acceptance 102/102.
-Next: **S07**.
+Last session ended: **S07 complete.** Pre-join is no longer a dead end: `denied` *and*
+`unavailable` call `voiceDowngrade` once (ref latch), enable the CTA and show
+`errors.VOICE_UNAVAILABLE`. The state query is deliberately not invalidated — refreshing `mode`
+would trip the existing redirect and swallow the line. Step 3 was already shipped by W08
+(`modules.tsx:44` `resumeHref`); it had no test, so this session added one and proved it can
+fail. Pre-join copy now states the answer audio is sent to be transcribed and not kept (ADR-S07),
+both locales. AC-10 became a real acceptance scenario in `speech_fallback.feature` (zero
+`elevenlabs` `llm_calls`). Lint + typecheck, unit 660, acceptance 103/103. Next: **S08**.
 
 ## Execution protocol (follow exactly)
 
@@ -25,8 +24,8 @@ EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**S07** (pre-join on resume, mic-denied downgrade, ADR-S07 copy — sonnet tier). S06 left the
-mic-denied path on `status: 'lost'` with no `voiceDowngrade` call and still no test covering it.
+**S08** (voice-first default and user-selectable duration — sonnet tier). Independent of S06/S07:
+`interviews/new/page.tsx:35` still defaults to `'text'`, and the duration control does not exist.
 
 ## Environment
 
@@ -73,7 +72,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | S04 | Per-call usage accounting at both provider call sites | | done | S02, S03, I08 |
 | S05 | Remove the convai, webhook and reconciliation surface; drop `voice_sessions` | | done | S02, S03, S04 |
 | S06 | Room turn loop: speak, VAD-record, upload, advance | | done | S02, S03, W10 |
-| S07 | Pre-join on resume, mic-denied downgrade, transient-audio copy | | todo | S06, V03, W09 |
+| S07 | Pre-join on resume, mic-denied downgrade, transient-audio copy | | done | S06, V03, W09 |
 | S08 | Voice-first default and user-selectable duration | | todo | S01, W05 |
 | S09 | `startedAt` and `expiresAt` in `/state`, and the room timer | | todo | S02, I03 |
 | S10 | Speech failure codes surfaced honestly in the room | | todo | S06 |
@@ -137,9 +136,10 @@ downgrade}.ts`, and the downgrade invariant itself.
 - **[S06] `voice/device-check.ts` is still an unimported second `AnalyserNode`.** S06 picked
   `use-mic-permission.ts` as the room's mic and VAD source and added no third graph, so the
   duplication is now dead code rather than a live divergence (#107).
-- **[S05→S07] Nothing tests `status: 'lost'` in the room.** `voice.test.tsx`'s dropped-session
-  reconnect test went with the socket S05 deleted. The lost banner + `reconnect` still render
-  off `status`, which now comes from the mic — S07 (mic-denied) is where it gets covered again.
+- **[S05→S10] Nothing tests `status: 'lost'` in the room.** `voice.test.tsx`'s dropped-session
+  reconnect test went with the socket S05 deleted. S07 covered mic denial at *pre-join*, which is
+  a different surface — the room's lost banner + `reconnect` are still untested. S10 owns the
+  room's failure copy and is where this gets covered.
 
 ## Backlog (deferred, unnumbered — promote to a task when its trigger fires)
 

@@ -22,6 +22,17 @@ Feature: The interview survives a speech outage
     And the response error code is "INVALID_STATE_TRANSITION"
     And the interview mode is still "text"
 
+  # S07 — the other trigger for the same one-directional downgrade: the candidate has no
+  # microphone, and the room was never reached. Nothing was spoken, so nothing was billed.
+  @speech-fallback @AC-10
+  Scenario: A microphone refused at pre-join downgrades the interview with no provider call
+    Given I am in an interview in voice mode on question 1
+    When the candidate cannot grant a microphone at pre-join
+    Then the response status is 200
+    And the interview mode becomes "text"
+    And no elevenlabs llm_calls row exists for the interview
+    And a "VOICE_DOWNGRADED_TO_TEXT" event is emitted with the interviewId
+
   @speech-fallback @AC-7
   Scenario: A healthy speech call stays in voice mode
     Given I am in an interview in voice mode on question 3

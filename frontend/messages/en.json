@@ -443,7 +443,7 @@
   },
   "preJoin": {
     "title": "Microphone check",
-    "subtitle": "Grant the microphone and confirm your input. Nothing is recorded on this screen.",
+    "subtitle": "Grant the microphone and confirm your input. Nothing is recorded on this screen. In the interview your answer audio is sent to be transcribed and is not kept — only the transcript is stored.",
     "deviceLabel": "Microphone",
     "deviceFallback": "Microphone {n}",
     "prompt": "Waiting for microphone permission…",
@@ -460,7 +460,7 @@
     },
     "unavailable": {
       "title": "No microphone found",
-      "body": "Connect a microphone and reload this page, or start a text interview instead."
+      "body": "Connect a microphone and reload this page, or continue this interview in text mode."
     }
   },
   "room": {

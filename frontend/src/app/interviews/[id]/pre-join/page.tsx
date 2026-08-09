@@ -2,7 +2,7 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { MicCheck } from '@/components/pre-join/mic-check';
 import { RailMark, SplitShell, WorkBody, WorkTop } from '@/components/shell/split-shell';
@@ -12,6 +12,7 @@ import { useInterviewState } from '@/lib/query';
 import { useErrorMessage } from '@/lib/use-error-message';
 import type { MicPermissionState } from '@/lib/use-mic-permission';
 import { useRequireAuth } from '@/lib/use-require-auth';
+import { voiceDowngrade } from '@/lib/voice/downgrade';
 
 import styles from './pre-join.module.css';
 
@@ -25,6 +26,8 @@ export default function PreJoinPage() {
   const ready = !authLoading && Boolean(user);
   const stateQuery = useInterviewState(ready ? id : null);
   const [mic, setMic] = useState<MicPermissionState>('idle');
+  const [downgrade, setDowngrade] = useState<'idle' | 'done' | { code: string }>('idle');
+  const downgrading = useRef(false);
 
   const mode = stateQuery.data?.mode ?? null;
   const queryErrorCode = stateQuery.error?.code ?? null;
@@ -43,6 +46,19 @@ export default function PreJoinPage() {
   useEffect(() => {
     if (mode && mode !== 'voice') router.replace(room);
   }, [mode, router, room]);
+
+  // S07: no microphone is a downgrade, never a dead end. `denied` and `unavailable` are both
+  // terminal for voice — the retry inside MicCheck can still win, but the way forward must not
+  // depend on it. The ref guards the second render `setMic` causes; the query cache is
+  // deliberately left saying `voice`, or the redirect above would fire and swallow the notice.
+  useEffect(() => {
+    if (mode !== 'voice' || downgrading.current) return;
+    if (mic !== 'denied' && mic !== 'unavailable') return;
+    downgrading.current = true;
+    void voiceDowngrade(id).then((result) => {
+      setDowngrade(result.ok ? 'done' : { code: result.code ?? 'UNKNOWN' });
+    });
+  }, [mic, mode, id]);
 
   // The rail says what this step is for and nothing else. It carries no fact about the
   // interview: while the state is still loading there is none to carry that is true yet.
@@ -83,20 +99,25 @@ export default function PreJoinPage() {
           <MicCheck onStateChange={onStateChange} />
         </div>
 
-        {/* Unavailable removes the CTA rather than disabling it: there is nothing to grant. */}
-        {mic === 'unavailable' ? null : (
-          <div>
-            <Button
-              className={styles.cta}
-              size="lg"
-              disabled={mic !== 'granted'}
-              onClick={() => router.push(room)}
-            >
-              {t('enter')}
-            </Button>
-            {mic === 'granted' ? null : <p className={styles.ctaHint}>{t('enterHint')}</p>}
-          </div>
-        )}
+        <div>
+          <Button
+            className={styles.cta}
+            size="lg"
+            disabled={mic !== 'granted' && downgrade !== 'done'}
+            onClick={() => router.push(room)}
+          >
+            {t('enter')}
+          </Button>
+          {downgrade === 'done' ? (
+            <p className={styles.ctaHint}>{errorMessage('VOICE_UNAVAILABLE')}</p>
+          ) : typeof downgrade === 'object' ? (
+            <p role="alert" className={styles.ctaHint}>
+              {errorMessage(downgrade.code)}
+            </p>
+          ) : mic === 'granted' ? null : (
+            <p className={styles.ctaHint}>{t('enterHint')}</p>
+          )}
+        </div>
       </section>
     );
   }
