@@ -17,9 +17,14 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: '*',
       allow: '/',
-      disallow: PRIVATE_ROUTES.map((route) => `${route}/`),
+      // No trailing slash. `Disallow: /admin/` is a prefix match that covers `/admin/foo` and
+      // NOT `/admin` — which is the URL Next actually serves, so the trailing-slash form left
+      // every one of these routes crawlable. Without it the prefix covers the bare path, the
+      // slashed path and everything under it.
+      disallow: [...PRIVATE_ROUTES],
     },
     sitemap: `${SITE_ORIGIN}/sitemap.xml`,
-    host: SITE_ORIGIN,
+    // A hostname, not an origin: the non-standard `Host` directive takes no scheme.
+    host: new URL(SITE_ORIGIN).host,
   };
 }

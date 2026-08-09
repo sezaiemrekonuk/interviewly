@@ -67,7 +67,11 @@ export async function generateMetadata(): Promise<Metadata> {
       description: t('subhead'),
       images: ['/opengraph-image'],
     },
-    alternates: { canonical: '/' },
+    // No `alternates` here, deliberately. Next merges metadata down the tree, so a canonical
+    // set at the root is inherited by every route that does not override it — which told
+    // crawlers `/privacy` and `/terms` were duplicates of the landing page while `sitemap.xml`
+    // listed them as distinct URLs. Each public route declares its own instead; a route with
+    // none is better off with no canonical than with a wrong one.
   };
 }
 
