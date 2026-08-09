@@ -97,6 +97,7 @@
 /* The stage gets its own ground and heading, set off from the hero rather than reading as
    its overflow. */
 .demoSection {
+  scroll-margin-block-start: 68px;
   padding-block: 40px 64px;
   background: var(--surface-sunken);
 }
@@ -118,6 +119,10 @@
 .langBand {
   padding-block: 48px;
   border-block-start: 1px solid var(--border);
+  /* The header is `position: sticky` (chrome.module.css), so an anchor jump from its own nav
+     lands the section heading underneath it. This is the offset that stops that — 68px is the
+     header's 44px control plus its 8px block padding, rounded up onto the 4px scale (issue 95). */
+  scroll-margin-block-start: 68px;
 }
 
 /* The rule belongs to the page gutter, so it is drawn by the band rather than by a wrapper

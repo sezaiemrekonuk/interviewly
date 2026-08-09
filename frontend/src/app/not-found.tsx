@@ -18,7 +18,7 @@ export default function NotFound() {
   const t = useTranslations('notFound');
 
   return (
-    <main className={styles.ground}>
+    <main id="content" tabIndex={-1} className={styles.ground}>
       <div className={styles.panel}>
         <p className={styles.code}>404</p>
         <h1 className={styles.title}>{t('title')}</h1>
