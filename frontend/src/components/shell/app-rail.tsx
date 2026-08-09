@@ -1,10 +1,9 @@
 'use client';
 
 import { useLocale, useTranslations } from 'next-intl';
-import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef } from 'react';
 
+import { Link, usePathname, useRouter } from '../../i18n/navigation';
 import { useSignOut } from '../../lib/query';
 import type { SessionUser } from '../../lib/use-require-auth';
 

@@ -9,7 +9,8 @@ const nav = vi.hoisted(() => ({ pathname: '/dashboard' }));
 // One stable object, as Next's own `useRouter()` returns — a fresh one per call re-fires
 // `useRequireAuth`'s effect on every commit, which is a timeout, not a test.
 const router = { replace: vi.fn(), push: vi.fn(), prefetch: vi.fn(), refresh: vi.fn() };
-vi.mock('next/navigation', () => ({
+vi.mock('next/navigation', async () => ({
+  ...(await import('@/test/navigation')).serverNavigation,
   useRouter: () => router,
   usePathname: () => nav.pathname,
 }));

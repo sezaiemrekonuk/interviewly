@@ -1,9 +1,9 @@
 'use client';
 
 import { useFormatter, useTranslations } from 'next-intl';
-import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 
+import { Link, useRouter } from '../../i18n/navigation';
 import type { MyQuestion } from '../../lib/query';
 import { SCORE_MAX, scoreBand } from '../../lib/score';
 

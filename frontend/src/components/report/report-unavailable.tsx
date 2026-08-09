@@ -1,8 +1,8 @@
 'use client';
 
-import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 
+import { Link } from '../../i18n/navigation';
 import { DEFAULT_LANDING_PATH } from '../../lib/auth-redirect';
 
 import styles from './report.module.css';

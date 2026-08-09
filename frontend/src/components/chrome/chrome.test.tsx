@@ -13,7 +13,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { messages, renderWithIntl } from '../../test/render';
 
-vi.mock('next/navigation', () => ({ usePathname: () => '/' }));
+vi.mock('next/navigation', async () => ({
+  ...(await import('@/test/navigation')).serverNavigation,
+  usePathname: () => '/',
+}));
 
 import { SkipLink } from './skip-link';
 

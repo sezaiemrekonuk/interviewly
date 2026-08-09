@@ -1,9 +1,10 @@
 'use client';
 
+import { useSearchParams } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
-import { useRouter } from 'next/navigation';
 
-import { locales, writeLocaleCookie, type Locale } from '../lib/locales';
+import { usePathname, useRouter } from '../i18n/navigation';
+import { locales, type Locale } from '../lib/locales';
 import { useSaveLocale } from '../lib/query';
 
 import styles from './locale-switcher.module.css';
@@ -24,16 +25,26 @@ export function LocaleSwitcher() {
   const t = useTranslations('common');
   const active = useLocale();
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const saveLocale = useSaveLocale();
 
   function select(locale: Locale) {
-    // Cookie first, and the refresh does not wait on the account write: the cookie is what
-    // next-intl reads, so the interface switches at the same speed it always did — signed in
-    // or not, network or not. The PATCH is the half that reaches mail and the interview
-    // (issue 76), and a visitor with no session is simply refused it.
-    writeLocaleCookie(locale);
+    if (locale === active) return;
+
+    // A navigation, not a refresh: the language is the URL now (issue 91), so switching it has
+    // to move the visitor to the other language's address — otherwise the page they are
+    // reading still cannot be linked or shared. `push`, so Back returns to the language they
+    // came from. next-intl re-prefixes `pathname` (which arrives unprefixed) and syncs the
+    // locale cookie itself; the query string is carried over because it is part of what the
+    // visitor is looking at (`/interviews?status=…`).
+    //
+    // The PATCH is a separate axis and does not gate the navigation: it is the half that
+    // reaches mail and the interview (issue 76), and a visitor with no session is simply
+    // refused it.
     saveLocale.mutate(locale);
-    router.refresh();
+    const query = searchParams.toString();
+    router.push(`${pathname}${query ? `?${query}` : ''}`, { locale });
   }
 
   const label: Record<Locale, string> = {
