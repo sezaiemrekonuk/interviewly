@@ -10,9 +10,7 @@
 import type { Prisma } from '@prisma/client';
 import {
   AiError,
-  PROMPT_NAMES,
   ReportPayloadSchema,
-  loadPromptRegistry,
   type AiClient,
   type AiCtx,
   type ReportPayload,
@@ -21,6 +19,7 @@ import {
 
 import { aiClient } from '../ai';
 import { prisma } from '../../src/lib/db';
+import { reportPrompt } from './report-row';
 import { logger } from '../../src/lib/logger';
 
 import { profileVariables } from './generation';
@@ -30,19 +29,6 @@ export interface ReportOpts {
   traceId: string;
   /** Defaults to the module's client. Injected only by tests that need a misbehaving one. */
   client?: AiClient;
-}
-
-let promptIdentity: { uuid: string; version: number } | undefined;
-
-/**
- * `reports.prompt_uuid`/`prompt_version` name the lineage that produced the payload. Read
- * from the registry, which is the same resolution the client compiled with, rather than from
- * the `llm_calls` row — the live chain can fall back to another provider, but never to
- * another prompt.
- */
-function reportPrompt(): { uuid: string; version: number } {
-  const file = (promptIdentity ??= loadPromptRegistry().resolve(PROMPT_NAMES.generateReport));
-  return file;
 }
 
 interface Turn {
@@ -106,6 +92,15 @@ export async function runReport(interviewId: string, opts: ReportOpts): Promise<
     where: { id: interviewId, deleted_at: null },
   });
   const ctx: AiCtx = { interviewId, traceId: opts.traceId };
+
+  // The run has started. `updateMany` and not `update`: a job redelivered after the row was
+  // already finished must not resurrect it, and a run whose row is missing entirely (an
+  // interview enqueued before this shipped) still has to be able to proceed.
+  await prisma.report.updateMany({
+    where: { interview_id: interviewId, status: { in: ['queued', 'failed'] } },
+    data: { status: 'generating' },
+  });
+
   const turns = await turnsOf(interviewId);
 
   let payload: ReportPayload;
@@ -165,14 +160,37 @@ export async function runReport(interviewId: string, opts: ReportOpts): Promise<
     // workers on a redelivered stalled job would otherwise both write. Serialised here rather
     // than left to the unique indexes, which would fail the loser's job instead of ordering it.
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${interviewId}))`;
+
+    // The row now exists from enqueue onward (issue #123), so "did I win" can no longer be
+    // "did my insert succeed". It is a compare-and-set on the status instead: exactly one
+    // caller moves it off a live state, and a loser finds `ready` and writes nothing —
+    // the same exclusivity the create-and-catch-P2002 gave, over a row that is already there.
+    const claimed = await tx.report.updateMany({
+      where: { interview_id: interviewId, status: { not: 'ready' } },
+      data: row,
+    });
+
     let report: { id: string } | null = null;
-    try {
-      report = await tx.report.create({
-        data: { interview_id: interviewId, ...row },
+    if (claimed.count > 0) {
+      report = await tx.report.findUnique({
+        where: { interview_id: interviewId },
         select: { id: true },
       });
-    } catch (err) {
-      if ((err as { code?: string } | null)?.code !== 'P2002') throw err;
+    } else {
+      // No row at all is the pre-#123 shape — an interview enqueued before this shipped, or a
+      // direct `runReport`. Create it, and keep the P2002 catch for the race that insert can
+      // still lose.
+      const missing = (await tx.report.count({ where: { interview_id: interviewId } })) === 0;
+      if (missing) {
+        try {
+          report = await tx.report.create({
+            data: { interview_id: interviewId, ...row },
+            select: { id: true },
+          });
+        } catch (err) {
+          if ((err as { code?: string } | null)?.code !== 'P2002') throw err;
+        }
+      }
     }
     if (!report) return;
     await tx.reportQuestion.createMany({
@@ -193,8 +211,13 @@ export async function runReport(interviewId: string, opts: ReportOpts): Promise<
 }
 
 /**
- * The invalid branch: state `failed`, no `reports` row at all. "No payload stored" is asserted
- * as the absence of the row rather than a null column, so nothing partial is written here.
+ * The invalid branch: interview `failed`, and the report row marked `failed` with no payload
+ * (issue #123). "No payload stored" is still asserted as the absence of a payload rather than
+ * a partial one — nothing half-written is kept — but the row itself now says what happened
+ * instead of vanishing, which is what made a lost report an investigation rather than a query.
+ *
+ * `updateMany` guarded on `not: 'ready'`: a finished report is a deliverable, and a late
+ * failure on a redelivered job must not overwrite one.
  */
 async function failReport(
   interview: Parameters<typeof applyTransition>[0],
@@ -205,5 +228,9 @@ async function failReport(
     { traceId: ctx.traceId, interviewId: ctx.interviewId, reason },
     'AI_OUTPUT_SCHEMA_INVALID',
   );
+  await prisma.report.updateMany({
+    where: { interview_id: ctx.interviewId, status: { not: 'ready' } },
+    data: { status: 'failed' },
+  });
   await applyTransition(interview, 'failed', { traceId: ctx.traceId });
 }
