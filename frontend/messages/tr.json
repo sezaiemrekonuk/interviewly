@@ -483,6 +483,7 @@
     "voice": {
       "mute": "Sesi kapat",
       "unmute": "Sesi aç",
+      "stop": "Bitir ve gönder",
       "lost": "Ses bağlantısı koptu. Görüşmeniz güvende — devam etmek için yeniden bağlanın.",
       "reconnect": "Yeniden bağlan",
       "status": {

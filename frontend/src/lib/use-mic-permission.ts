@@ -16,6 +16,8 @@ export interface UseMicPermission {
   state: MicPermissionState;
   /** 0..1 RMS level; only moves while state === 'granted'. */
   level: number;
+  /** The live capture, for `MediaRecorder` (S06). Owned here — the caller never stops it. */
+  stream: MediaStream | null;
   devices: MicDevice[];
   /** The device backing the live stream, once one is granted. */
   deviceId: string | null;
@@ -37,6 +39,7 @@ export function useMicPermission(): UseMicPermission {
   const [devices, setDevices] = useState<MicDevice[]>([]);
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [muted, setMuted] = useState(false);
+  const [stream, setStream] = useState<MediaStream | null>(null);
 
   const streamRef = useRef<MediaStream | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -50,6 +53,7 @@ export function useMicPermission(): UseMicPermission {
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     audioCtxRef.current = null;
+    setStream(null);
   }, []);
 
   const meter = useCallback((stream: MediaStream) => {
@@ -90,6 +94,7 @@ export function useMicPermission(): UseMicPermission {
           return;
         }
         streamRef.current = stream;
+        setStream(stream);
         setDeviceId(wanted ?? stream.getAudioTracks()[0]?.getSettings().deviceId ?? null);
         setState('granted');
         meter(stream);
@@ -141,5 +146,5 @@ export function useMicPermission(): UseMicPermission {
     };
   }, [release]);
 
-  return { state, level, devices, deviceId, request, select, muted, toggleMute };
+  return { state, level, stream, devices, deviceId, request, select, muted, toggleMute };
 }

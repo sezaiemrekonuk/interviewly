@@ -2,7 +2,7 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { AvatarPreload } from '../../../../components/avatar';
 import { AnswerComposer } from '../../../../components/room/answer-composer';
@@ -21,6 +21,7 @@ import { useErrorMessage } from '../../../../lib/use-error-message';
 import { useInterviewEvents } from '../../../../lib/use-interview-events';
 import { useRequireAuth } from '../../../../lib/use-require-auth';
 import { useVoiceSession } from '../../../../lib/use-voice-session';
+import { resolveActiveSpeaker } from '../../../../lib/voice/active-speaker';
 
 import styles from '../../../../components/room/room.module.css';
 
@@ -72,7 +73,16 @@ export default function InterviewRoomPage() {
   // `mode` is the server's, so a fatal voice error (V03 downgrade) lands here as a plain
   // refetch and the room becomes the text room — there is no client-side mode flag to unset.
   const voiceMode = room?.mode === 'voice';
-  const voice = useVoiceSession(id, { enabled: voiceMode });
+  // The turn the server is on, and the only thing that starts one (K11). A paused room or a
+  // round with no question yet hands down `null`, which is the loop's "speak nothing".
+  const questionId = room?.currentQuestion?.id ?? null;
+  const currentIndex = room?.currentIndex ?? null;
+  const speakable = roomState === 'hr_round' || roomState === 'tech_round';
+  const turn = useMemo(
+    () => (speakable && questionId && currentIndex ? { index: currentIndex, questionId } : null),
+    [speakable, questionId, currentIndex],
+  );
+  const voice = useVoiceSession(id, { enabled: voiceMode, turn });
 
   // Navigation belongs in an effect: routing during render is what makes a redirect fire twice.
   useEffect(() => {
@@ -153,6 +163,14 @@ useEffect(() => {
   const showTranscript = transcriptOpen ?? !voiceMode;
   const speaker = room.persona?.name ?? null;
 
+  // K2 — the round decides who has the floor, audio only decides how loud. `room.persona` is
+  // the same answer when the server resolved one; the round is the answer that always exists.
+  const activeRound = resolveActiveSpeaker(room.state);
+  const activeId =
+    room.personas.find((persona) => persona.roundType === activeRound)?.id ??
+    room.persona?.id ??
+    null;
+
   async function handleSubmit(transcript: string): Promise<boolean> {
     if (!room?.currentQuestion) return false;
     setSubmitError(null);
@@ -179,7 +197,7 @@ useEffect(() => {
     <>
       <PersonaTiles
         personas={room.personas}
-        activeId={room.persona?.id ?? null}
+        activeId={activeId}
         activeState={avatarState}
         layout={voiceMode ? 'stage' : 'strip'}
         candidate={voiceMode ? { level: voice.micLevel, muted: voice.muted } : null}

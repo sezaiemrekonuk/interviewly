@@ -61,6 +61,32 @@ export async function apiGet<T>(path: string): Promise<ApiResult<T>> {
   return { status: response.status, ok: true, data: payload as T, code: null, payload };
 }
 
+/**
+ * A binary GET (`…/questions/:index/speech`). Only the failure body is JSON, so the error code
+ * is read the same way every other call reads one and the caller never parses a status.
+ */
+export async function apiGetBlob(path: string): Promise<ApiResult<Blob>> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, { credentials: 'same-origin' });
+  } catch {
+    return { status: 0, ok: false, data: null, code: TRANSPORT_FAILURE, payload: null };
+  }
+
+  if (!response.ok) {
+    const payload: unknown = await response.json().catch(() => null);
+    return {
+      status: response.status,
+      ok: false,
+      data: null,
+      code: readErrorCode(payload) ?? TRANSPORT_FAILURE,
+      payload,
+    };
+  }
+
+  return { status: response.status, ok: true, data: await response.blob(), code: null, payload: null };
+}
+
 async function apiSend<T>(
   path: string,
   init: RequestInit,
@@ -106,6 +132,11 @@ export function apiPatch<T>(path: string, body: unknown): Promise<ApiResult<T>> 
 /** `DELETE /interviews/:id` answers `204` with no body; `apiSend` already tolerates that. */
 export function apiDelete<T>(path: string): Promise<ApiResult<T>> {
   return apiSend<T>(path, { method: 'DELETE' });
+}
+
+/** Multipart POST of a form the caller built — same boundary rule as `apiUpload`. */
+export function apiPostForm<T>(path: string, form: FormData): Promise<ApiResult<T>> {
+  return apiSend<T>(path, { method: 'POST', body: form });
 }
 
 /** Multipart upload (`POST /uploads`) — no JSON content-type, the browser sets the boundary. */
