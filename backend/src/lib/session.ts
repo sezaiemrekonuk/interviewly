@@ -11,12 +11,16 @@ import { config } from './env';
 // 32 random bytes → 64-char hex. Never logged.
 export const SESSION_COOKIE = 'session';
 
-const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+const sessionTtlMs = config.SESSION_TTL_DAYS * 24 * 60 * 60 * 1000;
 
 function cookieOptions() {
   return {
     httpOnly: true,
-    secure: config.NODE_ENV === 'production',
+    // The setting, not `NODE_ENV` (issue #69). `NODE_ENV` is a build concern; whether the
+    // cookie may travel in clear is a transport one, and the two come apart on exactly the
+    // deployment that matters — a TLS staging box whose container inherited
+    // `NODE_ENV=development` was sending this cookie without `Secure`.
+    secure: config.SESSION_COOKIE_SECURE,
     sameSite: 'lax' as const,
     path: '/',
   };
@@ -27,11 +31,11 @@ export function generateToken(): string {
 }
 
 export function sessionExpiry(): Date {
-  return new Date(Date.now() + SEVEN_DAYS_MS);
+  return new Date(Date.now() + sessionTtlMs);
 }
 
 export function issueCookie(res: Response, token: string): void {
-  res.cookie(SESSION_COOKIE, token, { ...cookieOptions(), maxAge: SEVEN_DAYS_MS });
+  res.cookie(SESSION_COOKIE, token, { ...cookieOptions(), maxAge: sessionTtlMs });
 }
 
 export function revokeCookie(res: Response): void {

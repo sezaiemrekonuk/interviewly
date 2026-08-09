@@ -66,6 +66,7 @@ vi.mock('../../src/lib/db', () => ({
 
 vi.mock('./machine', () => ({ applyTransition: vi.fn(async () => 'profiling') }));
 
+const { config } = await import('../../src/lib/env');
 const { ApiError, httpStatusFor } = await import('../../src/lib/api-error');
 const { classify, setupInterview } = await import('./setup');
 
@@ -259,6 +260,17 @@ describe('setupInterview uploadId ownership (issue #73)', () => {
     const res = await setup({});
     expect(res.status).toBe(201);
     expect(created[0]).toMatchObject({ upload_id: null, job_source: 'paste' });
+  });
+
+  // Issue #117: `BUDGET_USD_TEXT` was declared, documented and set in `.env` while the real
+  // ceiling was the column default, so editing it changed nothing. The row now carries the
+  // configured value explicitly; the column default stays the floor for rows written outside
+  // the API (seeds, fixtures).
+  it('writes the configured text budget onto the interview', async () => {
+    const res = await setup({});
+    expect(res.status).toBe(201);
+    expect(created[0]).toMatchObject({ budget_usd: config.BUDGET_USD_TEXT });
+    expect(created[0].budget_usd).toBeTypeOf('number');
   });
 
   it('takes an explicit hrQuestionCount instead of the 40/60 split', async () => {

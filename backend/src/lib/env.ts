@@ -14,6 +14,10 @@ const zBoolean = (defaultValue: boolean) =>
 // (`FOO=` in .env, which is what every unfilled `.env.example` line is) parses as `""` and
 // sails straight past both — `ELEVENLABS_TTS_MODEL=` would resolve to `""`, not the default.
 // Issue #56 is that same empty-string-is-not-absent confusion one layer up, in `??`.
+// Numbers need it as much as strings, and more sharply once they are wired to something:
+// `SIGNED_URL_TTL=` coerces to 0, so a signed URL would expire in a second, `BUDGET_USD_TEXT=`
+// would put every interview instantly over budget, and `MAX_INTERVIEWS_PER_USER_PER_DAY=`
+// would let nobody start one. Harmless while the keys were dead (issue #117); not after.
 const emptyAsUnset = <T extends z.ZodType>(inner: T) =>
   z.preprocess((v) => (v === '' ? undefined : v), inner);
 
@@ -26,7 +30,7 @@ const schema = z.object({
   SHADOW_DATABASE_URL:         z.string(),
   REDIS_URL:                   z.string().url(),
   SESSION_SECRET:              z.string().min(32),
-  SESSION_TTL_DAYS:            z.coerce.number().default(7),
+  SESSION_TTL_DAYS:            emptyAsUnset(z.coerce.number().default(7)),
   SESSION_COOKIE_SECURE:       zBoolean(true),
   GOOGLE_CLIENT_ID:            z.string().optional(),
   GOOGLE_CLIENT_SECRET:        z.string().optional(),
@@ -59,15 +63,15 @@ const schema = z.object({
   // MinIO ignores the region entirely; real S3 fails at request time on a wrong one.
   // The default must stay in step with prisma/seed.ts, which reads process.env by design.
   S3_REGION:                   z.string().default('us-east-1'),
-  SIGNED_URL_TTL:              z.coerce.number().default(300),
+  SIGNED_URL_TTL:              emptyAsUnset(z.coerce.number().default(300)),
   // Hop count passed to Express `trust proxy`. Default 1 = one Caddy hop in front of the
   // API. Set to `false` (or `0`) when running the API directly without the edge proxy — i.e.
   // in the dev compose where port 4000 is exposed — so clients cannot spoof X-Forwarded-For.
   // Named presets ('loopback', 'linklocal', 'uniquelocal') and CIDR ranges are also accepted.
   TRUST_PROXY:                 emptyAsUnset(z.string().default('1')),
   AI_ENABLED:                  zBoolean(true),
-  BUDGET_USD_TEXT:             z.coerce.number().default(0.50),
-  MAX_INTERVIEWS_PER_USER_PER_DAY: z.coerce.number().default(5),
+  BUDGET_USD_TEXT:             emptyAsUnset(z.coerce.number().default(0.50)),
+  MAX_INTERVIEWS_PER_USER_PER_DAY: emptyAsUnset(z.coerce.number().default(5)),
   LOG_LEVEL:                   z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
   LOG_TRANSPORT:               z.enum(['stdout', 'elastic']).default('stdout'),
   ELASTICSEARCH_URL:           z.string().optional(),
