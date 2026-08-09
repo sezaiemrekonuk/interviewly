@@ -12,7 +12,7 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query';
 
-import { apiDelete, apiGet, apiPatch, apiPost, apiUpload } from './api';
+import { apiDelete, apiGet, apiPatch, apiPost, apiPostForm, apiUpload } from './api';
 import { SILENT_REFETCH_CODES } from './error-routing';
 import type { SessionUser } from './use-require-auth';
 
@@ -550,6 +550,42 @@ export function useSubmitAnswer(
   return useMutation({
     mutationFn: async (body: SubmitAnswerBody) => {
       const result = await apiPost(`/interviews/${interviewId}/answers`, body);
+      if (!result.ok) throw new ApiError(result.code ?? 'UNKNOWN');
+      return result.data;
+    },
+    onError: (err) => {
+      if (SILENT_REFETCH_CODES.has(err.code)) {
+        void client.invalidateQueries({ queryKey: queryKeys.interviewState(interviewId) });
+      }
+    },
+    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.interviewState(interviewId) }),
+  });
+}
+
+export interface SubmitAudioAnswerBody {
+  questionId: string;
+  audio: Blob;
+}
+
+/**
+ * S06 — the recorded twin of `useSubmitAnswer`, not its replacement: `POST …/answers/audio`
+ * transcribes and then runs the SAME I06 advance, so both mutations owe the same
+ * reconciliation and invalidate the same key.
+ *
+ * The part's media type is sent bare. `MediaRecorder` reports `audio/webm;codecs=opus`, and the
+ * backend allow-list (`stt.ts`) carries media types, not codec strings.
+ */
+export function useSubmitAudioAnswer(
+  interviewId: string,
+): UseMutationResult<unknown, ApiError, SubmitAudioAnswerBody> {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ questionId, audio }: SubmitAudioAnswerBody) => {
+      const type = (audio.type || 'audio/webm').split(';')[0];
+      const form = new FormData();
+      form.append('questionId', questionId);
+      form.append('audio', new File([audio], 'answer', { type }), 'answer');
+      const result = await apiPostForm(`/interviews/${interviewId}/answers/audio`, form);
       if (!result.ok) throw new ApiError(result.code ?? 'UNKNOWN');
       return result.data;
     },

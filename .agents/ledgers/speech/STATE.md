@@ -1,16 +1,15 @@
 # Speech — State
 
-Last updated: 2026-08-07
-Last session ended: **S05 complete.** `modules/voice/` is now `downgrade.ts` alone (it absorbed
-`preJoinDowngrade` + the route). Deleted: webhook router + four gates, `reconcile{,-webhook}.ts`,
-`voice.reconcile` queue + worker job, `cloudflared`, three error codes + both locales,
-`elevenlabs/conversational`, `voice_sessions` (`20260807170000_drop_voice_sessions`), and the
-three `voice_*.feature` files. `voice_fallback` → `speech_fallback.feature` on
-`FakeSpeechProvider.failNext`. **The ceiling never lived in `webhook-auth.ts`** — it is
-`isPastSpeechCeiling` in `tts.ts`, imported by `stt.ts`; @AC-6 green before and after. Frontend
-went past the file list: `use-voice-session.ts` is mic-only now (no socket, `beat` always null —
-S06 owns it) and `middleware.ts` lost `wss://api.elevenlabs.io`. Verification: lint + typecheck
-clean, unit 553/553, acceptance 101/101, grep clean. Next: **S06** (turn loop — opus).
+Last updated: 2026-08-09
+Last session ended: **S06 complete.** `use-voice-session.ts` is the turn loop:
+`{ enabled, turn, vad }` in, `beat`/`recording`/`stop()`/`error`/`retry()` out. Play the
+question, record on the mic `use-mic-permission` already owns (the single audio graph, and the
+VAD source), stop after 2 s of silence **once speech was heard**, upload through the new
+`useSubmitAudioAnswer` sibling, refetch. Media type is sent bare — `;codecs=opus` is not in
+`stt.ts`'s allow-list. Playback failure downgrades; every other failure has a code and a Retry.
+`resolveActiveSpeaker` now lights the tile (#107's second orphan). Rebased onto `716245b`;
+verification 21/21, `new WebSocket` grep clean, lint + typecheck, unit 654, acceptance 102/102.
+Next: **S07**.
 
 ## Execution protocol (follow exactly)
 
@@ -26,8 +25,8 @@ EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**S06** (room turn loop: speak, VAD-record, upload, advance — opus tier). It inherits a
-mic-only `use-voice-session.ts` with no `beat` producer and no test covering `status: 'lost'`.
+**S07** (pre-join on resume, mic-denied downgrade, ADR-S07 copy — sonnet tier). S06 left the
+mic-denied path on `status: 'lost'` with no `voiceDowngrade` call and still no test covering it.
 
 ## Environment
 
@@ -73,7 +72,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | S03 | STT route: audio upload to Scribe to the guarded advance | | done | S01, I03, I06 |
 | S04 | Per-call usage accounting at both provider call sites | | done | S02, S03, I08 |
 | S05 | Remove the convai, webhook and reconciliation surface; drop `voice_sessions` | | done | S02, S03, S04 |
-| S06 | Room turn loop: speak, VAD-record, upload, advance | | todo | S02, S03, W10 |
+| S06 | Room turn loop: speak, VAD-record, upload, advance | | done | S02, S03, W10 |
 | S07 | Pre-join on resume, mic-denied downgrade, transient-audio copy | | todo | S06, V03, W09 |
 | S08 | Voice-first default and user-selectable duration | | todo | S01, W05 |
 | S09 | `startedAt` and `expiresAt` in `/state`, and the room timer | | todo | S02, I03 |
@@ -135,9 +134,9 @@ downgrade}.ts`, and the downgrade invariant itself.
   compiled twins checked into `src/` (`error-codes.js`, `error-codes.d.ts`) and a third under
   `packages/types/dist/`. Editing the registry silently leaves the twins wrong. Not this
   ledger's to fix; promote when the next task touches the registry a second time.
-- **[S06] `use-mic-permission.ts` and `voice/device-check.ts` both own an `AnalyserNode`.**
-  `use-mic-permission.ts:4-5` already flags the duplication. S06 must pick one as the VAD
-  source rather than adding a third audio graph.
+- **[S06] `voice/device-check.ts` is still an unimported second `AnalyserNode`.** S06 picked
+  `use-mic-permission.ts` as the room's mic and VAD source and added no third graph, so the
+  duplication is now dead code rather than a live divergence (#107).
 - **[S05→S07] Nothing tests `status: 'lost'` in the room.** `voice.test.tsx`'s dropped-session
   reconnect test went with the socket S05 deleted. The lost banner + `reconnect` still render
   off `status`, which now comes from the mic — S07 (mic-denied) is where it gets covered again.

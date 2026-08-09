@@ -483,6 +483,7 @@
     "voice": {
       "mute": "Mute",
       "unmute": "Unmute",
+      "stop": "Stop and send",
       "lost": "The voice connection dropped. Your interview is safe — reconnect to keep going.",
       "reconnect": "Reconnect",
       "status": {

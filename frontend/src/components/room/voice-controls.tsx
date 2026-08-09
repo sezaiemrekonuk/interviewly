@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { MiniBars } from './persona-tiles';
 import { Button } from '../ui';
 import type { UseVoiceSessionResult } from '../../lib/use-voice-session';
+import { useErrorMessage } from '../../lib/use-error-message';
 import styles from './room.module.css';
 
 const cx = (...names: Array<string | false | undefined>) => names.filter(Boolean).join(' ');
@@ -34,10 +35,24 @@ export function VoiceControls({
   onToggleTranscript,
 }: VoiceControlsProps) {
   const t = useTranslations('room');
+  const errorMessage = useErrorMessage();
   const lost = session.status === 'lost';
 
   return (
     <>
+      {/* S06: a turn that failed says which failure it was and offers the one action that can
+          succeed. S10 refines the copy per code; the branch is the hook's. */}
+      {session.error ? (
+        <div className={cx(styles.notice, styles.noticeDanger)} data-testid="voice-error">
+          <p className={styles.error} role="alert">
+            {errorMessage(session.error)}
+          </p>
+          <Button type="button" onClick={() => session.retry()} data-testid="voice-retry">
+            {t('retry')}
+          </Button>
+        </div>
+      ) : null}
+
       {lost ? (
         <div
           className={cx(styles.notice, styles.noticeDanger)}
@@ -52,6 +67,13 @@ export function VoiceControls({
       ) : null}
 
       <div className={styles.bar} data-testid="voice-controls">
+        {/* The VAD is a convenience; this is the enforcement the candidate has (ADR-S06). */}
+        {session.recording ? (
+          <Button type="button" onClick={() => session.stop()} data-testid="voice-stop">
+            {t('voice.stop')}
+          </Button>
+        ) : null}
+
         <button
           type="button"
           className={styles.ck}
