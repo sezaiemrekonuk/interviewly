@@ -24,7 +24,10 @@ export const login: RequestHandler = async (req, res) => {
     user?.password_hash != null &&
     (await verify(user.password_hash, parsed.data.password).catch(() => false));
   if (!user || !ok) {
-    logger.info({ email_lower, traceId: req.traceId }, 'AUTH_LOGIN_FAILED');
+    // The address is never logged: the failure branch also fires for emails with no account,
+    // so it would accumulate third-party addresses anyone can supply. `userId` keeps the one
+    // useful signal — which account is being sprayed — and is null when there is none.
+    logger.info({ userId: user?.id ?? null, traceId: req.traceId }, 'AUTH_LOGIN_FAILED');
     throw new ApiError('INVALID_CREDENTIALS');
   }
 
