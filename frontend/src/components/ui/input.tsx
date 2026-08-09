@@ -28,17 +28,19 @@ export function Input({
   // control needs its own id for nothing — the accessible name is the text itself.
   const generated = useId();
 
+  const canReveal = reveal && rest.type === 'password';
+
   const control = (
     <input
       {...rest}
-      type={reveal && shown ? 'text' : rest.type}
-      className={[styles.control, reveal ? styles.controlWithAction : null, className]
+      type={canReveal && shown ? 'text' : rest.type}
+      className={[styles.control, canReveal ? styles.controlWithAction : null, className]
         .filter(Boolean)
         .join(' ')}
     />
   );
 
-  if (!reveal) return control;
+  if (!canReveal) return control;
 
   return (
     <div className={styles.inputWrap}>
