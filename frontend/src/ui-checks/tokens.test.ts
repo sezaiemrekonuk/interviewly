@@ -129,7 +129,8 @@ describe('no stray literals outside the token registry', () => {
     const violations: string[] = [];
     for (const file of SCAN_FILES) {
       const content = readFileSync(file, 'utf8');
-      const exempt = BRAND_HEX_EXEMPTIONS[relative(SRC_DIR, file)];
+      const rel = relative(SRC_DIR, file).replaceAll('\\', '/');
+      const exempt = BRAND_HEX_EXEMPTIONS[rel];
       for (const match of content.matchAll(/#[0-9a-fA-F]{3,8}\b/g)) {
         if (exempt?.has(match[0])) continue;
         violations.push(`${file}: ${match[0]}`);
