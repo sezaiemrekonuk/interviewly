@@ -231,8 +231,14 @@ export const setupInterview: RequestHandler = async (req, res) => {
   // first moment the user has actually spent one of their five (issue #116). Everything
   // after this point either succeeds or leaves an interview they can resume, so there is no
   // later checkpoint that would be more honest.
-  await recordHit(DAILY_INTERVIEW_PREFIX, req.user!.id, DAILY_INTERVIEW_WINDOW_MS);
-
+  try {
+    await recordHit(DAILY_INTERVIEW_PREFIX, req.user!.id, DAILY_INTERVIEW_WINDOW_MS);
+  } catch (err) {
+    logger.warn(
+      { traceId: req.traceId, userId: req.user!.id, reason: err instanceof Error ? err.message : 'unknown' },
+      'DAILY_LIMIT_RECORD_FAILED',
+    );
+  }
   await titleInterview(interview.id, jobText, req.user!.locale, req.traceId!);
 
   await applyTransition(interview, 'profiling', { traceId: req.traceId! });
