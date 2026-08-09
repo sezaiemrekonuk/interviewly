@@ -53,10 +53,22 @@ describe('CSP: no inline style attributes', () => {
     'components/avatar.tsx',
   ]);
 
+  /**
+   * Next metadata images (issue 93). These are rendered by satori on the server into a PNG and
+   * never reach a browser, so there is no CSP to violate — and satori supports *only* inline
+   * styles, so a class would not render at all. Listed by exact path: a `style={{…}}` in any
+   * other file is still the production-only bug this check exists to catch.
+   */
+  const SERVER_RENDERED_IMAGES = new Set([
+    'app/opengraph-image.tsx',
+    'app/icon.tsx',
+    'app/apple-icon.tsx',
+  ]);
+
   it('no component sets style={{…}}', () => {
     const offenders: string[] = [];
     for (const file of TSX) {
-      if (KNOWN_DEAD.has(rel(file))) continue;
+      if (KNOWN_DEAD.has(rel(file)) || SERVER_RENDERED_IMAGES.has(rel(file))) continue;
       const src = readFileSync(file, 'utf8');
       if (/\sstyle=\{/.test(src)) offenders.push(rel(file));
     }
