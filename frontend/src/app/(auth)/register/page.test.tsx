@@ -35,6 +35,18 @@ describe('register page', () => {
     vi.unstubAllGlobals();
   });
 
+  // Issue 145: the 10-character rule was only discoverable by failing a submit.
+  it('states the length requirement before any submit', async () => {
+    stubFetch(201, {});
+    renderWithProviders(<RegisterPage />);
+
+    expect(screen.getByLabelText(messages.auth.passwordLabel)).toHaveAccessibleDescription(
+      messages.auth.passwordHint,
+    );
+    // A hint, not an error: nothing has failed yet.
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
   it('rejects a short password inline without calling the API', async () => {
     const fetchSpy = stubFetch(201, {});
     renderWithProviders(<RegisterPage />);

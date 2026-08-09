@@ -188,6 +188,18 @@ describe('sign-in page', () => {
     expect(email.closest('form')).not.toHaveAttribute('aria-busy');
   });
 
+  // Issue 145: the hint names a rule only the register schema enforces — login keeps min(1)
+  // so an account whose password predates the rule can still sign in.
+  it('shows no password hint, because this form does not enforce a length', () => {
+    stubFetch(200, {});
+    renderWithProviders(<SignInPage />);
+
+    expect(
+      screen.getByLabelText(messages.auth.passwordLabel),
+    ).not.toHaveAccessibleDescription();
+    expect(screen.queryByText(messages.auth.passwordHint)).toBeNull();
+  });
+
   it('offers the forgot-password and register links', () => {
     stubFetch(200, {});
     renderWithProviders(<SignInPage />);

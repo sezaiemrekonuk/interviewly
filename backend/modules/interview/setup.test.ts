@@ -66,9 +66,22 @@ vi.mock('../../src/lib/db', () => ({
 
 vi.mock('./machine', () => ({ applyTransition: vi.fn(async () => 'profiling') }));
 
+/**
+ * Issue #116: the daily quota is charged by the handler now, so the unit needs the limiter
+ * module without its Redis connection. `keyedLimiter` is stubbed to a pass-through because
+ * `./rate-limit` builds its limiters at import; `recordHit` is the call under test.
+ */
+const recordHit = vi.fn(async () => undefined);
+vi.mock('../auth/rate-limit', () => ({
+  recordHit,
+  keyedLimiter: () => (_req: unknown, _res: unknown, next: () => void) => next(),
+  redis: {},
+}));
+
 const { config } = await import('../../src/lib/env');
 const { ApiError, httpStatusFor } = await import('../../src/lib/api-error');
 const { classify, setupInterview } = await import('./setup');
+const { DAILY_INTERVIEW_PREFIX, DAILY_INTERVIEW_WINDOW_MS } = await import('./rate-limit');
 
 describe('classify', () => {
   it('titles a Turkish listing from its first line and clusters it', () => {
@@ -180,6 +193,7 @@ describe('setupInterview uploadId ownership (issue #73)', () => {
   beforeEach(() => {
     created.length = 0;
     updated.length = 0;
+    recordHit.mockClear();
     createRejectsWith = undefined;
     titleResult = async () => ({ title: 'Kıdemli Backend Geliştirici' });
   });
@@ -324,6 +338,45 @@ describe('setupInterview uploadId ownership (issue #73)', () => {
       expect(row.hr_question_count).toBeLessThanOrEqual(targetQuestionCount);
       expect(res.body.techCount as unknown as number).toBeGreaterThanOrEqual(0);
     }
+  });
+
+  // Issue #116. The cap counted the attempt, so a user who hit the upload bug and retried
+  // four times was locked out for 24 hours having created nothing. It charges results now.
+  describe('the daily quota charges interviews, not attempts', () => {
+    it('spends nothing on a refused create', async () => {
+      for (const body of [
+        { jobText: undefined }, // LISTING_REQUIRED
+        { uploadId: 'not-a-real-upload-id' }, // VALIDATION_ERROR
+        { targetQuestionCount: 999 }, // out of range
+      ]) {
+        recordHit.mockClear();
+        const res = await setup(body);
+        expect({ body, status: res.status }).not.toEqual({ body, status: 201 });
+        expect(recordHit).not.toHaveBeenCalled();
+      }
+      expect(created).toHaveLength(0);
+    });
+
+    it('spends exactly one on a create that succeeded', async () => {
+      const res = await setup({});
+      expect(res.status).toBe(201);
+      expect(recordHit).toHaveBeenCalledTimes(1);
+      const [prefix, key, windowMs] = recordHit.mock.calls[0] as unknown as [string, string, number];
+      expect({ prefix, key, windowMs }).toEqual({
+        prefix: DAILY_INTERVIEW_PREFIX,
+        key: 'usr_a',
+        windowMs: DAILY_INTERVIEW_WINDOW_MS,
+      });
+    });
+
+    it('charges after the row exists, so a failed insert cannot spend a slot', async () => {
+      createRejectsWith = { code: 'P2003', meta: { constraint: 'interviews_upload_id_fkey' } };
+      const res = await setup({ uploadId: 'upl_a_listing' });
+
+      expect(res.status).toBe(422);
+      expect(created).toHaveLength(0);
+      expect(recordHit).not.toHaveBeenCalled();
+    });
   });
 
   it('answers 422 rather than 500 for every malformed body shape', async () => {

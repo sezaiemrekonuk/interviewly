@@ -1,4 +1,5 @@
 import { fireEvent, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import { messages, renderWithIntl } from '../../test/render';
@@ -62,6 +63,56 @@ describe('<Field>', () => {
     const input = screen.getByLabelText('Occupation');
     expect(input).not.toHaveAttribute('aria-invalid');
     expect(input).not.toHaveAttribute('aria-describedby');
+  });
+});
+
+// Issue 145: a masked field with a typo can only be checked by retyping it. The toggle lives
+// in the primitive so the target size and the focus ring come from the same place as every
+// other control's.
+describe('<Input reveal>', () => {
+  const render = () =>
+    renderWithIntl(
+      <Field label="Password" id="password">
+        {(control) => <Input {...control} type="password" reveal />}
+      </Field>,
+    );
+
+  it('switches the input between password and text', async () => {
+    const user = userEvent.setup();
+    render();
+    const input = screen.getByLabelText('Password');
+    expect(input).toHaveAttribute('type', 'password');
+
+    await user.click(screen.getByRole('button', { name: messages.common.showPassword }));
+    expect(input).toHaveAttribute('type', 'text');
+
+    // The name reflects what the next press does, so it has to change with the state.
+    await user.click(screen.getByRole('button', { name: messages.common.hidePassword }));
+    expect(input).toHaveAttribute('type', 'password');
+  });
+
+  it('is a button, not a submit, and follows the field into disabled', () => {
+    renderWithIntl(
+      <Field label="Password" id="password">
+        {(control) => <Input {...control} type="password" reveal disabled />}
+      </Field>,
+    );
+
+    const toggle = screen.getByRole('button', { name: messages.common.showPassword });
+    // A submit here would post the form on a reveal.
+    expect(toggle).toHaveAttribute('type', 'button');
+    expect(toggle).toBeDisabled();
+  });
+
+  it('leaves an ordinary input untouched', () => {
+    renderWithIntl(
+      <Field label="Email" id="email">
+        {(control) => <Input {...control} type="email" />}
+      </Field>,
+    );
+
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.getByLabelText('Email')).toHaveAttribute('type', 'email');
   });
 });
 

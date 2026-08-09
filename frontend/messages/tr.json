@@ -6,7 +6,9 @@
     "localeTurkish": "Türkçe",
     "chooseFile": "PDF seç",
     "noFileChosen": "Dosya seçilmedi",
-    "clearFile": "Kaldır"
+    "clearFile": "Kaldır",
+    "showPassword": "Göster",
+    "hidePassword": "Gizle"
   },
   "chrome": {
     "newInterview": "Yeni mülakat",

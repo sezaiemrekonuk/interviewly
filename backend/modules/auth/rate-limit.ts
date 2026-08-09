@@ -28,6 +28,32 @@ export async function slidingWindowHit(key: string, windowMs: number): Promise<n
   return typeof count === 'number' ? count : 0;
 }
 
+/**
+ * The same window, counted without recording a hit. For a limiter that must charge the
+ * outcome rather than the attempt (issue #116): the middleware asks whether one more would
+ * exceed the limit, and the handler calls `recordHit` once it has actually produced the thing
+ * being limited. The `zremrangebyscore` is kept so the count is over the live window and the
+ * set does not grow between writes.
+ */
+export async function slidingWindowCount(key: string, windowMs: number): Promise<number> {
+  const now = clock.now().getTime();
+  const results = await redis
+    .multi()
+    .zremrangebyscore(key, 0, now - windowMs)
+    .zcard(key)
+    .exec();
+  const count = results?.[1]?.[1];
+  return typeof count === 'number' ? count : 0;
+}
+
+/** One namespace for both halves, so a check and its later record cannot address different sets. */
+const limiterKey = (prefix: string, key: string): string => `ratelimit:${prefix}:${key}`;
+
+/** Charge the window for a request that succeeded. Pairs with a `record: false` limiter. */
+export async function recordHit(prefix: string, key: string, windowMs: number): Promise<void> {
+  await slidingWindowHit(limiterKey(prefix, key), windowMs);
+}
+
 export interface KeyedLimit {
   prefix: string;
   limit: number;
@@ -36,6 +62,12 @@ export interface KeyedLimit {
   keyOf: (req: Request) => string;
   code?: string;
   event?: string;
+  /**
+   * Whether passing the check also spends a slot. `true` (the default) is abuse protection,
+   * where the attempt is the thing worth counting. `false` makes this a read-only gate whose
+   * handler must call `recordHit` on success — for a quota that should charge results.
+   */
+  record?: boolean;
 }
 
 /** I13 generalised A01's factory: the key and the error code are the only axes that vary. */
@@ -46,10 +78,17 @@ export function keyedLimiter({
   keyOf,
   code = 'RATE_LIMITED',
   event = 'RATE_LIMIT_HIT',
+  record = true,
 }: KeyedLimit): RequestHandler {
   return (req, res, next) => {
     const key = keyOf(req);
-    void slidingWindowHit(`ratelimit:${prefix}:${key}`, windowMs)
+    // Both branches produce the same number — the count *including* this request — so the
+    // comparison below stays one rule. Recording returns it directly; checking has to add
+    // the request it deliberately did not write.
+    const counted = record
+      ? slidingWindowHit(limiterKey(prefix, key), windowMs)
+      : slidingWindowCount(limiterKey(prefix, key), windowMs).then((n) => n + 1);
+    void counted
       .then((count) => {
         if (count > limit) {
           logger.warn({ key, traceId: req.traceId }, event);
