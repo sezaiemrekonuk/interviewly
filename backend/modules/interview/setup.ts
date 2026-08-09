@@ -12,11 +12,13 @@ import { recordHit } from '../auth/rate-limit';
 import { applyTransition } from './machine';
 import { DAILY_INTERVIEW_PREFIX, DAILY_INTERVIEW_WINDOW_MS } from './rate-limit';
 
-// Above the largest shape the UI offers (`new/page.tsx` LENGTHS tops out at 15) and still a
-// count one generation call can satisfy. Unbounded, a request body sized the provider call
-// directly — `generateRound` asks for the whole round at once (issue #98). Mirrored as a CHECK
-// constraint on `interviews.target_question_count` so a direct insert cannot bypass it.
-const MAX_TARGET_QUESTION_COUNT = 20;
+// Per-round ceilings: HR maxes out at 5, technical at 13. The overall ceiling is their sum —
+// tighter than the DB's own `target_question_count` CHECK (1..20), so this is an application
+// tightening within that range and needs no migration. Mirrored below in `split()`'s clamp and
+// in `shape()`'s custom-shape check so neither path can produce a round past its cap.
+const MAX_HR_QUESTION_COUNT = 5;
+const MAX_TECH_QUESTION_COUNT = 13;
+const MAX_TARGET_QUESTION_COUNT = MAX_HR_QUESTION_COUNT + MAX_TECH_QUESTION_COUNT;
 
 // The floor `split()` already assumes. Its HR half is `max(2, …)`, so a target of 1 made
 // `techCount` negative — a round size the generator then asks the provider for (issue #176).
@@ -36,7 +38,7 @@ const schema = z.object({
     .max(MAX_TARGET_QUESTION_COUNT),
   // The custom shape: the caller sizes the HR half itself instead of taking the 40/60 split.
   // Absent is the normal case and the only one the preset lengths ever send.
-  hrQuestionCount: z.coerce.number().int().min(1).max(MAX_TARGET_QUESTION_COUNT).optional(),
+  hrQuestionCount: z.coerce.number().int().min(1).max(MAX_HR_QUESTION_COUNT).optional(),
 });
 
 // Keyword → seeded occupation_clusters.key (prisma/seed.ts OCCUPATION_CLUSTERS). First
@@ -116,23 +118,28 @@ export function classify(jobText: string): { occupation: string; clusterKey: str
   return { occupation: titleFromListing(jobText), clusterKey };
 }
 
-// hrCount = max(2, round(target * 0.4)), techCount = target - hrCount (non-negotiable split).
-// Total over the accepted domain and only there: `target >= 2` is what keeps the `max(2, …)`
-// floor from exceeding the target and driving techCount negative (issue #176).
+// hrCount = max(2, round(target * 0.4)), clamped to MAX_HR_QUESTION_COUNT so the automatic
+// split never needs the technical side to absorb more than MAX_TECH_QUESTION_COUNT — checked
+// for every target in [MIN_TARGET_QUESTION_COUNT, MAX_TARGET_QUESTION_COUNT] since the two caps
+// sum to the overall ceiling. techCount = target - hrCount (non-negotiable split otherwise).
 function split(target: number): { hrCount: number; techCount: number } {
-  const hrCount = Math.max(2, Math.round(target * 0.4));
+  const hrCount = Math.min(Math.max(2, Math.round(target * 0.4)), MAX_HR_QUESTION_COUNT);
   return { hrCount, techCount: target - hrCount };
 }
 
 /**
  * The split, or the caller's own. An explicit `hrQuestionCount` must leave at least one
  * question for the technical round: both rounds are generated, and a batch of zero is a
- * provider call that asks for nothing and a round with no question to promote.
+ * provider call that asks for nothing and a round with no question to promote. The technical
+ * remainder gets its own cap check here — the schema only bounds `hrQuestionCount`, so a large
+ * target with a small custom `hr` could otherwise push `techCount` past MAX_TECH_QUESTION_COUNT.
  */
 function shape(target: number, hr: number | undefined): { hrCount: number; techCount: number } {
   if (hr === undefined) return split(target);
   if (hr >= target) throw new ApiError('VALIDATION_ERROR');
-  return { hrCount: hr, techCount: target - hr };
+  const techCount = target - hr;
+  if (techCount > MAX_TECH_QUESTION_COUNT) throw new ApiError('VALIDATION_ERROR');
+  return { hrCount: hr, techCount };
 }
 
 async function titleInterview(

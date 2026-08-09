@@ -45,7 +45,7 @@ export function ReportRail({
 
   return (
     <>
-      <RailMark />
+      <RailMark href="/" />
 
       {score === null ? null : (
         <>

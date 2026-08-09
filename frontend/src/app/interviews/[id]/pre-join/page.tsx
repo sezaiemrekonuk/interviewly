@@ -64,7 +64,7 @@ export default function PreJoinPage() {
   // interview: while the state is still loading there is none to carry that is true yet.
   const rail = (
     <>
-      <RailMark />
+      <RailMark href="/" />
       <p className={styles.railLead}>{t('subtitle')}</p>
     </>
   );

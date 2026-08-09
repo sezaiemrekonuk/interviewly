@@ -51,7 +51,7 @@ export function RoomRail({
 
   return (
     <>
-      <RailMark />
+      <RailMark href="/" />
 
       <RailBlock
         label={t('roundLabel')}

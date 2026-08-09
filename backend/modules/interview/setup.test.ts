@@ -303,6 +303,13 @@ describe('setupInterview uploadId ownership (issue #73)', () => {
     expect(created).toHaveLength(0);
   });
 
+  it('refuses a custom shape whose technical remainder would exceed the round cap', async () => {
+    const res = await setup({ targetQuestionCount: 18, hrQuestionCount: 1 });
+    expect(res.status).toBe(422);
+    expect(res.body).toEqual({ error: { code: 'VALIDATION_ERROR' } });
+    expect(created).toHaveLength(0);
+  });
+
   // Issue #176. `split()` floors the HR half at 2, so a target below that made `techCount`
   // negative — stored on the row, and then handed to the generator as a batch size.
   it('refuses a target below the HR floor the split assumes', async () => {
@@ -325,7 +332,7 @@ describe('setupInterview uploadId ownership (issue #73)', () => {
   it('never writes an hr_question_count above the target, for any accepted target', async () => {
     // The whole accepted domain, not a sample: the bug was one specific target at the edge of
     // it, and the constraint the migration adds has to hold for every row this handler writes.
-    for (let targetQuestionCount = 2; targetQuestionCount <= 20; targetQuestionCount += 1) {
+    for (let targetQuestionCount = 2; targetQuestionCount <= 18; targetQuestionCount += 1) {
       created.length = 0;
       const res = await setup({ targetQuestionCount });
       expect({ targetQuestionCount, status: res.status }).toEqual({

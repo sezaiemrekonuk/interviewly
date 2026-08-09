@@ -30,18 +30,18 @@ Feature: Question generation
     And the interview has techQuestionCount 5
 
   @question-generation @backend @AC-6
-  Scenario: The bound is inclusive at 20 and refuses 21
+  Scenario: The bound is inclusive at 18 and refuses 19
     # A fresh candidate per scenario, and only two attempts here: the daily cap is 5 rolling
     # interviews and a rejected attempt burns a slot too (rate-limit.ts).
     Given I am signed in as a candidate
-    When I start an interview with a "Backend Developer" listing and 21 target questions
+    When I start an interview with a "Backend Developer" listing and 19 target questions
     Then the response status is 422
     And the response error code is "VALIDATION_ERROR"
     And no interview is created
-    When I start an interview with a "Backend Developer" listing and 20 target questions
+    When I start an interview with a "Backend Developer" listing and 18 target questions
     Then the response status is 201
-    And the interview has hrQuestionCount 8
-    And the interview has techQuestionCount 12
+    And the interview has hrQuestionCount 5
+    And the interview has techQuestionCount 13
 
   @question-generation @backend @AC-6
   Scenario: A target below the HR floor is refused, and 2 stays legal

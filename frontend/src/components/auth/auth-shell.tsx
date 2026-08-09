@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 
@@ -42,10 +41,11 @@ export function AuthShell({
       rail={
         <>
           {/* Linked, as it was in the layout this shell replaced: an entry screen has no
-              nav, so the wordmark is the only way back out of a form opened by accident. */}
-          <Link className={styles.markLink} href="/">
-            <RailMark />
-          </Link>
+              nav, so the wordmark is the only way back out of a form opened by accident.
+              `RailMark` carries its own link now — this is the one call site that already
+              had one, so it's simplified to use `RailMark`'s built-in `href` instead of
+              double-wrapping it. */}
+          <RailMark href="/" />
           <p className={styles.railLede}>{t(`rail${rail}Lede`)}</p>
           <p className={styles.railBody}>{t(`rail${rail}Body`)}</p>
           <p className={styles.railFoot}>{t(`rail${rail}Foot`)}</p>

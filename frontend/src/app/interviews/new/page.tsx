@@ -32,14 +32,15 @@ const LENGTHS = [
 
 type LengthKey = (typeof LENGTHS)[number]['key'] | 'custom';
 
-// I03's own ceiling — mirrored as a CHECK constraint on `interviews.target_question_count`.
-const MAX_TOTAL = 20;
+// Per-round ceilings, mirroring I03's `setup.ts` — HR maxes out at 5, technical at 13.
+const MAX_HR = 5;
+const MAX_TECH = 13;
 
 // Mirrors I03's deterministic split so the shape is visible *before* the create. The 201
 // returns the same two counts, but setup navigates away on success, so the response copy is
 // never on screen — this preview is the only place the split can be read (see task Notes).
 function splitRounds(target: number): { hrCount: number; techCount: number } {
-  const hrCount = Math.max(2, Math.round(target * 0.4));
+  const hrCount = Math.min(Math.max(2, Math.round(target * 0.4)), MAX_HR);
   return { hrCount, techCount: target - hrCount };
 }
 
@@ -150,9 +151,10 @@ function InterviewSetup() {
         !Number.isInteger(tech) ||
         hr < 1 ||
         tech < 1 ||
-        hr + tech > MAX_TOTAL)
+        hr > MAX_HR ||
+        tech > MAX_TECH)
     ) {
-      setFormError(t('lengthCustomInvalid', { max: MAX_TOTAL }));
+      setFormError(t('lengthCustomInvalid', { hrMax: MAX_HR, techMax: MAX_TECH }));
       return;
     }
 
@@ -187,7 +189,7 @@ function InterviewSetup() {
   // control that decides it, and it stays there.
   const rail = (
     <>
-      <RailMark />
+      <RailMark href="/" />
       <p className={styles.railLead}>{t('subtitle')}</p>
 
       <RailBlock label={t('railNextLabel')}>
@@ -222,7 +224,11 @@ function InterviewSetup() {
       <WorkTop title={t('title')} />
 
       <WorkBody className={styles.body}>
-        <form onSubmit={handleSubmit} className={styles.form}>
+        {/* `noValidate`: `min`/`max` here are advisory hints (see the comment above), not a gate
+            — native constraint validation would otherwise block the submit silently and the
+            JS check below, which gives the specific too-many-HR / too-many-technical message,
+            would never run. */}
+        <form onSubmit={handleSubmit} className={styles.form} noValidate>
           {/* The listing is the subject of this screen, so it leads the form. */}
           <ListingUpload
             value={jobText}
@@ -271,7 +277,7 @@ function InterviewSetup() {
                     type="number"
                     inputMode="numeric"
                     min={1}
-                    max={MAX_TOTAL - 1}
+                    max={MAX_HR}
                     value={customHr}
                     onChange={(e) => setCustomHr(e.target.value)}
                     disabled={busy}
@@ -286,7 +292,7 @@ function InterviewSetup() {
                     type="number"
                     inputMode="numeric"
                     min={1}
-                    max={MAX_TOTAL - 1}
+                    max={MAX_TECH}
                     value={customTech}
                     onChange={(e) => setCustomTech(e.target.value)}
                     disabled={busy}

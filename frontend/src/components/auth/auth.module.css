@@ -9,18 +9,6 @@
 
 /* ------------------------------------------------- rail */
 
-/* `fit-content`, so the focus ring is the wordmark's shape and not the rail's width. */
-.markLink {
-  display: block;
-  width: fit-content;
-  border-radius: var(--radius-input);
-}
-
-.markLink:focus-visible {
-  outline: 2px solid var(--rail-text);
-  outline-offset: 2px;
-}
-
 /* Two `margin-top: auto` in one column split the free space: the argument sits low against
    the wordmark, the closing line is pinned to the floor. */
 .railLede {
