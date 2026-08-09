@@ -13,6 +13,17 @@ export const SESSION_COOKIE = 'session';
 
 const sessionTtlMs = config.SESSION_TTL_DAYS * 24 * 60 * 60 * 1000;
 
+/**
+ * How far behind the stored expiry has to fall before `requireAuth` slides it. Sliding on
+ * every request cost a write per `GET /me`, per room poll and per SSE connect, to move an
+ * expiry by milliseconds (issue #131).
+ *
+ * An hour, but never more than a twenty-fourth of the lifetime: with a short `SESSION_TTL_DAYS`
+ * a fixed hour would be most of the window, so an active session could reach its own expiry
+ * before earning a slide.
+ */
+export const SESSION_SLIDE_THRESHOLD_MS = Math.min(60 * 60 * 1000, sessionTtlMs / 24);
+
 function cookieOptions() {
   return {
     httpOnly: true,
