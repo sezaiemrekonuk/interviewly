@@ -1,8 +1,7 @@
 http://localhost {
     handle_path /api/* {
-        reverse_proxy api:4000
-    }
-    handle /events/* {
+        # SSE lives at /api/interviews/:id/events, so the no-buffering guarantee belongs
+        # here. It used to sit on a `/events/*` block, which no request ever matched.
         reverse_proxy api:4000 {
             flush_interval -1
         }
