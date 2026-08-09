@@ -12,3 +12,10 @@ services:
     # Loopback-only: a bare "4000:4000" binds 0.0.0.0, and `trust proxy 1` (issue 068) then
     # honours an X-Forwarded-For from anything on the LAN that reaches this port directly.
     ports: ["127.0.0.1:4000:4000"]
+    environment:
+      # The dev edge serves http://localhost, and a browser never sends a Secure cookie over
+      # plaintext — every local sign-in would appear to succeed and then be forgotten. It
+      # belongs here rather than in .env.example because this overlay is opt-in (`-f
+      # compose.dev.yaml`) and `cp .env.example .env` is how real environments are built
+      # (issue #069).
+      SESSION_COOKIE_SECURE: "false"
