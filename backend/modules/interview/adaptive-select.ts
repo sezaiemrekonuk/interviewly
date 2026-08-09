@@ -18,6 +18,18 @@ import type { ChosenReason, Difficulty } from '@prisma/client';
 const DIFFICULTY_ORDER = ['easy', 'medium', 'hard'] as const satisfies readonly Difficulty[];
 
 /**
+ * The two cut points of the B5 selection table on the 0..100 scale (ADR-I39): at or below
+ * `LOW_CEILING` the next question gets easier, at or below `MID_CEILING` it holds, above it
+ * the candidate is moved on. They are the old 0..5 cuts (2 and 3) times twenty, so a run that
+ * scored the same answers the same way takes the same path through the table.
+ *
+ * The frontend's display bands (`frontend/src/lib/score.ts`) use the same two numbers and are
+ * a deliberate second copy: nothing in the browser can import this package.
+ */
+const LOW_CEILING = 40;
+const MID_CEILING = 60;
+
+/**
  * Discriminated union on `graded`. `chosenReason` values are derived from the Prisma
  * `ChosenReason` enum (F02), not restated inline, so a renamed enum member fails the compile
  * here rather than silently drifting. `language_switch` belongs to I10, never to this module.
@@ -60,9 +72,9 @@ export function selectNextQuestion(
   }
 
   // Read `overall` only after the schema validates — a malformed object has no trustworthy one.
-  const overall = parsed.data.overall; // integer 0..5, schema-guaranteed.
+  const overall = parsed.data.overall; // integer 0..100, schema-guaranteed.
 
-  if (overall <= 2) {
+  if (overall <= LOW_CEILING) {
     return {
       graded: true,
       difficulty: shiftDifficulty(current.difficulty, -1),
@@ -71,7 +83,7 @@ export function selectNextQuestion(
     };
   }
 
-  if (overall === 3) {
+  if (overall <= MID_CEILING) {
     return {
       graded: true,
       difficulty: shiftDifficulty(current.difficulty, 0),
@@ -80,7 +92,7 @@ export function selectNextQuestion(
     };
   }
 
-  // overall is 4 or 5.
+  // overall is above MID_CEILING.
   return {
     graded: true,
     difficulty: shiftDifficulty(current.difficulty, 1),

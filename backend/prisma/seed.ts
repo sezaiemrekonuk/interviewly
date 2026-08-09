@@ -275,7 +275,7 @@ const QUESTION_SEEDS = [
       'wrote the migration plan, ran it over three releases, and owned the rollback path. ' +
       'It shipped with no downtime and cut p95 latency by about 40 percent.',
     duration_ms: 74_000,
-    score: 4,
+    score: 82,
     reason:
       'Clear situation and result with a concrete metric; the actions taken were specific ' +
       'and attributable to the candidate.',
@@ -295,7 +295,7 @@ const QUESTION_SEEDS = [
       'We wrote both options down, measured the simpler one under load, and it held. We went ' +
       'with the transaction and revisited the decision a quarter later.',
     duration_ms: 61_000,
-    score: 4,
+    score: 78,
     reason:
       'Handled the disagreement with evidence rather than seniority, and named the follow-up ' +
       'review. The result could have been stated more concretely.',
@@ -315,7 +315,7 @@ const QUESTION_SEEDS = [
       'in a uniqueness table inside the same transaction as the effect, and treat a unique ' +
       'violation as a successful no-op.',
     duration_ms: 98_000,
-    score: 4,
+    score: 80,
     reason:
       'Correct approach: the dedup record and the effect share one transaction, which is the ' +
       'part most candidates miss. Did not mention retention of the dedup keys.',
@@ -334,7 +334,7 @@ const QUESTION_SEEDS = [
       'I would check EXPLAIN ANALYZE first and then add an index if the plan shows a ' +
       'sequential scan.',
     duration_ms: 32_000,
-    score: 2,
+    score: 38,
     reason:
       'Started in the right place but stopped there: no mention of what changed in the ' +
       'deploy, statistics staleness, parameter sniffing, or verifying the plan under real ' +
@@ -385,8 +385,8 @@ async function seedSampleInterview(userId: string) {
   });
 
   const rounds = [
-    { id: HR_ROUND_ID, type: 'hr' as const, persona_id: HR_PERSONA_ID, score: 4 },
-    { id: TECH_ROUND_ID, type: 'tech' as const, persona_id: TECH_PERSONA_ID, score: 3 },
+    { id: HR_ROUND_ID, type: 'hr' as const, persona_id: HR_PERSONA_ID, score: 80 },
+    { id: TECH_ROUND_ID, type: 'tech' as const, persona_id: TECH_PERSONA_ID, score: 62 },
   ];
   for (const round of rounds) {
     const data = { ...round, interview_id: INTERVIEW_ID, status: 'done' as const };
@@ -450,7 +450,7 @@ async function seedSampleInterview(userId: string) {
       'role needs. Database diagnosis was the weak spot: the answer reached for an index ' +
       'before establishing what had actually changed. With a more systematic debugging ' +
       'narrative this would be a clear hire.',
-    overall_score: 4,
+    overall_score: 76,
     strengths: [
       'Owns outcomes end to end and can state the result in numbers.',
       'Resolves disagreement with measurement rather than seniority.',
@@ -463,13 +463,13 @@ async function seedSampleInterview(userId: string) {
     rounds: [
       {
         type: 'hr',
-        score: 4,
+        score: 80,
         summary:
           'Consistently concrete answers with clear ownership; STAR structure was mostly complete.',
       },
       {
         type: 'tech',
-        score: 3,
+        score: 62,
         summary:
           'Solid on asynchronous correctness, thin on database performance diagnosis.',
         note: 'The performance question was answered at the level of a mid engineer.',
@@ -490,7 +490,7 @@ async function seedSampleInterview(userId: string) {
     status: 'ready' as const,
     payload,
     prompt_uuid: 'interview.report.generate',
-    prompt_version: 1,
+    prompt_version: 2,
   };
   await prisma.report.upsert({
     where: { id: REPORT_ID },

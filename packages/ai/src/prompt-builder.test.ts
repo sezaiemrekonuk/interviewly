@@ -283,7 +283,7 @@ describe('StubAiClient', () => {
     ).resolves.toMatchObject({ language: 'en' });
     await expect(
       stub.scoreAnswer({ question: 'q', transcript: 'a', candidateProfile: null, language: 'en', ctx }),
-    ).resolves.toMatchObject({ overall: 3 });
+    ).resolves.toMatchObject({ overall: 60 });
     await expect(
       stub.generateCandidates({
         priorQuestion: 'q',

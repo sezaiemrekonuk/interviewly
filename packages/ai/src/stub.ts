@@ -92,12 +92,12 @@ export class StubAiClient implements AiClient {
         overall_impression:
           'Stub report. The candidate answered every question and stayed on topic. ' +
           'Structure was consistent. Depth varied between rounds.',
-        overall_score: 3,
+        overall_score: 60,
         strengths: ['Answers stayed on topic', 'Consistent structure'],
         improvements: ['Add concrete metrics', 'Close each answer with the outcome'],
         rounds: [
-          { type: 'hr', score: 3, summary: 'Stub HR round summary.' },
-          { type: 'tech', score: 3, summary: 'Stub technical round summary.' },
+          { type: 'hr', score: 60, summary: 'Stub HR round summary.' },
+          { type: 'tech', score: 60, summary: 'Stub technical round summary.' },
         ],
         questions: [],
         language: args.language,
@@ -116,10 +116,10 @@ export class StubAiClient implements AiClient {
     return parse(
       ScoresSchema,
       {
-        overall: 3,
-        relevance: 3,
-        depth: 3,
-        structure: 3,
+        overall: 60,
+        relevance: 60,
+        depth: 60,
+        structure: 60,
         star_adherence: 0.5,
         reasons: ['Stub score: the answer addressed the question.'],
       },

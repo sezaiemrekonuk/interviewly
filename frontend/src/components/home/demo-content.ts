@@ -3,13 +3,14 @@
  *
  * The *words* live in `messages/{en,tr}.json` under `landing.demo` like every other string in
  * the product. Only the numbers live here, because they are not copy: they are the scores the
- * demo shows on its meters, and a translator moving a 4 to a 3 would make the two locales
+ * demo shows on its meters, and a translator moving an 80 to a 60 would make the two locales
  * disagree about how good the same answer is.
  *
  * Everything in this file is authored demonstration material for an anonymous visitor. It is
  * not a recording of a real session and the surface says so (`landing.demo.sampleNote`). Real
  * scores come from the model and are stored per question on `report_questions`.
  */
+import { SCORE_MAX } from '../../lib/score';
 
 export const DEMO_ROLES = ['frontend', 'product', 'data'] as const;
 export type DemoRole = (typeof DEMO_ROLES)[number];
@@ -49,7 +50,8 @@ export interface DemoScore {
   star?: number;
 }
 
-export const DEMO_MAX = 5;
+/** The demo prints real report shapes, so it prints the real ceiling. */
+export const DEMO_MAX = SCORE_MAX;
 
 type RoleScores = Record<DemoRound, Record<DemoChoice, DemoScore>>;
 
@@ -63,38 +65,38 @@ type RoleScores = Record<DemoRound, Record<DemoChoice, DemoScore>>;
 export const DEMO_SCORES: Record<DemoRole, RoleScores> = {
   frontend: {
     hr: {
-      a: { overall: 4, star: 0.82 },
-      b: { overall: 2, star: 0.34 },
-      c: { overall: 2, star: 0.26 },
+      a: { overall: 82, star: 0.82 },
+      b: { overall: 41, star: 0.34 },
+      c: { overall: 36, star: 0.26 },
     },
     tech: {
-      a: { overall: 5 },
-      b: { overall: 2 },
-      c: { overall: 3 },
+      a: { overall: 91 },
+      b: { overall: 38 },
+      c: { overall: 57 },
     },
   },
   product: {
     hr: {
-      a: { overall: 5, star: 0.88 },
-      b: { overall: 2, star: 0.4 },
-      c: { overall: 3, star: 0.45 },
+      a: { overall: 88, star: 0.88 },
+      b: { overall: 43, star: 0.4 },
+      c: { overall: 58, star: 0.45 },
     },
     tech: {
-      a: { overall: 4 },
-      b: { overall: 2 },
-      c: { overall: 3 },
+      a: { overall: 79 },
+      b: { overall: 40 },
+      c: { overall: 61 },
     },
   },
   data: {
     hr: {
-      a: { overall: 4, star: 0.79 },
-      b: { overall: 2, star: 0.33 },
-      c: { overall: 3, star: 0.41 },
+      a: { overall: 84, star: 0.79 },
+      b: { overall: 37, star: 0.33 },
+      c: { overall: 55, star: 0.41 },
     },
     tech: {
-      a: { overall: 5 },
-      b: { overall: 1 },
-      c: { overall: 3 },
+      a: { overall: 93 },
+      b: { overall: 24 },
+      c: { overall: 62 },
     },
   },
 };
@@ -104,7 +106,7 @@ export const DEMO_SCORES: Record<DemoRole, RoleScores> = {
  *
  * Floored, not rounded. A real report's `overall_score` is an integer the model produced and
  * `report-rail.tsx` prints it as-is, so a decimal here would be a shape the product never
- * shows — and rounding a 3.5 up to 4 is the one thing a demo about honest marking may not do.
+ * shows — and rounding a 70.5 up to 71 is the one thing a demo about honest marking may not do.
  */
 export function demoOverall(hr: DemoScore, tech: DemoScore): number {
   return Math.floor((hr.overall + tech.overall) / 2);

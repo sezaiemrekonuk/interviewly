@@ -123,7 +123,7 @@ function ScorePanel({
   return (
     <div className={styles.score} data-testid="demo-score">
       {/* The verdict, announced once as a sentence. Read as marked-up, the figure and the tag
-          are "4", "/ 5", "STAR 82%" — three fragments in a row and no statement — so they are
+          are "82", "/ 100", "STAR 82%" — three fragments in a row and no statement — so they are
           hidden here and the region carries the sentence instead (WCAG 4.1.3). */}
       <div className={styles.scoreHead} role="status">
         <p className={styles.scoreFigureBlock} aria-hidden="true">

@@ -71,7 +71,7 @@ gate lives in the package; adaptive re-validates only at the point it interprets
 (the D01 guard), which is the invariant's belt-and-braces.
 
 `Scores` (import from `@interviewly/ai`) — the field adaptive reads is the integer
-`overall ∈ 0..5`. A score whose `overall` is out of range (e.g. `9`) fails the schema and is
+`overall ∈ 0..100`. A score whose `overall` is out of range (e.g. `101`) fails the schema and is
 the malformed case. `Candidate` — `{ text, difficulty: 'easy'|'medium'|'hard', topic }`.
 
 ## The selection rule (D01 — IDEA.md K4, ai spec B5)

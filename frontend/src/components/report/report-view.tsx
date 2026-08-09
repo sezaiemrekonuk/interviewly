@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import type { TranscriptTurn } from '../room/transcript';
 import { Meter } from '../shell/meter';
 import type { ReportPayload } from '../../lib/query';
+import { SCORE_MAX } from '../../lib/score';
 
 import styles from './report.module.css';
 
@@ -56,10 +57,10 @@ export function ReportView({
             <li key={`${round.type}-${idx}`} className={styles.row}>
               <h3 className={styles.rowTitle}>{t(round.type === 'hr' ? 'roundHr' : 'roundTech')}</h3>
               <span className={`${styles.rowScore} tabular`}>
-                {t('scoreValue', { score: round.score })}
+                {t('scoreValue', { score: round.score, max: SCORE_MAX })}
               </span>
               {/* Decorative: the score sits on the same line, in text. */}
-              <Meter className={styles.rowMeter} value={round.score} max={5} decorative />
+              <Meter className={styles.rowMeter} value={round.score} max={SCORE_MAX} decorative />
               <p className={styles.rowBody}>{round.summary}</p>
               {round.note ? <p className={styles.rowNote}>{round.note}</p> : null}
             </li>
@@ -94,13 +95,13 @@ export function ReportView({
             <li key={question.question_id} className={styles.row}>
               <p className={styles.questionText}>{turn.question}</p>
               <span className={`${styles.rowScore} tabular`}>
-                {t('scoreValue', { score: question.score })}
+                {t('scoreValue', { score: question.score, max: SCORE_MAX })}
               </span>
-              <Meter className={styles.rowMeter} value={question.score} max={5} decorative />
+              <Meter className={styles.rowMeter} value={question.score} max={SCORE_MAX} decorative />
               <p className={styles.rowBody}>{question.reason}</p>
               {/* STAR is a behavioural-story rubric. The scorer returns 0 for a technical
                   answer because none applies, not because the answer failed — printed as
-                  "STAR 0%" under a 4/5 it reads as broken scoring. The round comes off the
+                  "STAR 0%" under an 80 it reads as broken scoring. The round comes off the
                   transcript turn, which every rendered row already has. */}
               {turn.roundType === 'tech' ? (
                 <p className={styles.star}>{t('starNotApplicable')}</p>

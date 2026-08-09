@@ -212,13 +212,13 @@ describe('report artifact over a payload with per-question scores', () => {
   function payloadFor(questionIds: string[]): ReportPayload {
     return {
       overall_impression: 'Stub impression for the R02 artifact path.',
-      overall_score: 4,
+      overall_score: 80,
       strengths: ['Stayed on topic', 'Consistent structure'],
       improvements: ['Add metrics', 'State the outcome'],
-      rounds: [{ type: 'hr', score: 4, summary: 'Stub HR round.' }],
+      rounds: [{ type: 'hr', score: 80, summary: 'Stub HR round.' }],
       questions: questionIds.map((question_id, i) => ({
         question_id,
-        score: 3 + i,
+        score: 60 + i,
         reason: `Stub reason ${i + 1}`,
         star_adherence: 0.5 + i / 10,
       })),

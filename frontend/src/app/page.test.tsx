@@ -67,7 +67,7 @@ describe('landing (screen 1)', () => {
 
     const score = screen.getByTestId('demo-score');
     // 4 of 5 for this answer (`demo-content.ts`).
-    expect(screen.getByTestId('demo-score-overall')).toHaveTextContent('4');
+    expect(screen.getByTestId('demo-score-overall')).toHaveTextContent('82');
     expect(within(score).getByText(FRONTEND.hr.reasons.a)).toBeInTheDocument();
     expect(within(score).getByText('STAR 82%')).toBeInTheDocument();
 
@@ -110,9 +110,9 @@ describe('landing (screen 1)', () => {
     await userEvent.click(screen.getByRole('button', { name: FRONTEND.tech.answers.a }));
 
     const report = await screen.findByTestId('demo-report');
-    // hr 4, tech 5 → 4. Floored, never rounded: a demo about honest marking may not round a
-    // 4.5 up, and a real `overall_score` is an integer the model produced.
-    expect(screen.getByTestId('demo-report-overall')).toHaveTextContent('4');
+    // hr 82, tech 91 → 86. Floored, never rounded: a demo about honest marking may not round
+    // an 86.5 up, and a real `overall_score` is an integer the model produced.
+    expect(screen.getByTestId('demo-report-overall')).toHaveTextContent('86');
     expect(within(report).getByRole('link', { name: demo.report.cta })).toHaveAttribute(
       'href',
       '/register',

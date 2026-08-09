@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 
 import { DEFAULT_LANDING_PATH } from '../../lib/auth-redirect';
 import { useReportDownload } from '../../lib/query';
+import { SCORE_MAX } from '../../lib/score';
 import { Meter } from '../shell/meter';
 import { RailBlock, RailFoot, RailMark } from '../shell/split-shell';
 import { Button } from '../ui';
@@ -52,11 +53,11 @@ export function ReportRail({
           <RailBlock label={t('scoreLabel')}>
             <p className={styles.railFigure} data-testid="report-score">
               <span className={styles.railScore}>{score}</span>
-              <span className={styles.railScoreMax}>{t('scoreMax')}</span>
+              <span className={styles.railScoreMax}>{t('scoreMax', { max: SCORE_MAX })}</span>
             </p>
             {/* Decorative: the figure above is the accessible truth, and a second
                 announcement of the same number is noise. */}
-            <Meter className={styles.railMeter} value={score} max={5} onRail decorative />
+            <Meter className={styles.railMeter} value={score} max={SCORE_MAX} onRail decorative />
           </RailBlock>
 
           <div className={styles.download}>

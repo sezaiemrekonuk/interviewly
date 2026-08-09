@@ -45,8 +45,8 @@ function run(over: Record<string, unknown> = {}) {
     createdAt: new Date(Date.now() - DAY).toISOString(),
     startedAt: new Date(Date.now() - DAY).toISOString(),
     endedAt: new Date(Date.now() - DAY).toISOString(),
-    overallScore: 4,
-    roundScores: { hr: 4, tech: 2 },
+    overallScore: 80,
+    roundScores: { hr: 80, tech: 40 },
     ...over,
   };
 }
@@ -60,7 +60,7 @@ function question(over: Record<string, unknown> = {}) {
     text: 'Where do you look first when a query gets slow?',
     answeredAt: '2026-08-01T10:00:00.000Z',
     durationMs: 40_000,
-    score: 2,
+    score: 40,
     reason: 'Named an index without measuring first.',
     starAdherence: 0.3,
     answerScores: null,
@@ -133,9 +133,9 @@ describe('/dashboard — the briefing', () => {
     await render();
 
     const split = await screen.findByTestId('round-split');
-    expect(within(split).getByText('4')).toBeInTheDocument();
-    expect(within(split).getByText('2')).toBeInTheDocument();
-    expect(within(split).getByText(/Technical round is 2 lower/i)).toBeInTheDocument();
+    expect(within(split).getByText('80')).toBeInTheDocument();
+    expect(within(split).getByText('40')).toBeInTheDocument();
+    expect(within(split).getByText(/Technical round is 40 lower/i)).toBeInTheDocument();
     expect(
       within(split).getByRole('link', {
         name: copy(d.rounds.weakerLink, { round: d.rounds.tech }),
@@ -143,14 +143,14 @@ describe('/dashboard — the briefing', () => {
     ).toHaveAttribute('href', '/interviews?view=questions&round=tech&sort=worst');
   });
 
-  // One interview and a one-point gap on integer scores is not a property of the candidate.
+  // One interview and a forty-point gap on a single sitting is not a property of the candidate.
   // The same card family refuses to draw a trend from two points for the same reason.
   it('states the two round scores without prescribing anything from a sample of one', async () => {
     stub();
     await render();
 
     const split = await screen.findByTestId('round-split');
-    expect(within(split).getByText(copy(d.rounds.gapOne, { hr: 4, tech: 2 }))).toBeInTheDocument();
+    expect(within(split).getByText(copy(d.rounds.gapOne, { hr: 80, tech: 40 }))).toBeInTheDocument();
     expect(within(split).queryByText(/one to practise/i)).toBeNull();
     // Navigation is not advice: the round's worst answers exist at n = 1 too.
     expect(
@@ -164,21 +164,21 @@ describe('/dashboard — the briefing', () => {
     stub();
     await render();
 
-    expect(await screen.findByTestId('standing-latest')).toHaveTextContent('4');
+    expect(await screen.findByTestId('standing-latest')).toHaveTextContent('80');
     expect(screen.queryByText(/on your last/i)).toBeNull();
   });
 
   it('reports the change against the previous interview once there are two', async () => {
     stub({
       runs: [
-        run({ id: 'i2', overallScore: 5, createdAt: new Date().toISOString() }),
-        run({ id: 'i1', overallScore: 3 }),
+        run({ id: 'i2', overallScore: 100, createdAt: new Date().toISOString() }),
+        run({ id: 'i1', overallScore: 60 }),
       ],
     });
     await render();
 
-    expect(await screen.findByTestId('standing-latest')).toHaveTextContent('5');
-    expect(screen.getByText(d.standing.delta.up.replace('{n}', '2'))).toBeInTheDocument();
+    expect(await screen.findByTestId('standing-latest')).toHaveTextContent('100');
+    expect(screen.getByText(d.standing.delta.up.replace('{n}', '40'))).toBeInTheDocument();
   });
 
   // Duolingo's rule: a module that is not ready says what it is waiting for. A trend that
@@ -193,12 +193,12 @@ describe('/dashboard — the briefing', () => {
 
   it('draws the trend once three scored interviews exist', async () => {
     stub({
-      runs: [run({ id: 'i3', overallScore: 5 }), run({ id: 'i2' }), run({ id: 'i1', overallScore: 2 })],
+      runs: [run({ id: 'i3', overallScore: 100 }), run({ id: 'i2' }), run({ id: 'i1', overallScore: 40 })],
     });
     await render();
 
     const trend = await screen.findByTestId('trend');
-    // Oldest → newest, as the caption promises: 2, 4, 5 across a 240×44 box.
+    // Oldest → newest, as the caption promises: 40, 80, 100 across a 240×44 box.
     expect(trend.querySelector('polyline')).toHaveAttribute(
       'points',
       '0.0,26.4 120.0,8.8 240.0,0.0',
@@ -208,8 +208,8 @@ describe('/dashboard — the briefing', () => {
   it('lists the weakest answers with the reason each was marked down', async () => {
     stub({
       questions: [
-        question({ questionId: 'q1', score: 3, reason: 'Stopped at the situation.' }),
-        question({ questionId: 'q2', score: 1, reason: 'Never answered the question asked.' }),
+        question({ questionId: 'q1', score: 60, reason: 'Stopped at the situation.' }),
+        question({ questionId: 'q2', score: 20, reason: 'Never answered the question asked.' }),
       ],
     });
     await render();
@@ -224,14 +224,14 @@ describe('/dashboard — the briefing', () => {
     );
   });
 
-  // "Work on this" took the bottom three unconditionally, so an account whose floor is a 4 was
+  // "Work on this" took the bottom three unconditionally, so an account whose floor is an 80 was
   // shown its best answers under a remediation heading, with the commendation that earned the
   // mark printed as "the reason it was marked down".
-  it('says the floor is solid rather than dressing a 4 up as a weakness', async () => {
+  it('says the floor is solid rather than dressing an 80 up as a weakness', async () => {
     stub({
       questions: [
-        question({ questionId: 'q1', score: 4, reason: 'Clear situation and result, with a metric.' }),
-        question({ questionId: 'q2', score: 5, reason: 'Specific and attributable to you.' }),
+        question({ questionId: 'q1', score: 80, reason: 'Clear situation and result, with a metric.' }),
+        question({ questionId: 'q2', score: 100, reason: 'Specific and attributable to you.' }),
       ],
     });
     await render();
@@ -239,7 +239,7 @@ describe('/dashboard — the briefing', () => {
     const focus = await screen.findByTestId('focus');
     expect(within(focus).queryByText(/Clear situation and result/)).toBeNull();
     expect(within(focus).getByTestId('focus-clear')).toHaveTextContent(
-      copy(d.focus.clear, { ceiling: 3 }),
+      copy(d.focus.clear, { ceiling: 60 }),
     );
     // A designed state, not a dead card: the archive is still reachable from it.
     expect(within(focus).getByRole('link', { name: d.focus.seeAll })).toHaveAttribute(

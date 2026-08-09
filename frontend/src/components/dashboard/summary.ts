@@ -29,8 +29,11 @@ export const ADVICE_MINIMUM = 2;
  * At or below this, an answer is something to work on. Above it, printing it under a heading
  * that says "Work on this" — beside a reason that reads "clear situation and result" — tells a
  * user their best answer is a problem.
+ *
+ * 60 on the 0..100 scale (ADR-I39) is the old 3/5 cut, and the same number the backend's
+ * selector holds difficulty at — "adequate" is the top of what is worth practising.
  */
-export const WEAKNESS_CEILING = 3;
+export const WEAKNESS_CEILING = 60;
 
 /** Weeks in the practice grid. Twelve is a quarter — long enough to show a gap. */
 export const RHYTHM_WEEKS = 12;
@@ -84,7 +87,7 @@ export function standing(items: MyInterview[]): Standing {
 
 /**
  * The mean of each round across every scored interview. This is the sentence the product could
- * never say before — "you are a 4.2 at HR and a 2.8 at technical" — and `roundScores` was added
+ * never say before — "you are an 84 at HR and a 56 at technical" — and `roundScores` was added
  * to `GET /me/interviews` so it costs one request rather than one per interview.
  *
  * Rounded to one decimal, because two would claim a precision that averaging four integers
@@ -118,10 +121,10 @@ export function roundAverages(items: MyInterview[]): {
 
 /**
  * The answers worth working on — scored at or below `WEAKNESS_CEILING`, lowest first, then by
- * age, because of two answers marked 2 the older one has had longer to go unaddressed.
+ * age, because of two answers marked 40 the older one has had longer to go unaddressed.
  *
  * The ceiling, not just the bottom `limit`: taking the bottom three unconditionally meant a
- * candidate whose floor is a 4 had two congratulatory reasons printed under "Work on this" as
+ * candidate whose floor is an 80 had two congratulatory reasons printed under "Work on this" as
  * "the reason it was marked down". The list is allowed to come back empty; that is a result,
  * and `Focus` renders it as one.
  *

@@ -30,11 +30,11 @@ const TRANSCRIPT = [
 function payload(over: Record<string, unknown> = {}) {
   return {
     overall_impression: 'Solid, structured answers.',
-    overall_score: 4,
+    overall_score: 80,
     strengths: ['Clear structure', 'Concrete examples'],
     improvements: ['More depth on trade-offs', 'Quantify impact'],
-    rounds: [{ type: 'hr', score: 4, summary: 'Communicated well.' }],
-    questions: [{ question_id: 'q1', score: 4, reason: 'Named a real outcome.', star_adherence: 0.8 }],
+    rounds: [{ type: 'hr', score: 80, summary: 'Communicated well.' }],
+    questions: [{ question_id: 'q1', score: 80, reason: 'Named a real outcome.', star_adherence: 0.8 }],
     language: 'en',
     ...over,
   };
@@ -129,7 +129,7 @@ describe('report + transcript (W07)', () => {
     stubFetch();
     await renderReport();
 
-    expect(screen.getByTestId('report-score')).toHaveTextContent('4');
+    expect(screen.getByTestId('report-score')).toHaveTextContent('80');
     expect(screen.getByText('Solid, structured answers.')).toBeInTheDocument();
     expect(screen.getByText('Clear structure')).toBeInTheDocument();
     expect(screen.getByText('More depth on trade-offs')).toBeInTheDocument();
@@ -160,12 +160,12 @@ describe('report + transcript (W07)', () => {
     await act(async () => {
       MockEventSource.instances[0].emit(
         'INTERVIEW_STATE_CHANGED',
-        JSON.stringify({ type: 'INTERVIEW_STATE_CHANGED', report: { payload: payload({ overall_score: 1 }) } }),
+        JSON.stringify({ type: 'INTERVIEW_STATE_CHANGED', report: { payload: payload({ overall_score: 20 }) } }),
       );
     });
 
     await waitFor(() => expect(screen.getByTestId('report-view')).toBeInTheDocument());
-    expect(screen.getByTestId('report-score')).toHaveTextContent('4');
+    expect(screen.getByTestId('report-score')).toHaveTextContent('80');
     expect(calls.filter((c) => c.url === '/api/interviews/i1')).toHaveLength(2);
   });
 
@@ -215,8 +215,8 @@ describe('report + transcript (W07)', () => {
             status: 'ready',
             payload: payload({
               questions: [
-                { question_id: 'q1', score: 4, reason: 'Named a real outcome.', star_adherence: 0.8 },
-                { question_id: 'q2', score: 4, reason: 'Correct approach: one transaction.', star_adherence: 0 },
+                { question_id: 'q1', score: 80, reason: 'Named a real outcome.', star_adherence: 0.8 },
+                { question_id: 'q2', score: 80, reason: 'Correct approach: one transaction.', star_adherence: 0 },
               ],
             }),
           },
