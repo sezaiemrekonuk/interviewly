@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react';
+import Link from 'next/link';
+
 import styles from './shell.module.css';
 
 const cx = (...names: Array<string | false | undefined>) => names.filter(Boolean).join(' ');
@@ -29,13 +31,25 @@ export function SplitShell({
   );
 }
 
-/** The wordmark. The glyph is drawn from currentColor — no asset, no second request. */
-export function RailMark({ label = 'Interviewly' }: { label?: string }) {
-  return (
+/**
+ * The wordmark. The glyph is drawn from currentColor — no asset, no second request.
+ *
+ * `href`, when given, makes it a way back to the marketing home — `/` redirects a signed-in
+ * visitor straight back to their briefing (`home-switch.tsx`), so every rail can point here
+ * without knowing whether the visitor underneath it is signed in.
+ */
+export function RailMark({ label = 'Interviewly', href }: { label?: string; href?: string }) {
+  const mark = (
     <div className={styles.mark}>
       <span className={styles.markGlyph} aria-hidden="true" />
       <span className={styles.markText}>{label}</span>
     </div>
+  );
+  if (!href) return mark;
+  return (
+    <Link href={href} className={styles.markLink}>
+      {mark}
+    </Link>
   );
 }
 

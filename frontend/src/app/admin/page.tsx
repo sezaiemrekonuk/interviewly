@@ -149,7 +149,7 @@ export default function AdminPage() {
 
   const rail = (
     <>
-      <RailMark />
+      <RailMark href="/" />
       <p className={styles.railKicker}>{t('title')}</p>
 
       <nav className={styles.nav} aria-label={t('nav.label')}>

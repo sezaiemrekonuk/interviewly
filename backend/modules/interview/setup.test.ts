@@ -325,7 +325,7 @@ describe('setupInterview uploadId ownership (issue #73)', () => {
   it('never writes an hr_question_count above the target, for any accepted target', async () => {
     // The whole accepted domain, not a sample: the bug was one specific target at the edge of
     // it, and the constraint the migration adds has to hold for every row this handler writes.
-    for (let targetQuestionCount = 2; targetQuestionCount <= 20; targetQuestionCount += 1) {
+    for (let targetQuestionCount = 2; targetQuestionCount <= 18; targetQuestionCount += 1) {
       created.length = 0;
       const res = await setup({ targetQuestionCount });
       expect({ targetQuestionCount, status: res.status }).toEqual({

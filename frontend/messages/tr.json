@@ -435,7 +435,7 @@
     "lengthCustom": "Özel",
     "customHr": "En fazla İK sorusu",
     "customTech": "En fazla teknik soru",
-    "lengthCustomInvalid": "En az bir İK ve bir teknik soru gir, toplam {max} soruyu geçmesin.",
+    "lengthCustomInvalid": "En az bir İK sorusu (en fazla {hrMax}) ve bir teknik soru (en fazla {techMax}) gir.",
     "start": "Başla",
     "railNextLabel": "Sırada ne var",
     "railStep1": "İlanı okuyup rolü belirliyoruz.",

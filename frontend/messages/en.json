@@ -435,7 +435,7 @@
     "lengthCustom": "Custom",
     "customHr": "Maximum HR questions",
     "customTech": "Maximum technical questions",
-    "lengthCustomInvalid": "Give at least one HR and one technical question, and no more than {max} in total.",
+    "lengthCustomInvalid": "Give at least one HR question (up to {hrMax}) and one technical question (up to {techMax}).",
     "start": "Start",
     "railNextLabel": "What happens next",
     "railStep1": "We read the listing and work out the role.",

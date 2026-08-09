@@ -220,7 +220,7 @@ export default function OnboardingStepPage({ params }: { params: Promise<{ step:
   // for, the working surface holds the fields and nothing else.
   const rail = (
     <>
-      <RailMark />
+      <RailMark href="/" />
 
       <RailBlock
         label={t('progress', { step, total: TOTAL_STEPS })}
