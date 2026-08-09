@@ -254,6 +254,7 @@ export default function OnboardingStepPage({ params }: { params: Promise<{ step:
                 uploading={uploadCvMutation.isPending}
                 error={cvError ? `${tFields('cvFailed')} ${errorMessage(cvError)}` : null}
                 onFile={(file) => void uploadCv(file)}
+                onReject={setCvError}
               />
             </>
           )}

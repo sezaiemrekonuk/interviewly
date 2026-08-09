@@ -83,6 +83,13 @@ async function renderSetup() {
 
 const listingPdf = () => new File(['%PDF-1.4'], 'listing.pdf', { type: 'application/pdf' });
 
+/** Claims to be over the server's 10 MB cap without allocating eleven megabytes to say so. */
+const oversizedPdf = () => {
+  const file = new File(['%PDF-1.4'], 'huge.pdf', { type: 'application/pdf' });
+  Object.defineProperty(file, 'size', { value: 11 * 1024 * 1024 });
+  return file;
+};
+
 describe('interview setup page (W05)', () => {
   beforeEach(() => {
     nav.push.mockReset();
@@ -220,6 +227,19 @@ describe('interview setup page (W05)', () => {
       uploadId: 'up1',
       jobText: 'Backend engineer, Go',
     });
+  });
+
+  // Issue 140: the server refuses this file anyway, but only after the browser has streamed
+  // all of it. The point of the guard is the request that never leaves.
+  it('refuses an over-sized PDF at pick time, with no request to /uploads', async () => {
+    const calls = stubFetch();
+    const user = userEvent.setup();
+    await renderSetup();
+
+    await user.upload(screen.getByLabelText(messages.setup.listingUpload), oversizedPdf());
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(messages.errors.UPLOAD_TOO_LARGE);
+    expect(calls.filter((c) => c.url === '/api/uploads')).toHaveLength(0);
   });
 
   it('still needs pasted text when the PDF carried no readable text', async () => {

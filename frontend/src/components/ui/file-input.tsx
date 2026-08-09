@@ -5,6 +5,13 @@ import { useRef, useState } from 'react';
 
 import styles from './ui.module.css';
 
+/**
+ * Mirrors `MAX_BYTES` in `backend/modules/interview/uploads.ts`. A courtesy, not the boundary:
+ * the server still checks Content-Length, multer's limit and the parsed size, and this number
+ * being stale can only ever cost a round trip the server then refuses correctly.
+ */
+export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+
 export interface FileInputProps {
   id?: string;
   name?: string;
@@ -15,6 +22,10 @@ export interface FileInputProps {
   invalid?: boolean;
   /** Called with the picked file, or `null` when the selection is cleared. */
   onFile: (file: File | null) => void;
+  /** Refuse a bigger pick before any request goes out. */
+  maxBytes?: number;
+  /** A pick refused locally, as an error code — the caller renders it where its errors go. */
+  onReject?: (code: 'UPLOAD_TOO_LARGE') => void;
   /** Overrides the default "Choose a PDF" call to action. */
   action?: string;
   /** Shown in place of the filename while nothing is selected. */
@@ -34,6 +45,8 @@ export function FileInput({
   disabled = false,
   invalid = false,
   onFile,
+  maxBytes = MAX_UPLOAD_BYTES,
+  onReject,
   action,
   emptyHint,
   'aria-describedby': describedBy,
@@ -72,6 +85,18 @@ export function FileInput({
           aria-invalid={invalid || undefined}
           onChange={(event) => {
             const file = event.currentTarget.files?.[0] ?? null;
+
+            // Refused at pick time, so a 40 MB PDF on a phone is not streamed in full only to
+            // be told it was too big. `onFile(null)` before `onReject`: the call sites reset
+            // their error on a cleared pick, and the refusal has to be what survives.
+            if (file && file.size > maxBytes) {
+              event.currentTarget.value = '';
+              setFileName(null);
+              onFile(null);
+              onReject?.('UPLOAD_TOO_LARGE');
+              return;
+            }
+
             setFileName(file?.name ?? null);
             onFile(file);
           }}

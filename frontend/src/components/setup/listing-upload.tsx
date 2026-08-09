@@ -89,6 +89,7 @@ export function ListingUpload({
               disabled={locked}
               invalid={error !== null}
               onFile={handleFile}
+              onReject={(code) => setError(errorMessage(code))}
             />
           )}
         </Field>

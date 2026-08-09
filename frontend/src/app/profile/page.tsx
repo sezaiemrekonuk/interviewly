@@ -299,6 +299,7 @@ export default function ProfilePage() {
                 uploading={uploadCvMutation.isPending}
                 error={cvError}
                 onFile={(file) => void uploadCv(file)}
+                onReject={(code) => setCvError(`${tFields('cvFailed')} ${errorMessage(code)}`)}
               />
             </section>
 
