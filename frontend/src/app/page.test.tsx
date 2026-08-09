@@ -239,6 +239,7 @@ describe('landing — a visitor who is already signed in', () => {
     ['unauthenticated', 401, { error: { code: 'UNAUTHENTICATED' } }],
     ['authenticated', 200, { user: { id: 'u1', email: 'a@b.c' } }],
   ])('probes the session exactly once (%s), not once per reader', async (_name, status, body) => {
+    const urls: string[] = [];
     vi.stubGlobal(
       'fetch',
       vi.fn(async (url: string) => {
