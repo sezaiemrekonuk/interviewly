@@ -1,6 +1,7 @@
 import { Router } from 'express';
 
 import { requireAuth } from '../auth/middleware';
+import { adminStatsLimiter } from '../auth/rate-limit';
 import { requirePublicOrigin } from '../interview/csrf';
 
 import { listAllInterviews } from './interviews';
@@ -26,6 +27,9 @@ router.get('/interviews', listAllInterviews);
 router.post('/interviews/:id/report/requeue', requeueReport);
 
 // N02 mounts GET /stats below this line — do not remove
-router.get('/stats', getAdminStats);
+// Issue 85: per-admin limiter, mounted on this route rather than the router — the two other
+// admin endpoints are cheap, and a shared budget would let a dashboard refresh lock an
+// operator out of the requeue that fixes a stuck report.
+router.get('/stats', adminStatsLimiter, getAdminStats);
 
 export default router;

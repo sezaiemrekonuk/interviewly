@@ -12,6 +12,17 @@ const boolFromEnv = (fallback: boolean) =>
     z.boolean(),
   );
 
+/**
+ * Issue 71: `z.coerce.number()` alone turns a present-but-empty key — which is what every
+ * unfilled `.env.example` line is — into 0, and a health server on port 0 binds a random
+ * one the healthcheck can never reach. Same trap `emptyAsUnset` closes in the API's env.
+ */
+const portFromEnv = (fallback: number) =>
+  z.preprocess(
+    (value) => (value === undefined || String(value).trim() === '' ? fallback : value),
+    z.coerce.number().int().positive(),
+  );
+
 const schema = z.object({
   NODE_ENV:                    z.enum(['development', 'production', 'test']).default('development'),
   // A04 — the mail job builds the verification/reset link, so the worker needs the same
@@ -19,6 +30,9 @@ const schema = z.object({
   PUBLIC_ORIGIN:               z.string().url(),
   DATABASE_URL:                z.string(),
   REDIS_URL:                   z.string(),
+  // Issue 71 — the port `health.ts` serves `/healthz` on. Container-internal and never
+  // published; compose's worker healthcheck is its only client.
+  WORKER_HEALTH_PORT:          portFromEnv(4100),
   SMTP_HOST:                   z.string(),
   SMTP_PORT:                   z.coerce.number().default(1025),
   SMTP_USER:                   z.string().optional(),

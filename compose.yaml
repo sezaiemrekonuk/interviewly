@@ -107,6 +107,16 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+    # Issue 71. Same shape as the `api` block above, against the worker's own `/healthz`
+    # (worker/src/health.ts). No `ports:` entry anywhere for this port — the endpoint is
+    # container-internal on purpose, and this healthcheck is its only caller. Interpolated
+    # rather than hardcoded so the probe cannot drift from the port the process binds; the
+    # default repeats `env.ts`'s so an operator who never set the key still gets a probe.
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:${WORKER_HEALTH_PORT:-4100}/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   web:
     build:

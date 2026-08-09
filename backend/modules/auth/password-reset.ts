@@ -3,6 +3,7 @@ import type { RequestHandler } from 'express';
 import { z } from 'zod';
 
 import { ApiError } from '../../src/lib/api-error';
+import { recordAudit } from '../../src/lib/audit';
 import { prisma } from '../../src/lib/db';
 import { logger } from '../../src/lib/logger';
 import { revokeCookie } from '../../src/lib/session';
@@ -86,17 +87,31 @@ export const confirmPasswordReset: RequestHandler = async (req, res) => {
   // One transaction, because a new password that leaves the old sessions alive is not a
   // reset — an attacker holding a live cookie would keep it. The null guard on
   // `email_verified_at` keeps the original proof date when there already is one.
-  const [, revoked] = await prisma.$transaction([
-    prisma.user.update({ where: { id: result.userId }, data: { password_hash } }),
-    prisma.session.updateMany({
+  //
+  // Interactive rather than the array form since issue 86: the audit row belongs to the same
+  // commit as the password write, and `recordAudit` takes the transaction client to make
+  // that structural. It records that a reset completed and how many sessions it killed —
+  // never the password, the hash or the token.
+  const revoked = await prisma.$transaction(async (tx) => {
+    await tx.user.update({ where: { id: result.userId }, data: { password_hash } });
+    const revokedSessions = await tx.session.updateMany({
       where: { user_id: result.userId, revoked_at: null },
       data: { revoked_at: now },
-    }),
-    prisma.user.updateMany({
+    });
+    await tx.user.updateMany({
       where: { id: result.userId, email_verified_at: null },
       data: { email_verified_at: now },
-    }),
-  ]);
+    });
+    await recordAudit(tx, {
+      actorUserId: result.userId,
+      action: 'auth.password_reset_completed',
+      subjectType: 'user',
+      subjectId: result.userId,
+      traceId: req.traceId,
+      metadata: { sessionsRevoked: revokedSessions.count },
+    });
+    return revokedSessions;
+  });
 
   // The caller's own cookie is one of the revoked rows; clearing it stops the browser that
   // did the reset from sending a dead token on every subsequent request.

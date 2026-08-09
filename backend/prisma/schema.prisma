@@ -184,8 +184,47 @@ model User {
   email_tokens EmailToken[]
   interviews   Interview[]
   uploads      Upload[]     @relation("UploadOwner")
+  audit_logs   AuditLog[]
 
   @@map("users")
+}
+
+/// Issue 86 — the audit half of N01 ("role gate, soft delete, audit"), which was never built.
+/// A NEW TABLE, so it is the §5.2 exception this file's header calls out: sanctioned by the
+/// issue rather than smuggled in with a feature.
+///
+/// Until now the only record that an interview had been deleted was a pino line on stdout,
+/// with no log volume mounted for `api` — so `docker compose down` erased it. `deleted_at`
+/// said *that* something happened, never who did it. This is the durable, joinable,
+/// queryable record; the pino lines stay, they are for tailing, not for truth.
+///
+/// NO PII, deliberately: ids and an action, never a password, token, session secret or raw
+/// email address (the logger's contract, issue 063). `metadata` is for the same class of
+/// thing — counts, states, flags.
+///
+/// Deliberately NOT here yet, and not an oversight: a retention policy for these rows, and
+/// access control on reading them.
+model AuditLog {
+  id            String   @id @default(cuid())
+  actor_user_id String
+  /// Dotted `subject.verb`, e.g. `interview.soft_deleted` — see `src/lib/audit.ts`, which
+  /// owns the closed set. A string and not an enum: a new action must not be a migration.
+  action        String
+  subject_type  String
+  /// Null for a collection read — an admin listing a page of interviews acts on no single
+  /// subject, and inventing one would make the column a lie.
+  subject_id    String?
+  /// Joins the row to the K6 log lines of the request that wrote it. Nullable because the
+  /// Express augmentation types `req.traceId` optional; every HTTP path sets it.
+  trace_id      String?
+  metadata      Json?
+  created_at    DateTime @default(now())
+
+  actor User @relation(fields: [actor_user_id], references: [id], onDelete: Restrict)
+
+  @@index([subject_type, subject_id]) // "everything that happened to this interview"
+  @@index([actor_user_id, created_at]) // "everything this account did, newest first"
+  @@map("audit_logs")
 }
 
 model Session {

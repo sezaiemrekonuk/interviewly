@@ -1,8 +1,10 @@
 import { REPORT_QUEUE } from '@interviewly/backend';
 import { Queue, Worker } from 'bullmq';
+import { Redis } from 'ioredis';
 
 import { processReportJob, type ReportJobData } from './consumer';
 import { handleReportJobFailed } from './failure';
+import { startHealthServer } from './health';
 import { sendEmail, type EmailJob } from './jobs/email-send';
 import { sweepAbandoned } from './jobs/abandon-sweep';
 import { config } from './lib/env';
@@ -22,12 +24,20 @@ const ABANDON_SWEEP_EVERY_MS = 15 * 60 * 1000;
 // (env.ts exposes no override yet — a fixed constant until a task needs to tune it).
 const REPORT_CONCURRENCY = 2;
 
+// Issue 71: ONE client, shared by every worker and queue below, so `/healthz` can ping the
+// same connection the jobs ride on rather than a second one that could be healthy while the
+// real link is dead. `maxRetriesPerRequest: null` is BullMQ's requirement for a connection
+// it is handed (it refuses a Worker otherwise) — and it is also what makes `health.ts`'s
+// timeout necessary, see the note there. A connection passed in is owned by the caller:
+// `worker.close()` will not disconnect it, so `shutdown()` quits it explicitly.
+const connection = new Redis(config.REDIS_URL, { maxRetriesPerRequest: null });
+
 const emailWorker = new Worker<EmailJob>(
   EMAIL_QUEUE_NAME,
   async (job) => {
     await sendEmail(job.data);
   },
-  { connection: { url: config.REDIS_URL } },
+  { connection },
 );
 
 // The producer sets attempts and backoff (they are job options, not worker options); this
@@ -47,7 +57,7 @@ emailWorker.on('failed', (job, err) => {
 const reportWorker = new Worker<ReportJobData>(
   REPORT_QUEUE,
   processReportJob,
-  { connection: { url: config.REDIS_URL }, concurrency: REPORT_CONCURRENCY },
+  { connection, concurrency: REPORT_CONCURRENCY },
 );
 
 // R03. `attempts`/`backoff` ride on the job (queue defaults in `backend/src/lib/queue.ts`), so
@@ -57,16 +67,14 @@ reportWorker.on('failed', (job, err) => {
   void handleReportJobFailed(job, err);
 });
 
-const abandonSweepQueue = new Queue(ABANDON_SWEEP_QUEUE_NAME, {
-  connection: { url: config.REDIS_URL },
-});
+const abandonSweepQueue = new Queue(ABANDON_SWEEP_QUEUE_NAME, { connection });
 
 const abandonSweepWorker = new Worker(
   ABANDON_SWEEP_QUEUE_NAME,
   async () => {
     await sweepAbandoned();
   },
-  { connection: { url: config.REDIS_URL } },
+  { connection },
 );
 
 // `queue.add({ repeat })` is gone in bullmq 6 — `repeat` is not in `JobsOptions` and an
@@ -103,6 +111,8 @@ abandonSweepWorker.on('failed', (job, err) => {
   );
 });
 
+const healthServer = startHealthServer(config.WORKER_HEALTH_PORT, connection);
+
 logger.info(
   {
     queues: [
@@ -116,12 +126,17 @@ logger.info(
 );
 
 async function shutdown(): Promise<void> {
+  // The health server first: an orchestrator draining this container should see 503 rather
+  // than a 200 from a process that is already closing its consumers.
+  await new Promise<void>((resolve) => healthServer.close(() => resolve()));
   await Promise.all([
     emailWorker.close(),
     reportWorker.close(),
     abandonSweepWorker.close(),
     abandonSweepQueue.close(),
   ]);
+  // Ours to close (issue 71): BullMQ never disconnects a connection it was handed.
+  await connection.quit();
   process.exit(0);
 }
 

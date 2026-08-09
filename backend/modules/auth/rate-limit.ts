@@ -174,3 +174,14 @@ export const profilePatchLimiter = keyedLimiter({
   windowMs: 60 * 60 * 1000,
   keyOf: (req) => req.user!.id,
 });
+
+// Issue 85: 60/hour per admin. `/admin/stats` is the most expensive read in the system and
+// was the only one with no limit — an auto-refreshing dashboard tab, or one compromised
+// admin session, could aim it at the shared API process as often as it liked. Keyed by user
+// like the pair above, and for the same reason: the endpoint is authenticated.
+export const adminStatsLimiter = keyedLimiter({
+  prefix: 'adminstats',
+  limit: 60,
+  windowMs: 60 * 60 * 1000,
+  keyOf: (req) => req.user!.id,
+});
