@@ -7,8 +7,10 @@ import { config } from '../../src/lib/env';
 import { logger } from '../../src/lib/logger';
 
 import { aiClient } from '../ai';
+import { recordHit } from '../auth/rate-limit';
 
 import { applyTransition } from './machine';
+import { DAILY_INTERVIEW_PREFIX, DAILY_INTERVIEW_WINDOW_MS } from './rate-limit';
 
 // Above the largest shape the UI offers (`new/page.tsx` LENGTHS tops out at 15) and still a
 // count one generation call can satisfy. Unbounded, a request body sized the provider call
@@ -225,6 +227,18 @@ export const setupInterview: RequestHandler = async (req, res) => {
       throw err;
     });
 
+  // The daily quota is charged here, not in the middleware: the row exists, so this is the
+  // first moment the user has actually spent one of their five (issue #116). Everything
+  // after this point either succeeds or leaves an interview they can resume, so there is no
+  // later checkpoint that would be more honest.
+  try {
+    await recordHit(DAILY_INTERVIEW_PREFIX, req.user!.id, DAILY_INTERVIEW_WINDOW_MS);
+  } catch (err) {
+    logger.warn(
+      { traceId: req.traceId, userId: req.user!.id, reason: err instanceof Error ? err.message : 'unknown' },
+      'DAILY_LIMIT_RECORD_FAILED',
+    );
+  }
   await titleInterview(interview.id, jobText, req.user!.locale, req.traceId!);
 
   await applyTransition(interview, 'profiling', { traceId: req.traceId! });

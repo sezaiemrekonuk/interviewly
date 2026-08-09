@@ -70,6 +70,7 @@ export function CredentialsForm({
 }: CredentialsFormProps) {
   const t = useTranslations('auth');
   const messageFor = useErrorMessage();
+  const isRegister = endpoint === '/auth/register';
 
   // `undefined` means "no submission has answered yet", which is what lets the banner
   // show a code carried in the URL without mirroring a prop into state in an effect.
@@ -139,14 +140,18 @@ export function CredentialsForm({
         <Field
           label={t('passwordLabel')}
           id="password"
+          // Register only: login keeps `min(1)` on purpose (see the schema comment above), so
+          // stating a length there would name a rule that screen's form does not enforce.
+          hint={isRegister ? t('passwordHint') : undefined}
           error={errors.password?.message && messageFor(errors.password.message)}
         >
           {(control) => (
             <Input
               {...control}
               type="password"
-              autoComplete={endpoint === '/auth/register' ? 'new-password' : 'current-password'}
+              autoComplete={isRegister ? 'new-password' : 'current-password'}
               disabled={isSubmitting}
+              reveal
               {...register('password')}
             />
           )}

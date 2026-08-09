@@ -6,7 +6,9 @@
     "localeTurkish": "Türkçe",
     "chooseFile": "Choose a PDF",
     "noFileChosen": "No file selected",
-    "clearFile": "Remove"
+    "clearFile": "Remove",
+    "showPassword": "Show",
+    "hidePassword": "Hide"
   },
   "chrome": {
     "newInterview": "New interview",
