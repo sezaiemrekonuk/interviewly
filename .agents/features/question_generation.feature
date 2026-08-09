@@ -43,6 +43,23 @@ Feature: Question generation
     And the interview has hrQuestionCount 8
     And the interview has techQuestionCount 12
 
+  @question-generation @backend @AC-6
+  Scenario: A target below the HR floor is refused, and 2 stays legal
+    # The other end of the same bound (issue #176). `split()` floors the HR half at 2, so a
+    # target of 1 produced hrCount 2 / techCount -1 — a row that contradicts itself, and a
+    # negative batch size handed to the generator. The floor is 2, not 3: that is the shape
+    # `machine.ts` carries the `hr_round → evaluating` edge for.
+    Given I am signed in as a candidate
+    When I start an interview with a "Backend Developer" listing and 1 target questions
+    Then the response status is 422
+    And the response error code is "VALIDATION_ERROR"
+    And no interview is created
+    And the database refuses a direct insert of 2 HR questions for 1 target questions
+    When I start an interview with a "Backend Developer" listing and 2 target questions
+    Then the response status is 201
+    And the interview has hrQuestionCount 2
+    And the interview has techQuestionCount 0
+
   @question-generation @backend @AC-7
   Scenario: An interview with no budget left never buys its HR batch
     Given I set up an interview with 8 questions

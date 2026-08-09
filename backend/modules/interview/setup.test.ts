@@ -277,6 +277,43 @@ describe('setupInterview uploadId ownership (issue #73)', () => {
     expect(created).toHaveLength(0);
   });
 
+  // Issue #176. `split()` floors the HR half at 2, so a target below that made `techCount`
+  // negative — stored on the row, and then handed to the generator as a batch size.
+  it('refuses a target below the HR floor the split assumes', async () => {
+    for (const targetQuestionCount of [1, 0, -1]) {
+      const res = await setup({ targetQuestionCount });
+      expect({ targetQuestionCount, status: res.status }).toEqual({
+        targetQuestionCount,
+        status: 422,
+      });
+    }
+    expect(created).toHaveLength(0);
+  });
+
+  it('keeps target 2 legal — the shape machine.ts routes hr_round → evaluating for', async () => {
+    const res = await setup({ targetQuestionCount: 2 });
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({ hrCount: 2, techCount: 0 });
+  });
+
+  it('never writes an hr_question_count above the target, for any accepted target', async () => {
+    // The whole accepted domain, not a sample: the bug was one specific target at the edge of
+    // it, and the constraint the migration adds has to hold for every row this handler writes.
+    for (let targetQuestionCount = 2; targetQuestionCount <= 20; targetQuestionCount += 1) {
+      created.length = 0;
+      const res = await setup({ targetQuestionCount });
+      expect({ targetQuestionCount, status: res.status }).toEqual({
+        targetQuestionCount,
+        status: 201,
+      });
+      const row = created[0] as { target_question_count: number; hr_question_count: number };
+      expect({ targetQuestionCount, ...row }).toMatchObject({ target_question_count: targetQuestionCount });
+      expect(row.hr_question_count).toBeGreaterThanOrEqual(0);
+      expect(row.hr_question_count).toBeLessThanOrEqual(targetQuestionCount);
+      expect(res.body.techCount as unknown as number).toBeGreaterThanOrEqual(0);
+    }
+  });
+
   it('answers 422 rather than 500 for every malformed body shape', async () => {
     // @AC "no request body can produce a 500 from setup.ts" — the ids are the new path, the
     // rest are the guards it was inserted between.
