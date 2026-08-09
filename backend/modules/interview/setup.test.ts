@@ -303,6 +303,13 @@ describe('setupInterview uploadId ownership (issue #73)', () => {
     expect(created).toHaveLength(0);
   });
 
+  it('refuses a custom shape whose technical remainder would exceed the round cap', async () => {
+    const res = await setup({ targetQuestionCount: 18, hrQuestionCount: 1 });
+    expect(res.status).toBe(422);
+    expect(res.body).toEqual({ error: { code: 'VALIDATION_ERROR' } });
+    expect(created).toHaveLength(0);
+  });
+
   // Issue #176. `split()` floors the HR half at 2, so a target below that made `techCount`
   // negative — stored on the row, and then handed to the generator as a batch size.
   it('refuses a target below the HR floor the split assumes', async () => {
