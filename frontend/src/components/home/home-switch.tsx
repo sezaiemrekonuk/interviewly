@@ -3,8 +3,8 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, type ReactNode } from 'react';
 
-import { apiGet } from '../../lib/api';
 import { DEFAULT_LANDING_PATH } from '../../lib/auth-redirect';
+import { probeSignedIn } from '../../lib/session-probe';
 
 /**
  * `/` is the marketing page, for everyone. A signed-in visitor is sent to their briefing.
@@ -16,19 +16,20 @@ import { DEFAULT_LANDING_PATH } from '../../lib/auth-redirect';
  * anonymous visitor — nothing, they are the branch that never fires — and does not pitch the
  * product to people who already bought it.
  *
- * Deliberately `apiGet` rather than `useMe()`: the same reason `chrome/header-nav.tsx` gives.
- * Pulling React Query into this tree spends the §8.1 JS budget on one boolean, and the landing
- * demo below it is already the page's client weight.
+ * Deliberately a bare probe rather than `useMe()`: the same reason `chrome/header-nav.tsx`
+ * gives. Pulling React Query into this tree spends the §8.1 JS budget on one boolean, and the
+ * landing demo below it is already the page's client weight. The probe itself is shared with
+ * the header, which mounts beside this in the same tree (`lib/session-probe.ts`, issue 130).
  */
 export function HomeSwitch({ children }: { children: ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
     let active = true;
-    void apiGet<{ user: unknown }>('/me').then((result) => {
+    void probeSignedIn().then((ok) => {
       // `replace`, not `push`: pressing back from the dashboard must leave the site rather
       // than bounce through a redirect that fires again.
-      if (active && result.ok) router.replace(DEFAULT_LANDING_PATH);
+      if (active && ok) router.replace(DEFAULT_LANDING_PATH);
     });
     return () => {
       active = false;

@@ -179,6 +179,15 @@
   outline-offset: 2px;
 }
 
+/* Under the control that raised it, not above the one that would have worked (issue 139).
+   Quieter than `.banner`: this sits beside its own button, so it needs no box to find. */
+.googleError {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--danger);
+}
+
 /* Left-aligned with the form, not centred under it: the column has one edge and everything
    in it hangs off that edge. */
 .footer {

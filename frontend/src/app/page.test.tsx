@@ -232,6 +232,32 @@ describe('landing — a visitor who is already signed in', () => {
     await waitFor(() => expect(replace).toHaveBeenCalledWith(DEFAULT_LANDING_PATH));
   });
 
+  // Issue 130: the header and the redirect gate each probed `/me` for themselves, so the
+  // app's most-visited page made two identical requests — two 401s and two red console lines
+  // anonymously, two authenticated requests (each a Postgres write) signed in.
+  it.each([
+    ['unauthenticated', 401, { error: { code: 'UNAUTHENTICATED' } }],
+    ['authenticated', 200, { user: { id: 'u1', email: 'a@b.c' } }],
+  ])('probes the session exactly once (%s), not once per reader', async (_name, status, body) => {
+    const urls: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        urls.push(String(url));
+        return new Response(JSON.stringify(body), {
+          status,
+          headers: { 'content-type': 'application/json' },
+        });
+      }),
+    );
+
+    await act(async () => {
+      renderWithIntl(<Home />);
+    });
+
+    expect(urls.filter((url) => url === '/api/me')).toHaveLength(1);
+  });
+
   it('leaves an anonymous visitor exactly where they are', async () => {
     vi.stubGlobal(
       'fetch',
