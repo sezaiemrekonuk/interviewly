@@ -59,7 +59,9 @@ export function Field({ label, hint, error, required, id: idProp, children }: Fi
         </p>
       ) : null}
       {error ? (
-        <p className={styles.error} id={errorId}>
+        // `role="alert"` and not just `aria-describedby`: the message appears after submit,
+        // so without a live region a screen reader says nothing until focus returns here.
+        <p className={styles.error} id={errorId} role="alert">
           {error}
         </p>
       ) : null}

@@ -44,6 +44,16 @@ describe('<Field>', () => {
     expect(input).toHaveAccessibleDescription('Work address That is not an email');
   });
 
+  it('announces the error, which describedby alone does not do after submit', () => {
+    renderWithIntl(
+      <Field label="Email" error="That is not an email" id="email">
+        {(control) => <Input type="email" {...control} />}
+      </Field>,
+    );
+
+    expect(screen.getByRole('alert')).toHaveTextContent('That is not an email');
+  });
+
   it('leaves aria-invalid and describedby off when there is nothing to say', () => {
     renderWithIntl(
       <Field label="Occupation">{(control) => <Input {...control} />}</Field>,

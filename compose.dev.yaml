@@ -9,4 +9,6 @@ services:
   mail:
     ports: ["8025:8025"]     # Mailpit web inbox — where verification/reset links are read
   api:
-    ports: ["4000:4000"]
+    # Loopback-only: a bare "4000:4000" binds 0.0.0.0, and `trust proxy 1` (issue 068) then
+    # honours an X-Forwarded-For from anything on the LAN that reaches this port directly.
+    ports: ["127.0.0.1:4000:4000"]
