@@ -45,3 +45,50 @@ describe('src/lib environment access', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+/**
+ * Issue #117's fourth criterion, and the property that keeps the other three from rotting:
+ * `MAX_INTERVIEWS_PER_USER_PER_DAY`, `BUDGET_USD_TEXT` and `SIGNED_URL_TTL` were declared,
+ * defaulted, documented and set in `.env` — and read by nothing, because the value each one
+ * names was hardcoded somewhere else. A knob that silently does nothing is worse than a
+ * missing one: an operator raises a limit, sees no error, and finds out in front of an
+ * audience.
+ *
+ * A key counts as read if anything outside the declaration reaches for it — `config.KEY`
+ * (the sanctioned path), `process.env.KEY` (the two ops tools that must not need the whole
+ * schema to run), or `env("KEY")` in the Prisma schema, which is how the datasource is wired.
+ */
+describe('every declared env key has a reader', () => {
+  const REPO = join(__dirname, '..', '..', '..');
+
+  /** Sources that may legitimately consume config, minus the schema that declares it. */
+  const walk = (d: string): string[] =>
+    readdirSync(d, { withFileTypes: true }).flatMap((e) => {
+      if (e.name === 'node_modules' || e.name === 'dist' || e.name === '.next') return [];
+      const full = join(d, e.name);
+      return e.isDirectory() ? walk(full) : [full];
+    });
+
+  it('is read somewhere other than the schema that declares it', () => {
+    const envSource = readFileSync(join(__dirname, 'env.ts'), 'utf8');
+    // The keys as declared: `  KEY:` at the head of a schema line.
+    const declared = [...envSource.matchAll(/^\s{2}([A-Z][A-Z0-9_]*):/gm)].map((m) => m[1]);
+    expect(declared.length).toBeGreaterThan(20);
+
+    const consumers = [
+      ...walk(join(REPO, 'backend')),
+      ...walk(join(REPO, 'worker')),
+      ...walk(join(REPO, 'packages')),
+    ]
+      .filter((p) => /\.(ts|tsx|prisma)$/.test(p))
+      .filter((p) => p !== join(__dirname, 'env.ts'))
+      .map((p) => readFileSync(p, 'utf8'));
+
+    const dead = declared.filter((key) => {
+      const reader = new RegExp(`(config\\.${key}\\b|process\\.env\\.${key}\\b|env\\("${key}"\\))`);
+      return !consumers.some((source) => reader.test(source));
+    });
+
+    expect(dead).toEqual([]);
+  });
+});

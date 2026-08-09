@@ -11,7 +11,9 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { clock } from './clock';
 import { config } from './env';
 
-export const MAX_TTL_SECONDS = 300;
+// The declared knob, not a literal that shadowed it (issue #117). `cappedTtl` keeps its
+// ceiling semantics: this is the maximum a caller can ask for, not a default it overrides.
+export const MAX_TTL_SECONDS = config.SIGNED_URL_TTL;
 
 // @AC-6: a hard ceiling, not a default — `signedUrl(key, 600)` still expires at 300 s.
 export const cappedTtl = (ttlSeconds: number): number =>

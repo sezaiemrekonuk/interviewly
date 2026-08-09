@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { ApiError } from '../../src/lib/api-error';
 import { prisma } from '../../src/lib/db';
+import { config } from '../../src/lib/env';
 import { logger } from '../../src/lib/logger';
 
 import { aiClient } from '../ai';
@@ -204,6 +205,9 @@ export const setupInterview: RequestHandler = async (req, res) => {
         language: req.user!.locale,
         target_question_count: targetQuestionCount,
         hr_question_count: hrCount,
+        // The declared knob, not the column default that shadowed it (issue #117). The
+        // default stays as the floor for rows created outside the API — seeds, fixtures.
+        budget_usd: config.BUDGET_USD_TEXT,
         // Born `created`, moved by the guard in the same request. Inserting straight into
         // `profiling` would be one write fewer and the only state change in the system that
         // emits no `INTERVIEW_STATE_CHANGED` (@AC-16 lists this edge).
