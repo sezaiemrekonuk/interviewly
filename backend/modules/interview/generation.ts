@@ -6,7 +6,7 @@
  * prompt compilation, the provider chain and the per-attempt audit row — nothing here builds
  * a prompt string or reads a provider key.
  */
-import type { Interview, Prisma } from '@prisma/client';
+import type { Interview, Persona, Prisma } from '@prisma/client';
 import {
   AiError,
   type AiClient,
@@ -85,30 +85,29 @@ export function roundQuestionArgs(
 /**
  * The seeded persona for a round type. Personas are F02 reference data, never invented here.
  *
- * The seeded row is asked for by id first, and that is the whole point (issue 257). This used
- * to be "the lowest-sorting active persona of this role", which sounds neutral and is not: the
- * seed's ids are `seed-persona-*` and every test fixture's is a cuid, so `c` beat `s` and real
- * interviews were conducted by whichever fixture the integration suite had left behind — with
- * `system_prompt: 'stub'`, a name printed to the candidate, and a `voice_id` no TTS provider
- * has ever heard of, which took voice down to a 400 and a silent downgrade on every question.
- *
- * The old query stays as the fallback rather than being replaced: a deployment that has
- * genuinely swapped its personas out has no `seed-persona-*` row, and this must still find its.
+ * Prefer the deterministic `seed-persona-{role}` id. Nothing guarantees one active persona per
+ * role, so `orderBy id asc` alone is fixture-roulette — test fixtures carry cuid ids that sort
+ * before `seed-…` and would win the round. The by-role query stays as a fallback for
+ * deployments predating the seeded ids. Shared with the conductor's `personaForRound` so
+ * assignment and the name/brief the room reads back can't diverge.
  */
-export async function personaFor(roundType: RoundType): Promise<string> {
-  const seeded = await prisma.persona.findFirst({
-    where: { id: `seed-persona-${roundType}`, role: roundType, active: true },
-  });
-  if (seeded) return seeded.id;
-
-  const persona = await prisma.persona.findFirst({
-    where: { role: roundType, active: true },
-    orderBy: { id: 'asc' },
-  });
+export async function seededPersona(roundType: RoundType): Promise<Persona> {
+  const persona =
+    (await prisma.persona.findFirst({
+      where: { id: `seed-persona-${roundType}`, active: true },
+    })) ??
+    (await prisma.persona.findFirst({
+      where: { role: roundType, active: true },
+      orderBy: { id: 'asc' },
+    }));
   // Not an ApiError: a missing seeded persona is a broken deployment, not a request the
   // caller got wrong, and app.ts already turns an unknown throw into an opaque 500.
   if (!persona) throw new Error(`no active persona seeded for round type ${roundType}`);
-  return persona.id;
+  return persona;
+}
+
+export async function personaFor(roundType: RoundType): Promise<string> {
+  return (await seededPersona(roundType)).id;
 }
 
 export async function generateRound(
@@ -196,6 +195,12 @@ export async function generateRound(
         round_id: round.id,
         order_index: i + 1,
         text: q.text,
+        // C05: the agenda line — what this slot is for, which the conductor writes the real
+        // question from. `?? null` and not a default string because the column is nullable by
+        // design: v1/v2 of the prompt do not emit it, and a row written from an older batch
+        // must stay distinguishable from one whose intent the model actually wrote. The room
+        // falls back to `text` when `intent` is null, which is exactly the pre-C05 behaviour.
+        intent: q.intent ?? null,
         kind: q.kind,
         difficulty: q.difficulty,
         topic: q.topic,

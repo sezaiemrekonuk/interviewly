@@ -11,6 +11,7 @@ import { z } from 'zod';
 import { TIMEOUT_MS } from './AiClient';
 import type {
   AiClient,
+  ConductTurnArgs,
   GenerateCandidatesArgs,
   GenerateInterviewTitleArgs,
   GenerateReportArgs,
@@ -24,6 +25,7 @@ import { buildChain, runChain, type ChainDeps } from './providers';
 import {
   PROMPT_NAMES,
   candidateVars,
+  conductVars,
   questionVars,
   reportVars,
   scoreVars,
@@ -31,11 +33,13 @@ import {
 } from './prompt-vars';
 import {
   CandidateSchema,
+  ConductorTurnSchema,
   InterviewTitleSchema,
   QuestionBatchSchema,
   ReportPayloadSchema,
   ScoresSchema,
   type Candidate,
+  type ConductorTurn,
   type InterviewTitle,
   type QuestionBatch,
   type ReportPayload,
@@ -101,6 +105,16 @@ export class LiveAiClient implements AiClient {
       titleVars(args),
       InterviewTitleSchema,
       TIMEOUT_MS.generateInterviewTitle,
+      args.ctx,
+    );
+  }
+
+  conductTurn(args: ConductTurnArgs): Promise<ConductorTurn> {
+    return this.call(
+      PROMPT_NAMES.conductTurn,
+      conductVars(args),
+      ConductorTurnSchema,
+      TIMEOUT_MS.conductTurn,
       args.ctx,
     );
   }

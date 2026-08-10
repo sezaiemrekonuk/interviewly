@@ -12,8 +12,10 @@ import { z } from 'zod';
 
 import { ApiError } from '../../src/lib/api-error';
 import { prisma } from '../../src/lib/db';
+import { logger } from '../../src/lib/logger';
 
 import { withBudgetOrEnd } from './budget';
+import { openRound } from './conductor';
 import { generateRound } from './generation';
 import { applyTransition } from './machine';
 
@@ -134,6 +136,16 @@ export async function startHrRound(
   // larger of the two calls, so a budget that guarded only the tech batch was a ceiling with a
   // hole in it. An interview already out of budget here ends rather than 500ing.
   await withBudgetOrEnd(updated, () => generateRound(updated, 'hr', ctx), ctx);
+
+  // C02 — the interviewer says hello. Best-effort on purpose: the batch is committed and the
+  // room is usable without a greeting (it falls back to showing `currentQuestion`), so a
+  // provider blip here must not turn a started interview into a 503. `openRound` is idempotent,
+  // so the first real turn re-attempts it for free.
+  try {
+    await openRound(updated, ctx);
+  } catch (err) {
+    logger.warn({ err, traceId: ctx.traceId, interviewId: interview.id }, 'CONDUCTOR_OPEN_ROUND_FAILED');
+  }
 
   return state;
 }

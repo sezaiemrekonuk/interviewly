@@ -6,6 +6,7 @@ const m = vi.hoisted(() => ({
   applyTransition: vi.fn(),
   transcribe: vi.fn(),
   advance: vi.fn(),
+  conduct: vi.fn(),
   loggerInfo: vi.fn(),
   loggerError: vi.fn(),
   now: vi.fn(() => new Date('2026-08-06T10:10:00.000Z')),
@@ -42,13 +43,19 @@ vi.mock('../interview/answers', async (orig) => {
   const actual = await orig<typeof import('../interview/answers')>();
   return { answerInputSchema: actual.answerInputSchema, advanceWithAnswer: m.advance };
 });
+// Same shape for C06's turn path: the real `turnInputSchema` is the boundary the transcript
+// must survive, so it is NOT stubbed — only the conducting itself is.
+vi.mock('../interview/conductor', async (orig) => {
+  const actual = await orig<typeof import('../interview/conductor')>();
+  return { turnInputSchema: actual.turnInputSchema, conductTurn: m.conduct };
+});
 
 import { type Request, type Response } from 'express';
 
 import { ApiError } from '../../src/lib/api-error';
 
 import speechRouter from './router';
-import { guardVoiceAnswer, submitAnswerAudio } from './stt';
+import { guardVoiceAnswer, submitAnswerAudio, submitTurnAudio } from './stt';
 
 const interview = {
   id: 'itv-1',
@@ -96,6 +103,7 @@ beforeEach(() => {
   m.currentQuestion.mockResolvedValue({ id: 'q-1', text: 'Tell me about yourself.' });
   m.transcribe.mockResolvedValue({ transcript: 'A spoken answer.', seconds: 12 });
   m.advance.mockResolvedValue({ state: 'hr_round', nextIndex: 2 });
+  m.conduct.mockResolvedValue({ state: 'hr_round', currentIndex: 1 });
   m.applyTransition.mockImplementation(async (row: { ended_reason: string | null }, _to, ctx: { endedReason?: string }) => {
     row.ended_reason = ctx.endedReason ?? null;
     return 'evaluating';
@@ -209,6 +217,55 @@ describe('submitAnswerAudio', () => {
   });
 });
 
+/** C06 — the same recording, handed to the conductor instead of to the advance. */
+describe('submitTurnAudio', () => {
+  it('transcribes then hands one utterance to conductTurn', async () => {
+    const { r, out } = res();
+
+    await submitTurnAudio(req({ body: {} }), r, (() => undefined) as never);
+
+    expect(m.conduct).toHaveBeenCalledOnce();
+    expect(m.conduct.mock.calls[0]?.[1]).toEqual({
+      text: 'A spoken answer.',
+      inputMode: 'voice',
+    });
+    expect(m.advance).not.toHaveBeenCalled();
+    expect(out.status).toBe(200);
+    expect(out.body).toEqual({ state: 'hr_round', currentIndex: 1 });
+  });
+
+  // The whole point of the route: a recording no longer consumes a question by arriving.
+  it('needs no questionId and never checks the current question', async () => {
+    const { r, out } = res();
+
+    await submitTurnAudio(req({ body: {} }), r, (() => undefined) as never);
+
+    expect(m.currentQuestion).not.toHaveBeenCalled();
+    expect(out.status).toBe(200);
+  });
+
+  it('an empty transcript fails and conducts nothing', async () => {
+    m.transcribe.mockResolvedValue({ transcript: '   ', seconds: 0 });
+    const { r } = res();
+
+    await expect(submitTurnAudio(req(), r, (() => undefined) as never)).rejects.toMatchObject({
+      code: 'SPEECH_TRANSCRIPTION_FAILED',
+    });
+
+    expect(m.conduct).not.toHaveBeenCalled();
+  });
+
+  it('rejects a missing audio part as invalid before the provider', async () => {
+    const { r } = res();
+
+    await expect(
+      submitTurnAudio(req({ file: undefined }), r, (() => undefined) as never),
+    ).rejects.toMatchObject({ code: 'SPEECH_AUDIO_INVALID' });
+
+    expect(m.transcribe).not.toHaveBeenCalled();
+  });
+});
+
 describe('router', () => {
   it('runs the voice-answer guards before multer buffers the body', () => {
     const route = speechRouter.stack.find(
@@ -217,5 +274,19 @@ describe('router', () => {
     const names = route?.stack.map((layer) => layer.handle.name);
 
     expect(names).toEqual(['guardVoiceAnswer', 'uploadAudioMiddleware', 'submitAnswerAudio']);
+  });
+
+  it('guards the turn audio route the same way', () => {
+    const route = speechRouter.stack.find(
+      (layer) => layer.route?.path === '/:id/turns/audio',
+    )?.route;
+    const names = route?.stack.map((layer) => layer.handle.name);
+
+    expect(names).toEqual(['guardVoiceAnswer', 'uploadTurnAudioMiddleware', 'submitTurnAudio']);
+  });
+
+  it('exposes the message speech route C06 added', () => {
+    const paths = speechRouter.stack.map((layer) => layer.route?.path);
+    expect(paths).toContain('/:id/messages/:messageId/speech');
   });
 });

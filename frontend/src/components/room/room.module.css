@@ -567,6 +567,25 @@
   border-radius: var(--radius-card);
 }
 
+/* C02 — the conversation view reuses `.turn`, one message per row rather than a Q/A pair, so
+   the two speakers have to be told apart by the card instead of by position within it. A tint
+   would do it in one theme and fail in the other; an edge marker reads the same in both.
+   The system row is the server speaking (a forced advance) and is deliberately the quietest
+   thing in the panel — it is a footnote about the interview, not part of it. */
+.turn[data-role='user'] {
+  border-inline-start: 4px solid var(--accent);
+}
+
+.turn[data-role='system'] {
+  background: transparent;
+  border-style: dashed;
+}
+
+.turn[data-role='system'] .turnQuestion {
+  font-size: 13px;
+  font-style: italic;
+}
+
 .turnPart {
   display: flex;
   flex-direction: column;

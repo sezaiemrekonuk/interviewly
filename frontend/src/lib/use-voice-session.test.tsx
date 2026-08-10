@@ -3,15 +3,33 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { RoomMessage } from './query';
 import { useVoiceSession, VAD_SILENCE_MS, VAD_THRESHOLD } from './use-voice-session';
 import { installAudioMock, type AudioHarness } from '../test/audio-mock';
 import { installMediaDevicesMock } from '../test/media-devices-mock';
 
-const TURN = { index: 1, questionId: 'q1' };
+/** `state.messages` rows are only ever read for `id` and `role` here — the rest is shape. */
+function msg(id: string, role: RoomMessage['role']): RoomMessage {
+  return {
+    id,
+    role,
+    content: id,
+    action: role === 'assistant' ? 'continue' : null,
+    questionId: 'q1',
+    roundType: 'hr',
+    createdAt: '2026-01-01T00:00:00.000Z',
+  };
+}
+
+/** The opening state of a fresh room: the interviewer has said one thing and nobody has replied. */
+const MESSAGES = [msg('m1', 'assistant')];
 
 // Short enough that the silence window is a real wait no test has to sit through, and still
 // the same code path the 2 s default takes.
 const VAD = { silenceMs: 20 };
+
+const SPEECH = (id: string) => `/api/interviews/i1/messages/${id}/speech`;
+const UPLOAD = '/api/interviews/i1/turns/audio';
 
 interface Call {
   url: string;
@@ -35,7 +53,7 @@ function stubApi(routes: Record<string, () => Response> = {}) {
           headers: { 'content-type': 'audio/mpeg' },
         });
       }
-      return new Response(JSON.stringify({ state: 'hr_round', nextIndex: 2 }), {
+      return new Response(JSON.stringify({ state: 'hr_round', currentIndex: 1 }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       });
@@ -61,7 +79,7 @@ function wrapper(client: QueryClient) {
   };
 }
 
-describe('useVoiceSession — the turn loop (S06)', () => {
+describe('useVoiceSession — the turn loop (C02)', () => {
   let audio: AudioHarness;
   let mics: ReturnType<typeof installMediaDevicesMock>;
   let client: QueryClient;
@@ -76,15 +94,20 @@ describe('useVoiceSession — the turn loop (S06)', () => {
     vi.unstubAllGlobals();
   });
 
-  function mount(turn: { index: number; questionId: string } | null = TURN) {
+  function mount(messages: RoomMessage[] = MESSAGES) {
     return renderHook(
-      (props: { turn: { index: number; questionId: string } | null }) =>
-        useVoiceSession('i1', { enabled: true, turn: props.turn, vad: VAD }),
-      { wrapper: wrapper(client), initialProps: { turn } },
+      (props: { messages: RoomMessage[] }) =>
+        useVoiceSession('i1', {
+          enabled: true,
+          messages: props.messages,
+          speakable: true,
+          vad: VAD,
+        }),
+      { wrapper: wrapper(client), initialProps: { messages } },
     );
   }
 
-  /** Question spoken, playback finished, recorder running — the state every turn starts from. */
+  /** Line spoken, playback finished, recorder running — the state every turn starts from. */
   async function recording(hook: ReturnType<typeof mount>) {
     await waitFor(() => expect(audio.players).toHaveLength(1));
     await act(async () => audio.players[0].end());
@@ -94,9 +117,10 @@ describe('useVoiceSession — the turn loop (S06)', () => {
 
   // The meter re-renders this hook on every animation frame. If a render during the in-flight
   // TTS fetch tears the speak effect down, its `cancelled` flag drops the audio that arrives —
-  // and the `spokenRef` guard stops the re-run from fetching it again. The turn then sits in
-  // `speaking` forever: nothing plays, the recorder never opens, and talking does nothing.
-  it('still plays the question when the meter re-renders during the fetch', async () => {
+  // and the message is already marked spoken, so the re-run does not fetch it again. The turn
+  // then sits in `speaking` forever: nothing plays, the recorder never opens, and talking does
+  // nothing.
+  it('still speaks the line when the meter re-renders during the fetch', async () => {
     stubApi();
     const hook = mount();
 
@@ -111,19 +135,96 @@ describe('useVoiceSession — the turn loop (S06)', () => {
     expect(hook.result.current.recording).toBe(true);
   });
 
-  it('plays the current question before it records anything', async () => {
+  // The identity trap. `useInterviewEvents` invalidates the state query on every SSE
+  // INTERVIEW_STATE_CHANGED — which `applyTransition` publishes mid-request, so a handover or an
+  // ending reliably fires one — and an EventSource reconnect fires another. react-query hands back
+  // a NEW array for the same rows on every one of those refetches. If that identity is what the
+  // speak effect depends on, the refetch tears the in-flight turn down: every id is already
+  // marked spoken, the re-run finds nothing pending and returns, and the recorder is never opened.
+  // `phase` is then stuck on 'speaking' forever — `retry` only renders on 'failed', so the room
+  // has no way out and the candidate's mic never opens again.
+  it('opens the mic after a refetch hands back a new array of the same messages', async () => {
     const calls = stubApi();
     const hook = mount();
 
     await waitFor(() => expect(audio.players).toHaveLength(1));
-    expect(hits(calls, '/api/interviews/i1/questions/1/speech')).toBe(1);
+
+    // Exactly what an SSE-driven invalidate produces: same rows, new array.
+    hook.rerender({ messages: [msg('m1', 'assistant')] });
+    await act(async () => audio.level(0.002, 3));
+
+    await act(async () => audio.players[0].end());
+
+    await waitFor(() => expect(audio.recorders).toHaveLength(1));
+    expect(hook.result.current.recording).toBe(true);
+    // ...and the line the refetch re-delivered is not read out a second time.
+    expect(hits(calls, SPEECH('m1'))).toBe(1);
+    expect(audio.players).toHaveLength(1);
+  });
+
+  it('speaks the unspoken assistant message before it records anything', async () => {
+    const calls = stubApi();
+    const hook = mount();
+
+    await waitFor(() => expect(audio.players).toHaveLength(1));
+    expect(hits(calls, SPEECH('m1'))).toBe(1);
     expect(audio.players[0].playCalls).toBe(1);
     expect(hook.result.current.beat).toBe('speaking');
-    // The mic is not open on the question — a recorder started here captures the interviewer.
+    // The mic is not open while the interviewer talks — a recorder started here captures it.
     expect(audio.recorders).toHaveLength(0);
   });
 
-  it('records the answer once the question has finished playing', async () => {
+  // A handover writes two assistant lines in one turn: the outgoing interviewer's closing
+  // sentence and the incoming one's greeting. Opening the mic after the first would record the
+  // candidate over the second, and the second is the question.
+  it('speaks every pending line in order and only then opens the mic', async () => {
+    const calls = stubApi();
+    mount([msg('m1', 'assistant'), msg('m2', 'assistant')]);
+
+    await waitFor(() => expect(audio.players).toHaveLength(1));
+    expect(hits(calls, SPEECH('m1'))).toBe(1);
+    expect(audio.recorders).toHaveLength(0);
+
+    await act(async () => audio.players[0].end());
+
+    await waitFor(() => expect(audio.players).toHaveLength(2));
+    expect(hits(calls, SPEECH('m2'))).toBe(1);
+    expect(audio.recorders).toHaveLength(0);
+
+    await act(async () => audio.players[1].end());
+    await waitFor(() => expect(audio.recorders).toHaveLength(1));
+  });
+
+  // §3.8: a refresh REBUILDS the room from `messages`, it does not re-run them. Everything up to
+  // the candidate's last utterance is history — replaying it would read the interview back from
+  // the greeting — and the assistant lines after it are the prompt they must still hear.
+  it('never replays the backlog on a refresh, only what came after the last utterance', async () => {
+    const calls = stubApi();
+    mount([
+      msg('m1', 'assistant'),
+      msg('u1', 'user'),
+      msg('m2', 'assistant'),
+      msg('u2', 'user'),
+      msg('m3', 'assistant'),
+    ]);
+
+    await waitFor(() => expect(audio.players).toHaveLength(1));
+    expect(hits(calls, SPEECH('m3'))).toBe(1);
+    expect(hits(calls, SPEECH('m1'))).toBe(0);
+    expect(hits(calls, SPEECH('m2'))).toBe(0);
+  });
+
+  it('says nothing when the candidate has spoken and the interviewer has not replied yet', async () => {
+    const calls = stubApi();
+    mount([msg('m1', 'assistant'), msg('u1', 'user')]);
+
+    await Promise.resolve();
+    expect(audio.players).toHaveLength(0);
+    expect(hits(calls, SPEECH('m1'))).toBe(0);
+    expect(audio.recorders).toHaveLength(0);
+  });
+
+  it('records the answer once the line has finished playing', async () => {
     stubApi();
     const hook = await recording(mount());
 
@@ -140,14 +241,14 @@ describe('useVoiceSession — the turn loop (S06)', () => {
     await act(async () => audio.level(0));
 
     await waitFor(() => expect(audio.recorders[0].stops).toBe(1));
-    await waitFor(() => expect(hits(calls, '/api/interviews/i1/answers/audio')).toBe(1));
+    await waitFor(() => expect(hits(calls, UPLOAD)).toBe(1));
 
-    const upload = calls.find((call) => call.url === '/api/interviews/i1/answers/audio')!;
+    const upload = calls.find((call) => call.url === UPLOAD)!;
     expect(upload.method).toBe('POST');
     const form = upload.body as FormData;
-    // The question the recording answers, exactly like a typed answer names it — that is what
-    // makes a duplicate upload a QUESTION_NOT_CURRENT instead of the next question's answer.
-    expect(form.get('questionId')).toBe('q1');
+    // No question named: the utterance may be an answer, a clarification or a question back, and
+    // which of those it was — and whether the interview advances — is the conductor's call.
+    expect(form.get('questionId')).toBe(null);
     // Bare media type: the backend's allow-list has no `;codecs=` member.
     expect((form.get('audio') as File).type).toBe('audio/webm');
     await waitFor(() => expect(hook.result.current.beat).toBe(null));
@@ -174,7 +275,7 @@ describe('useVoiceSession — the turn loop (S06)', () => {
     }
 
     expect(audio.recorders[0].stops).toBe(1);
-    await waitFor(() => expect(hits(calls, '/api/interviews/i1/answers/audio')).toBe(1));
+    await waitFor(() => expect(hits(calls, UPLOAD)).toBe(1));
   });
 
   it('does not stop on silence the candidate never broke — an unspoken turn keeps listening', async () => {
@@ -185,7 +286,7 @@ describe('useVoiceSession — the turn loop (S06)', () => {
     await new Promise((resolve) => setTimeout(resolve, VAD.silenceMs * 3));
 
     expect(audio.recorders[0].stops).toBe(0);
-    expect(hits(calls, '/api/interviews/i1/answers/audio')).toBe(0);
+    expect(hits(calls, UPLOAD)).toBe(0);
   });
 
   it('uploads immediately on a manual stop', async () => {
@@ -195,7 +296,7 @@ describe('useVoiceSession — the turn loop (S06)', () => {
     await act(async () => hook.result.current.stop());
 
     expect(audio.recorders[0].stops).toBe(1);
-    await waitFor(() => expect(hits(calls, '/api/interviews/i1/answers/audio')).toBe(1));
+    await waitFor(() => expect(hits(calls, UPLOAD)).toBe(1));
   });
 
   it('refetches state after the upload and never advances the index itself', async () => {
@@ -208,33 +309,51 @@ describe('useVoiceSession — the turn loop (S06)', () => {
     await waitFor(() =>
       expect(invalidate).toHaveBeenCalledWith({ queryKey: ['interview', 'i1', 'state'] }),
     );
-    // Still the turn the server handed us: nothing local moved to question 2.
+    // Still the conversation the server handed us: nothing local moved it on.
     expect(audio.players).toHaveLength(1);
   });
 
-  it('speaks a question once, and the next one only when the server delivers it', async () => {
+  // The reply to a clarification does not advance the index (C02), so an index-keyed loop would
+  // hear it and say nothing. The id is what makes it a new line.
+  it('speaks a line once, and the next one only when the server writes it', async () => {
     const calls = stubApi();
     const hook = mount();
     await waitFor(() => expect(audio.players).toHaveLength(1));
 
-    hook.rerender({ turn: { index: 1, questionId: 'q1' } });
+    hook.rerender({ messages: [msg('m1', 'assistant')] });
     expect(audio.players).toHaveLength(1);
 
-    hook.rerender({ turn: { index: 2, questionId: 'q2' } });
+    hook.rerender({ messages: [msg('m1', 'assistant'), msg('u1', 'user'), msg('m2', 'assistant')] });
     await waitFor(() => expect(audio.players).toHaveLength(2));
-    expect(hits(calls, '/api/interviews/i1/questions/2/speech')).toBe(1);
+    expect(hits(calls, SPEECH('m2'))).toBe(1);
+    expect(hits(calls, SPEECH('m1'))).toBe(1);
   });
 
   it('opens no microphone and speaks nothing in text mode', async () => {
     const calls = stubApi();
-    renderHook(() => useVoiceSession('i1', { enabled: false, turn: TURN, vad: VAD }), {
-      wrapper: wrapper(client),
-    });
+    renderHook(
+      () => useVoiceSession('i1', { enabled: false, messages: MESSAGES, speakable: true, vad: VAD }),
+      { wrapper: wrapper(client) },
+    );
 
     await Promise.resolve();
     expect(audio.players).toHaveLength(0);
-    expect(hits(calls, '/api/interviews/i1/questions/1/speech')).toBe(0);
+    expect(hits(calls, SPEECH('m1'))).toBe(0);
     expect(mics.tracks).toHaveLength(0);
+  });
+
+  // A paused room, a report and an ended interview all hand down `speakable: false`. Nothing is
+  // forgotten while it is down — the set of spoken ids outlives it.
+  it('speaks nothing while the room is not conductable', async () => {
+    const calls = stubApi();
+    renderHook(
+      () => useVoiceSession('i1', { enabled: true, messages: MESSAGES, speakable: false, vad: VAD }),
+      { wrapper: wrapper(client) },
+    );
+
+    await Promise.resolve();
+    expect(audio.players).toHaveLength(0);
+    expect(hits(calls, SPEECH('m1'))).toBe(0);
   });
 
   it('keeps the spec default of a two-second silence window', () => {
@@ -257,13 +376,14 @@ describe('useVoiceSession — failure branches (S06)', () => {
     vi.unstubAllGlobals();
   });
 
-  function mount(turn: { index: number; questionId: string } | null = TURN) {
-    return renderHook(() => useVoiceSession('i1', { enabled: true, turn, vad: VAD }), {
-      wrapper: wrapper(client),
-    });
+  function mount(messages: RoomMessage[] = MESSAGES) {
+    return renderHook(
+      () => useVoiceSession('i1', { enabled: true, messages, speakable: true, vad: VAD }),
+      { wrapper: wrapper(client) },
+    );
   }
 
-  it('downgrades to text when the question cannot be played, instead of retrying it', async () => {
+  it('downgrades to text when the line cannot be played, instead of retrying it', async () => {
     const calls = stubApi();
     const hook = mount();
     await waitFor(() => expect(audio.players).toHaveLength(1));
@@ -279,9 +399,7 @@ describe('useVoiceSession — failure branches (S06)', () => {
 
   it('reports the ceiling refusal as its own code and lets the refetch end the room', async () => {
     const invalidate = vi.spyOn(client, 'invalidateQueries');
-    const calls = stubApi({
-      '/api/interviews/i1/questions/1/speech': jsonError(403, 'VOICE_SESSION_EXPIRED'),
-    });
+    const calls = stubApi({ [SPEECH('m1')]: jsonError(403, 'VOICE_SESSION_EXPIRED') });
     const hook = mount();
 
     await waitFor(() => expect(hook.result.current.error).toBe('VOICE_SESSION_EXPIRED'));
@@ -292,10 +410,22 @@ describe('useVoiceSession — failure branches (S06)', () => {
     expect(hits(calls, '/api/interviews/i1/voice/downgrade')).toBe(0);
   });
 
+  // Un-speaking the whole conversation on a retry would read the interview back from its
+  // greeting; only the line that failed is owed a second attempt.
+  it('re-speaks only the failed line on retry', async () => {
+    const calls = stubApi({ [SPEECH('m2')]: jsonError(500, 'SPEECH_UNAVAILABLE') });
+    const hook = mount([msg('m1', 'assistant'), msg('u1', 'user'), msg('m2', 'assistant')]);
+
+    await waitFor(() => expect(hook.result.current.error).toBe('SPEECH_UNAVAILABLE'));
+
+    await act(async () => hook.result.current.retry());
+
+    await waitFor(() => expect(hits(calls, SPEECH('m2'))).toBe(2));
+    expect(hits(calls, SPEECH('m1'))).toBe(0);
+  });
+
   it('surfaces an unusable recording and re-records on retry', async () => {
-    const calls = stubApi({
-      '/api/interviews/i1/answers/audio': jsonError(400, 'SPEECH_AUDIO_INVALID'),
-    });
+    const calls = stubApi({ [UPLOAD]: jsonError(400, 'SPEECH_AUDIO_INVALID') });
     const hook = mount();
     await waitFor(() => expect(audio.players).toHaveLength(1));
     await act(async () => audio.players[0].end());
@@ -308,10 +438,10 @@ describe('useVoiceSession — failure branches (S06)', () => {
 
     await act(async () => hook.result.current.retry());
 
-    // The retry re-records the same question — it does not re-buy the question audio.
+    // The retry re-records the same turn — it does not re-buy the interviewer's audio.
     await waitFor(() => expect(audio.recorders).toHaveLength(2));
     expect(hook.result.current.error).toBe(null);
-    expect(hits(calls, '/api/interviews/i1/questions/1/speech')).toBe(1);
+    expect(hits(calls, SPEECH('m1'))).toBe(1);
   });
 
   it('mute stops the recorder capturing, and unmute resumes it', async () => {

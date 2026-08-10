@@ -333,12 +333,21 @@ Then(
  * Read from `llm_calls`, not from anything the test compiled: the point is that the call the
  * app actually made is auditable under a stable prompt identity. `prompt_uuid` is the stored
  * identity (ADR-I17); the registry maps it back to the name the scenario names.
+ *
+ * Searches every row of the scenario rather than the newest one. It used to read
+ * `findFirst(orderBy: created_at desc)` — "the last call" and "the call this scenario is
+ * about" were the same row while `POST /profile` made exactly one AI call. ADR-C02 gave the
+ * request a second one: `openRound` compiles `interview.conduct.turn` after the question
+ * batch so the interviewer greets the candidate, and it is now the newest row. Pinning the
+ * assertion to the newest row would make this step assert whichever call happens to be last,
+ * which is not what its English says; presence under the named identity is.
  */
 Then('the recorded AI prompt name is {string}', async function (this: AiWorld, name: string) {
-  const call = await prisma.llmCall.findFirst({
-    where: { interview_id: this.interviewId },
-    orderBy: { created_at: 'desc' },
-  });
-  assert.ok(call, `no llm_calls row was recorded for interview ${this.interviewId}`);
-  assert.equal(call.prompt_uuid, loadPromptRegistry().resolve(name).uuid);
+  const calls = await prisma.llmCall.findMany({ where: { interview_id: this.interviewId } });
+  assert.ok(calls.length, `no llm_calls row was recorded for interview ${this.interviewId}`);
+  const uuid = loadPromptRegistry().resolve(name).uuid;
+  assert.ok(
+    calls.some((c) => c.prompt_uuid === uuid),
+    `no llm_calls row for ${name} (${uuid}); recorded: ${calls.map((c) => c.prompt_uuid).join(', ')}`,
+  );
 });

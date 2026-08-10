@@ -484,6 +484,8 @@
     "roleHr": "İK mülakatçısı",
     "roleTech": "Teknik mülakatçı",
     "speakerYou": "Sen",
+    "roleSystem": "Mülakat sistemi",
+    "choosePlaceholder": "Bir cevap seç",
     "progress": "Soru {index} / {total}",
     "waiting": "Sıradaki soru hazırlanıyor…",
     "starting": "Bu mülakat henüz başlamadı. Şimdi başlatılıyor…",
@@ -496,6 +498,7 @@
     "resume": "Devam et",
     "stalled": "Sıradaki soru hazırlanamadı. Verdiğin cevapların hiçbiri kaybolmadı — yeniden oluşturmak için tekrar dene.",
     "retry": "Tekrar dene",
+    "conversationTitle": "Konuşma",
     "transcriptTitle": "Verdiğin cevaplar",
     "transcriptEmpty": "Henüz cevap yok.",
     "voice": {

@@ -9,6 +9,8 @@ const m = vi.hoisted(() => ({
   currentQuestion: vi.fn(),
   activeInterview: vi.fn(),
   findRound: vi.fn(),
+  findMessage: vi.fn(),
+  findQuestion: vi.fn(),
   loggerInfo: vi.fn(),
   now: vi.fn(() => new Date('2026-08-06T10:10:00.000Z')),
 }));
@@ -19,7 +21,11 @@ vi.mock('../../src/lib/env', () => ({
 }));
 vi.mock('../../src/lib/db', () => ({
   activeInterview: m.activeInterview,
-  prisma: { interviewRound: { findFirstOrThrow: m.findRound } },
+  prisma: {
+    interviewRound: { findFirstOrThrow: m.findRound },
+    chatMessage: { findUnique: m.findMessage },
+    question: { findUnique: m.findQuestion },
+  },
 }));
 vi.mock('../interview/state', () => ({ currentQuestionRow: m.currentQuestion }));
 vi.mock('../interview/machine', () => ({ applyTransition: m.applyTransition }));
@@ -37,7 +43,7 @@ import { type Request, type Response } from 'express';
 
 import { ApiError } from '../../src/lib/api-error';
 
-import { isPastSpeechCeiling, serveQuestionSpeech } from './tts';
+import { isPastSpeechCeiling, serveMessageSpeech, serveQuestionSpeech } from './tts';
 
 const interview = {
   id: 'itv-1',
@@ -51,13 +57,15 @@ const interview = {
   ended_reason: null,
 };
 
-function req(): Request {
+function req(params: Record<string, string> = { index: '1' }): Request {
   return {
-    params: { id: interview.id, index: '1' },
+    params: { id: interview.id, ...params },
     user: { id: interview.user_id },
     traceId: 'trace-1',
   } as unknown as Request;
 }
+
+const msgReq = () => req({ messageId: 'm1' });
 
 function res() {
   const out: { status?: number; mime?: string; body?: Buffer } = {};
@@ -84,6 +92,14 @@ beforeEach(() => {
   m.activeInterview.mockResolvedValue({ ...interview });
   m.currentQuestion.mockResolvedValue({ id: 'q-1', text: 'Tell me about yourself.' });
   m.findRound.mockResolvedValue({ persona: { voice_id: 'voice-hr' } });
+  m.findMessage.mockResolvedValue({
+    id: 'm1',
+    interview_id: interview.id,
+    role: 'assistant',
+    content: 'Welcome — shall we start?',
+    question_id: null,
+  });
+  m.findQuestion.mockResolvedValue({ round: { persona: { voice_id: 'voice-tech' } } });
   m.storageGet.mockResolvedValue(Buffer.from([0xff, 0xfb, 0x90, 0x00]));
   m.storagePut.mockResolvedValue(undefined);
   m.speak.mockResolvedValue({ audio: Buffer.from([1, 2, 3]), mime: 'audio/mpeg', characters: 24 });
@@ -171,5 +187,98 @@ describe('serveQuestionSpeech', () => {
     await expect(serveQuestionSpeech(req(), r, (() => undefined) as never)).rejects.toMatchObject({
       code: 'VOICE_SESSION_EXPIRED',
     });
+  });
+});
+
+/** C06 — the lines that are not questions: the welcome, clarifications, handover, goodbye. */
+describe('serveMessageSpeech', () => {
+  it('serves an assistant line from its own cache key, provider untouched', async () => {
+    const { r, out } = res();
+
+    await serveMessageSpeech(msgReq(), r, (() => undefined) as never);
+
+    expect(m.storageGet).toHaveBeenCalledWith('speech/msg-m1.mp3');
+    expect(m.speak).not.toHaveBeenCalled();
+    expect(out.status).toBe(200);
+    expect(out.mime).toBe('audio/mpeg');
+  });
+
+  it('refuses to speak anything the interviewer did not say', async () => {
+    for (const role of ['user', 'system']) {
+      m.findMessage.mockResolvedValue({
+        id: 'm1',
+        interview_id: interview.id,
+        role,
+        content: 'not the interviewer',
+        question_id: null,
+      });
+      const { r } = res();
+
+      await expect(serveMessageSpeech(msgReq(), r, (() => undefined) as never)).rejects.toMatchObject({
+        code: 'VALIDATION_ERROR',
+      });
+    }
+    expect(m.speak).not.toHaveBeenCalled();
+  });
+
+  it("another interview's message id is a 404, not a leak", async () => {
+    m.findMessage.mockResolvedValue({
+      id: 'm1',
+      interview_id: 'itv-someone-else',
+      role: 'assistant',
+      content: 'their welcome',
+      question_id: null,
+    });
+    const { r } = res();
+
+    await expect(serveMessageSpeech(msgReq(), r, (() => undefined) as never)).rejects.toMatchObject({
+      code: 'INTERVIEW_NOT_FOUND',
+    });
+  });
+
+  // The refresh case: the room replays what it missed, so a line the index has moved past is
+  // still served — and still in the voice of the round that said it, not the current one.
+  it('replays a past line in its own round\'s voice', async () => {
+    m.activeInterview.mockResolvedValue({ ...interview, state: 'tech_round', current_index: 5 });
+    m.findMessage.mockResolvedValue({
+      id: 'm1',
+      interview_id: interview.id,
+      role: 'assistant',
+      content: 'And what did you learn from it?',
+      question_id: 'q-hr-2',
+    });
+    m.findQuestion.mockResolvedValue({ round: { persona: { voice_id: 'voice-hr' } } });
+    m.storageGet.mockRejectedValue(new Error('miss'));
+    const { r, out } = res();
+
+    await serveMessageSpeech(msgReq(), r, (() => undefined) as never);
+
+    expect(m.speak.mock.calls[0]?.[1]?.voiceId).toBe('voice-hr');
+    expect(m.findRound).not.toHaveBeenCalled();
+    expect(out.status).toBe(200);
+  });
+
+  it('falls back to the current round when the line belongs to no question', async () => {
+    m.storageGet.mockRejectedValue(new Error('miss'));
+    const { r } = res();
+
+    await serveMessageSpeech(msgReq(), r, (() => undefined) as never);
+
+    expect(m.findQuestion).not.toHaveBeenCalled();
+    expect(m.findRound.mock.calls[0]?.[0]?.where?.type).toBe('hr');
+    expect(m.speak.mock.calls[0]?.[1]?.voiceId).toBe('voice-hr');
+  });
+
+  it('past the ceiling nothing is spoken and the interview ends', async () => {
+    m.now.mockReturnValue(new Date('2026-08-06T10:20:01.000Z'));
+    const { r } = res();
+
+    await expect(serveMessageSpeech(msgReq(), r, (() => undefined) as never)).rejects.toMatchObject({
+      code: 'VOICE_SESSION_EXPIRED',
+    });
+
+    expect(m.applyTransition.mock.calls[0]?.[2]?.endedReason).toBe('time_exhausted');
+    expect(m.findMessage).not.toHaveBeenCalled();
+    expect(m.speak).not.toHaveBeenCalled();
   });
 });

@@ -69,8 +69,10 @@ export async function deliverCurrentQuestion(interview: IndexedInterview) {
     id: question.id,
     text: question.text,
     kind: question.kind,
-    // ponytail: widget question kind isn't built yet (I04/I06 scope); always null for now.
-    widget: null,
+    // C04 — the typed answer surface, when the conductor put one on screen. Null is the
+    // ordinary spoken-or-typed answer, which is most questions; the hardcoded null this
+    // replaces had been standing in since I04 with nothing to write it.
+    widget: question.widget ?? null,
     deliveredAt,
   };
 }
@@ -159,6 +161,67 @@ async function resolveTranscript(interviewId: string) {
   return orderTranscript(questions as TranscriptQuestion[]);
 }
 
+/**
+ * C02 — the conversation, which since the conductor landed is the interview's actual state.
+ *
+ * `transcript` above is question/answer pairs, and it stays: the report ledger and the report
+ * page read it, and pairs are what a finished interview looks like. This is the other view —
+ * what was said, in order, including everything a pair cannot hold: the welcome, the
+ * clarifications, the handover, and the system line where the server overrode the interviewer.
+ *
+ * A room rebuilds itself from this alone (§3.8), which is the whole reason assistant rows are
+ * written before they are spoken rather than after.
+ */
+async function resolveMessages(interviewId: string) {
+  const rows = await prisma.chatMessage.findMany({
+    // C07 — the refusal notes stay out of the room. They are written for the interviewer, and
+    // showing them to the candidate would narrate the guard that just stopped them: "the server
+    // refused because this round has not covered enough questions yet" is a recipe. The drift
+    // note is different and stays visible — it is about the candidate's own turn, not about a
+    // rule they could aim at.
+    //
+    // The null branch is load-bearing: every candidate turn has `action = null`, and both
+    // `NOT: { action: 'refused' }` and `action: { not: 'refused' }` compile to SQL that is
+    // NULL — and so excludes the row — wherever `action` is null. Without the explicit
+    // `action: null`, the whole candidate side of the conversation vanishes from the room.
+    where: {
+      interview_id: interviewId,
+      OR: [{ action: null }, { action: { not: 'refused' } }],
+    },
+    // Same order the conductor replays in. A user utterance and the reply to it are written
+    // inside one request and can share a millisecond; `id` breaks that tie the same way twice.
+    orderBy: [{ created_at: 'asc' }, { id: 'asc' }],
+    select: {
+      id: true,
+      role: true,
+      content: true,
+      action: true,
+      question_id: true,
+      created_at: true,
+      // Which interviewer said it. Without this the room labels every past line with whoever
+      // holds the floor *now*, so after the handover the HR round's questions are attributed to
+      // the technical interviewer — a transcript that misreports who asked what.
+      //
+      // Derived from the question rather than stored on the message: the round a question
+      // belongs to is already a fact of the schema, and a copy on `chat_messages` would be a
+      // second place for it to be wrong.
+      question: { select: { round: { select: { type: true } } } },
+    },
+  });
+  return rows.map((m) => ({
+    id: m.id,
+    role: m.role,
+    content: m.content,
+    action: m.action,
+    questionId: m.question_id,
+    // Null for the lines that belong to no question — the welcome, the handover, the closing
+    // line. The room falls back to whoever has the floor for those, which is right: they are
+    // said by the interviewer who is speaking at that moment.
+    roundType: m.question?.round.type ?? null,
+    createdAt: m.created_at,
+  }));
+}
+
 export interface TimedInterview {
   mode: string;
   started_at: Date | null;
@@ -192,11 +255,11 @@ export const getInterviewState: RequestHandler = async (req, res) => {
 
   // Every field is derived from the DB, nothing from the request: a refreshed room with no
   // client memory reconstructs to the same place (§3.8, @AC-9).
-  const [{ persona, personas }, currentQuestion, transcript, transcriptCursor] = await Promise.all([
+  const [{ persona, personas }, currentQuestion, transcript, messages] = await Promise.all([
     resolvePersonas(interview.id, interview.state),
     deliverCurrentQuestion(interview),
     resolveTranscript(interview.id),
-    prisma.chatMessage.count({ where: { interview_id: interview.id } }),
+    resolveMessages(interview.id),
   ]);
 
   res.status(200).json({
@@ -212,7 +275,13 @@ export const getInterviewState: RequestHandler = async (req, res) => {
     personas,
     currentQuestion,
     transcript,
-    transcriptCursor,
+    messages,
+    // Answers, not messages. This was `chatMessage.count(...)` and the two were the same number
+    // only because `chat_messages` held exactly one row per answered turn. C02 puts the
+    // interviewer's own lines in the same table, so counting rows would make the cursor jump on
+    // a greeting — `interview_flow.feature` caught it as "3 answers" reading 4. The field means
+    // how far through the transcript the interview is, and that is still the answer count.
+    transcriptCursor: messages.filter((m) => m.role === 'user').length,
   });
 };
 

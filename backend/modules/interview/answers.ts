@@ -37,6 +37,86 @@ export const answerInputSchema = z.object({
 type AnswerInput = z.infer<typeof answerInputSchema>;
 
 /**
+ * ADR-I06's guarded advance, in one place.
+ *
+ * The advance IS the guard: two requests can read the same `current_index`, the WHERE clause
+ * lets exactly one of them write, and the loser rolls the whole transaction back rather than
+ * merely returning early. Both progression paths run through here — the direct answer route
+ * below, and C02's conductor when it decides a question is finished — because two copies of a
+ * compare-and-set are two chances for them to stop agreeing about who won.
+ *
+ * `data` is null when the question is being left behind unanswered: the conductor may move on
+ * from a question the candidate never addressed, and an empty `answers` row would put a blank
+ * turn in the report. The index still advances, so the interview still ends.
+ *
+ * `chatMessage` distinguishes the two callers rather than a mode: the conductor has already
+ * stored the candidate's words as they were said (that is how it remembers the interview), so
+ * writing them again here would double every utterance in the replay.
+ *
+ * `toIndex` is where the interview points afterwards, and defaults to the next question. The
+ * conductor needs the other two: a handover jumps past the rest of the round in one move, and
+ * an interview that is ending stays where it is. All three are the SAME compare-and-set on the
+ * index the caller read, in the same transaction as the answer — a handover that moved the
+ * index with its own `updateMany` was a second guard that could disagree with this one, and it
+ * left the answer the candidate had just given unrecorded because only the advancing path
+ * wrote one.
+ */
+export async function recordAnswer(
+  interview: Interview,
+  question: { id: string; asked_at: Date | null },
+  data: { transcript: string; inputMode: AnswerInput['inputMode'] } | null,
+  opts: { traceId: string; chatMessage?: boolean; toIndex?: number },
+): Promise<{ nextIndex: number; answerId: string | null }> {
+  const expected = interview.current_index;
+  const toIndex = opts.toIndex ?? expected + 1;
+  const answeredAt = clock.now();
+  // Server clock, both ends: `asked_at` was stamped when state.ts delivered the question.
+  const durationMs = question.asked_at ? answeredAt.getTime() - question.asked_at.getTime() : null;
+
+  const answerId = await prisma.$transaction(async (tx) => {
+    // Still the guard even when the index does not move: the WHERE clause is what proves this
+    // caller read the index it is writing against, and a losing duplicate rolls the whole
+    // transaction back rather than adding a second answer row for the same question.
+    const { count } = await tx.interview.updateMany({
+      where: { id: interview.id, current_index: expected },
+      data: { current_index: toIndex },
+    });
+    if (count === 0) throw new ApiError('QUESTION_NOT_CURRENT');
+    if (!data) return null;
+
+    const created = await tx.answer.create({
+      data: {
+        question_id: question.id,
+        transcript: data.transcript,
+        input_mode: data.inputMode,
+        started_at: question.asked_at,
+        answered_at: answeredAt,
+        duration_ms: durationMs,
+      },
+    });
+    if (opts.chatMessage) {
+      await tx.chatMessage.create({
+        data: {
+          interview_id: interview.id,
+          role: 'user',
+          content: data.transcript,
+          question_id: question.id,
+          trace_id: opts.traceId,
+        },
+      });
+    }
+    return created.id;
+  });
+
+  interview.current_index = toIndex;
+  logger.info(
+    { traceId: opts.traceId, interviewId: interview.id, questionId: question.id, durationMs },
+    'ANSWER_RECORDED',
+  );
+  return { nextIndex: toIndex, answerId };
+}
+
+/**
  * Core answer-progression logic, shared by the typed handler and S03's audio route.
  * Validates state, advances `current_index` atomically, records the turn, and runs all
  * post-answer side-effects.
@@ -52,7 +132,6 @@ export async function advanceWithAnswer(
     throw new ApiError('INVALID_STATE_TRANSITION');
   }
 
-  const expected = interview.current_index;
   const question = await currentQuestionRow(interview);
   // A body naming any question but the current one is the same rejection as losing the race,
   // and the response does not say which question it should have been.
@@ -60,51 +139,13 @@ export async function advanceWithAnswer(
     throw new ApiError('QUESTION_NOT_CURRENT');
   }
 
-  const answeredAt = clock.now();
-  // Server clock, both ends: `asked_at` was stamped when state.ts delivered the question.
-  const durationMs = question.asked_at
-    ? answeredAt.getTime() - question.asked_at.getTime()
-    : null;
-
   // The advance and the turn are ONE commit (#70). Split across two, a crash in between left
-  // `current_index` moved with no answer row — and the CAS below then refused the resubmit,
-  // so the answer was unrecoverable.
-  //
-  // ADR-I06 is unchanged by the move: the advance is still the guard. Two requests can read
-  // the same `current_index`, the WHERE clause still lets exactly one of them write, and the
-  // loser now rolls back instead of merely returning early.
-  const answer = await prisma.$transaction(async (tx) => {
-    const { count } = await tx.interview.updateMany({
-      where: { id: interview.id, current_index: expected },
-      data: { current_index: expected + 1 },
-    });
-    if (count === 0) throw new ApiError('QUESTION_NOT_CURRENT');
-
-    const created = await tx.answer.create({
-      data: {
-        question_id: question.id,
-        transcript: data.transcript,
-        input_mode: data.inputMode,
-        started_at: question.asked_at,
-        answered_at: answeredAt,
-        duration_ms: durationMs,
-      },
-    });
-    await tx.chatMessage.create({
-      data: {
-        interview_id: interview.id,
-        role: 'user',
-        content: data.transcript,
-        trace_id: traceId,
-      },
-    });
-    return created;
+  // `current_index` moved with no answer row — and the CAS then refused the resubmit, so the
+  // answer was unrecoverable. `recordAnswer` above holds that transaction for both callers.
+  const { nextIndex, answerId } = await recordAnswer(interview, question, data, {
+    traceId,
+    chatMessage: true,
   });
-
-  logger.info(
-    { traceId, interviewId: interview.id, questionId: question.id, durationMs },
-    'ANSWER_RECORDED',
-  );
 
   // I10: a pure heuristic, no `llm_calls` row. It runs before the handover below because a
   // switch has to reach the technical batch that ADR-I22 generates in `interview.language`.
@@ -112,7 +153,6 @@ export async function advanceWithAnswer(
   // It also runs before the K4 hook, and the hook reads `interview.language` off this
   // assignment: the candidate pool D02 generates for the next row is written in the language
   // the switch just landed on, so no pool is ever stale enough to need a refresh (#148).
-  const nextIndex = expected + 1;
   interview.language = await trackLanguage(interview, data.transcript, { traceId });
 
   // ADR-I22: the technical batch is generated during the HR round, not by the transition into
@@ -160,12 +200,16 @@ export async function advanceWithAnswer(
   // raises — the turn is already stored and the default next question is askable, so the
   // interview drops to non-adaptive rather than ending.
   try {
-    await withBudget(interview.id, () =>
-      promoteNextQuestion(interview, question, answer.id, data.transcript, nextIndex, {
-        traceId,
-        client: opts.client,
-      }),
-    );
+    // `answerId` is non-null on this path: `data` is always supplied, so `recordAnswer` always
+    // wrote a row. The guard is for the type, not for a case that happens here.
+    if (answerId) {
+      await withBudget(interview.id, () =>
+        promoteNextQuestion(interview, question, answerId, data.transcript, nextIndex, {
+          traceId,
+          client: opts.client,
+        }),
+      );
+    }
   } catch (err) {
     if (err instanceof BudgetExceeded) {
       logger.warn({ traceId, interviewId: interview.id }, 'ADAPTIVE_SKIPPED_NO_BUDGET');

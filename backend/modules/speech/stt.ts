@@ -1,12 +1,21 @@
 /**
- * `POST /interviews/:id/answers/audio` (S03, §3.2). One recorded answer is transcribed by
- * ElevenLabs Scribe and delegated to the SAME guarded advance a typed answer uses
- * (`advanceWithAnswer`, I06) — there is no second answer path.
+ * The two recorded-audio routes.
+ *
+ * `POST /interviews/:id/answers/audio` (S03, §3.2) is the original: one recorded answer,
+ * transcribed by ElevenLabs Scribe and delegated to the SAME guarded advance a typed answer
+ * uses (`advanceWithAnswer`, I06) — there is no second answer path.
+ *
+ * `POST /interviews/:id/turns/audio` (C06) is its conversational twin, and it exists because
+ * the first one always advances. A voice candidate could therefore never be asked a follow-up:
+ * every recording consumed a question whatever the interviewer wanted to do with it. This one
+ * hands the transcript to `conductTurn` instead, so a clarification stays on the question and
+ * only the conductor decides when the index moves. Same split as `/answers` vs `/turns` on the
+ * text side (turns.ts): two contracts, two routes, both kept.
  *
  * ADR-S07: the candidate audio is a memory buffer for one request, sent to the provider and
  * discarded. Never `storage.put`, never a DB column, never a log line.
  */
-import type { RequestHandler } from 'express';
+import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import multer, { MulterError } from 'multer';
 
 import { ApiError } from '../../src/lib/api-error';
@@ -14,6 +23,7 @@ import { activeInterview } from '../../src/lib/db';
 import { logger } from '../../src/lib/logger';
 import { advanceWithAnswer, answerInputSchema } from '../interview/answers';
 import { BudgetExceeded, withBudget } from '../interview/budget';
+import { conductTurn, turnInputSchema } from '../interview/conductor';
 import { applyTransition } from '../interview/machine';
 import { currentQuestionRow } from '../interview/state';
 
@@ -38,44 +48,64 @@ const AUDIO_MIME = new Set([
   'audio/x-wav',
 ]);
 
-const parseAudio = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_AUDIO_BYTES, files: 1, fields: 1, parts: 3 },
-  fileFilter(_req, file, cb) {
-    if (!AUDIO_MIME.has(file.mimetype)) {
-      cb(new ApiError('UNSUPPORTED_MEDIA_TYPE'));
-      return;
-    }
-    cb(null, true);
-  },
-}).single('audio');
+function audioParser(limits: { fields: number; parts: number }): RequestHandler {
+  return multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: MAX_AUDIO_BYTES, files: 1, ...limits },
+    fileFilter(_req, file, cb) {
+      if (!AUDIO_MIME.has(file.mimetype)) {
+        cb(new ApiError('UNSUPPORTED_MEDIA_TYPE'));
+        return;
+      }
+      cb(null, true);
+    },
+  }).single('audio');
+}
+
+/** An answer names the question it answers, so one text field rides along with the recording. */
+const parseAudio = audioParser({ fields: 1, parts: 3 });
+/** A turn names nothing (C06) — the recording is the whole body, so no field is allowed in. */
+const parseTurnAudio = audioParser({ fields: 0, parts: 2 });
 
 /**
  * Content-Length is the cheap path: an honest oversized upload is refused before a byte is
  * buffered. multer's own limit stays as the backstop for a client that lies about its length.
  * Mirrors `uploads.ts`.
  */
-export const uploadAudioMiddleware: RequestHandler = (req, res, next) => {
+function runUpload(
+  parse: RequestHandler,
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void {
   const declared = Number(req.headers['content-length']);
   if (Number.isFinite(declared) && declared > MAX_AUDIO_BYTES + MULTIPART_SLACK) {
     next(new ApiError('UPLOAD_TOO_LARGE'));
     return;
   }
 
-  parseAudio(req, res, (err: unknown) => {
+  parse(req, res, (err: unknown) => {
     if (err instanceof MulterError) {
       next(new ApiError(err.code === 'LIMIT_FILE_SIZE' ? 'UPLOAD_TOO_LARGE' : 'VALIDATION_ERROR'));
       return;
     }
     next(err);
   });
-};
+}
+
+export const uploadAudioMiddleware: RequestHandler = (req, res, next) =>
+  runUpload(parseAudio, req, res, next);
+
+export const uploadTurnAudioMiddleware: RequestHandler = (req, res, next) =>
+  runUpload(parseTurnAudio, req, res, next);
 
 /**
  * Ownership, mode, state and ceiling need nothing from the body, so they run BEFORE multer
  * buffers up to 10 MiB into memory — a rejected request never costs the heap its payload.
  * The interview row is stashed for the handler; `advanceWithAnswer` re-validates state and
  * index atomically, so the parse window between the two cannot smuggle a stale advance.
+ * `conductTurn` re-reads the same row for the same reason, which is why both audio routes can
+ * share this guard.
  */
 export const guardVoiceAnswer: RequestHandler = async (req, res, next) => {
   const interview = await activeInterview(String(req.params.id));
@@ -104,12 +134,67 @@ export const guardVoiceAnswer: RequestHandler = async (req, res, next) => {
   next();
 };
 
-export const submitAnswerAudio: RequestHandler = async (req, res) => {
-  const interview = res.locals.interview as Awaited<ReturnType<typeof activeInterview>>;
+type VoiceInterview = NonNullable<Awaited<ReturnType<typeof activeInterview>>>;
+
+/** The recording the guard let through, or the 400 that says there wasn't one. */
+function recordingFrom(req: Request, res: Response): {
+  interview: VoiceInterview;
+  file: Express.Multer.File;
+} {
+  const interview = res.locals.interview as VoiceInterview | undefined;
   if (!interview) throw new ApiError('INTERVIEW_NOT_FOUND');
 
   const file = req.file;
   if (!file || file.size === 0) throw new ApiError('SPEECH_AUDIO_INVALID');
+
+  return { interview, file };
+}
+
+/**
+ * The recording, transcribed and paid for.
+ *
+ * I08 wraps the provider call: an interview already at its budget never reaches Scribe.
+ * meterStt writes the `second` `llm_calls` row and increments `spent_usd` in one transaction,
+ * under the lock; a `transcribe` that throws bills nothing. Shared by both audio routes so
+ * neither can drift into billing the candidate for a session it then refuses to end.
+ */
+async function transcribeRecording(
+  interview: VoiceInterview,
+  file: Express.Multer.File,
+  traceId: string,
+): Promise<{ transcript: string; seconds: number }> {
+  try {
+    return await withBudget(interview.id, async () => {
+      const result = await speechProvider.transcribe(file.buffer, {
+        mime: file.mimetype,
+        language: interview.language,
+      });
+      await meterStt(interview.id, result.seconds, traceId);
+      return result;
+    });
+  } catch (err) {
+    if (err instanceof BudgetExceeded) {
+      logger.warn({ traceId, interviewId: interview.id }, 'BUDGET_EXHAUSTED');
+      // ADR-I32: a losing transition must not replace the caller's error.
+      try {
+        await applyTransition(interview, 'evaluating', {
+          traceId,
+          endedReason: 'budget_exhausted',
+        });
+      } catch (transitionErr) {
+        logger.error(
+          { err: transitionErr, traceId, interviewId: interview.id },
+          'INTERVIEW_END_FAILED',
+        );
+      }
+      throw new ApiError('BUDGET_EXCEEDED');
+    }
+    throw err;
+  }
+}
+
+export const submitAnswerAudio: RequestHandler = async (req, res) => {
+  const { interview, file } = recordingFrom(req, res);
 
   // The client names the question it recorded for, exactly like a typed answer does — that is
   // what lets a retried or duplicate upload fail QUESTION_NOT_CURRENT instead of consuming the
@@ -122,39 +207,7 @@ export const submitAnswerAudio: RequestHandler = async (req, res) => {
   const question = await currentQuestionRow(interview);
   if (!question || question.id !== questionId) throw new ApiError('QUESTION_NOT_CURRENT');
 
-  // I08 wraps the provider call: an interview already at its budget never reaches Scribe.
-  // meterStt writes the `second` `llm_calls` row and increments `spent_usd` in one
-  // transaction, under the lock; a `transcribe` that throws bills nothing.
-  let transcript: string;
-  let seconds: number;
-  try {
-    ({ transcript, seconds } = await withBudget(interview.id, async () => {
-      const result = await speechProvider.transcribe(file.buffer, {
-        mime: file.mimetype,
-        language: interview.language,
-      });
-      await meterStt(interview.id, result.seconds, req.traceId!);
-      return result;
-    }));
-  } catch (err) {
-    if (err instanceof BudgetExceeded) {
-      logger.warn({ traceId: req.traceId, interviewId: interview.id }, 'BUDGET_EXHAUSTED');
-      // ADR-I32: a losing transition must not replace the caller's error.
-      try {
-        await applyTransition(interview, 'evaluating', {
-          traceId: req.traceId!,
-          endedReason: 'budget_exhausted',
-        });
-      } catch (transitionErr) {
-        logger.error(
-          { err: transitionErr, traceId: req.traceId, interviewId: interview.id },
-          'INTERVIEW_END_FAILED',
-        );
-      }
-      throw new ApiError('BUDGET_EXCEEDED');
-    }
-    throw err;
-  }
+  const { transcript, seconds } = await transcribeRecording(interview, file, req.traceId!);
   // The audio buffer is not referenced past this point (ADR-S07).
 
   // The transcript is untrusted provider output: it reaches `advanceWithAnswer` only through
@@ -167,6 +220,37 @@ export const submitAnswerAudio: RequestHandler = async (req, res) => {
   if (!parsed.success) throw new ApiError('SPEECH_TRANSCRIPTION_FAILED');
 
   const result = await advanceWithAnswer(interview, parsed.data, { traceId: req.traceId! });
+
+  logger.info(
+    { traceId: req.traceId, interviewId: interview.id, seconds },
+    'SPEECH_STT_TRANSCRIBED',
+  );
+
+  res.status(200).json(result);
+};
+
+/**
+ * `POST /interviews/:id/turns/audio` (C06) — one spoken utterance, whatever it turns out to be.
+ *
+ * No `questionId` and no `QUESTION_NOT_CURRENT` pre-check, and their absence is the point: a
+ * turn is not addressed to a question, so there is nothing for the client to name and nothing
+ * to be stale about. What `/answers/audio` used that check for — refusing a duplicate upload
+ * before it consumed the next question — `conductTurn` covers differently: it decides whether
+ * the index moves at all, so a re-sent recording costs a turn, not a question.
+ */
+export const submitTurnAudio: RequestHandler = async (req, res) => {
+  const { interview, file } = recordingFrom(req, res);
+
+  const { transcript, seconds } = await transcribeRecording(interview, file, req.traceId!);
+  // The audio buffer is not referenced past this point (ADR-S07).
+
+  // Same §7.1 boundary the answer path enforces: the transcript is provider output, and it
+  // reaches the conductor only through the schema a typed turn is parsed by. An empty or
+  // over-long one is a failed transcription, not an utterance.
+  const parsed = turnInputSchema.safeParse({ text: transcript, inputMode: 'voice' });
+  if (!parsed.success) throw new ApiError('SPEECH_TRANSCRIPTION_FAILED');
+
+  const result = await conductTurn(interview, parsed.data, { traceId: req.traceId! });
 
   logger.info(
     { traceId: req.traceId, interviewId: interview.id, seconds },

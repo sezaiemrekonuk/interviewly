@@ -484,6 +484,8 @@
     "roleHr": "HR interviewer",
     "roleTech": "Technical interviewer",
     "speakerYou": "You",
+    "roleSystem": "Interview system",
+    "choosePlaceholder": "Choose an answer",
     "progress": "Question {index} of {total}",
     "waiting": "Preparing the next question…",
     "starting": "This interview hasn't started yet. Starting it now…",
@@ -496,6 +498,7 @@
     "resume": "Resume",
     "stalled": "The next question could not be prepared. Nothing you answered is lost — try again to rebuild it.",
     "retry": "Try again",
+    "conversationTitle": "Conversation",
     "transcriptTitle": "Answers so far",
     "transcriptEmpty": "No answers yet.",
     "voice": {

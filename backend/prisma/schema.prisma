@@ -141,6 +141,25 @@ enum ChatRole {
   system
 }
 
+/// What the conductor decided at the end of a turn (ADR-C01). Stored on the assistant row
+/// that carried the decision, so the interview's flow is readable from the conversation
+/// alone — `continue` is a real value, not the absence of one, because "the interviewer
+/// chose to stay on this question" and "nobody recorded a choice" are different facts.
+///
+/// `drift` is the one value the model cannot produce: the server writes it on the system row
+/// it injects when the per-question ceiling is reached and the advance is forced.
+enum ConductorAction {
+  continue
+  next_question
+  handover
+  end_interview
+  show_widget
+  drift
+  /// C07 — the server refused what the interviewer asked for. Written on a system row so the
+  /// next turn can read that it was overruled; a refusal the model cannot see is only a delay.
+  refused
+}
+
 /// K8.6 — one `email_tokens` table serves both flows.
 enum EmailTokenKind {
   verify
@@ -346,13 +365,25 @@ model InterviewRound {
 }
 
 model Question {
-  id            String        @id @default(cuid())
-  round_id      String
-  order_index   Int
-  text          String
-  kind          QuestionKind
-  difficulty    Difficulty
-  topic         String
+  id          String       @id @default(cuid())
+  round_id    String
+  order_index Int
+  /// What was actually asked. Written by the batch as the fallback wording (C05) and
+  /// overwritten by the conductor with the sentence it really said, so the report always
+  /// quotes the interview rather than the plan.
+  text        String
+  kind        QuestionKind
+  difficulty  Difficulty
+  topic       String
+  /// C05 — what this slot is *for*, in the interviewer's words ("find out how they handle
+  /// a deadline they cannot meet"). The conductor writes the question from this; `text` is
+  /// only the sentence to fall back to when there is no conductor to write one.
+  intent      String?
+  /// C04 — a typed answer surface the conductor put on screen for this question:
+  /// `{ kind: 'textbox' | 'choice', label, options? }`. Null is the ordinary spoken or
+  /// typed answer, which is most questions.
+  widget      Json?
+
   candidates    Json? // K4's two unselected candidates, retained for admin analysis
   chosen_reason ChosenReason?
   asked_at      DateTime?
@@ -360,6 +391,7 @@ model Question {
   round            InterviewRound   @relation(fields: [round_id], references: [id], onDelete: Restrict)
   answers          Answer[]
   report_questions ReportQuestion[]
+  chat_messages    ChatMessage[]
 
   @@unique([round_id, order_index]) // order_index is unique within a round
   @@map("questions")
@@ -450,15 +482,30 @@ model Upload {
 }
 
 model ChatMessage {
-  id           String   @id @default(cuid())
+  id           String           @id @default(cuid())
   interview_id String
   role         ChatRole
   content      String
+  /// C01 — which question this utterance belongs to. Null for anything said outside a
+  /// question's window: the opening welcome, and the handover line between rounds.
+  ///
+  /// This is what makes an answer recoverable. A conversational turn is many user messages
+  /// per question, so `answers.transcript` is the join of every user row carrying this id —
+  /// without it there is no way to tell a clarification apart from the answer it clarified.
+  question_id  String?
+  /// The conductor's decision for this turn; null on user rows, which decide nothing.
+  action       ConductorAction?
+  /// C07 — this utterance matched a §7.1 prompt-injection pattern. Evidence, not a summary:
+  /// the report is allowed to quote the sentence rather than merely count it.
+  flagged_injection Boolean         @default(false)
   trace_id     String // joins a K6 log line's traceId to the row that produced it
-  created_at   DateTime @default(now())
+  created_at   DateTime         @default(now())
 
   interview Interview @relation(fields: [interview_id], references: [id], onDelete: Restrict)
+  question  Question? @relation(fields: [question_id], references: [id], onDelete: Restrict)
 
+  /// Replay reads one interview's messages in the order they were said, on every turn.
+  @@index([interview_id, created_at])
   @@map("chat_messages")
 }
 

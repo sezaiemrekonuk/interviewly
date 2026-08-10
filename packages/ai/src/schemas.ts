@@ -25,7 +25,19 @@ const score = z.number().int().min(0).max(SCORE_MAX);
 const ratio = z.number().min(0).max(1);
 
 export const QuestionSchema = z.object({
+  /**
+   * The askable sentence. Since C05 this is the *fallback* wording rather than the script:
+   * the conductor writes the question it really asks from `intent` and overwrites this. It
+   * stays required, and stays a real question, because it is what an interview falls back to
+   * when the conductor cannot be reached mid-round — an agenda with no sentences would leave
+   * a provider outage with nothing to ask.
+   */
   text: z.string().min(1),
+  /**
+   * C05 — what this slot is for, in the interviewer's own words. Optional so that v1/v2 of
+   * the generation prompt (still on disk, still resolvable by version) keep validating.
+   */
+  intent: z.string().min(1).optional(),
   kind: QuestionKindSchema,
   difficulty: DifficultySchema,
   topic: z.string().min(1),
@@ -64,6 +76,48 @@ export const ScoresSchema = z.object({
   reasons: z.array(z.string().min(1)).min(1).max(5),
 });
 
+/**
+ * C04 — the answer surface the conductor can put on screen instead of asking for prose.
+ * `options` is required by `choice` and meaningless to `textbox`; the refine below is what
+ * stops a choice widget rendering as a list of nothing.
+ */
+export const WidgetSchema = z
+  .object({
+    kind: z.enum(['textbox', 'choice']),
+    label: z.string().min(1).max(200),
+    options: z.array(z.string().min(1).max(120)).min(2).max(6).optional(),
+  })
+  .refine((w) => w.kind !== 'choice' || (w.options?.length ?? 0) >= 2, {
+    message: 'a choice widget needs at least two options',
+  });
+
+/**
+ * C02 — one conductor turn. This is the whole tool-calling surface, expressed as JSON rather
+ * than as provider-native tools: `providers.ts` speaks to both tiers through one hand-rolled
+ * `fetch` each, and a native tool call would have to be implemented, validated and kept in
+ * step twice. One schema through the layer-2 gate that already exists costs nothing new and
+ * fails the same way everything else in this package fails.
+ *
+ * `say` is what the candidate hears or reads. `action` is what the server is being asked to
+ * do about it — asked, not told: every value is re-checked against the interview's real state
+ * in `conductor.ts` before anything is written, because this object is derived from candidate
+ * text and is therefore untrusted input in the §7.1 sense.
+ */
+export const ConductorTurnSchema = z.object({
+  say: z.string().min(1).max(1500),
+  action: z.enum(['continue', 'next_question', 'handover', 'end_interview', 'show_widget']),
+  /**
+   * The question `say` actually put to the candidate, without the acknowledgement that
+   * preceded it. Written to `questions.text` on `next_question` so the report quotes the
+   * interview rather than the batch's planned wording. Ignored for every other action.
+   */
+  question: z.string().min(1).max(600).optional(),
+  /** Required by `end_interview`, ignored otherwise. The server maps it to `EndedReason`. */
+  endReason: z.enum(['completed', 'cut_short']).optional(),
+  /** Required by `show_widget`, ignored otherwise. */
+  widget: WidgetSchema.optional(),
+});
+
 export const ReportPayloadSchema = z.object({
   overall_impression: z.string().min(1),
   overall_score: score,
@@ -96,6 +150,8 @@ export type RoundType = z.infer<typeof RoundTypeSchema>;
 export type Question = z.infer<typeof QuestionSchema>;
 export type QuestionBatch = z.infer<typeof QuestionBatchSchema>;
 export type Candidate = z.infer<typeof CandidateSchema>;
+export type Widget = z.infer<typeof WidgetSchema>;
+export type ConductorTurn = z.infer<typeof ConductorTurnSchema>;
 export type Scores = z.infer<typeof ScoresSchema>;
 export type InterviewTitle = z.infer<typeof InterviewTitleSchema>;
 export type ReportPayload = z.infer<typeof ReportPayloadSchema>;

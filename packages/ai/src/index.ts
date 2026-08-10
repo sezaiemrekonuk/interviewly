@@ -7,16 +7,19 @@
 export type {
   AiClient,
   AiCtx,
+  ConductTurnArgs,
   GenerateCandidatesArgs,
   GenerateInterviewTitleArgs,
   GenerateReportArgs,
   GenerateRoundQuestionsArgs,
+  ReportIntegrity,
   ScoreAnswerArgs,
 } from './AiClient';
 export { TIMEOUT_MS } from './AiClient';
 
 export {
   CandidateSchema,
+  ConductorTurnSchema,
   DifficultySchema,
   INTERVIEW_TITLE_MAX,
   InterviewTitleSchema,
@@ -27,9 +30,11 @@ export {
   RoundTypeSchema,
   SCORE_MAX,
   ScoresSchema,
+  WidgetSchema,
 } from './schemas';
 export type {
   Candidate,
+  ConductorTurn,
   Difficulty,
   InterviewTitle,
   Question,
@@ -38,6 +43,7 @@ export type {
   ReportPayload,
   RoundType,
   Scores,
+  Widget,
 } from './schemas';
 
 export { PromptRegistry, loadPromptRegistry, PROMPTS_DIR } from './registry';
@@ -58,6 +64,7 @@ export { StubAiClient } from './stub';
 export {
   PROMPT_NAMES,
   candidateVars,
+  conductVars,
   questionVars,
   reportVars,
   scoreVars,

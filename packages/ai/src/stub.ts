@@ -12,6 +12,7 @@
  */
 import type {
   AiClient,
+  ConductTurnArgs,
   GenerateCandidatesArgs,
   GenerateInterviewTitleArgs,
   GenerateReportArgs,
@@ -23,6 +24,7 @@ import { detectLanguage, type LanguageDetection } from './detect-language';
 import {
   PROMPT_NAMES,
   candidateVars,
+  conductVars,
   questionVars,
   reportVars,
   scoreVars,
@@ -30,12 +32,14 @@ import {
 } from './prompt-vars';
 import {
   CandidateSchema,
+  ConductorTurnSchema,
   INTERVIEW_TITLE_MAX,
   InterviewTitleSchema,
   QuestionBatchSchema,
   ReportPayloadSchema,
   ScoresSchema,
   type Candidate,
+  type ConductorTurn,
   type Difficulty,
   type InterviewTitle,
   type QuestionBatch,
@@ -68,6 +72,7 @@ export class StubAiClient implements AiClient {
       QuestionBatchSchema,
       {
         questions: Array.from({ length: args.count }, (_, i) => ({
+          intent: `Stub intent ${i + 1}.`,
           text: `Stub ${args.roundType} question ${i + 1}.`,
           kind: kinds[i % kinds.length],
           difficulty: DIFFICULTIES[i % DIFFICULTIES.length],
@@ -162,6 +167,44 @@ export class StubAiClient implements AiClient {
       InterviewTitleSchema,
       { title: firstLine.slice(0, INTERVIEW_TITLE_MAX).trim() || 'Interview' },
       'generateInterviewTitle',
+    );
+  }
+
+  /**
+   * The stub conducts the interview the way the pre-C02 code did: one candidate utterance is
+   * one answer, and the question always advances. That is not laziness about the fake — it is
+   * what keeps every acceptance scenario written against `POST /answers` true of the turn
+   * loop as well. A stub that decided to `continue` sometimes would make the question count
+   * of a keyless interview depend on canned text.
+   *
+   * The exception is the opening turn, which the empty conversation identifies: nothing has
+   * been said, so there is nothing to advance past and the turn is a welcome. The server does
+   * not advance on it either — `conductor.ts` treats the first assistant message for a
+   * question row as the *asking* of it, whatever action came back.
+   */
+  async conductTurn(args: ConductTurnArgs): Promise<ConductorTurn> {
+    this.builder.build({
+      promptName: PROMPT_NAMES.conductTurn,
+      vars: conductVars(args),
+      ctx: args.ctx,
+    });
+
+    if (args.conversation.length === 0) {
+      return parse(
+        ConductorTurnSchema,
+        {
+          say: `Welcome. I am ${args.personaName} and I will be running this ${args.roundType} round.`,
+          action: 'next_question',
+          question: 'Stub opening question.',
+        },
+        'conductTurn',
+      );
+    }
+
+    return parse(
+      ConductorTurnSchema,
+      { say: 'Stub acknowledgement. Stub next question.', action: 'next_question', question: 'Stub next question.' },
+      'conductTurn',
     );
   }
 

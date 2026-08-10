@@ -51,6 +51,11 @@ export const meRouter = Router();
 // including the routers mounted after it, which own their guard.
 // `/me` is the prefix of every route below, so this still covers the whole router.
 meRouter.use('/me', requirePublicOrigin);
+// Hard auth, deliberately. A soft probe that answers 200 { user: null } for a session that no
+// longer resolves is indistinguishable from "signed out cleanly": it hides a revoked session
+// (AC-26) and an erased account (KVKK), and `useRequireAuth` routes on UNAUTHENTICATED, so a
+// 200 leaves a protected page rendered for nobody. The console line the 401 costs anonymously
+// is worth that.
 meRouter.get('/me', requireAuth, me);
 // A06: the account profile (K8.7, §3.3 layer 1). PATCH is rate-limited per user, not per
 // IP — the endpoint is authenticated, so the account is the thing worth protecting.

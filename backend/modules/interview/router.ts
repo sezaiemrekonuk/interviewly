@@ -15,6 +15,7 @@ import { resumeInterview } from './resume';
 import { setupInterview } from './setup';
 import { streamInterviewEvents } from './sse';
 import { getInterviewState } from './state';
+import { submitTurn } from './turns';
 
 const router = Router();
 router.use(requireAuth);
@@ -34,6 +35,9 @@ router.delete('/:id', deleteInterview);
 
 router.post('/:id/profile', submitProfile);
 router.post('/:id/answers', submitAnswer);
+// C02 — the conversational path the room uses. `/answers` stays: it is the plain
+// one-answer-one-advance contract, and the acceptance suite is written against it.
+router.post('/:id/turns', submitTurn);
 
 router.post('/:id/resume', resumeInterview);
 router.get('/:id/events', streamInterviewEvents);

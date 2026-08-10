@@ -2,20 +2,20 @@
 
 import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 
 import { AnswerComposer } from '../../../../../components/room/answer-composer';
+import { Conversation } from '../../../../../components/room/conversation';
 import { PersonaTiles } from '../../../../../components/room/persona-tiles';
 import { QuestionPanel } from '../../../../../components/room/question-panel';
 import { RoomRail } from '../../../../../components/room/room-rail';
 import { useRouter } from '../../../../../i18n/navigation';
 import { DEFAULT_LANDING_PATH } from '../../../../../lib/auth-redirect';
-import { Transcript } from '../../../../../components/room/transcript';
 import { VoiceControls } from '../../../../../components/room/voice-controls';
 import { SplitShell, WorkTop } from '../../../../../components/shell/split-shell';
 import { Button } from '../../../../../components/ui';
 import { routeForError } from '../../../../../lib/error-routing';
-import { ApiError, useInterviewState, useResumeInterview, useSubmitAnswer } from '../../../../../lib/query';
+import { ApiError, useInterviewState, useResumeInterview, useSubmitTurn } from '../../../../../lib/query';
 import { resolveAvatarState, roomPhase } from '../../../../../lib/room-avatar';
 import { useErrorMessage } from '../../../../../lib/use-error-message';
 import { useInterviewEvents } from '../../../../../lib/use-interview-events';
@@ -61,7 +61,7 @@ export default function InterviewRoomPage() {
   // K11 — the event is a nudge; it invalidates the state key and nothing here reads its body.
   useInterviewEvents(ready ? id : null);
 
-  const submit = useSubmitAnswer(id);
+  const submit = useSubmitTurn(id);
   const resume = useResumeInterview(id);
   const [typedFor, setTypedFor] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -82,16 +82,15 @@ export default function InterviewRoomPage() {
   // `mode` is the server's, so a fatal voice error (V03 downgrade) lands here as a plain
   // refetch and the room becomes the text room — there is no client-side mode flag to unset.
   const voiceMode = room?.mode === 'voice';
-  // The turn the server is on, and the only thing that starts one (K11). A paused room or a
-  // round with no question yet hands down `null`, which is the loop's "speak nothing".
-  const questionId = room?.currentQuestion?.id ?? null;
-  const currentIndex = room?.currentIndex ?? null;
   const speakable = roomState === 'hr_round' || roomState === 'tech_round';
-  const turn = useMemo(
-    () => (speakable && questionId && currentIndex ? { index: currentIndex, questionId } : null),
-    [speakable, questionId, currentIndex],
-  );
-  const voice = useVoiceSession(id, { enabled: voiceMode, turn });
+  // C06 — voice follows the conversation, not the question index: the welcome, a follow-up and
+  // the handover line are all things to say and none of them is a question.
+  //
+  // `room.messages` is passed through exactly as react-query hands it over. It is an effect
+  // dependency inside the hook, and a `.filter()` or a spread here would mint a fresh array on
+  // every render — the mic meter re-renders this room ~60x/s, which would tear the speak effect
+  // down mid-fetch and, because an id is marked spoken before its fetch, nothing would ever play.
+  const voice = useVoiceSession(id, { enabled: voiceMode, messages: room?.messages, speakable });
 
   // Navigation belongs in an effect: routing during render is what makes a redirect fire twice.
   useEffect(() => {
@@ -158,10 +157,25 @@ export default function InterviewRoomPage() {
 
   if (!room) return null;
 
+  // C02 — the interviewer's last line, which is what the room is actually showing. In voice it
+  // is the caption; in text it is the bottom of the conversation. It is not always the question:
+  // a follow-up, the handover line and the closing line are all things it says.
+  const messages = room.messages ?? [];
+  const lastSpoken = messages.filter((m) => m.role === 'assistant').at(-1) ?? null;
+  // The question has been *delivered* once the interviewer has said something carrying its id.
+  // Text mode has no typewriter to finish any more (the question arrives inside the
+  // conversation), so this is what stands in for `typedFor` there — without it the phase would
+  // sit on `typing-question` forever and the avatar would never stop speaking.
+  const askedCurrent =
+    room.currentQuestion &&
+    messages.some((m) => m.role === 'assistant' && m.questionId === room.currentQuestion?.id)
+      ? room.currentQuestion.id
+      : null;
+
   const phase = roomPhase({
     state: room.state,
     question: room.currentQuestion,
-    typedFor,
+    typedFor: voiceMode ? typedFor : askedCurrent,
     submitting: submit.isPending,
   });
   const serverAvatarState = room.persona?.avatarState ?? 'idle';
@@ -173,8 +187,9 @@ export default function InterviewRoomPage() {
     ? (voice.beat ?? resolveAvatarState('settled', serverAvatarState))
     : resolveAvatarState(phase, serverAvatarState);
 
-  // A meeting does not open with a document on screen; a written Q&A keeps its record out.
-  const showTranscript = transcriptOpen ?? !voiceMode;
+  // A meeting does not open with a document on screen. In text the conversation IS the main
+  // column now (C02), so the side panel would be the same thing twice and is never shown.
+  const showTranscript = voiceMode ? (transcriptOpen ?? false) : false;
   const speaker = room.persona?.name ?? null;
 
   // K2 — the round decides who has the floor, audio only decides how loud. `room.persona` is
@@ -189,10 +204,12 @@ export default function InterviewRoomPage() {
     if (!room?.currentQuestion) return false;
     setSubmitError(null);
     try {
+      // C02 — a turn, not an answer: no questionId, because whether this closes the question is
+      // the interviewer's call and not the room's. `widget` is the mode only when the
+      // interviewer put a surface on screen for this question.
       await submit.mutateAsync({
-        questionId: room.currentQuestion.id,
-        transcript,
-        inputMode: 'text',
+        text: transcript,
+        inputMode: room.currentQuestion.widget ? 'widget' : 'text',
       });
       return true;
     } catch (err) {
@@ -219,20 +236,46 @@ export default function InterviewRoomPage() {
     />
   );
 
-  // The waiting panel is the truth right up until it is not — past `STALLED_AFTER_MS` it
-  // would keep promising a question that no longer has anything generating it, and in a room
-  // that has not started there is no *next* question for it to be promising.
+  // The caption, voice only. It shows the interviewer's last *line* rather than the current
+  // question row (C02): what was spoken is what should be captioned, and half of what the
+  // interviewer says now belongs to no question at all. Falling back to the question row keeps
+  // a pre-C02 interview — or one whose greeting failed to generate — captioned rather than blank.
+  //
+  // The waiting panel is the truth right up until it is not: past `STALLED_AFTER_MS` it would
+  // keep promising a question nothing is generating, and a room that has not started has no
+  // *next* question for it to be promising.
+  const captionSource = lastSpoken
+    ? { id: lastSpoken.id, text: lastSpoken.content }
+    : room.currentQuestion;
   const question = stalled || starting ? null : (
-    // One question, one instance: the panel's typed state resets by remount, not by effect.
+    // One line, one instance: the panel's typed state resets by remount, not by effect.
     <QuestionPanel
-      key={room.currentQuestion?.id ?? 'waiting'}
-      question={room.currentQuestion}
+      key={captionSource?.id ?? 'waiting'}
+      question={captionSource}
       onTyped={setTypedFor}
-      instant={voiceMode}
+      instant
       speaker={speaker ?? undefined}
-      className={voiceMode ? styles.caps : styles.writtenSheet}
+      className={styles.caps}
     />
   );
+
+  // C04 — the answer surface. Text mode always has one; voice mode gets one only when the
+  // interviewer put a widget on screen, which is the whole point of `show_widget`: some
+  // answers are a list or a precise value, and dictating those is worse than typing them.
+  const widget = room.currentQuestion?.widget ?? null;
+  const composer =
+    room.currentQuestion && room.state !== 'paused' && !stalled && !starting && (!voiceMode || widget) ? (
+      // Keyed on the question: a retained draft belongs to the question it was typed for. It
+      // used to survive into the next one — across a pause and resume most of all — and be sent
+      // as the answer to a question it never read (#90).
+      <AnswerComposer
+        key={room.currentQuestion.id}
+        onSubmit={handleSubmit}
+        pending={submit.isPending}
+        error={submitError}
+        widget={widget}
+      />
+    ) : null;
 
   // Three rooms the candidate cannot answer from, and they must not look alike: one is
   // starting itself, one is paused, one has given up. Only the last two carry a control —
@@ -328,6 +371,9 @@ export default function InterviewRoomPage() {
                   stage the bar would land on the captions the moment it wrapped. */}
               <div className={styles.footRow}>
                 {captionsOn ? question : null}
+                {/* C04 — the one thing a voice room gets a keyboard for. It appears only when
+                    the interviewer asked for it, so the room is still audio-first. */}
+                {composer}
                 {notice}
                 {room.state !== 'paused' && !stalled && !starting ? (
                   <VoiceControls
@@ -342,27 +388,43 @@ export default function InterviewRoomPage() {
               </div>
             </section>
           ) : (
-            // Text is not this room with the audio off: a written Q&A on the light surface,
-            // the roster reduced to a strip, no stage and no controls.
+            // Text is not this room with the audio off: a written exchange on the light surface,
+            // the roster reduced to a strip, no stage and no controls. Since C02 it is a
+            // conversation rather than one question at a time, so the record is the column
+            // itself — the side panel would be the same content twice and is not rendered.
             <div className={styles.written}>
               {tiles}
-              {question}
-              {notice}
-              {room.currentQuestion && room.state !== 'paused' ? (
-                // Keyed like the panel above: a retained draft belongs to the question it was
-                // typed for. It used to survive into the next one — across a pause and resume
-                // most of all — and be sent as the answer to a question it never read (#90).
-                <AnswerComposer
-                  key={room.currentQuestion.id}
-                  onSubmit={handleSubmit}
-                  pending={submit.isPending}
-                  error={submitError}
+              <Conversation
+                messages={messages}
+                speakerName={speaker ?? undefined}
+                personas={room.personas}
+              />
+              {/* The waiting beat survives C02. A live round with no question is a real state —
+                  the batch is still generating — and the conversation alone would leave the
+                  last thing said on screen with no sign anything is coming, which reads as a
+                  room that has quietly stopped. That is exactly the confusion #89 was about. */}
+              {!room.currentQuestion && !stalled && !starting ? (
+                <QuestionPanel
+                  question={null}
+                  onTyped={setTypedFor}
+                  instant
+                  className={styles.writtenSheet}
                 />
               ) : null}
+              {notice}
+              {composer}
             </div>
           )}
 
-          <Transcript turns={room.transcript} live={voiceMode} open={showTranscript} />
+          {voiceMode ? (
+            <Conversation
+              messages={messages}
+              speakerName={speaker ?? undefined}
+              personas={room.personas}
+              live
+              open={showTranscript}
+            />
+          ) : null}
         </div>
       </SplitShell>
     </div>
