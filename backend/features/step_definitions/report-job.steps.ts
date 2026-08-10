@@ -21,7 +21,7 @@ import { redis } from '../../modules/auth/rate-limit';
 import { applyTransition } from '../../modules/interview/machine';
 import { runReport } from '../../modules/interview/report-run';
 import { enqueueReport } from '../../modules/interview/sse';
-import { REPORT_QUEUE, reportQueue } from '../../src/lib/queue';
+import { REPORT_QUEUE, REPORT_QUEUE_PREFIX, reportQueue } from '../../src/lib/queue';
 
 import { signInAsAdmin } from './admin.steps';
 import { arriveAtQuestion } from './answers.steps';
@@ -98,13 +98,13 @@ When('the report job completes for the interview', async function (this: AiWorld
   const job = await reportQueue.getJob(this.interviewId);
   assert.ok(job, 'no report job was enqueued for this interview');
 
-  const queueEvents = new QueueEvents(REPORT_QUEUE, { connection });
+  const queueEvents = new QueueEvents(REPORT_QUEUE, { connection, prefix: REPORT_QUEUE_PREFIX });
   const worker = new Worker(
     REPORT_QUEUE,
     async (queuedJob: Job<{ interviewId: string }>) => {
       await runReport(queuedJob.data.interviewId, { traceId: `trace-${queuedJob.data.interviewId}` });
     },
-    { connection },
+    { connection, prefix: REPORT_QUEUE_PREFIX },
   );
   try {
     await job.waitUntilFinished(queueEvents, 20_000);
@@ -184,13 +184,13 @@ When('the report job fails until its retry budget is exhausted', async function 
   // `handleReportJobFailed` is deliberately NOT wired here. Without it the dead-letter never
   // runs and the interview sits in `evaluating` with no report — the live shape issue 081
   // found four of.
-  const queueEvents = new QueueEvents(REPORT_QUEUE, { connection });
+  const queueEvents = new QueueEvents(REPORT_QUEUE, { connection, prefix: REPORT_QUEUE_PREFIX });
   const worker = new Worker(
     REPORT_QUEUE,
     async () => {
       throw new Error('forced report job loss');
     },
-    { connection },
+    { connection, prefix: REPORT_QUEUE_PREFIX },
   );
   try {
     await assert.rejects(job.waitUntilFinished(queueEvents, 20_000));
@@ -201,14 +201,7 @@ When('the report job fails until its retry budget is exhausted', async function 
 });
 
 When('the report job is deleted from Redis', async function (this: AiWorld) {
-  // Byte for byte the issue's own reproduction step — `redis-cli del bull:report:<interviewId>`
-  // — rather than `reportQueue.remove`, which is the call the endpoint makes and would prove
-  // nothing about a job the queue never got to clean up itself.
-  //
-  // This is the branch the retained-job scenarios cannot reach: `remove` answers 1 for a job
-  // that is merely absent, so a requeue that gated on its return code would refuse exactly the
-  // case issue 081 was filed about. Pins that.
-  const deleted = await redis.del(`bull:${REPORT_QUEUE}:${this.interviewId}`);
+  const deleted = await redis.del(`${REPORT_QUEUE_PREFIX ?? 'bull'}:${REPORT_QUEUE}:${this.interviewId}`);
   assert.equal(deleted, 1, 'the report job hash was not there to delete');
 });
 
