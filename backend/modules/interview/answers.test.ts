@@ -10,19 +10,27 @@
  * 2. The hook is inside I08's ceiling. It spends on every turn now, so an interview that has
  *    exhausted its budget must stop paying for adaptivity — but not stop, because the turn is
  *    already stored and the default next question is askable.
+ *
+ * 3. The same for the ADR-I22 batch at the handover (#90): the answer is committed before it
+ *    runs, so a provider outage there is a paused interview and a 200, not a 503 telling the
+ *    candidate the answer they gave was lost.
  */
-import type { Interview } from '@prisma/client';
+import type { Interview, InterviewState } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { ApiError } from '../../src/lib/api-error';
 
 const calls: string[] = [];
 
 // The advance and the turn run inside one interactive transaction (#70), so what these
 // scenarios need from `$transaction` is a client to hand the callback. Whether the boundary
 // actually rolls back is a database question, and `answers.integration.test.ts` asks it.
+/** Hoisted out of the factory so a scenario can ask whether the turn was written at all. */
+const answerCreate = vi.fn(async () => ({ id: 'ans_1' }));
 vi.mock('../../src/lib/db', () => {
   const tx = {
     interview: { updateMany: vi.fn(async () => ({ count: 1 })) },
-    answer: { create: vi.fn(async () => ({ id: 'ans_1' })) },
+    answer: { create: () => answerCreate() },
     chatMessage: { create: vi.fn(async () => ({})) },
   };
   return { prisma: { ...tx, $transaction: (fn: (c: typeof tx) => unknown) => fn(tx) } };
@@ -43,8 +51,20 @@ vi.mock('./state', () => ({
   })),
 }));
 
-vi.mock('./generation', () => ({ ensureTechBatch: vi.fn(async () => undefined) }));
-vi.mock('./machine', () => ({ applyTransition: vi.fn(async () => 'hr_round') }));
+/**
+ * The ADR-I22 batch, per scenario. The failing variant pauses the caller's copy before it
+ * throws, because that is what `generation.ts` does through `applyTransition` — and the
+ * handover below has to see it.
+ */
+const ensureTechBatch = vi.fn(async (_interview: Interview) => undefined);
+vi.mock('./generation', () => ({
+  ensureTechBatch: (interview: Interview) => ensureTechBatch(interview),
+}));
+
+const applyTransition = vi.fn(async (_interview: Interview, to: InterviewState) => to);
+vi.mock('./machine', () => ({
+  applyTransition: (interview: Interview, to: InterviewState) => applyTransition(interview, to),
+}));
 
 /** The switch this turn completes: I10 returns the new language, `advanceWithAnswer` adopts it. */
 vi.mock('./language', () => ({
@@ -71,11 +91,12 @@ vi.mock('./budget', () => ({
     if (budgetSpent.value) throw new BudgetExceeded();
     return fn();
   },
-  // The tech batch's ceiling (budget.test.ts owns what it does when it refuses). Never reached
-  // from `tech_round`, where these scenarios run — it is here because the module is mocked whole.
+  // The tech batch's ceiling. `budget.test.ts` owns what the real one does when it refuses;
+  // what matters here is the shape of the refusal it hands back — the 402 code, not
+  // `BudgetExceeded`, which it converts after ending the interview.
   withBudgetOrEnd: async (_interview: Interview, fn: () => Promise<unknown>) => {
     calls.push('withBudgetOrEnd');
-    if (budgetSpent.value) throw new BudgetExceeded();
+    if (budgetSpent.value) throw new ApiError('BUDGET_EXCEEDED');
     return fn();
   },
 }));
@@ -94,17 +115,26 @@ const interview = () =>
     language: 'en',
   }) as unknown as Interview;
 
+// The last HR turn: `nextIndex` (5) passes `hr_question_count`, so this is the one submit that
+// generates the technical batch and then hands the round over.
+const atHandover = () =>
+  ({ ...interview(), state: 'hr_round', current_index: 4 }) as unknown as Interview;
+
 beforeEach(() => {
   calls.length = 0;
   languageSeenByHook = undefined;
   budgetSpent.value = false;
   promoteNextQuestion.mockClear();
+  answerCreate.mockClear();
+  ensureTechBatch.mockClear();
+  ensureTechBatch.mockImplementation(async () => undefined);
+  applyTransition.mockClear();
   warn.mockClear();
 });
 
-function submit() {
+function submit(subject: Interview = interview()) {
   return advanceWithAnswer(
-    interview(),
+    subject,
     { questionId: 'qst_1', transcript: 'Bir cevap.', inputMode: 'text' },
     { traceId: 'trace-1' },
   );
@@ -133,5 +163,47 @@ describe('advanceWithAnswer', () => {
     await expect(submit()).resolves.toMatchObject({ nextIndex: 4 });
     expect(promoteNextQuestion).not.toHaveBeenCalled();
     expect(warn).toHaveBeenCalledWith(expect.anything(), 'ADAPTIVE_SKIPPED_NO_BUDGET');
+  });
+
+  describe('when the technical batch fails at the handover (#90)', () => {
+    /** What `generation.ts` does: pause through `applyTransition`, then rethrow the code. */
+    function providerOutage() {
+      ensureTechBatch.mockImplementation(async (subject: Interview) => {
+        subject.state = 'paused';
+        throw new ApiError('AI_PROVIDER_UNAVAILABLE');
+      });
+    }
+
+    it('keeps the answer and reports the pause instead of failing the request', async () => {
+      providerOutage();
+
+      await expect(submit(atHandover())).resolves.toEqual({ state: 'paused', nextIndex: 5 });
+      expect(answerCreate).toHaveBeenCalled();
+      expect(warn).toHaveBeenCalledWith(expect.anything(), 'TECH_BATCH_FAILED');
+    });
+
+    // `paused → tech_round` is not an edge, so the handover would answer 409 — replacing a
+    // recorded answer with the wrong problem.
+    it('does not attempt the handover out of a paused interview', async () => {
+      providerOutage();
+
+      await submit(atHandover());
+
+      expect(applyTransition).not.toHaveBeenCalled();
+    });
+
+    // The one refusal that still fails the request: the interview has ended, and the room
+    // routes 402 to a silent refetch that lands on the ended state (@AC-11, I08).
+    it('still raises BUDGET_EXCEEDED', async () => {
+      budgetSpent.value = true;
+
+      await expect(submit(atHandover())).rejects.toMatchObject({ code: 'BUDGET_EXCEEDED' });
+      expect(answerCreate).toHaveBeenCalled();
+    });
+  });
+
+  it('hands the round over when the batch lands', async () => {
+    await expect(submit(atHandover())).resolves.toEqual({ state: 'tech_round', nextIndex: 5 });
+    expect(ensureTechBatch).toHaveBeenCalled();
   });
 });

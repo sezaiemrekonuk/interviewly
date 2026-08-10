@@ -224,6 +224,38 @@ describe('interview room, text mode (W06)', () => {
     expect(calls.filter((c) => c.url === '/api/interviews/i1/answers')).toHaveLength(1);
   });
 
+  // Issue 90: a refused answer keeps its text, deliberately — but it used to keep it across
+  // the arrival of the *next* question, where pressing Send recorded it against a question
+  // the candidate never read.
+  it('empties the composer when the next question arrives', async () => {
+    const calls = stubFetch({
+      states: [
+        roomState(),
+        roomState({
+          currentIndex: 2,
+          currentQuestion: {
+            id: 'q2',
+            text: 'Explain an index.',
+            kind: 'text',
+            widget: null,
+            deliveredAt: '2026-08-04T10:05:00.000Z',
+          },
+        }),
+      ],
+      answer: { status: 409, body: { error: { code: 'QUESTION_NOT_CURRENT' } } },
+    });
+    const user = userEvent.setup();
+    await renderRoom();
+
+    await user.type(screen.getByLabelText(messages.room.answerLabel), 'Late answer.');
+    await user.click(screen.getByRole('button', { name: messages.room.submit }));
+
+    await waitFor(() =>
+      expect(calls.filter((c) => c.url === '/api/interviews/i1/state')).toHaveLength(2),
+    );
+    expect(screen.getByLabelText(messages.room.answerLabel)).toHaveValue('');
+  });
+
   it('shows the waiting beat instead of a blank panel when a live round has no question', async () => {
     stubFetch({ states: [roomState({ currentQuestion: null })] });
     await renderRoom();
