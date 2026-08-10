@@ -1,10 +1,9 @@
-import type { Metadata } from "next";
 import localFont from "next/font/local";
-import { NextIntlClientProvider } from "next-intl";
-import { getLocale, getMessages, getTranslations } from "next-intl/server";
+import { getLocale } from "next-intl/server";
 import "./globals.css";
-import { Providers } from "./providers";
-import { SITE_NAME, SITE_ORIGIN } from "../lib/site";
+import { SITE_ORIGIN } from "../lib/site";
+
+import type { Metadata } from "next";
 
 // Direction B's three roles. Self-hosted woff2 because the CSP is `default-src 'self'`;
 // each is subset to latin + latin-ext so Turkish (İ ğ Ğ ş Ş) renders — enforced by
@@ -34,49 +33,28 @@ const jetbrainsMono = localFont({
   display: "swap",
 });
 
+/** The deployment's origin, which every relative URL below the tree resolves against. */
+export const metadata: Metadata = {
+  metadataBase: new URL(SITE_ORIGIN),
+};
+
 /**
- * The whole metadata surface used to be two hardcoded English lines, applied identically to
- * every route in both languages — so sharing any link rendered a bare grey box, and the
- * Turkish site described itself in English (issue 92).
+ * The document, and only the document. Everything that needs to know *which* language this is
+ * lives in `[locale]/layout.tsx`; this file exists above that segment because `not-found.tsx`
+ * does too.
  *
- * A function, not a constant, because none of it is static: the copy is the landing page's own
- * translated hero, and `metadataBase` is the deployment's origin. `title.template` is what
- * lets each route name itself without repeating the brand.
+ * Next renders a not-found outside the matched route's layouts, and when the only layout owning
+ * `<html>` sat inside a dynamic segment it had no params to render with — so a 404 came back as
+ * a bare error shell with the designed page reachable only after hydration (issue 91). Owning
+ * the document one level up puts every response, matched or not, inside the same `<html>`.
+ *
+ * `lang` comes from the negotiated locale rather than from a route param for the same reason:
+ * an unmatched URL has no `[locale]` to read, but the middleware has already decided which
+ * language it was asking for.
  */
-export async function generateMetadata(): Promise<Metadata> {
-  const locale = await getLocale();
-  const t = await getTranslations({ locale, namespace: 'landing' });
-
-  return {
-    metadataBase: new URL(SITE_ORIGIN),
-    title: { default: SITE_NAME, template: `%s · ${SITE_NAME}` },
-    description: t('subhead'),
-    applicationName: SITE_NAME,
-    openGraph: {
-      type: 'website',
-      siteName: SITE_NAME,
-      locale,
-      title: t('hero'),
-      description: t('subhead'),
-      // Resolved against `metadataBase`; `opengraph-image.tsx` is what serves it.
-      images: ['/opengraph-image'],
-    },
-    twitter: {
-      card: 'summary_large_image',
-      title: t('hero'),
-      description: t('subhead'),
-      images: ['/opengraph-image'],
-    },
-    alternates: { canonical: '/' },
-  };
-}
-
 export default async function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
-  const messages = await getMessages();
+}: Readonly<{ children: React.ReactNode }>) {
   const locale = await getLocale();
 
   return (
@@ -84,11 +62,7 @@ export default async function RootLayout({
       lang={locale}
       className={`${sourceSerif.variable} ${publicSans.variable} ${jetbrainsMono.variable}`}
     >
-      <body>
-        <NextIntlClientProvider locale={locale} messages={messages}>
-          <Providers>{children}</Providers>
-        </NextIntlClientProvider>
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

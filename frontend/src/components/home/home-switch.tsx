@@ -1,8 +1,8 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
 import { useEffect, type ReactNode } from 'react';
 
+import { useRouter } from '../../i18n/navigation';
 import { firstRunPath } from '../../lib/first-run';
 import { probeSession } from '../../lib/session-probe';
 

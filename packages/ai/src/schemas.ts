@@ -13,8 +13,14 @@ export const QuestionKindSchema = z.enum(['open', 'behavioral', 'technical', 'wi
 export const DifficultySchema = z.enum(['easy', 'medium', 'hard']);
 export const RoundTypeSchema = z.enum(['hr', 'tech']);
 
-/** Integer 0..5 — every score in this package, without exception. */
-const score = z.number().int().min(0).max(5);
+/**
+ * The score ceiling. Every score in this package is an integer 0..SCORE_MAX, without
+ * exception — exported because the worker's PDF and the prompts' `0..100` wording are the
+ * same fact, and a second literal is how a rescale half-lands (ADR-I39).
+ */
+export const SCORE_MAX = 100;
+
+const score = z.number().int().min(0).max(SCORE_MAX);
 /** 0..1 inclusive — STAR adherence. */
 const ratio = z.number().min(0).max(1);
 

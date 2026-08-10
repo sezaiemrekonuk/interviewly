@@ -119,7 +119,7 @@ report_questions                ← written by R02 (denormalised from payload.qu
   id             String @id (cuid)
   report_id      String FK → reports.id
   question_id    String FK → questions.id
-  score          Int            (0..5)
+  score          Int            (0..100)
   reason         String
   star_adherence Float          (0..1)
 ```

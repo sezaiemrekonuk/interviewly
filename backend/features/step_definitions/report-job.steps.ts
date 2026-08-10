@@ -219,28 +219,42 @@ Then('no report job exists for the interviewId', async function (this: AiWorld) 
 When('a report row is written while the interview is still evaluating', async function (this: AiWorld) {
   // Issue 082's crash window, staged directly: the report transaction committed and the
   // `evaluating → completed` one did not. The requeue must still be allowed here.
-  await prisma.report.create({
-    data: {
+  //
+  // An upsert since issue #123: the row is opened when the job is enqueued, so this fixture
+  // is now describing a row that already exists — what it stages is the *status*, which is
+  // the half the scenario is about.
+  await prisma.report.upsert({
+    where: { interview_id: this.interviewId },
+    create: {
       interview_id: this.interviewId,
       status: 'ready',
       prompt_uuid: randomUUID(),
       prompt_version: 1,
     },
+    update: { status: 'ready' },
   });
 });
 
-When('the interview is dead-lettered with no report row', async function (this: AiWorld) {
+When('the interview is dead-lettered with no report', async function (this: AiWorld) {
   // What R03's `handleDeadLetter` leaves behind once the retries are gone: state `failed`, and
-  // no `reports` row at all — I09 only ever creates one on the success branch. Driven through
-  // `applyTransition` rather than a direct write for the reason K2 exists: nothing in this
-  // system writes `interviews.state` any other way.
+  // no report — which since issue #123 is a row that *says* so rather than no row at all. That
+  // is the point of the change: a lost report used to be indistinguishable from one still
+  // being written, and both looked like nothing. Driven through `applyTransition` rather than
+  // a direct write for the reason K2 exists: nothing writes `interviews.state` any other way.
   const interview = await prisma.interview.findUniqueOrThrow({ where: { id: this.interviewId } });
   await applyTransition(interview, 'failed', { traceId: `trace-${this.interviewId}` });
-  assert.equal(
-    await prisma.report.count({ where: { interview_id: this.interviewId } }),
-    0,
-    'the dead-letter fixture must leave no report row',
-  );
+  await prisma.report.updateMany({
+    where: { interview_id: this.interviewId, status: { not: 'ready' } },
+    data: { status: 'failed' },
+  });
+
+  // The property that matters is unchanged: nothing readable was produced.
+  const ready = await prisma.report.count({
+    where: { interview_id: this.interviewId, status: 'ready' },
+  });
+  assert.equal(ready, 0, 'the dead-letter fixture must leave no readable report');
+  const row = await prisma.report.findFirst({ where: { interview_id: this.interviewId } });
+  assert.equal(row?.payload ?? null, null, 'a dead-lettered report must hold no payload');
 });
 
 When('an unauthenticated client requeues the report for the interview', async function (this: AiWorld) {

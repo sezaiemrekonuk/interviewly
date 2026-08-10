@@ -4,7 +4,7 @@
  * The stub `scoreAnswer` returns a fixed, self-valid score, so it can neither vary the score
  * nor emit a malformed one. The score is instead injected: `advanceWithAnswer` is called
  * directly with a client whose `scoreAnswer` returns exactly the score the row under test
- * needs — valid 0..5 for the graded outline, out-of-range for the malformed scenario. This is
+ * needs — valid 0..100 for the graded outline, out-of-range for the malformed scenario. This is
  * the module-level seam ADR-D03/@AC-1 already use when HTTP cannot configure the AI.
  *
  * The interview is parked on a *technical* question (index 5 of 8), so submitting it fires no
@@ -150,8 +150,8 @@ Given('the stub AI scores the submitted answer {int}', function (_overall: numbe
 });
 
 Given('the stub AI is configured to return a score with overall {int}', function (overall: number) {
-  // Out of the schema's 0..5 range: the selector must treat it as ungraded, never promote it.
-  configuredScore = { ...validScore(3), overall };
+  // Out of the schema's 0..100 range: the selector must treat it as ungraded, never promote it.
+  configuredScore = { ...validScore(60), overall };
 });
 
 // ---------------------------------------------------------------- when

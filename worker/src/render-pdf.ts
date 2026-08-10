@@ -5,7 +5,7 @@
  */
 import PDFDocument from 'pdfkit';
 
-import type { ReportPayload } from '@interviewly/ai';
+import { SCORE_MAX, type ReportPayload } from '@interviewly/ai';
 
 export interface ReportPdfMeta {
   interviewId: string;
@@ -53,7 +53,7 @@ export async function renderReportPdf(
     .text(`Generated ${meta.createdAt.toISOString()}`)
     .text(`Language ${payload.language}`);
 
-  heading(`Overall — ${payload.overall_score}/5`);
+  heading(`Overall — ${payload.overall_score}/${SCORE_MAX}`);
   doc.text(payload.overall_impression);
 
   heading('Strengths');
@@ -64,7 +64,7 @@ export async function renderReportPdf(
 
   heading('Rounds');
   for (const round of payload.rounds) {
-    doc.font('Helvetica-Bold').text(`${round.type} — ${round.score}/5`);
+    doc.font('Helvetica-Bold').text(`${round.type} — ${round.score}/${SCORE_MAX}`);
     doc.font('Helvetica').text(round.summary);
     if (round.note) doc.text(round.note);
     doc.moveDown(0.4);
@@ -74,7 +74,7 @@ export async function renderReportPdf(
   for (const question of payload.questions) {
     doc
       .font('Helvetica-Bold')
-      .text(`${question.question_id} — ${question.score}/5 · STAR ${question.star_adherence}`);
+      .text(`${question.question_id} — ${question.score}/${SCORE_MAX} · STAR ${question.star_adherence}`);
     doc.font('Helvetica').text(question.reason);
     doc.moveDown(0.4);
   }

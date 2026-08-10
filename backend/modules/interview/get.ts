@@ -13,7 +13,14 @@ import { prisma } from '../../src/lib/db';
  */
 export const getInterview: RequestHandler = async (req, res) => {
   const interview = req.interview!;
-  const report = await prisma.report.findFirst({ where: { interview_id: interview.id } });
+  // `status: 'ready'` (issue #123). A row now exists from the moment the job is enqueued, and
+  // an in-flight one has no payload — so answering with it would tell the client a report had
+  // arrived when none had. The report surface polls on this field's presence and renders on it,
+  // so presence has to keep meaning "finished". Surfacing `queued`/`generating` to the room is
+  // a UI change, not a serialisation one, and belongs with that work.
+  const report = await prisma.report.findFirst({
+    where: { interview_id: interview.id, status: 'ready' },
+  });
 
   res.status(200).json({
     interviewId: interview.id,

@@ -8,7 +8,8 @@
     "noFileChosen": "No file selected",
     "clearFile": "Remove",
     "showPassword": "Show",
-    "hidePassword": "Hide"
+    "hidePassword": "Hide",
+    "skipToContent": "Skip to content"
   },
   "chrome": {
     "newInterview": "New interview",
@@ -534,8 +535,8 @@
     "backToInterviews": "Back to my interviews",
     "earlyEnd": "This interview ended early — the report scores what was answered.",
     "scoreLabel": "Overall score",
-    "scoreMax": "/ 5",
-    "scoreValue": "{score} / 5",
+    "scoreMax": "/ {max}",
+    "scoreValue": "{score} / {max}",
     "roundsTitle": "Rounds",
     "roundHr": "HR round",
     "roundTech": "Technical round",

@@ -25,7 +25,7 @@ import { AiWorld } from './world';
 const TOTAL_QUESTIONS = 5;
 
 /** What the injected client returns on the next run. */
-let payloadKind: 'valid' | 'overall_score_7' = 'valid';
+let payloadKind: 'valid' | 'overall_score_out_of_range' = 'valid';
 
 const realWarn = logger.warn;
 
@@ -75,16 +75,16 @@ async function payloadFor(world: AiWorld): Promise<ReportPayload> {
   });
   return {
     overall_impression: 'The candidate answered every question and stayed on topic throughout.',
-    overall_score: payloadKind === 'overall_score_7' ? 7 : 4,
+    overall_score: payloadKind === 'overall_score_out_of_range' ? 101 : 80,
     strengths: ['Answers stayed on topic', 'Consistent structure'],
     improvements: ['Add concrete metrics', 'Close with the outcome'],
     rounds: [
-      { type: 'hr', score: 4, summary: 'Communicated clearly.' },
-      { type: 'tech', score: 3, summary: 'Reasonable depth on the core topic.' },
+      { type: 'hr', score: 80, summary: 'Communicated clearly.' },
+      { type: 'tech', score: 60, summary: 'Reasonable depth on the core topic.' },
     ],
     questions: questions.map((q, i) => ({
       question_id: q.id,
-      score: i % 5,
+      score: (i % 5) * 20,
       reason: 'Addressed the question with a concrete example.',
       star_adherence: 0.5,
     })),
@@ -109,8 +109,8 @@ Given('an interview has reached {string}', async function (this: AiWorld, state:
 When(
   'the stub AI is configured to return a report with overall_score {int}',
   function (score: number) {
-    assert.equal(score, 7, 'the malformed fixture is overall_score 7');
-    payloadKind = 'overall_score_7';
+    assert.equal(score, 101, 'the malformed fixture is overall_score 101');
+    payloadKind = 'overall_score_out_of_range';
   },
 );
 
@@ -132,7 +132,13 @@ When('the report job runs', async function (this: AiWorld) {
 // ---------------------------------------------------------------- then
 
 Then('no report payload is stored for the interview', async function (this: AiWorld) {
-  assert.equal(await prisma.report.count({ where: { interview_id: this.interviewId } }), 0);
+  // The step's own name is the property, and it is the one that survives issue #123: the
+  // invalid branch stores nothing readable. What changed is that the row now exists and says
+  // `failed`, where before its absence was the only signal — and an absence cannot tell a
+  // failed report apart from one that was never started.
+  const row = await prisma.report.findFirst({ where: { interview_id: this.interviewId } });
+  assert.equal(row?.payload ?? null, null, 'the invalid branch must store no payload');
+  assert.notEqual(row?.status, 'ready', 'a refused payload must not leave a ready report');
 });
 
 // `an "…" event is emitted` is ai-provider.steps.ts's regex over `world.events`, which is why
@@ -148,14 +154,14 @@ async function storedPayload(world: AiWorld): Promise<ReportPayload> {
 function assertScore(value: unknown, label: string): void {
   assert.equal(typeof value, 'number', `${label} is not a number`);
   assert.ok(Number.isInteger(value), `${label} is not an integer`);
-  assert.ok((value as number) >= 0 && (value as number) <= 5, `${label} is outside 0..5`);
+  assert.ok((value as number) >= 0 && (value as number) <= 100, `${label} is outside 0..100`);
 }
 
-Then('the stored report overall_score is an integer in 0..5', async function (this: AiWorld) {
+Then('the stored report overall_score is an integer in 0..100', async function (this: AiWorld) {
   assertScore((await storedPayload(this)).overall_score, 'overall_score');
 });
 
-Then('every stored rounds[].score is an integer in 0..5', async function (this: AiWorld) {
+Then('every stored rounds[].score is an integer in 0..100', async function (this: AiWorld) {
   const payload = await storedPayload(this);
   assert.ok(payload.rounds.length > 0, 'no rounds in the stored payload');
   for (const round of payload.rounds) assertScore(round.score, `rounds[${round.type}].score`);
@@ -164,7 +170,7 @@ Then('every stored rounds[].score is an integer in 0..5', async function (this: 
 // Asserted against `report_questions` as well as the payload: the denormalised copy is what
 // the admin "weakest questions" query reads, and a payload-only check would not notice it
 // being empty.
-Then('every stored questions[].score is an integer in 0..5', async function (this: AiWorld) {
+Then('every stored questions[].score is an integer in 0..100', async function (this: AiWorld) {
   const payload = await storedPayload(this);
   assert.ok(payload.questions.length > 0, 'no questions in the stored payload');
   for (const q of payload.questions) assertScore(q.score, `questions[${q.question_id}].score`);

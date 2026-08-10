@@ -1,6 +1,6 @@
 import { useTranslations } from 'next-intl';
-import Link from 'next/link';
 
+import { Link } from '../../i18n/navigation';
 import styles from './legal.module.css';
 
 export type LegalDoc = 'privacy' | 'terms';
@@ -32,7 +32,7 @@ export function LegalPage({ doc }: { doc: LegalDoc }) {
   const sections = d.raw('sections') as Section[];
 
   return (
-    <main className={styles.doc}>
+    <main id="content" tabIndex={-1} className={styles.doc}>
       <article className={styles.sheet}>
         <header className={styles.head}>
           <p className={styles.updated}>{t('updated')}</p>

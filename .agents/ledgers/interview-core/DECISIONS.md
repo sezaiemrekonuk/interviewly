@@ -822,3 +822,45 @@ replica is still publishing. Business logic keeps its ordering.
 The publish is best-effort (the questions are already written; a Redis outage must not fail a
 generated round), and the room's `STALLED_AFTER_MS` timer stays as the backstop for a nudge
 that never lands. `generation.ts` now imports `sse.ts`, which `machine.ts` already did.
+
+---
+
+## ADR-I39 — 2026-08-09 — every score is an integer 0..100; old rows are rescaled ×20, prompts get a v2
+
+**Context:** Every score in the product was an integer `0..5` (`packages/ai/src/schemas.ts`,
+ADR-I18's K15 gate). Six buckets is too coarse for what the report claims to do — two answers
+one bucket apart differ by twenty points of the visible scale, and the model has no way to say
+"better than a 3, not yet a 4". Moving to `0..100` touches the schema, the prompts that write
+the numbers, the B5 selection cuts, the rows already stored, and every surface that prints
+`/ 5`. The forks: what the ceiling is, what happens to stored rows, and whether the prompts
+are edited in place or versioned.
+
+**Decision:** `SCORE_MAX = 100`, exported from `schemas.ts`, is the single ceiling; `score`
+is `int().min(0).max(SCORE_MAX)` and nothing else in the package restates it. Every existing
+cut point is multiplied by twenty rather than re-derived: the B5 table becomes `0–40` easier /
+`41–60` same / `61–100` harder (`adaptive-select.ts`), and the dashboard's `WEAKNESS_CEILING`
+becomes 60. Stored rows are rescaled ×20 by `20260809200000_score_scale_0_100` — two INTEGER
+columns and the two JSONB blobs (`answers.scores`, `reports.payload`). The three prompts that
+read or write a score gain a **v2** file with the same uuid (`interview.answer.score`,
+`interview.report.generate`, `interview.question.candidates`); `registry.resolve()` serves the
+highest version, so nothing else changed to adopt them.
+
+**Why ×20 rather than a fresh rubric:** it is the only mapping under which a stored report
+reads the same after the migration as before it, and the only one that keeps every existing
+acceptance scenario a statement about the same behaviour. Re-deriving the cuts would have made
+this two changes — a rescale and a rebalancing — with no way to tell which one broke a run.
+
+**Why not edit the prompts in place:** `reports.prompt_version` and `llm_calls.prompt_version`
+name which prompt produced a stored number. Editing v1 would make every historical row claim a
+scale it never used, which is exactly the audit the version column exists to support. The
+migration therefore leaves `prompt_version` alone: it names the author of the prose, and the
+numbers beside it changed unit, not author.
+
+**Consequences:** the ceiling now lives in two places — `packages/ai` for the server, and
+`frontend/src/lib/score.ts` for the browser, which has no workspace dependency on the package
+(it would pull zod and the prompt registry into the bundle). The frontend copy also owns
+`scoreBand()`, so the `[data-band]` tone rules in `dashboard.module.css` and
+`question-table.module.css` keep their three-band contract with the cuts stated once instead
+of inline in each component. `report.scoreMax`/`scoreValue` in both locale files take a
+`{max}` parameter rather than carrying the number in copy. Answers scored before the migration
+keep their band but not their resolution: a rescaled 80 was a 4, never a 78.

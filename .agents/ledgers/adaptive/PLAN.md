@@ -81,7 +81,7 @@ columns F02 already defines:
 
 ## Selection rule (the core mechanic — IDEA.md K4, ai spec B5)
 
-`overall` is the integer `0..5` from the validated `Scores`. Difficulty is ordered
+`overall` is the integer `0..100` from the validated `Scores`. Difficulty is ordered
 `easy < medium < hard`.
 
 | `overall` | Next difficulty | Topic | `chosen_reason` |

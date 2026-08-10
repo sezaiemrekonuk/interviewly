@@ -8,7 +8,8 @@
     "noFileChosen": "Dosya seçilmedi",
     "clearFile": "Kaldır",
     "showPassword": "Göster",
-    "hidePassword": "Gizle"
+    "hidePassword": "Gizle",
+    "skipToContent": "İçeriğe geç"
   },
   "chrome": {
     "newInterview": "Yeni mülakat",
@@ -534,8 +535,8 @@
     "backToInterviews": "Mülakatlarıma dön",
     "earlyEnd": "Bu mülakat erken bitti — rapor yalnızca cevapladığın soruları puanlar.",
     "scoreLabel": "Genel puan",
-    "scoreMax": "/ 5",
-    "scoreValue": "{score} / 5",
+    "scoreMax": "/ {max}",
+    "scoreValue": "{score} / {max}",
     "roundsTitle": "Turlar",
     "roundHr": "İK turu",
     "roundTech": "Teknik tur",

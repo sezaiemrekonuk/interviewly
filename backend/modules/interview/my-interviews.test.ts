@@ -27,12 +27,12 @@ const { listMyInterviews } = await import('./my-interviews');
 /** A payload as `reports.payload` stores it — snake_case, K15's shape (schemas.ts). */
 const payload = {
   overall_impression: 'Solid.',
-  overall_score: 4,
+  overall_score: 80,
   strengths: ['clear', 'structured'],
   improvements: ['more depth', 'more detail'],
   rounds: [
-    { type: 'hr', score: 3, summary: 'warm' },
-    { type: 'tech', score: 5, summary: 'strong' },
+    { type: 'hr', score: 60, summary: 'warm' },
+    { type: 'tech', score: 95, summary: 'strong' },
   ],
   questions: [],
   language: 'en',
@@ -87,8 +87,8 @@ describe('GET /me/interviews', () => {
     const { items } = await call();
     expect(items[0]).toMatchObject({
       id: 'itv_1',
-      overallScore: 4,
-      roundScores: { hr: 3, tech: 5 },
+      overallScore: 80,
+      roundScores: { hr: 60, tech: 95 },
     });
   });
 
@@ -145,8 +145,8 @@ describe('GET /me/interviews', () => {
     page.push(interview([{ payload: { ...payload, rounds: [payload.rounds[0]] } }]));
 
     expect((await call()).items[0]).toMatchObject({
-      overallScore: 4,
-      roundScores: { hr: 3, tech: null },
+      overallScore: 80,
+      roundScores: { hr: 60, tech: null },
     });
   });
 
@@ -157,7 +157,7 @@ describe('GET /me/interviews', () => {
 
     const { items } = await call();
     expect(items[0]).toMatchObject({ overallScore: null, roundScores: { hr: null, tech: null } });
-    expect(items[1]).toMatchObject({ overallScore: 4 });
+    expect(items[1]).toMatchObject({ overallScore: 80 });
   });
 
   it('still scopes and pages exactly as before', async () => {

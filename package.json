@@ -9,7 +9,9 @@
   ],
   "scripts": {
     "build": "npm run -w @interviewly/types build && npm run -w @interviewly/ai build && npm run -w frontend build && npm run -w backend build",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "//prisma:generate": "Prisma Client is generated code, and nothing regenerates it on a developer machine: the root postinstall of @prisma/client finds no schema (it hoists to the workspace root), and a real postinstall here would run during the Docker deps stage, where only the manifests have been copied and the schema does not exist yet. So the one command that reads the generated types runs it first — a pulled schema change costs 1.5s instead of a type error naming a property rather than a cause.",
+    "prisma:generate": "prisma generate --schema backend/prisma/schema.prisma",
+    "typecheck": "npm run prisma:generate && tsc --noEmit -p tsconfig.json",
     "lint": "eslint . --ext .ts,.tsx",
     "test": "node --env-file-if-exists=.env node_modules/.bin/vitest run",
     "//test:integration": "The vitest files `test` excludes: they need a live Postgres and Redis, which the CI `unit` job has neither of. Run against host-reachable servers — `.env`'s `db:5432`/`cache:6379` only resolve inside the compose network — by exporting DATABASE_URL and REDIS_URL first (a shell export wins over --env-file).",

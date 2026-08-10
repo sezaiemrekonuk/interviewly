@@ -18,5 +18,10 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.test.{ts,tsx}'],
+    // `next` ships no `exports` map, so `next/navigation` only resolves under CommonJS
+    // extension guessing. Vitest leaves node_modules external and loads them as native ESM,
+    // where that guessing does not happen — so next-intl's own `import … from 'next/navigation'`
+    // fails to resolve. Inlining routes it through Vite's resolver, which does guess.
+    server: { deps: { inline: ['next-intl'] } },
   },
 });

@@ -222,12 +222,12 @@ describe('crash between the report write and the transition (issue 082)', () => 
     ({
       generateReport: async () => ({
         overall_impression: 'Answered the question and stayed on topic.',
-        overall_score: 3,
+        overall_score: 60,
         strengths: ['Stayed on topic', 'Consistent structure'],
         improvements: ['Add metrics', 'State the outcome'],
-        rounds: [{ type: 'hr', score: 3, summary: 'Stub HR round.' }],
+        rounds: [{ type: 'hr', score: 60, summary: 'Stub HR round.' }],
         questions: [
-          { question_id: questionId, score: 3, reason: 'Clear ownership.', star_adherence: 0.6 },
+          { question_id: questionId, score: 60, reason: 'Clear ownership.', star_adherence: 0.6 },
         ],
         language: 'en',
       }),
@@ -366,13 +366,13 @@ describe('schema-gate failure (I09)', () => {
   const clientReturning = (payload: ReportPayload): AiClient =>
     ({ generateReport: async () => payload }) as unknown as AiClient;
 
-  // `overall_score` is 0..5 in `ReportPayloadSchema`; 7 is the canonical gate rejection.
+  // `overall_score` is 0..100 in `ReportPayloadSchema`; 101 is the canonical gate rejection.
   const invalidPayload = {
     overall_impression: 'Rejected by the gate.',
-    overall_score: 7,
+    overall_score: 101,
     strengths: ['Stayed on topic', 'Consistent structure'],
     improvements: ['Add metrics', 'State the outcome'],
-    rounds: [{ type: 'hr', score: 4, summary: 'Stub HR round.' }],
+    rounds: [{ type: 'hr', score: 80, summary: 'Stub HR round.' }],
     questions: [],
     language: 'en',
   } as unknown as ReportPayload;

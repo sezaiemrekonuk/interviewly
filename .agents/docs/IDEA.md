@@ -1339,18 +1339,18 @@ Nine points, tied for the heaviest single criterion. It gets a schema.
 ```ts
 {
   overall_impression: string,          // 3-5 sentences
-  overall_score: 0..5,
+  overall_score: 0..100,
   strengths: string[],                 // 2-5 items
   improvements: string[],              // 2-5 items
   rounds: [{
     type: 'hr' | 'tech',
-    score: 0..5,
+    score: 0..100,
     summary: string,
     note?: string                      // e.g. "HR round was weak" (K5, no elimination)
   }],
   questions: [{
     question_id: string,
-    score: 0..5,
+    score: 0..100,
     reason: string,                    // why this score, referencing the answer
     star_adherence: 0..1               // 0 for non-narrative questions
   }],

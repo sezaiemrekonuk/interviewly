@@ -32,10 +32,10 @@ const { listMyQuestions } = await import('./my-questions');
 
 /** K4's stored score — snake_case, as `adaptive.ts` writes it (schemas.ts §ScoresSchema). */
 const storedScores = {
-  overall: 4,
-  relevance: 4,
-  depth: 3,
-  structure: 5,
+  overall: 80,
+  relevance: 80,
+  depth: 60,
+  structure: 95,
   star_adherence: 0.8,
   reasons: ['Concrete example, thin on outcome.'],
 };
@@ -50,7 +50,7 @@ const answer = (over: Row = {}, question: Row = {}): Row => ({
     text: 'Tell me about a conflict you resolved.',
     round: { type: 'hr', interview: { id: 'itv_1', occupation: 'Backend Engineer' } },
     report_questions: [
-      { score: 4, reason: 'Named the outcome.', star_adherence: new Prisma.Decimal('0.75') },
+      { score: 80, reason: 'Named the outcome.', star_adherence: new Prisma.Decimal('0.75') },
     ],
     ...question,
   },
@@ -97,14 +97,14 @@ describe('GET /me/questions', () => {
         text: 'Tell me about a conflict you resolved.',
         answeredAt: new Date('2026-01-02T09:00:00.000Z'),
         durationMs: 42_000,
-        score: 4,
+        score: 80,
         reason: 'Named the outcome.',
         starAdherence: 0.75,
         answerScores: {
-          overall: 4,
-          relevance: 4,
-          depth: 3,
-          structure: 5,
+          overall: 80,
+          relevance: 80,
+          depth: 60,
+          structure: 95,
           starAdherence: 0.8,
           reasons: ['Concrete example, thin on outcome.'],
         },
@@ -212,6 +212,6 @@ describe('GET /me/questions', () => {
     const { items } = await call();
     expect(items[0].answerScores).toBeNull();
     expect(items[1].answerScores).toBeNull();
-    expect(items[2].answerScores).toMatchObject({ overall: 4 });
+    expect(items[2].answerScores).toMatchObject({ overall: 80 });
   });
 });
