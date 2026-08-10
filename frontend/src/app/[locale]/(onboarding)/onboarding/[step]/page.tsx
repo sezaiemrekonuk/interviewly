@@ -29,6 +29,7 @@ import {
 import { Button } from '../../../../../components/ui';
 import { useRouter } from '../../../../../i18n/navigation';
 import { apiPost } from '../../../../../lib/api';
+import { routeForError } from '../../../../../lib/error-routing';
 import {
   useProfile,
   useSaveProfileCard,
@@ -77,7 +78,7 @@ export default function OnboardingStepPage({ params }: { params: Promise<{ step:
   const router = useRouter();
   const { user, loading: authLoading } = useRequireAuth();
   // useRequireAuth redirects UNAUTHENTICATED itself; don't ask for the profile before it has.
-  const { data, isPending } = useProfile(!authLoading && Boolean(user));
+  const { data, isPending, error: profileError } = useProfile(!authLoading && Boolean(user));
   const saveCard = useSaveProfileCard();
   const uploadCvMutation = useUploadCv();
 
@@ -108,6 +109,16 @@ export default function OnboardingStepPage({ params }: { params: Promise<{ step:
   const resumeStep = data ? firstUnfilledStep(data.profile) : null;
   const mustResume = resumeStep !== null && resumeStep < step && !passedSteps.has(resumeStep);
 
+  // Where a sign-in round trip has to come back to (§4.5), for both the query below and the
+  // save paths further down.
+  const pathname = `/onboarding/${step}`;
+
+  useEffect(() => {
+    // A session that lapsed before the profile resolved: the error was discarded, so `data`
+    // stayed undefined and the card rendered `null` — a blank page with no way out (issue 99).
+    if (profileError) routeForError(profileError.code, router, { pathname });
+  }, [profileError, router, pathname]);
+
   useEffect(() => {
     // A hand-edited step is not a step. This needs no profile, but it does wait for the
     // session: an anonymous visitor belongs to useRequireAuth's redirect, and racing it
@@ -127,13 +138,23 @@ export default function OnboardingStepPage({ params }: { params: Promise<{ step:
     if (mustResume) router.replace(`/onboarding/${resumeStep}`);
   }, [validStep, user, data, mustResume, resumeStep, router]);
 
+  /**
+   * True when the code has no navigation of its own and belongs in the card's banner.
+   * `UNAUTHENTICATED` does have one: it used to render as "Sign in to continue." on a card
+   * carrying no sign-in control, so Continue could never succeed again (issue 99).
+   */
+  function rendersInline(code: string): boolean {
+    return routeForError(code, router, { pathname }) === 'inline';
+  }
+
   async function uploadCv(file: File) {
     setCvError(null);
     try {
       await uploadCvMutation.mutateAsync(file);
     } catch (err) {
       // A refused upload leaves the previously attached CV — if any — exactly where it was.
-      setCvError(err instanceof Error ? err.message : 'UNKNOWN');
+      const code = err instanceof Error ? err.message : 'UNKNOWN';
+      if (rendersInline(code)) setCvError(code);
     }
   }
 
@@ -147,7 +168,8 @@ export default function OnboardingStepPage({ params }: { params: Promise<{ step:
     // Replay of an already-complete account answers 200 too — same navigation, no error.
     const result = await apiPost('/me/profile/complete', {});
     if (!result.ok) {
-      setSaveError(result.code);
+      const code = result.code ?? 'UNKNOWN';
+      if (rendersInline(code)) setSaveError(code);
       return;
     }
     router.replace('/interviews/new');
@@ -185,7 +207,8 @@ export default function OnboardingStepPage({ params }: { params: Promise<{ step:
       await saveCard.mutateAsync(card);
     } catch (err) {
       // A refused save keeps the draft on screen and does not advance (screen table).
-      setSaveError(err instanceof Error ? err.message : 'UNKNOWN');
+      const code = err instanceof Error ? err.message : 'UNKNOWN';
+      if (rendersInline(code)) setSaveError(code);
       return;
     }
     if (step === 3) {

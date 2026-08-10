@@ -16,6 +16,7 @@ import {
 import { Button, Field, Input } from '../../../../components/ui';
 import { Link, useRouter } from '../../../../i18n/navigation';
 import { DEFAULT_LANDING_PATH } from '../../../../lib/auth-redirect';
+import { routeForError } from '../../../../lib/error-routing';
 import { useCreateInterview, useSubmitProfile } from '../../../../lib/query';
 import { useErrorMessage } from '../../../../lib/use-error-message';
 import { useRequireAuth } from '../../../../lib/use-require-auth';
@@ -180,7 +181,11 @@ function InterviewSetup() {
       );
     } catch (err) {
       const code = err instanceof Error ? err.message : 'UNKNOWN';
-      setFormError(errorMessage(code));
+      // A session that lapsed while the listing was being pasted is a navigation, not a
+      // banner: this screen has no sign-in control, so Start would fail forever (issue 99).
+      if (routeForError(code, router, { pathname: '/interviews/new' }) === 'inline') {
+        setFormError(errorMessage(code));
+      }
     }
   }
 
