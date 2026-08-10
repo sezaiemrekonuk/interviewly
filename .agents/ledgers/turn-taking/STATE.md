@@ -96,6 +96,11 @@ assumed: the held partial is not durable and is not the conversation. ADR-C01 is
 - **[T01] The gate is the first prompt to opt out of the fallback chain.** `buildChain` appends
   tier-2 to everything; T01 adds a per-prompt exemption. If a second prompt ever needs it, this
   should become a field on the prompt YAML rather than a second special case in `live-client.ts`.
+- **[T04] Issue #219 (flaky voice turn-loop test) is folded into T04.** `voice.test.tsx` races a
+  real 1 000 ms `waitFor` and red-lights PRs that touch nothing near the room; T04 rewrites every
+  timing assertion in that file anyway. If T04 slips, the standalone fix is one line —
+  `testTimeout` in `frontend/vitest.config.mts` — and is worth doing alone: a red `unit` job that
+  does not mean "you broke something" is how red builds start getting ignored.
 - **[T02] The held partial has no in-memory fallback.** Redis down means every fragment is gated
   alone — correct, but silently more expensive and more interrupt-prone. There is no metric for
   it yet.

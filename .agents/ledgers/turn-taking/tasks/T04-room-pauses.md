@@ -56,6 +56,11 @@ mid-thought can see what survived.
   `recording` true and re-opens the recorder; a null `pendingTurn` moves to idle; the 13 s clock
   fires the silence submit exactly once; a fully silent turn never uploads audio; manual Stop
   sends `force`. See them red.
+- [ ] **1b. Close #219 while you are in here.** `voice.test.tsx:234` and `:341` race a real
+  1 000 ms `waitFor` against a request the loop has to issue — it fails on loaded CI runners and
+  red-lights PRs that touch nothing near the room. Every timing assertion in that file is being
+  rewritten by this task anyway. Drive the loop on fake timers, and give any remaining real-clock
+  `waitFor` an explicit timeout rather than inheriting the default.
 - [ ] **2. Stop reasons** — `stop(reason: 'probe' | 'final')`. The VAD passes `'probe'`; the Stop
   button, the mic-lost effect and unmount pass `'final'`.
 - [ ] **3. `onstop`** — a `discardRef` short-circuit first; take the blob; on a probe stop call
@@ -91,6 +96,7 @@ mid-thought can see what survived.
 
 ## Definition of done
 - turn-taking AC-12 and AC-13 green.
+- Issue #219 closed: `voice.test.tsx` no longer races the default 1 000 ms `waitFor` window.
 - Speaking through a 4-second mid-sentence pause produces **one** user row, not two.
 - A fully silent turn uploads no audio and still ends.
 - The notice renders outside the `aria-live` list and never changes once shown.
