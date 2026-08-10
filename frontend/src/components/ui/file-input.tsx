@@ -24,8 +24,12 @@ export interface FileInputProps {
   onFile: (file: File | null) => void;
   /** Refuse a bigger pick before any request goes out. */
   maxBytes?: number;
-  /** A pick refused locally, as an error code — the caller renders it where its errors go. */
-  onReject?: (code: 'UPLOAD_TOO_LARGE') => void;
+  /**
+   * A pick refused locally, as an error code — the caller renders it where its errors go.
+   * Both codes are the registry's own, so the sentence is the one the server would have sent
+   * had the file been allowed to travel.
+   */
+  onReject?: (code: 'UPLOAD_TOO_LARGE' | 'UNSUPPORTED_MEDIA_TYPE') => void;
   /** Overrides the default "Choose a PDF" call to action. */
   action?: string;
   /** Shown in place of the filename while nothing is selected. */
@@ -34,9 +38,44 @@ export interface FileInputProps {
 }
 
 /**
+ * Does the file match what the picker would have offered? `accept` is the same
+ * comma-separated list the native input takes: MIME types, `type/*` wildcards, or extensions.
+ *
+ * Only the drop path needs this. The picker filters by `accept` itself, but a drag bypasses
+ * it entirely — and letting a `.docx` through to the upload would spend a round trip to be
+ * told by the server what the browser already knew.
+ */
+function matchesAccept(file: File, accept: string): boolean {
+  const patterns = accept
+    .split(',')
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean);
+  if (patterns.length === 0) return true;
+
+  const type = file.type.toLowerCase();
+  const name = file.name.toLowerCase();
+
+  // The browser could not resolve a media type — which happens for real files on systems whose
+  // registry has no entry for the extension. "I don't know" is not "wrong": refusing here would
+  // block a genuine PDF, and the server reads the magic bytes anyway.
+  if (!type && !patterns.some((pattern) => pattern.startsWith('.'))) return true;
+
+  return patterns.some((pattern) => {
+    if (pattern.startsWith('.')) return name.endsWith(pattern);
+    if (pattern.endsWith('/*')) return type.startsWith(pattern.slice(0, -1));
+    return type === pattern;
+  });
+}
+
+/**
  * Replaces the browser's "Choose File" button with a sunken drop-target label. The real
  * `<input type="file">` is still there and still focusable — only visually hidden — so the
  * control stays keyboard- and screen-reader-native; the ring is drawn on the wrapper.
+ *
+ * It also takes a dropped file, which is what the box has looked like it does since it was
+ * drawn. Dragging is a pointer gesture and cannot be the only way in — the input underneath
+ * is still the keyboard's and the screen reader's, and everything a drop does goes through
+ * the same two guards a pick does.
  */
 export function FileInput({
   id,
@@ -54,6 +93,11 @@ export function FileInput({
   const t = useTranslations('common');
   const inputRef = useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
+  // `dragenter`/`dragleave` fire for every child the pointer crosses, so a boolean flickers as
+  // the cursor moves from the box onto its own icon. Counting entries is what makes the
+  // highlight hold until the pointer has genuinely left the target.
+  const depth = useRef(0);
 
   function clear() {
     if (inputRef.current) inputRef.current.value = '';
@@ -62,16 +106,90 @@ export function FileInput({
     inputRef.current?.focus();
   }
 
+  /**
+   * The one path a file takes, whichever way it arrived. `onFile(null)` before `onReject`:
+   * the call sites reset their error on a cleared pick, and the refusal has to be what
+   * survives.
+   */
+  function take(file: File | null): void {
+    if (file && !matchesAccept(file, accept)) {
+      reset();
+      onReject?.('UNSUPPORTED_MEDIA_TYPE');
+      return;
+    }
+    // Refused at pick time, so a 40 MB PDF on a phone is not streamed in full only to be told
+    // it was too big.
+    if (file && file.size > maxBytes) {
+      reset();
+      onReject?.('UPLOAD_TOO_LARGE');
+      return;
+    }
+
+    setFileName(file?.name ?? null);
+    onFile(file);
+  }
+
+  function reset(): void {
+    if (inputRef.current) inputRef.current.value = '';
+    setFileName(null);
+    onFile(null);
+  }
+
   const targetClasses = [
     styles.fileTarget,
     disabled ? styles.fileDisabled : null,
     invalid ? styles.fileInvalid : null,
+    dragging ? styles.fileDragging : null,
   ]
     .filter(Boolean)
     .join(' ');
 
+  /** A drag carrying files, as opposed to one carrying selected text or a link. */
+  const carriesFiles = (event: React.DragEvent): boolean =>
+    Array.from(event.dataTransfer?.types ?? []).includes('Files');
+
   return (
-    <div className={targetClasses}>
+    <div
+      className={targetClasses}
+      data-dragging={dragging || undefined}
+      onDragEnter={(event) => {
+        if (disabled || !carriesFiles(event)) return;
+        depth.current += 1;
+        setDragging(true);
+      }}
+      onDragOver={(event) => {
+        if (disabled || !carriesFiles(event)) return;
+        // Without this the browser keeps its own default — open the file in the tab — and no
+        // `drop` is ever delivered here.
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'copy';
+      }}
+      onDragLeave={() => {
+        depth.current = Math.max(0, depth.current - 1);
+        if (depth.current === 0) setDragging(false);
+      }}
+      onDrop={(event) => {
+        if (disabled) return;
+        event.preventDefault();
+        depth.current = 0;
+        setDragging(false);
+
+        // One file, like the picker: `multiple` is not offered and taking the rest silently
+        // would be a decision nobody made.
+        const file = event.dataTransfer.files?.[0] ?? null;
+        if (!file) return;
+
+        // Push it into the real input too, so `clear()` empties the same thing the pick path
+        // empties and a form reading `input.files` sees what the label is showing. Guarded:
+        // `DataTransfer` is constructible in browsers and not everywhere else.
+        if (inputRef.current && typeof DataTransfer !== 'undefined') {
+          const carrier = new DataTransfer();
+          carrier.items.add(file);
+          inputRef.current.files = carrier.files;
+        }
+        take(file);
+      }}
+    >
       <label className={styles.fileLabel}>
         <input
           ref={inputRef}
@@ -83,23 +201,7 @@ export function FileInput({
           className={styles.fileInput}
           aria-describedby={describedBy}
           aria-invalid={invalid || undefined}
-          onChange={(event) => {
-            const file = event.currentTarget.files?.[0] ?? null;
-
-            // Refused at pick time, so a 40 MB PDF on a phone is not streamed in full only to
-            // be told it was too big. `onFile(null)` before `onReject`: the call sites reset
-            // their error on a cleared pick, and the refusal has to be what survives.
-            if (file && file.size > maxBytes) {
-              event.currentTarget.value = '';
-              setFileName(null);
-              onFile(null);
-              onReject?.('UPLOAD_TOO_LARGE');
-              return;
-            }
-
-            setFileName(file?.name ?? null);
-            onFile(file);
-          }}
+          onChange={(event) => take(event.currentTarget.files?.[0] ?? null)}
         />
         <svg
           className={styles.fileGlyph}

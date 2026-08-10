@@ -200,4 +200,97 @@ describe('<FileInput>', () => {
     expect(onFile).toHaveBeenLastCalledWith(null);
     expect(screen.getByText(messages.common.noFileChosen)).toBeInTheDocument();
   });
+
+  // The box has looked like a drop target since it was drawn; now it is one. A drag is a
+  // pointer gesture and never the only way in — the input behind it is untouched.
+  describe('taking a dropped file', () => {
+    /** A drag carrying files, as the browser presents one. */
+    const dragging = (files: File[]) => ({ dataTransfer: { files, types: ['Files'] } });
+    const target = () => screen.getByLabelText(new RegExp(messages.common.chooseFile)).closest('div') as HTMLElement;
+
+    it('takes the file and names it, exactly as a pick does', () => {
+      const onFile = vi.fn();
+      renderWithIntl(<FileInput onFile={onFile} />);
+
+      fireEvent.drop(target(), dragging([pdf()]));
+
+      expect(onFile).toHaveBeenCalledWith(expect.objectContaining({ name: 'listing.pdf' }));
+      expect(screen.getByText('listing.pdf')).toBeInTheDocument();
+    });
+
+    it('runs a drop through the same size guard', () => {
+      const onFile = vi.fn();
+      const onReject = vi.fn();
+      renderWithIntl(<FileInput onFile={onFile} onReject={onReject} maxBytes={4} />);
+
+      fireEvent.drop(target(), dragging([pdf()]));
+
+      expect(onReject).toHaveBeenCalledWith('UPLOAD_TOO_LARGE');
+      expect(onFile).toHaveBeenCalledWith(null);
+      expect(screen.queryByText('listing.pdf')).toBeNull();
+    });
+
+    // The picker filters by `accept`; a drag bypasses it, so the check has to exist here or a
+    // .docx buys a round trip to be told what the browser already knew.
+    it('refuses a file the picker would not have offered', () => {
+      const onFile = vi.fn();
+      const onReject = vi.fn();
+      renderWithIntl(<FileInput onFile={onFile} onReject={onReject} />);
+
+      fireEvent.drop(
+        target(),
+        dragging([new File(['x'], 'cv.docx', { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })]),
+      );
+
+      expect(onReject).toHaveBeenCalledWith('UNSUPPORTED_MEDIA_TYPE');
+      expect(onFile).toHaveBeenCalledWith(null);
+    });
+
+    // "I don't know" is not "wrong": some systems report no media type for a real PDF, and the
+    // server reads the magic bytes regardless.
+    it('lets a file with no media type through to the server', () => {
+      const onFile = vi.fn();
+      const onReject = vi.fn();
+      renderWithIntl(<FileInput onFile={onFile} onReject={onReject} />);
+
+      fireEvent.drop(target(), dragging([new File(['%PDF-1.4'], 'unknown.pdf')]));
+
+      expect(onReject).not.toHaveBeenCalled();
+      expect(onFile).toHaveBeenCalledWith(expect.objectContaining({ name: 'unknown.pdf' }));
+    });
+
+    it('ignores a drop while the control is disabled', () => {
+      const onFile = vi.fn();
+      renderWithIntl(<FileInput disabled onFile={onFile} />);
+
+      fireEvent.drop(target(), dragging([pdf()]));
+
+      expect(onFile).not.toHaveBeenCalled();
+    });
+
+    // The highlight has to survive the pointer crossing the box's own icon, and let go once it
+    // has genuinely left.
+    it('holds the highlight across child elements', () => {
+      renderWithIntl(<FileInput onFile={vi.fn()} />);
+      const box = target();
+
+      fireEvent.dragEnter(box, dragging([pdf()]));
+      expect(box).toHaveAttribute('data-dragging', 'true');
+
+      fireEvent.dragEnter(box, dragging([pdf()]));
+      fireEvent.dragLeave(box);
+      expect(box).toHaveAttribute('data-dragging', 'true');
+
+      fireEvent.dragLeave(box);
+      expect(box).not.toHaveAttribute('data-dragging');
+    });
+
+    it('does not light up for a drag carrying no files', () => {
+      renderWithIntl(<FileInput onFile={vi.fn()} />);
+      const box = target();
+
+      fireEvent.dragEnter(box, { dataTransfer: { files: [], types: ['text/plain'] } });
+      expect(box).not.toHaveAttribute('data-dragging');
+    });
+  });
 });
