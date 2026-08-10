@@ -67,6 +67,18 @@ describe('googleCallback destination', () => {
   });
 });
 
+describe('the redirect URI', () => {
+  // The auth ledger's packaging defect (3). `handle_path /api/*` at the edge strips the prefix
+  // before the request reaches this router, so the browser-facing callback carries it — without
+  // it Google returns the visitor to the catch-all, which is Next.js, which 404s. Verified
+  // against the running stack: `/auth/google/callback` → 404, `/api/auth/google/callback` → 302.
+  it('carries the browser-facing /api prefix', async () => {
+    const { REDIRECT_URI } = await import('./google');
+
+    expect(REDIRECT_URI).toBe(`${config.PUBLIC_ORIGIN}/api/auth/google/callback`);
+  });
+});
+
 describe('the success destination is the first-run router', () => {
   it('is `/`, so the rule lives in one place instead of two', async () => {
     // Read from source rather than driven through a full OAuth exchange: completing one needs
