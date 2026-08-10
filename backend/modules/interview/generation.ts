@@ -82,8 +82,25 @@ export function roundQuestionArgs(
   };
 }
 
-/** The seeded persona for a round type. Personas are F02 reference data, never invented here. */
-async function personaFor(roundType: RoundType): Promise<string> {
+/**
+ * The seeded persona for a round type. Personas are F02 reference data, never invented here.
+ *
+ * The seeded row is asked for by id first, and that is the whole point (issue 257). This used
+ * to be "the lowest-sorting active persona of this role", which sounds neutral and is not: the
+ * seed's ids are `seed-persona-*` and every test fixture's is a cuid, so `c` beat `s` and real
+ * interviews were conducted by whichever fixture the integration suite had left behind — with
+ * `system_prompt: 'stub'`, a name printed to the candidate, and a `voice_id` no TTS provider
+ * has ever heard of, which took voice down to a 400 and a silent downgrade on every question.
+ *
+ * The old query stays as the fallback rather than being replaced: a deployment that has
+ * genuinely swapped its personas out has no `seed-persona-*` row, and this must still find its.
+ */
+export async function personaFor(roundType: RoundType): Promise<string> {
+  const seeded = await prisma.persona.findFirst({
+    where: { id: `seed-persona-${roundType}`, role: roundType, active: true },
+  });
+  if (seeded) return seeded.id;
+
   const persona = await prisma.persona.findFirst({
     where: { role: roundType, active: true },
     orderBy: { id: 'asc' },
