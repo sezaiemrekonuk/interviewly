@@ -68,8 +68,10 @@ export async function deliverCurrentQuestion(interview: IndexedInterview) {
     id: question.id,
     text: question.text,
     kind: question.kind,
-    // ponytail: widget question kind isn't built yet (I04/I06 scope); always null for now.
-    widget: null,
+    // C04 — the typed answer surface, when the conductor put one on screen. Null is the
+    // ordinary spoken-or-typed answer, which is most questions; the hardcoded null this
+    // replaces had been standing in since I04 with nothing to write it.
+    widget: question.widget ?? null,
     deliveredAt,
   };
 }
@@ -158,6 +160,35 @@ async function resolveTranscript(interviewId: string) {
   return orderTranscript(questions as TranscriptQuestion[]);
 }
 
+/**
+ * C02 — the conversation, which since the conductor landed is the interview's actual state.
+ *
+ * `transcript` above is question/answer pairs, and it stays: the report ledger and the report
+ * page read it, and pairs are what a finished interview looks like. This is the other view —
+ * what was said, in order, including everything a pair cannot hold: the welcome, the
+ * clarifications, the handover, and the system line where the server overrode the interviewer.
+ *
+ * A room rebuilds itself from this alone (§3.8), which is the whole reason assistant rows are
+ * written before they are spoken rather than after.
+ */
+async function resolveMessages(interviewId: string) {
+  const rows = await prisma.chatMessage.findMany({
+    where: { interview_id: interviewId },
+    // Same order the conductor replays in. A user utterance and the reply to it are written
+    // inside one request and can share a millisecond; `id` breaks that tie the same way twice.
+    orderBy: [{ created_at: 'asc' }, { id: 'asc' }],
+    select: { id: true, role: true, content: true, action: true, question_id: true, created_at: true },
+  });
+  return rows.map((m) => ({
+    id: m.id,
+    role: m.role,
+    content: m.content,
+    action: m.action,
+    questionId: m.question_id,
+    createdAt: m.created_at,
+  }));
+}
+
 // req.interview is attached by resolveInterview (ownership.ts); a non-owned or deleted id
 // never reaches this handler (404 INTERVIEW_NOT_FOUND).
 export const getInterviewState: RequestHandler = async (req, res) => {
@@ -165,11 +196,11 @@ export const getInterviewState: RequestHandler = async (req, res) => {
 
   // Every field is derived from the DB, nothing from the request: a refreshed room with no
   // client memory reconstructs to the same place (§3.8, @AC-9).
-  const [{ persona, personas }, currentQuestion, transcript, transcriptCursor] = await Promise.all([
+  const [{ persona, personas }, currentQuestion, transcript, messages] = await Promise.all([
     resolvePersonas(interview.id, interview.state),
     deliverCurrentQuestion(interview),
     resolveTranscript(interview.id),
-    prisma.chatMessage.count({ where: { interview_id: interview.id } }),
+    resolveMessages(interview.id),
   ]);
 
   res.status(200).json({
@@ -184,7 +215,10 @@ export const getInterviewState: RequestHandler = async (req, res) => {
     personas,
     currentQuestion,
     transcript,
-    transcriptCursor,
+    messages,
+    // Kept as the message count it always was — the room uses it as a cheap "has anything been
+    // said" check, and `messages.length` is now the same number by construction.
+    transcriptCursor: messages.length,
   });
 };
 
