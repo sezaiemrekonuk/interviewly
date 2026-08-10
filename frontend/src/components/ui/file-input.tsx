@@ -158,22 +158,18 @@ export function FileInput({
         setDragging(true);
       }}
       onDragOver={(event) => {
-        if (disabled || !carriesFiles(event)) return;
+        if (!carriesFiles(event)) return;
         // Without this the browser keeps its own default — open the file in the tab — and no
         // `drop` is ever delivered here.
         event.preventDefault();
-        event.dataTransfer.dropEffect = 'copy';
-      }}
-      onDragLeave={() => {
-        depth.current = Math.max(0, depth.current - 1);
-        if (depth.current === 0) setDragging(false);
+        event.dataTransfer.dropEffect = disabled ? 'none' : 'copy';
       }}
       onDrop={(event) => {
-        if (disabled) return;
+        if (!carriesFiles(event)) return;
         event.preventDefault();
         depth.current = 0;
         setDragging(false);
-
+        if (disabled) return;
         // One file, like the picker: `multiple` is not offered and taking the rest silently
         // would be a decision nobody made.
         const file = event.dataTransfer.files?.[0] ?? null;
