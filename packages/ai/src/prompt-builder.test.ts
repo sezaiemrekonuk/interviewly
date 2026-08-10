@@ -205,10 +205,14 @@ describe('PromptBuilder', () => {
 });
 
 describe('PromptRegistry', () => {
-  it('ships the five reserved prompt names, each resolvable and each on one provider', () => {
+  it('ships the six reserved prompt names, each resolvable and each on one provider', () => {
     const registry = loadPromptRegistry();
     expect(registry.names()).toEqual([
       'interview.answer.score',
+      // C02 — the conductor. A sixth lineage rather than a version of an existing one: it is
+      // a different call with a different output schema, and `PROMPT_NAMES` keys on the
+      // `AiClient` method, so folding it into another name would make one prompt serve two.
+      'interview.conduct.turn',
       'interview.question.candidates',
       'interview.question.generate',
       'interview.report.generate',
@@ -278,6 +282,12 @@ describe('StubAiClient', () => {
         candidateProfile: null,
         candidateCv: null,
         language: 'en',
+        // C03 — required, and deliberately not defaulted in `reportVars`: {{endedReason}} has
+        // no null marker, so a caller that forgets them fails the build here rather than
+        // shipping a report that silently claims the interview ran to the end.
+        endedReason: 'completed',
+        answeredCount: 1,
+        plannedCount: 1,
         ctx,
       }),
     ).resolves.toMatchObject({ language: 'en' });

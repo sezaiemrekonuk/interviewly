@@ -113,6 +113,15 @@ export async function runReport(interviewId: string, opts: ReportOpts): Promise<
       perAnswerScores: turns.flatMap((t) => (t.scores ? [t.scores] : [])),
       ...profileVariables(interview),
       language: interview.language,
+      // C03. `turnsOf` already dropped every question with no answer, so `turns.length` is
+      // literally "how much of the interview happened" and the target is what it set out to
+      // do. Null `ended_reason` is a report generated off a path that never wrote one — the
+      // pre-C03 rows, and the direct `runReport` calls — and `completed` is the only honest
+      // default there: it is the reason the prompt treats as "nothing was cut short", so a
+      // missing value reads as no claim rather than as an early stop the model then explains.
+      endedReason: interview.ended_reason ?? 'completed',
+      answeredCount: turns.length,
+      plannedCount: interview.target_question_count,
       ctx,
     });
   } catch (err) {

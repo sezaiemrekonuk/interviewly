@@ -70,7 +70,21 @@ const schema = z.object({
   // Named presets ('loopback', 'linklocal', 'uniquelocal') and CIDR ranges are also accepted.
   TRUST_PROXY:                 emptyAsUnset(z.string().default('1')),
   AI_ENABLED:                  zBoolean(true),
-  BUDGET_USD_TEXT:             emptyAsUnset(z.coerce.number().default(0.50)),
+  // C02 raised this from 0.50. The conductor spends per *utterance* with the conversation
+  // replayed, not per question, so the cost of an interview now scales with how much the
+  // candidate says rather than with how many questions were planned. At 0.50 a talkative
+  // candidate hit `withBudgetOrEnd` mid-sentence and the interview ended on them — a ceiling
+  // that used to be unreachable in practice became the normal way an interview finished.
+  BUDGET_USD_TEXT:             emptyAsUnset(z.coerce.number().default(1.50)),
+  // C02 — the hard drift ceiling. How many times the candidate may speak to one question
+  // before the server stops asking the conductor's permission and advances itself. This is
+  // the backstop for an interviewer that has decided to explore forever; it is deliberately
+  // generous, because reaching it reads to the candidate as being cut off mid-thought.
+  CONDUCTOR_MAX_TURNS_PER_QUESTION: emptyAsUnset(z.coerce.number().int().positive().default(4)),
+  // The whole-interview backstop, in utterances. `budget_usd` is the real ceiling; this one
+  // exists because a provider that answers cheaply and wrongly can burn a long time without
+  // ever tripping a dollar limit.
+  CONDUCTOR_MAX_TURNS:         emptyAsUnset(z.coerce.number().int().positive().default(80)),
   MAX_INTERVIEWS_PER_USER_PER_DAY: emptyAsUnset(z.coerce.number().default(5)),
   LOG_LEVEL:                   z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
   LOG_TRANSPORT:               z.enum(['stdout', 'elastic']).default('stdout'),

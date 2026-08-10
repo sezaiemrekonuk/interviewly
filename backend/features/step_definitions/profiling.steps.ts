@@ -95,6 +95,12 @@ When('the report is generated for that interview', async function (this: AiWorld
     transcript: 'Q: Tell me about a hard bug. A: A deadlock between two writers.',
     language: interview.language,
     ...profileVariables(interview),
+    // C03 — the profiling scenarios are about the <candidate_profile> block, not about how
+    // the interview ended, so these are the "ran to the end" values. They are still passed:
+    // {{endedReason}} has no null marker and the build would fail without them.
+    endedReason: 'completed',
+    answeredCount: 1,
+    plannedCount: interview.target_question_count,
     ctx,
   };
 

@@ -179,6 +179,12 @@ export async function generateRound(
         round_id: round.id,
         order_index: i + 1,
         text: q.text,
+        // C05: the agenda line — what this slot is for, which the conductor writes the real
+        // question from. `?? null` and not a default string because the column is nullable by
+        // design: v1/v2 of the prompt do not emit it, and a row written from an older batch
+        // must stay distinguishable from one whose intent the model actually wrote. The room
+        // falls back to `text` when `intent` is null, which is exactly the pre-C05 behaviour.
+        intent: q.intent ?? null,
         kind: q.kind,
         difficulty: q.difficulty,
         topic: q.topic,
