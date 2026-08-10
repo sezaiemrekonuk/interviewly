@@ -68,6 +68,12 @@ export interface KeyedLimit {
    * handler must call `recordHit` on success — for a quota that should charge results.
    */
   record?: boolean;
+  /**
+   * Skip the check entirely when this returns true (e.g. admin accounts on a per-user
+   * quota). Opt-in per limiter — `adminStatsLimiter` deliberately still caps admins, so
+   * this must not become a blanket "role === admin" bypass inside the shared factory.
+   */
+  bypass?: (req: Request) => boolean;
 }
 
 /** I13 generalised A01's factory: the key and the error code are the only axes that vary. */
@@ -79,8 +85,10 @@ export function keyedLimiter({
   code = 'RATE_LIMITED',
   event = 'RATE_LIMIT_HIT',
   record = true,
+  bypass,
 }: KeyedLimit): RequestHandler {
   return (req, res, next) => {
+    if (bypass?.(req)) return next();
     const key = keyOf(req);
     // Both branches produce the same number — the count *including* this request — so the
     // comparison below stays one rule. Recording returns it directly; checking has to add
