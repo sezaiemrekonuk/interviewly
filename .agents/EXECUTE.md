@@ -21,18 +21,23 @@ guess — guessing writes to another person's ledger, and two people implementin
 | Person | Ledgers |
 |---|---|
 | Sezai | foundations `F03`, interview-core (`I01`–`I15`), frontend (`W01`–`W11`) |
-| Ahmet | foundations `F01`, auth (`A01`–`A06`), report (`R01`–`R04`), speech (`S01`–`S10`) |
+| Ahmet | foundations `F01`, auth (`A01`–`A06`), report (`R01`–`R04`), speech (`S01`–`S10`), turn-taking (`T01`–`T04`) |
 | Fatih | foundations `F02`, admin (`N01`–`N02`), voice (`V01`–`V05`), adaptive (`D01`–`D03`) |
 
 Task-ID prefixes are unique per ledger — `F` foundations, `A` auth, `I` interview-core,
-`R` report, `N` admin, `V` voice, `D` adaptive, `W` frontend (web), `S` speech — so an ID alone
-tells you whose it is. Foundations is the one per-task split; every other ledger belongs wholly to one
-person.
+`R` report, `N` admin, `V` voice, `D` adaptive, `W` frontend (web), `S` speech, `T` turn-taking —
+so an ID alone tells you whose it is. Foundations is the one per-task split; every other ledger
+belongs wholly to one person.
 
 **speech supersedes voice (2026-08-06).** `V01`–`V05` stay `done` and are not reopened, but the
 architecture under them was reversed by the owner — ElevenLabs is used for voice generation only,
 with no agent and no webhooks. The replacement work is the `S` ledger
 (`.agents/ledgers/speech/`, ADR-S01). Do not start a new `V` task.
+
+**turn-taking supersedes ADR-S06's silence rule (2026-08-10).** `S01`–`S10` stay `done` and are
+not reopened. What changed is narrower than the speech supersession above: silence still stops
+the recorder, it just no longer ends the turn. The work is the `T` ledger
+(`.agents/ledgers/turn-taking/`, ADR-T01). Start `T` tasks, not new `S` ones.
 
 **This table is the only authority on who owns what.** There is deliberately no `Owner`
 column in any `STATE.md`: 50 cells to maintain where three rows already say it is 50 chances
