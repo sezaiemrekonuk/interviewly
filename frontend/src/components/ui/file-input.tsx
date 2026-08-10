@@ -164,6 +164,10 @@ export function FileInput({
         event.preventDefault();
         event.dataTransfer.dropEffect = disabled ? 'none' : 'copy';
       }}
+      onDragLeave={() => {
+        depth.current = Math.max(0, depth.current - 1);
+        if (depth.current === 0) setDragging(false);
+      }}
       onDrop={(event) => {
         if (!carriesFiles(event)) return;
         event.preventDefault();
