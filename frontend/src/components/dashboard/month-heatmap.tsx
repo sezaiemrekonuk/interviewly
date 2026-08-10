@@ -46,10 +46,16 @@ export function MonthHeatmap({ now }: { now: number }) {
   // and printing "0 interviews across 0 days" over them states a fact nobody has established.
   const loading = isPending && !data;
 
-  // The floor is the account's first practice, so the picker cannot walk back through years of
-  // empty grids; the ceiling is this month, because tomorrow has nothing to show.
-  const earliest = data?.earliest ?? thisMonth;
-  const atStart = month <= earliest;
+  // How far back the picker goes: this calendar year, or the account's first interview when
+  // that is older. The first interview alone was too tight a floor — it makes both arrows dead
+  // on a fresh account, and someone who started in August has every reason to look at February
+  // and find out there is nothing there. Further back than the current year is not history a
+  // practice log has anything to say about.
+  //
+  // The ceiling is this month: tomorrow has nothing to show.
+  const yearStart = `${thisMonth.slice(0, 4)}-01`;
+  const floor = data?.earliest && data.earliest < yearStart ? data.earliest : yearStart;
+  const atStart = month <= floor;
   const atEnd = month >= thisMonth;
 
   const monthName = format.dateTime(new Date(`${month}-01T00:00:00.000Z`), {
@@ -58,10 +64,16 @@ export function MonthHeatmap({ now }: { now: number }) {
     timeZone: 'UTC',
   });
 
-  // Narrow weekday initials, Monday first. Read from `Intl` rather than six message keys: they
-  // are the locale's own calendar, and next-intl already carries the locale that decides them.
+  // Short weekday names, Monday first, read from `Intl` rather than from seven message keys:
+  // they are the locale's own calendar, and next-intl already carries the locale that decides
+  // them.
+  //
+  // `short` and not `narrow`. Turkish narrow initials are `P S Ç P C C P` — Pazartesi,
+  // Perşembe and Pazar all collapse to P, Cuma and Cumartesi both to C — so four of the seven
+  // columns cannot be told apart. Full names do not fit seven columns at a phone's width;
+  // three letters do, and `Pzt Sal Çar Per Cum Cmt Paz` is unambiguous.
   const weekdays = Array.from({ length: WEEK }, (_, index) =>
-    new Intl.DateTimeFormat(locale, { weekday: 'narrow', timeZone: 'UTC' }).format(
+    new Intl.DateTimeFormat(locale, { weekday: 'short', timeZone: 'UTC' }).format(
       // 2024-01-01 was a Monday, so this walks Monday → Sunday for any locale.
       new Date(Date.UTC(2024, 0, 1 + index)),
     ),
