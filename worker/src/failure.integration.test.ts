@@ -73,6 +73,9 @@ async function seedAnsweredInterview(): Promise<{ interviewId: string; questionI
       voice_id: 'stub',
       avatar_set: {},
       system_prompt: 'stub',
+      // Not selectable: the round below names it directly, and an active fixture outranks the
+      // seeded persona by id order in a shared database (issue 257).
+      active: false,
     },
   });
   const round = await prisma.interviewRound.create({

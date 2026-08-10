@@ -48,6 +48,9 @@ beforeAll(async () => {
       voice_id: 'none',
       avatar_set: {},
       system_prompt: 'fixture',
+      // Not selectable: every round here is created with this id explicitly, and an active
+      // fixture outranks the seeded persona by id order in a shared database (issue 257).
+      active: false,
     },
   });
   personaId = persona.id;

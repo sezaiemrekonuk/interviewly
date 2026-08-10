@@ -194,6 +194,10 @@ async function seedScoredQuestion(interviewId: string): Promise<void> {
         voice_id: 'test',
         avatar_set: {},
         system_prompt: 'test',
+        // The stand-in is only ever an FK target — `findFirst` above takes it back without
+        // asking about `active`, and leaving it selectable would let it conduct a real
+        // interview on a database this ring shares (issue 257).
+        active: false,
       },
     }));
 
