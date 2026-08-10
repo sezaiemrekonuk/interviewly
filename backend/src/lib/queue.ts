@@ -10,6 +10,8 @@ import { config } from './env';
 
 export const REPORT_QUEUE = 'report';
 
+export const REPORT_QUEUE_PREFIX = config.NODE_ENV === 'test' ? 'acceptance' : undefined;
+
 /**
  * R03/K10. Attempts and backoff are *job* options, so they belong to the producer even though
  * the worker owns what happens when they run out — set as queue defaults rather than at the
@@ -35,4 +37,5 @@ export const REPORT_JOB_OPTIONS = {
 export const reportQueue = new Queue(REPORT_QUEUE, {
   connection: { url: config.REDIS_URL },
   defaultJobOptions: REPORT_JOB_OPTIONS,
+  prefix: REPORT_QUEUE_PREFIX,
 });
