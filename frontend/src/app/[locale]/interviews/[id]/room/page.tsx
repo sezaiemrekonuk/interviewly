@@ -2,7 +2,7 @@
 
 import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { AnswerComposer } from '../../../../../components/room/answer-composer';
 import { PersonaTiles } from '../../../../../components/room/persona-tiles';
@@ -27,6 +27,15 @@ import styles from '../../../../../components/room/room.module.css';
 
 /** Past the last answer: the report surface (W07) owns the wait and the result. */
 const REPORT_STATES = new Set(['evaluating', 'completed', 'failed', 'abandoned']);
+
+/**
+ * Entered before the interview was ever started — history's Continue link, or a setup that
+ * died. No question, and nothing generating one: these rooms are stopped, not slow (#89).
+ */
+const PARKED_STATES = new Set(['created', 'profiling']);
+
+/** The two states a question can arrive in on its own, so the two a wait can be honest in. */
+const ROUND_STATES = new Set(['hr_round', 'tech_round']);
 
 /**
  * How long the waiting panel is the truth before it becomes a lie. A failed HR generation can
@@ -93,18 +102,19 @@ export default function InterviewRoomPage() {
     if (roomState && REPORT_STATES.has(roomState)) router.replace(`/interviews/${id}`);
   }, [roomState, router, id]);
 
-  // `POST /resume` repairs exactly two rooms with no question: an `hr_round` whose batch never
-  // landed, and one still parked in `profiling` (history's Continue link, or a setup that died
-  // before `POST /profile`). Offering the control anywhere else would answer the candidate
-  // with a 409.
-  const waitingOnHr =
-    (roomState === 'hr_round' || roomState === 'profiling') &&
+  // `POST /resume` repairs every room with no question and nothing on its way: a round whose
+  // batch never landed — either round, since a pause that could not be written leaves the
+  // technical one just as empty — and one entered before the interview was started at all.
+  // Offering the control anywhere else would answer the candidate with a 409.
+  const waitingOnQuestion =
     Boolean(room) &&
-    !room?.currentQuestion;
+    !room?.currentQuestion &&
+    roomState !== null &&
+    (PARKED_STATES.has(roomState) || ROUND_STATES.has(roomState));
   // A parked room is not slow, it is stopped — nothing is generating and nothing will, so the
   // repair fires on arrival instead of after the stall timer. `resume.isIdle` is the once-only
   // guard: the retry it turns into on failure is the candidate's, not a loop.
-  const parked = roomState === 'profiling';
+  const parked = roomState !== null && PARKED_STATES.has(roomState);
   const { mutate: startRoom, isIdle: repairIdle } = resume;
   // Which wait ran out, not whether one did: the flag is never reset, it simply stops matching
   // once the round moves on (`current_index` only ever advances), so every later wait starts
@@ -118,13 +128,17 @@ export default function InterviewRoomPage() {
     // land in), so waiting out the stall timer only delays the same alert and Retry by 30s.
     startRoom(undefined, { onError: () => setStalledIndex(waitingIndex) });
   }, [parked, repairIdle, startRoom, waitingIndex]);
-useEffect(() => {
-  if (!waitingOnHr) return;
-  if (stalledIndex !== null && stalledIndex === waitingIndex) return;
-  const timer = setTimeout(() => setStalledIndex(waitingIndex), STALLED_AFTER_MS);
-  return () => clearTimeout(timer);
-}, [waitingOnHr, waitingIndex, stalledIndex]);
-  const stalled = waitingOnHr && stalledIndex !== null && stalledIndex === waitingIndex;
+  useEffect(() => {
+    if (!waitingOnQuestion) return;
+    if (stalledIndex !== null && stalledIndex === waitingIndex) return;
+    const timer = setTimeout(() => setStalledIndex(waitingIndex), STALLED_AFTER_MS);
+    return () => clearTimeout(timer);
+  }, [waitingOnQuestion, waitingIndex, stalledIndex]);
+  const stalled = waitingOnQuestion && stalledIndex !== null && stalledIndex === waitingIndex;
+  // A room repairing itself is neither waiting on a question nor broken, and saying "preparing
+  // the next question" of an interview with no first question is the sentence that made three
+  // different failures look identical (#89).
+  const starting = parked && !stalled;
 
   if (!ready || stateQuery.isPending) {
     return <div className={styles.skeleton} data-testid="room-skeleton" />;
@@ -206,8 +220,9 @@ useEffect(() => {
   );
 
   // The waiting panel is the truth right up until it is not — past `STALLED_AFTER_MS` it
-  // would keep promising a question that no longer has anything generating it.
-  const question = stalled ? null : (
+  // would keep promising a question that no longer has anything generating it, and in a room
+  // that has not started there is no *next* question for it to be promising.
+  const question = stalled || starting ? null : (
     // One question, one instance: the panel's typed state resets by remount, not by effect.
     <QuestionPanel
       key={room.currentQuestion?.id ?? 'waiting'}
@@ -219,10 +234,24 @@ useEffect(() => {
     />
   );
 
-  // Both doors out of a round the candidate cannot answer from lead to the same request:
-  // `POST /resume` resumes a pause, and regenerates the batch when there is none.
-  const notice =
-    room.state === 'paused' || stalled ? (
+  // Three rooms the candidate cannot answer from, and they must not look alike: one is
+  // starting itself, one is paused, one has given up. Only the last two carry a control —
+  // the parked room's repair fires on arrival, and a button beside it would be a second
+  // trigger for the request already in flight.
+  //
+  // Both controls lead to the same request: `POST /resume` resumes a pause, and regenerates
+  // the batch when there is none.
+  let notice: ReactNode = null;
+  if (starting) {
+    notice = (
+      <div className={styles.notice} data-testid="room-starting">
+        <p className={styles.noticeText} aria-live="polite">
+          {t('starting')}
+        </p>
+      </div>
+    );
+  } else if (room.state === 'paused' || stalled) {
+    notice = (
       <div
         className={stalled ? `${styles.notice} ${styles.noticeDanger}` : styles.notice}
         data-testid={stalled ? 'room-stalled' : 'room-paused'}
@@ -252,7 +281,8 @@ useEffect(() => {
           </p>
         ) : null}
       </div>
-    ) : null;
+    );
+  }
 
   return (
     <div className={styles.room} data-testid="interview-room">
@@ -299,7 +329,7 @@ useEffect(() => {
               <div className={styles.footRow}>
                 {captionsOn ? question : null}
                 {notice}
-                {room.state !== 'paused' && !stalled ? (
+                {room.state !== 'paused' && !stalled && !starting ? (
                   <VoiceControls
                     session={voice}
                     captionsOn={captionsOn}

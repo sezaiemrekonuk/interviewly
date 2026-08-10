@@ -24,26 +24,38 @@ export const resumeInterview: RequestHandler = async (req, res) => {
   const interview = req.interview!;
   const ctx = { traceId: req.traceId! };
 
-  // A room entered on `profiling` is a dead end otherwise: `POST /profile` is the only exit and
-  // only the setup screen calls it, so an interview that never got that call (setup aborted, or
-  // history's Continue link) waits on a question nothing is generating. Same repair, same door.
-  if (interview.state === 'profiling') {
+  // A room entered before the interview started is a dead end otherwise: `POST /profile` is the
+  // only exit and only the setup screen calls it, so an interview that never got that call
+  // (setup aborted, or history's Continue link) waits on a question nothing is generating.
+  //
+  // `created` is the same dead end one edge earlier. `POST /interviews` inserts the row and then
+  // transitions it itself, so a request that died between the two leaves an interview nothing
+  // can start — and history links to its room exactly like any other unfinished one (#89).
+  if (interview.state === 'created' || interview.state === 'profiling') {
+    if (interview.state === 'created') await applyTransition(interview, 'profiling', ctx);
     const state = await startHrRound(interview, interview.user_id, undefined, ctx);
     res.status(200).json({ state });
     return;
   }
 
-  const hrQuestionCount = await prisma.question.count({
-    where: { round: { interview_id: interview.id, type: 'hr' } },
+  // The round the interview is sitting in is the round that can be missing its batch.
+  const round: RoundType = interview.state === 'tech_round' ? 'tech' : 'hr';
+  const questionCount = await prisma.question.count({
+    where: { round: { interview_id: interview.id, type: round } },
   });
 
-  // `hr_round` with an empty batch is the second door into the same repair. `POST /profile`
+  // A round with an empty batch is the second door into the same repair. `POST /profile`
   // claims the transition before it generates, so a pause that could not be written
   // (`INTERVIEW_PAUSE_FAILED`) or a process that died between the two leaves an interview in a
   // round that has no question to ask and no request that can get it out — `/profile` refuses
   // anything but `profiling`, and the pause that would have made this endpoint legal is the
   // very write that failed. Recognising it here is the only recovery path there is.
-  const stranded = interview.state === 'hr_round' && hrQuestionCount === 0;
+  //
+  // `tech_round` for the same reason one round over: the handover is driven by the answer whose
+  // batch generation failed, so a pause that did not land leaves the interview in a technical
+  // round with nothing in it. There is no `tech_round → paused` edge to catch it either.
+  const stranded =
+    (interview.state === 'hr_round' || interview.state === 'tech_round') && questionCount === 0;
 
   // `applyTransition` alone would let `hr_round → tech_round` through, which is a legal edge
   // driven by the last HR answer and not by this endpoint.
@@ -65,7 +77,7 @@ export const resumeInterview: RequestHandler = async (req, res) => {
     try {
       // Under I08's ceiling like every other generation (issue #98): resume is a door back into
       // the same provider call, so it cannot be the one that spends past the budget.
-      await withBudgetOrEnd(interview, () => generateRound(interview, 'hr', ctx), ctx);
+      await withBudgetOrEnd(interview, () => generateRound(interview, round, ctx), ctx);
     } catch (err) {
       if ((err as { code?: string } | null)?.code !== 'P2002') throw err;
     }

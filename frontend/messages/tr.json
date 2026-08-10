@@ -481,6 +481,8 @@
     "speakerYou": "Sen",
     "progress": "Soru {index} / {total}",
     "waiting": "Sıradaki soru hazırlanıyor…",
+    "starting": "Bu mülakat henüz başlamadı. Şimdi başlatılıyor…",
+    "notStarted": "Henüz başlamadı.",
     "answerLabel": "Cevabın",
     "answerPlaceholder": "Cevabını yaz",
     "submit": "Cevabı gönder",

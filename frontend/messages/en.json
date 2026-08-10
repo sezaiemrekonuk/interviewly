@@ -481,6 +481,8 @@
     "speakerYou": "You",
     "progress": "Question {index} of {total}",
     "waiting": "Preparing the next question…",
+    "starting": "This interview hasn't started yet. Starting it now…",
+    "notStarted": "Not started yet.",
     "answerLabel": "Your answer",
     "answerPlaceholder": "Type your answer",
     "submit": "Send answer",

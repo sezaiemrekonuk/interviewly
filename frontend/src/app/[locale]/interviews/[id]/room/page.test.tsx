@@ -72,7 +72,14 @@ interface Call {
 }
 
 /** `/me` gates the page; the state key is what every assertion here is really about. */
-function stubFetch(options: { states?: Record<string, unknown>[]; answer?: { status: number; body: unknown } } = {}) {
+function stubFetch(
+  options: {
+    states?: Record<string, unknown>[];
+    answer?: { status: number; body: unknown };
+    /** Left to the 404 fallback where the scenario is about the repair failing. */
+    resume?: { status: number; body: unknown };
+  } = {},
+) {
   const calls: Call[] = [];
   const states = options.states ?? [roomState()];
   let stateHits = 0;
@@ -95,6 +102,9 @@ function stubFetch(options: { states?: Record<string, unknown>[]; answer?: { sta
       }
       if (url === '/api/interviews/i1/answers') {
         return json(options.answer?.status ?? 200, options.answer?.body ?? { state: 'hr_round', nextIndex: 2 });
+      }
+      if (url === '/api/interviews/i1/resume' && options.resume) {
+        return json(options.resume.status, options.resume.body);
       }
       return json(404, { error: { code: 'NOT_FOUND' } });
     }),
@@ -316,6 +326,60 @@ describe('interview room, text mode (W06)', () => {
       expect(
         calls.filter((c) => c.url === '/api/interviews/i1/resume' && c.method === 'POST'),
       ).toHaveLength(1),
+    );
+  });
+
+  // Issue 89: a room that has not started, a round whose batch never landed and a genuine
+  // handover used to render the same optimistic placeholder — which is why three different
+  // backend failures were one indistinguishable screen. `created` had no branch at all.
+  it.each(['created', 'profiling'])('names a room parked in %s while it starts it', async (state) => {
+    const calls = stubFetch({
+      states: [roomState({ state, currentIndex: 0, currentQuestion: null, persona: null })],
+      resume: { status: 200, body: { state: 'hr_round' } },
+    });
+    await renderRoom();
+
+    await waitFor(() =>
+      expect(
+        calls.filter((c) => c.url === '/api/interviews/i1/resume' && c.method === 'POST'),
+      ).toHaveLength(1),
+    );
+    expect(screen.getByTestId('room-starting')).toHaveTextContent(messages.room.starting);
+    // Not "Preparing the next question…": there is no next question in a room with no first one.
+    expect(screen.queryByTestId('question-waiting')).not.toBeInTheDocument();
+    // Nor "Question 0 of 8", a count no healthy interview ever reaches.
+    expect(screen.getByText(messages.room.notStarted)).toBeInTheDocument();
+    expect(screen.queryByText(/Question 0 of/)).not.toBeInTheDocument();
+  });
+
+  // The technical round is stranded by the same failure one round over — a pause that could not
+  // be written — and the wait budget used to watch only the HR round.
+  it('stalls a technical round with no question, the same as an HR round', async () => {
+    vi.useFakeTimers();
+    const calls = stubFetch({
+      states: [roomState({ state: 'tech_round', currentIndex: 5, currentQuestion: null })],
+    });
+    await act(async () => {
+      renderWithProviders(<RoomPage />);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    // A batch can genuinely still be generating, so the beat holds for the budget first.
+    expect(screen.getByTestId('question-waiting')).toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000);
+    });
+
+    expect(screen.getByTestId('room-stalled')).toBeInTheDocument();
+    await act(async () => {
+      screen.getByRole('button', { name: messages.room.retry }).click();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(calls.some((c) => c.url === '/api/interviews/i1/resume' && c.method === 'POST')).toBe(
+      true,
     );
   });
 
