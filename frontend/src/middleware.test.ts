@@ -73,6 +73,21 @@ describe('content security policy', () => {
       expect(response.headers.get('content-security-policy')).toMatch(/^default-src 'self';/);
     }
   });
+
+  // `media-src` has no default of its own — it falls back to `default-src 'self'`, which does
+  // not cover `blob:`, and the room's turn loop hands `new Audio()` exactly one of those
+  // (`URL.createObjectURL` on the TTS response). Blocked media fires `error` on the element,
+  // which the hook reads as a fatal voice failure and downgrades the interview to text: a
+  // missing directive here is a room where voice can never work.
+  it('lets the room play its question audio from a blob URL', () => {
+    expect(request('/').headers.get('content-security-policy')).toContain("media-src 'self' blob:");
+  });
+
+  // speech AC-9: no cross-origin connection from the built room. `blob:` above is same-document
+  // data, not an origin, so it does not widen this.
+  it('still allows no network origin but this one', () => {
+    expect(request('/').headers.get('content-security-policy')).toContain("connect-src 'self'");
+  });
 });
 
 describe('metadata routes', () => {

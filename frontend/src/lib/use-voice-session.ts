@@ -26,6 +26,9 @@ export type VoiceBeat = 'listening' | 'speaking' | 'acknowledging' | null;
 export const VAD_SILENCE_MS = 2_000;
 export const VAD_THRESHOLD = 0.05;
 
+/** How often the silence window is checked. Independent of the mic's frame rate on purpose. */
+const VAD_POLL_MS = 100;
+
 /** The server's question, and the only thing that starts a turn. */
 export interface VoiceTurn {
   index: number;
@@ -116,6 +119,7 @@ export function useVoiceSession(
   // The VAD only arms once the candidate has been heard — a turn that opens on silence would
   // otherwise upload two seconds of nothing and come back SPEECH_AUDIO_INVALID.
   const heardRef = useRef(false);
+  const lastLoudRef = useRef(0);
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
@@ -188,6 +192,17 @@ export function useVoiceSession(
     setPhase('listening');
   }, [mic.stream, mic.muted, refetchState, submitAudio]);
 
+  // `startRecording` closes over `submitAudio`, and a react-query mutation result is a NEW
+  // object on every render. The meter re-renders this hook once per animation frame, so using
+  // that callback as an effect dependency below re-runs the speak effect ~60×/s — each run
+  // cancelling the in-flight question audio and then returning at the `spokenRef` guard, so
+  // nothing ever plays. Read through a ref instead: the effect reacts to the turn, not to
+  // identity churn.
+  const startRecordingRef = useRef(startRecording);
+  useEffect(() => {
+    startRecordingRef.current = startRecording;
+  }, [startRecording]);
+
   const stop = useCallback(() => {
     const recorder = recorderRef.current;
     if (!recorder || recorder.state === 'inactive') return;
@@ -235,7 +250,7 @@ export function useVoiceSession(
       player.addEventListener('ended', () => {
         if (!liveRef.current) return;
         releasePlayer();
-        startRecording();
+        startRecordingRef.current();
       });
       // ADR-S06 §Downgrade: undecodable audio is a fatal voice failure, and the interview
       // continues in text at the same index rather than stalling on a question nobody heard.
@@ -258,29 +273,30 @@ export function useVoiceSession(
       cancelled = true;
     };
     // `attempt` re-runs a failed question; `turn.questionId` is what makes the next one run.
-  }, [
-    active,
-    interviewId,
-    mic.state,
-    turn,
-    attempt,
-    refetchState,
-    releasePlayer,
-    startRecording,
-  ]);
+  }, [active, interviewId, mic.state, turn, attempt, refetchState, releasePlayer]);
 
-  // VAD (ADR-S06): the candidate ends the turn, the server ends the interview. Re-armed by
-  // every level change, so a pause that ends before the window closes never fires.
+  // VAD (ADR-S06): the candidate ends the turn, the server ends the interview.
+  //
+  // The silence window is measured from a timestamp, NOT held in a timer keyed to the level.
+  // `mic.level` changes once per animation frame, and a `setTimeout` in an effect that depends
+  // on it is torn down and re-armed by every one of those frames — it can only elapse if the
+  // reported RMS is bit-identical for the whole window, which no real microphone's noise floor
+  // ever is. The recorder then never stops and the turn never uploads.
   useEffect(() => {
     if (phase !== 'listening' || mic.muted) return;
-    if (mic.level >= threshold) {
-      heardRef.current = true;
-      return;
-    }
-    if (!heardRef.current) return;
-    const timer = setTimeout(stop, silenceMs);
-    return () => clearTimeout(timer);
-  }, [phase, mic.level, mic.muted, silenceMs, threshold, stop]);
+    if (mic.level < threshold) return;
+    heardRef.current = true;
+    lastLoudRef.current = Date.now();
+  }, [phase, mic.level, mic.muted, threshold]);
+
+  useEffect(() => {
+    if (phase !== 'listening' || mic.muted) return;
+    const timer = setInterval(() => {
+      if (!heardRef.current) return;
+      if (Date.now() - lastLoudRef.current >= silenceMs) stop();
+    }, VAD_POLL_MS);
+    return () => clearInterval(timer);
+  }, [phase, mic.muted, silenceMs, stop]);
 
   // Mute means mute: the recorder stops capturing, it does not merely meter zero.
   useEffect(() => {

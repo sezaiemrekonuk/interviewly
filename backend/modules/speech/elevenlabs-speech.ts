@@ -83,11 +83,9 @@ export class ElevenLabsSpeech implements SpeechProvider {
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       try {
         const form = new FormData();
-        form.append(
-          'audio',
-          new Blob([Uint8Array.from(audio)], { type: opts.mime }),
-          'audio.webm',
-        );
+        // `file`, not `audio`: Scribe answers any other part name with
+        // `400 invalid_parameters "Must provide either file or a URL parameter."`.
+        form.append('file', new Blob([Uint8Array.from(audio)], { type: opts.mime }), 'audio.webm');
         form.append('model_id', this.sttModel);
         form.append('language_code', opts.language);
 

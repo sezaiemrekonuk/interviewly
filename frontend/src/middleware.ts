@@ -11,7 +11,12 @@ const handleLocale = createMiddleware(routing);
 function policy(nonce: string): string {
   // S05 narrowed `connect-src` back to 'self': the ElevenLabs socket allowance existed for the
   // agent dial ADR-S01 removed, and the browser now talks only to this origin (speech AC-9).
-  return `default-src 'self'; script-src 'self' 'nonce-${nonce}'; style-src 'self' 'nonce-${nonce}'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none';`;
+  // `media-src` has no default of its own: without it the room's question audio falls under
+  // `default-src 'self'`, which does not cover the `blob:` URL `URL.createObjectURL` produces
+  // for the TTS response. The element then fires `error`, which the turn loop reads as a fatal
+  // voice failure and downgrades to text — voice could never play. `blob:` is same-document
+  // data, not a network origin, so AC-9 ("no cross-origin connection") is untouched.
+  return `default-src 'self'; script-src 'self' 'nonce-${nonce}'; style-src 'self' 'nonce-${nonce}'; img-src 'self' data:; media-src 'self' blob:; font-src 'self'; connect-src 'self'; frame-ancestors 'none';`;
 }
 
 /**

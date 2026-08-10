@@ -98,3 +98,44 @@ describe('ElevenLabsSpeech — empty key guard', () => {
     ).rejects.toThrow(ApiError);
   });
 });
+
+/**
+ * The multipart Scribe actually accepts. `POST /v1/speech-to-text` names the part `file`; any
+ * other name is answered
+ * `400 {"code":"invalid_parameters","message":"Must provide either file or a URL parameter."}`
+ * — probed against the real endpoint, not read off a doc. The retry loop then burns all three
+ * attempts on a request that can never succeed and the interview downgrades to text, which is
+ * indistinguishable from a provider outage.
+ */
+describe('ElevenLabsSpeech — the STT request shape', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('sends the recording as the "file" part, with the model and language beside it', async () => {
+    const sent: FormData[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        sent.push(init?.body as FormData);
+        return new Response(JSON.stringify({ text: 'hello', words: [{ end: 1.5 }] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }),
+    );
+
+    const driver = new ElevenLabsSpeech('key', 'eleven_multilingual_v2', 'scribe_v1');
+    const result = await driver.transcribe(Buffer.from([1, 2, 3]), {
+      mime: 'audio/webm',
+      language: 'en',
+    });
+
+    expect(result).toEqual({ transcript: 'hello', seconds: 1.5 });
+    expect(sent).toHaveLength(1);
+    expect(sent[0].get('file')).toBeInstanceOf(Blob);
+    expect(sent[0].get('audio')).toBeNull();
+    expect(sent[0].get('model_id')).toBe('scribe_v1');
+    expect(sent[0].get('language_code')).toBe('en');
+  });
+});
