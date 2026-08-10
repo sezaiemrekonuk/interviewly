@@ -58,10 +58,10 @@ export interface UseVoiceSessionOptions {
   /** Voice mode only — a text interview must not open a mic. */
   enabled?: boolean;
   /**
-   * `state.messages` as the server returned it, oldest first. Pass the array through — do NOT
-   * rebuild or filter it per render: this is an effect dependency, the mic meter re-renders the
-   * room once per animation frame, and a fresh array each frame tears the speak effect down
-   * mid-fetch (the same failure the `startRecordingRef` note below describes).
+   * `state.messages` as the server returned it, oldest first. Its IDENTITY is not read — the
+   * speak effect keys on the assistant ids inside it (see `assistantIds`), because react-query
+   * hands back a new array for the same rows on every refetch and the meter re-renders the room
+   * once per animation frame. Both used to tear the effect down mid-turn.
    */
   messages?: RoomMessage[];
   /**
@@ -142,6 +142,33 @@ export function useVoiceSession(
   const heardRef = useRef(false);
   const lastLoudRef = useRef(0);
   const [attempt, setAttempt] = useState(0);
+
+  // What the speak effect actually reacts to: WHICH assistant lines exist, by id, in order.
+  //
+  // Not `messages` itself. react-query returns a new array for the same rows on every refetch,
+  // and `useInterviewEvents` invalidates the state query on every SSE INTERVIEW_STATE_CHANGED —
+  // which `applyTransition` publishes mid-request, so a handover or an interview ending reliably
+  // produces one, and an EventSource reconnect produces another. With the array as the
+  // dependency, such a refetch lands mid-playback, the cleanup cancels the in-flight turn, and
+  // the re-run finds nothing pending (ids are marked spoken BEFORE their fetch, deliberately —
+  // see the loop below), so `startRecordingRef` is never reached: `phase` sticks on 'speaking'
+  // forever, `retry` only renders on 'failed', and the candidate's mic never opens again.
+  //
+  // A string of ids is stable by VALUE, so neither a refetch of unchanged rows nor the meter's
+  // ~60 renders/s re-enters the effect, and the one thing that must re-enter it — the server
+  // writing a new assistant line — changes it. Do NOT "simplify" this back to `messages`.
+  const assistantIds = messages
+    .filter((m) => m.role === 'assistant')
+    .map((m) => m.id)
+    .join('|');
+
+  // The rows themselves are then read through a ref, so the effect sees the latest ones without
+  // depending on the array. Declared above the speak effect so this commit's value is in place
+  // before that effect runs — the same ordering trick as `startRecordingRef` below.
+  const messagesRef = useRef(messages);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   useEffect(() => {
     if (active) requestMic();
@@ -251,13 +278,14 @@ export function useVoiceSession(
     // them. What survives the write-off is the trailing run of assistant lines after the last
     // candidate utterance, which is exactly the prompt they are currently being asked and the
     // one thing a reload does have to replay.
-    if (!seededRef.current && messages.length > 0) {
+    const rows = messagesRef.current;
+    if (!seededRef.current && rows.length > 0) {
       seededRef.current = true;
-      const lastSaid = messages.map((m) => m.role).lastIndexOf('user');
-      messages.slice(0, lastSaid + 1).forEach((m) => spokenRef.current.add(m.id));
+      const lastSaid = rows.map((m) => m.role).lastIndexOf('user');
+      rows.slice(0, lastSaid + 1).forEach((m) => spokenRef.current.add(m.id));
     }
 
-    const pending = messages.filter(
+    const pending = rows.filter(
       (m) => m.role === 'assistant' && !spokenRef.current.has(m.id),
     );
     if (pending.length === 0) return;
@@ -325,11 +353,13 @@ export function useVoiceSession(
 
     return () => {
       cancelled = true;
+      // A turn that is torn down still owns an `Audio` on an object URL. Left alone it keeps
+      // playing over whatever the next run says and its blob is never revoked, so release it
+      // here rather than only on 'ended' and on unmount.
+      releasePlayer();
     };
-    // `attempt` re-runs a failed line; a refetch that appends an assistant message is what makes
-    // the next one run — `messages` must therefore be the server's array by identity, or this
-    // effect is torn down mid-fetch by the meter and nothing ever plays (see the options doc).
-  }, [active, speakable, interviewId, mic.state, messages, attempt, refetchState, releasePlayer]);
+    // `attempt` re-runs a failed line; `assistantIds` re-runs when the server writes a new one.
+  }, [active, speakable, interviewId, mic.state, assistantIds, attempt, refetchState, releasePlayer]);
 
   // VAD (ADR-S06): the candidate ends the turn, the server ends the interview.
   //

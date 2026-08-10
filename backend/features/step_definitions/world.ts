@@ -84,6 +84,12 @@ export class AiWorld extends World {
     // `vars` is what the builder receives, not `GenerateReportArgs`.
     endedReason: 'completed',
     coverage: '1 of 1 planned questions were answered',
+    // C07: v4 adds {{integrity}} on the same terms — no null marker, so a missing entry throws
+    // AI_PROMPT_BUILD_FAILED before the security assertion under test ever runs. Already
+    // flattened to the string `reportVars` would produce for a clean interview.
+    integrity:
+      'no integrity concerns: no candidate message matched a manipulation pattern, the server ' +
+      'never overruled the interviewer, and the interviewer was never forced to move on',
   };
 
   ctx = { interviewId: 'itv_security_test', traceId: 'trace_security_test' };

@@ -13,6 +13,7 @@ import {
   ReportPayloadSchema,
   type AiClient,
   type AiCtx,
+  type ReportIntegrity,
   type ReportPayload,
   type Scores,
 } from '@interviewly/ai';
@@ -76,6 +77,46 @@ async function turnsOf(interviewId: string): Promise<Turn[]> {
     );
 }
 
+/**
+ * C07 — the conduct half of the interview, which the transcript cannot carry.
+ *
+ * `turnsOf` walks questions and answers, so by construction it sees nothing that happened
+ * outside an answer: a `role: 'system'` refusal row is not a question, and the flag on a
+ * candidate message is a column rather than text. Both live only in `chat_messages`, so the
+ * report reads them from there or does not learn about them at all — which is what shipped
+ * before this, and is how a candidate who opened by trying to end the interview was reported
+ * as having simply not said very much.
+ *
+ * ONE query on purpose, not three counts. The rows are few (an interview with more than a
+ * handful of these is already over), the `[interview_id, created_at]` index covers the scan,
+ * and three round trips to count three values on the same table is three chances for them to
+ * disagree about which moment they describe. Reduced in JS because the flagged CONTENT has to
+ * come back anyway — once the rows are in hand, counting them costs nothing.
+ */
+async function integrityOf(interviewId: string): Promise<ReportIntegrity> {
+  const rows = await prisma.chatMessage.findMany({
+    where: {
+      interview_id: interviewId,
+      // The union of the three things the report is allowed to know about. Anything else in
+      // the conversation is already represented in the transcript.
+      OR: [{ flagged_injection: true }, { action: { in: ['refused', 'drift'] } }],
+    },
+    orderBy: { created_at: 'asc' },
+    select: { role: true, content: true, action: true, flagged_injection: true },
+  });
+
+  return {
+    // `role: 'user'` and not just the flag: only a candidate utterance is conduct BY the
+    // candidate. The server's own refusal note quotes the attempt back at the interviewer,
+    // and counting that row would double every attempt the candidate made.
+    flaggedUtterances: rows
+      .filter((r) => r.flagged_injection && r.role === 'user')
+      .map((r) => r.content),
+    refusals: rows.filter((r) => r.action === 'refused').length,
+    forcedAdvances: rows.filter((r) => r.action === 'drift').length,
+  };
+}
+
 function formatTranscript(turns: Turn[]): string {
   return turns
     .map(
@@ -102,6 +143,7 @@ export async function runReport(interviewId: string, opts: ReportOpts): Promise<
   });
 
   const turns = await turnsOf(interviewId);
+  const integrity = await integrityOf(interviewId);
 
   let payload: ReportPayload;
   try {
@@ -122,6 +164,11 @@ export async function runReport(interviewId: string, opts: ReportOpts): Promise<
       endedReason: interview.ended_reason ?? 'completed',
       answeredCount: turns.length,
       plannedCount: interview.target_question_count,
+      // C07. An interview from before the conductor wrote any of this — or one that simply
+      // behaved — produces zeroes and an empty list, which `reportVars` renders as "no
+      // integrity concerns". That is the honest reading in both cases: nothing was recorded,
+      // so nothing is claimed, and v4 is instructed to write those reports clean.
+      integrity,
       ctx,
     });
   } catch (err) {

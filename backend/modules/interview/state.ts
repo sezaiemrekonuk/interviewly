@@ -173,7 +173,12 @@ async function resolveTranscript(interviewId: string) {
  */
 async function resolveMessages(interviewId: string) {
   const rows = await prisma.chatMessage.findMany({
-    where: { interview_id: interviewId },
+    // C07 — the refusal notes stay out of the room. They are written for the interviewer, and
+    // showing them to the candidate would narrate the guard that just stopped them: "the server
+    // refused because this round has not covered enough questions yet" is a recipe. The drift
+    // note is different and stays visible — it is about the candidate's own turn, not about a
+    // rule they could aim at.
+    where: { interview_id: interviewId, NOT: { action: 'refused' } },
     // Same order the conductor replays in. A user utterance and the reply to it are written
     // inside one request and can share a millisecond; `id` breaks that tie the same way twice.
     orderBy: [{ created_at: 'asc' }, { id: 'asc' }],

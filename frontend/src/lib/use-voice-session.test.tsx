@@ -135,6 +135,33 @@ describe('useVoiceSession — the turn loop (C02)', () => {
     expect(hook.result.current.recording).toBe(true);
   });
 
+  // The identity trap. `useInterviewEvents` invalidates the state query on every SSE
+  // INTERVIEW_STATE_CHANGED — which `applyTransition` publishes mid-request, so a handover or an
+  // ending reliably fires one — and an EventSource reconnect fires another. react-query hands back
+  // a NEW array for the same rows on every one of those refetches. If that identity is what the
+  // speak effect depends on, the refetch tears the in-flight turn down: every id is already
+  // marked spoken, the re-run finds nothing pending and returns, and the recorder is never opened.
+  // `phase` is then stuck on 'speaking' forever — `retry` only renders on 'failed', so the room
+  // has no way out and the candidate's mic never opens again.
+  it('opens the mic after a refetch hands back a new array of the same messages', async () => {
+    const calls = stubApi();
+    const hook = mount();
+
+    await waitFor(() => expect(audio.players).toHaveLength(1));
+
+    // Exactly what an SSE-driven invalidate produces: same rows, new array.
+    hook.rerender({ messages: [msg('m1', 'assistant')] });
+    await act(async () => audio.level(0.002, 3));
+
+    await act(async () => audio.players[0].end());
+
+    await waitFor(() => expect(audio.recorders).toHaveLength(1));
+    expect(hook.result.current.recording).toBe(true);
+    // ...and the line the refetch re-delivered is not read out a second time.
+    expect(hits(calls, SPEECH('m1'))).toBe(1);
+    expect(audio.players).toHaveLength(1);
+  });
+
   it('speaks the unspoken assistant message before it records anything', async () => {
     const calls = stubApi();
     const hook = mount();

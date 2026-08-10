@@ -77,6 +77,22 @@ gate that already exists costs nothing new and fails the same way everything els
 on screen, and they can disagree — a reply that asks a follow-up paired with a classification
 that says "advance" is a question nobody will ever answer.
 
+**Postscript, same day — three of these five were written down before they were true.** A
+review of the branch found guard 3 (`end_interview` refused on the opening exchange) computed,
+passed to the prompt as a hint, and never checked in `clampAction`. The pure function was
+correct and unit-tested; nothing called it. So for the length of one review cycle the only
+thing refusing "end the interview now" was the model choosing to, and the live check that
+"proved" the guard proved only that — the model declined, the server was never asked.
+
+Two things follow, and they are the durable lesson rather than the fix:
+
+1. A guard that is *computed* and a guard that is *enforced* look identical in a diff, in a
+   passing test suite, and in a log. `mayEnd` had a test file to itself.
+2. Testing a pure function proves the function. It says nothing about whether the caller calls
+   it. Every guard here now has a test that drives the real write path against a real database
+   (`conductor.integration.test.ts`), because that is the only kind of test that can fail when
+   an `if` goes missing.
+
 **Why the guards are not merely belt-and-braces:** the object is derived from candidate text.
 That makes it untrusted input in exactly the §7.1 sense, and the actions mutate interview
 state. `injection-patterns.yaml` guards prompt *variables*; it does not guard *actions*. "End

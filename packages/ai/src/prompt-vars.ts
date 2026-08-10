@@ -12,6 +12,7 @@ import type {
   GenerateInterviewTitleArgs,
   GenerateReportArgs,
   GenerateRoundQuestionsArgs,
+  ReportIntegrity,
   ScoreAnswerArgs,
 } from './AiClient';
 
@@ -49,7 +50,52 @@ export function reportVars(args: GenerateReportArgs): Record<string, unknown> {
     // One string rather than two numbers: the prompt has to reason about the *ratio*, and a
     // model told "3" and "8" in separate fields reliably scores as though it saw eight.
     coverage: `${args.answeredCount} of ${args.plannedCount} planned questions were answered`,
+    integrity: integrityLine(args.integrity),
   };
+}
+
+/** `1 time` / `3 times`. Cheaper than making the prompt parse "3 time(s)". */
+function times(n: number): string {
+  return n === 1 ? '1 time' : `${n} times`;
+}
+
+/**
+ * C07 — the three integrity counts as ONE sentence, for the same reason `coverage` is one:
+ * a model handed `injectionAttempts: 2` and `refusals: 1` in separate numeric fields treats
+ * them as telemetry and writes a report that never mentions either. Prose it will act on.
+ *
+ * The zero case is stated positively and out loud rather than omitted. An absent variable is
+ * a gap the model fills from the transcript, and a transcript containing an argument reads a
+ * lot like a transcript containing a manipulation attempt if nothing says otherwise — v4's
+ * "do not invent integrity problems" rule needs something concrete to point at.
+ *
+ * Ordering is load-bearing: counts first, quotes last. `PromptBuilder` truncates any bound
+ * value at MAX_BLOCK_CHARS, so a candidate who pastes a novel loses their own quotes and
+ * never the numbers.
+ */
+function integrityLine(integrity: ReportIntegrity): string {
+  const attempts = integrity.flaggedUtterances.length;
+  if (attempts === 0 && integrity.refusals === 0 && integrity.forcedAdvances === 0) {
+    return (
+      'no integrity concerns: no candidate message matched a manipulation pattern, the server ' +
+      'never overruled the interviewer, and the interviewer was never forced to move on'
+    );
+  }
+
+  const counts =
+    `${attempts === 1 ? '1 candidate message' : `${attempts} candidate messages`} ` +
+    'matched a manipulation pattern; ' +
+    `the server overruled the interviewer ${times(integrity.refusals)}; ` +
+    `the interviewer was forced to move on ${times(integrity.forcedAdvances)}`;
+
+  if (attempts === 0) return counts;
+  // ponytail: 300 chars per quote, uncapped in number. One flagged sentence is the signal —
+  // the rest of a 4 000-character paste is padding, and the block cap above catches the
+  // pathological case. Cap the list length too if a real interview ever produces dozens.
+  const quoted = integrity.flaggedUtterances
+    .map((text) => `"${text.slice(0, 300)}"`)
+    .join(' | ');
+  return `${counts}. The flagged candidate messages, verbatim: ${quoted}`;
 }
 
 /**

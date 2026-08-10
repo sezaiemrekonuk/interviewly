@@ -12,6 +12,7 @@ export type {
   GenerateInterviewTitleArgs,
   GenerateReportArgs,
   GenerateRoundQuestionsArgs,
+  ReportIntegrity,
   ScoreAnswerArgs,
 } from './AiClient';
 export { TIMEOUT_MS } from './AiClient';

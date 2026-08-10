@@ -52,22 +52,34 @@ type AnswerInput = z.infer<typeof answerInputSchema>;
  * `chatMessage` distinguishes the two callers rather than a mode: the conductor has already
  * stored the candidate's words as they were said (that is how it remembers the interview), so
  * writing them again here would double every utterance in the replay.
+ *
+ * `toIndex` is where the interview points afterwards, and defaults to the next question. The
+ * conductor needs the other two: a handover jumps past the rest of the round in one move, and
+ * an interview that is ending stays where it is. All three are the SAME compare-and-set on the
+ * index the caller read, in the same transaction as the answer — a handover that moved the
+ * index with its own `updateMany` was a second guard that could disagree with this one, and it
+ * left the answer the candidate had just given unrecorded because only the advancing path
+ * wrote one.
  */
 export async function recordAnswer(
   interview: Interview,
   question: { id: string; asked_at: Date | null },
   data: { transcript: string; inputMode: AnswerInput['inputMode'] } | null,
-  opts: { traceId: string; chatMessage?: boolean },
+  opts: { traceId: string; chatMessage?: boolean; toIndex?: number },
 ): Promise<{ nextIndex: number; answerId: string | null }> {
   const expected = interview.current_index;
+  const toIndex = opts.toIndex ?? expected + 1;
   const answeredAt = clock.now();
   // Server clock, both ends: `asked_at` was stamped when state.ts delivered the question.
   const durationMs = question.asked_at ? answeredAt.getTime() - question.asked_at.getTime() : null;
 
   const answerId = await prisma.$transaction(async (tx) => {
+    // Still the guard even when the index does not move: the WHERE clause is what proves this
+    // caller read the index it is writing against, and a losing duplicate rolls the whole
+    // transaction back rather than adding a second answer row for the same question.
     const { count } = await tx.interview.updateMany({
       where: { id: interview.id, current_index: expected },
-      data: { current_index: expected + 1 },
+      data: { current_index: toIndex },
     });
     if (count === 0) throw new ApiError('QUESTION_NOT_CURRENT');
     if (!data) return null;
@@ -96,12 +108,12 @@ export async function recordAnswer(
     return created.id;
   });
 
-  interview.current_index = expected + 1;
+  interview.current_index = toIndex;
   logger.info(
     { traceId: opts.traceId, interviewId: interview.id, questionId: question.id, durationMs },
     'ANSWER_RECORDED',
   );
-  return { nextIndex: expected + 1, answerId };
+  return { nextIndex: toIndex, answerId };
 }
 
 /**

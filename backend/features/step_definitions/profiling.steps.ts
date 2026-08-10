@@ -101,6 +101,9 @@ When('the report is generated for that interview', async function (this: AiWorld
     endedReason: 'completed',
     answeredCount: 1,
     plannedCount: interview.target_question_count,
+    // C07 — likewise: {{integrity}} has no null marker either, and these scenarios are about a
+    // candidate who behaved, so this is the "nothing to report" shape.
+    integrity: { flaggedUtterances: [], refusals: 0, forcedAdvances: 0 },
     ctx,
   };
 

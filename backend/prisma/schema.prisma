@@ -155,6 +155,9 @@ enum ConductorAction {
   end_interview
   show_widget
   drift
+  /// C07 — the server refused what the interviewer asked for. Written on a system row so the
+  /// next turn can read that it was overruled; a refusal the model cannot see is only a delay.
+  refused
 }
 
 /// K8.6 — one `email_tokens` table serves both flows.
@@ -492,6 +495,9 @@ model ChatMessage {
   question_id  String?
   /// The conductor's decision for this turn; null on user rows, which decide nothing.
   action       ConductorAction?
+  /// C07 — this utterance matched a §7.1 prompt-injection pattern. Evidence, not a summary:
+  /// the report is allowed to quote the sentence rather than merely count it.
+  flagged_injection Boolean         @default(false)
   trace_id     String // joins a K6 log line's traceId to the row that produced it
   created_at   DateTime         @default(now())
 
