@@ -48,6 +48,9 @@ export function RoomRail({
 
   const total = Math.max(room.targetQuestionCount, 0);
   const index = Math.min(room.currentIndex, total);
+  // `current_index` is 1 from the first question onwards, so 0 is an interview that has not
+  // started — and "Question 0 of 8" is a count no healthy interview ever reaches (#89).
+  const started = index >= 1;
 
   return (
     <>
@@ -55,7 +58,7 @@ export function RoomRail({
 
       <RailBlock
         label={t('roundLabel')}
-        note={t('progress', { index, total: room.targetQuestionCount })}
+        note={started ? t('progress', { index, total: room.targetQuestionCount }) : t('notStarted')}
       >
         <RailValue>{room.state === 'tech_round' ? t('roundTech') : t('roundHr')}</RailValue>
         {/* Decorative: the line under it is the accessible truth (ui §4.4). Answered segments
