@@ -43,18 +43,18 @@ This replaces one wrong sentence with the right one per failure.
   for each.
 
 ## Steps
-- [ ] **1. Test red** — each code in the spec's failure table renders its own copy and its own
+- [x] **1. Test red** — each code in the spec's failure table renders its own copy and its own
   action; none renders `voice.lost`. See it red.
-- [ ] **2. Read the code** — thread `code` from the failed request to the room state instead of
+- [x] **2. Read the code** — thread `code` from the failed request to the room state instead of
   collapsing every failure to `lost`.
-- [ ] **3. Copy per failure** — `VOICE_UNAVAILABLE` (continue in text, already written),
+- [x] **3. Copy per failure** — `VOICE_UNAVAILABLE` (continue in text, already written),
   `SPEECH_AUDIO_INVALID` (re-record), `SPEECH_TRANSCRIPTION_FAILED` (retry or type),
   `VOICE_SESSION_EXPIRED` (time is up, go to the report), `FORBIDDEN` / `INVALID_STATE_TRANSITION`
   (this interview cannot continue in voice). Both locales.
-- [ ] **4. Action per failure** — Reconnect only where reconnecting can work. Elsewhere: continue
+- [x] **4. Action per failure** — Reconnect only where reconnecting can work. Elsewhere: continue
   in text, re-record, or leave.
-- [ ] **5. Retire `voice.lost`** or narrow it to the one case that still means it.
-- [ ] **6. Unit test** — a 403 renders no Reconnect button.
+- [x] **5. Retire `voice.lost`** or narrow it to the one case that still means it.
+- [x] **6. Unit test** — a 403 renders no Reconnect button.
 
 ## Definition of done
 - speech AC-13 green.
@@ -70,3 +70,31 @@ grep -rn "voice.lost" frontend/src frontend/messages
 Expected: tests green; the grep shows no use against a non-recoverable failure.
 
 ## Notes
+
+S06 already threads `code` into `session.error`; S10 was component-only — no hook change needed.
+
+- **Copy lives in `room.voice.failure.<code>`, not the `errors` namespace.** A 403 in the room
+  is "this interview cannot continue in voice", not the generic "no permission"; the ceiling is
+  "time is up, going to your report", not "start it again". `voice-controls.tsx` reads
+  `voice.failure.<code>` and falls back to `useErrorMessage` for unmapped codes.
+- **Action gate is `RETRYABLE_CODES`** (`SPEECH_AUDIO_INVALID`, `SPEECH_TRANSCRIPTION_FAILED`,
+  `UNKNOWN`) — the only failures a re-record clears. Every other code renders copy alone: the
+  room resolves them itself (`VOICE_UNAVAILABLE` refetch→text, `VOICE_SESSION_EXPIRED`
+  refetch→report) or cannot continue in voice at all (403).
+- **`voice.lost` retired.** Renamed the key to `voice.micLost` with mic-honest copy (the mic can
+  drop; the connection S05 deleted cannot). `voice.status.lost` chip reworded "Disconnected"→
+  "Mic off". Grep for `voice.lost` is now empty.
+- Covers the STATE tech-debt line **[S05→S10]**: the room's mic-lost banner + reconnect now has
+  a test (`session-lost` names the mic, not a connection, and its reconnect fires).
+- **Issue 112's guard was amended, not bypassed.** `ui-checks/error-codes.test.ts` forbade any
+  code-shaped key outside `errors` — the rule that catches copy shadowed where `useErrorMessage`
+  can never reach it. `room.voice.failure` is a deliberate override read by a component, so it
+  is exempted by name and two new assertions replace what the exemption gives up: every key in
+  it is a real registry code, and both locales override the same set.
+- `voice.test.tsx`'s W10 failure test asserted `messages.errors.SPEECH_AUDIO_INVALID`; it now
+  asserts the room's own copy for the same code.
+- Verified: full `npm run -w frontend test` 476/476 across 48 files (the narrower
+  `-- room/voice-controls use-voice-session` selection is 27/27 but missed both regressions
+  above); grep clean; root `npm run lint` + `npm run typecheck` green, and the changed files
+  pass pre-commit's stricter `frontend/eslint.config.mjs`. No acceptance feature covers AC-13 —
+  it is a frontend copy criterion, held by the unit tests.

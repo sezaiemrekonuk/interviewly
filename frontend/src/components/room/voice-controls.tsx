@@ -11,6 +11,10 @@ import styles from './room.module.css';
 
 const cx = (...names: Array<string | false | undefined>) => names.filter(Boolean).join(' ');
 
+/** Failures a re-record or a retry can actually clear. Everything else the room resolves on
+ *  its own — a downgrade, a ceiling refetch, or an interview that cannot continue in voice. */
+const RETRYABLE_CODES = new Set(['SPEECH_AUDIO_INVALID', 'SPEECH_TRANSCRIPTION_FAILED', 'UNKNOWN']);
+
 /** Late enough to be news, early enough to finish a sentence and be asked one more question. */
 const WARN_AT_SECONDS = 60;
 
@@ -90,18 +94,32 @@ export function VoiceControls({
   const errorMessage = useErrorMessage();
   const lost = session.status === 'lost';
 
+  const code = session.error;
+  // Room-honest copy per code — the generic `errors` namespace is wrong in the room (a 403
+  // there reads "no permission", the ceiling reads "start it again"). Unmapped codes fall back
+  // to it rather than leaking a bare code.
+  const failKey = code
+    ? (`voice.failure.${code}` as Parameters<typeof t.has>[0])
+    : null;
+  const failMessage = code ? (failKey && t.has(failKey) ? t(failKey) : errorMessage(code)) : null;
+  // Retry only where re-recording can clear it. Every other failure the room resolves itself: a
+  // downgrade or a ceiling refetch navigates away, a 403 cannot continue in voice at all —
+  // offering a button that re-issues the same refusal is worse than offering none.
+  const retryable = code !== null && RETRYABLE_CODES.has(code);
+
   return (
     <>
-      {/* S06: a turn that failed says which failure it was and offers the one action that can
-          succeed. S10 refines the copy per code; the branch is the hook's. */}
-      {session.error ? (
+      {/* S06 threads the code here; S10 branches copy and action on it. */}
+      {code ? (
         <div className={cx(styles.notice, styles.noticeDanger)} data-testid="voice-error">
           <p className={styles.error} role="alert">
-            {errorMessage(session.error)}
+            {failMessage}
           </p>
-          <Button type="button" onClick={() => session.retry()} data-testid="voice-retry">
-            {t('retry')}
-          </Button>
+          {retryable ? (
+            <Button type="button" onClick={() => session.retry()} data-testid="voice-retry">
+              {t('retry')}
+            </Button>
+          ) : null}
         </div>
       ) : null}
 
@@ -111,7 +129,7 @@ export function VoiceControls({
           data-testid="session-lost"
           role="alert"
         >
-          <p className={styles.noticeText}>{t('voice.lost')}</p>
+          <p className={styles.noticeText}>{t('voice.micLost')}</p>
           <Button type="button" onClick={() => session.reconnect()}>
             {t('voice.reconnect')}
           </Button>

@@ -384,7 +384,10 @@ describe('interview room, voice mode (W10)', () => {
       fireEvent.click(await screen.findByTestId('voice-stop'));
     });
 
-    expect(await screen.findByText(messages.errors.SPEECH_AUDIO_INVALID)).toBeInTheDocument();
+    // S10: the room's own copy per code, not the generic `errors` string.
+    expect(
+      await screen.findByText(messages.room.voice.failure.SPEECH_AUDIO_INVALID),
+    ).toBeInTheDocument();
 
     await act(async () => {
       fireEvent.click(screen.getByTestId('voice-retry'));
