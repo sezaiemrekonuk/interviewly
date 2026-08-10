@@ -308,6 +308,16 @@
   border-color: var(--primary);
 }
 
+/* A file is over the box. Same pair of values the hover state uses, held rather than tracked
+   by the pointer — the gesture is the same offer, so it should not look like a new one. It
+   beats `:hover` in the cascade by sitting after it, and applies while invalid too: during a
+   drag the question is "will this land here", not "what went wrong last time". */
+.fileDragging {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  border-style: solid;
+}
+
 .fileDisabled {
   cursor: not-allowed;
   opacity: 0.55;

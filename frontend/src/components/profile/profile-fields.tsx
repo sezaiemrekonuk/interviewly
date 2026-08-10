@@ -514,8 +514,8 @@ export interface CvFieldProps {
   /** A resolved message, or null. The caller looks the error code up. */
   error: string | null;
   onFile: (file: File) => void;
-  /** A pick the size guard refused, by code — the caller renders it like an upload failure. */
-  onReject: (code: 'UPLOAD_TOO_LARGE') => void;
+  /** A pick the local guards refused, by code — the caller renders it like an upload failure. */
+  onReject: (code: 'UPLOAD_TOO_LARGE' | 'UNSUPPORTED_MEDIA_TYPE') => void;
   /**
    * Whether to carry the "what is on the account" line. Off for a caller that already says it
    * in its own words — setup's CV block did, and the two sentences made the same claim twice,
