@@ -39,6 +39,8 @@ interface Call {
 function stubFetch(options: {
   profile?: Record<string, unknown>;
   onboardingCompletedAt?: string | null;
+  profileGetStatus?: number;
+  profileGetBody?: unknown;
   patchStatus?: number;
   patchBody?: unknown;
   uploadStatus?: number;
@@ -69,6 +71,9 @@ function stubFetch(options: {
       return json(status, options.uploadBody ?? { uploadId: 'up_1' });
     }
     if (url === '/api/me/profile' && method === 'GET') {
+      if (options.profileGetStatus) {
+        return json(options.profileGetStatus, options.profileGetBody ?? null);
+      }
       return json(200, {
         profile: options.profile ?? {},
         onboardingCompletedAt: options.onboardingCompletedAt ?? null,
@@ -150,6 +155,34 @@ describe('onboarding step page', () => {
     expect(screen.queryByText(/VALIDATION_ERROR/)).toBeNull();
     expect(nav.push).not.toHaveBeenCalled();
     expect(screen.getByLabelText(messages.fields.fullNameLabel)).toHaveValue('Ada');
+  });
+
+  // Issue 99: `UNAUTHENTICATED` used to render as "Sign in to continue." in the banner above
+  // three buttons, none of which signs anyone in — so Continue could never succeed again.
+  it('routes a save refused with UNAUTHENTICATED to sign-in instead of the banner', async () => {
+    stubFetch({ patchStatus: 401, patchBody: { error: { code: 'UNAUTHENTICATED' } } });
+    await renderStep('1');
+
+    const user = userEvent.setup();
+    await user.type(await screen.findByLabelText(messages.fields.fullNameLabel), 'Ada');
+    await user.click(screen.getByRole('button', { name: messages.onboarding.continueButton }));
+
+    await waitFor(() =>
+      expect(nav.replace).toHaveBeenCalledWith('/sign-in?returnPath=%2Fonboarding%2F1'),
+    );
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(nav.push).not.toHaveBeenCalled();
+  });
+
+  // The worse half of the same issue: the profile error was discarded, `data` stayed
+  // undefined, and the card rendered `null` — a white page with no message and no navigation.
+  it('routes an expired session on load to sign-in rather than rendering nothing', async () => {
+    stubFetch({ profileGetStatus: 401, profileGetBody: { error: { code: 'UNAUTHENTICATED' } } });
+    await renderStep('2');
+
+    await waitFor(() =>
+      expect(nav.replace).toHaveBeenCalledWith('/sign-in?returnPath=%2Fonboarding%2F2'),
+    );
   });
 
   it('completes from step 3 and routes to setup', async () => {

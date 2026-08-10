@@ -186,6 +186,22 @@ describe('interview setup page (W05)', () => {
     expect(screen.getByRole('button', { name: messages.setup.start })).toBeEnabled();
   });
 
+  // Issue 99: a session that lapsed while the listing was being pasted used to render
+  // "Sign in to continue." on a screen with no sign-in control, and Start kept failing.
+  it('sends an expired session to sign-in instead of a dead Start button', async () => {
+    stubFetch({ createStatus: 401, createBody: { error: { code: 'UNAUTHENTICATED' } } });
+    const user = userEvent.setup();
+    await renderSetup();
+
+    await user.type(screen.getByLabelText(messages.setup.listingPaste), 'Senior developer wanted');
+    await user.click(screen.getByRole('button', { name: messages.setup.start }));
+
+    await waitFor(() =>
+      expect(nav.replace).toHaveBeenCalledWith('/sign-in?returnPath=%2Finterviews%2Fnew'),
+    );
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
   it('keeps the typed listing after a refused create', async () => {
     stubFetch({ createStatus: 429, createBody: { error: { code: 'DAILY_INTERVIEW_LIMIT' } } });
     const user = userEvent.setup();
