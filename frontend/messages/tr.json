@@ -414,6 +414,11 @@
   "setup": {
     "title": "Mülakatını hazırla",
     "subtitle": "Sorular, eklediğin ilandan çıkar.",
+    "cvTitle": "Özgeçmişin yüklü değil",
+    "cvBody": "Sorular özgeçmişine göre yazılıyor, cevapların da ona göre puanlanıyor. Şimdi eklersen mülakat sana göre olur — eklemesen de çalışır.",
+    "cvAttached": "Bu mülakat {date} tarihinde eklenen {name} dosyasına göre hazırlanacak.",
+    "cvChange": "Değiştir",
+    "cvKeep": "Vazgeç",
     "listingPaste": "İş ilanı",
     "listingHint": "Hazırlandığın ilanı yapıştır — her soru bu metinden yazılır.",
     "listingUpload": "Ya da ilanı PDF olarak yükle",

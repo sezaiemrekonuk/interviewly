@@ -516,6 +516,12 @@ export interface CvFieldProps {
   onFile: (file: File) => void;
   /** A pick the size guard refused, by code — the caller renders it like an upload failure. */
   onReject: (code: 'UPLOAD_TOO_LARGE') => void;
+  /**
+   * Whether to carry the "what is on the account" line. Off for a caller that already says it
+   * in its own words — setup's CV block did, and the two sentences made the same claim twice,
+   * in Turkish with two different words for the same document (issue 111's drift, in one box).
+   */
+  showState?: boolean;
 }
 
 const BYTES_PER_KB = 1024;
@@ -526,7 +532,7 @@ const BYTES_PER_MB = BYTES_PER_KB * BYTES_PER_KB;
  * no Save beside it and needs no Continue to persist. Holding the returned id in page state
  * instead is what made "CV received" a lie the moment the page reloaded (issue 62).
  */
-export function CvField({ cv, uploading, error, onFile, onReject }: CvFieldProps) {
+export function CvField({ cv, uploading, error, onFile, onReject, showState = true }: CvFieldProps) {
   const t = useTranslations('fields');
   const format = useFormatter();
 
@@ -545,6 +551,7 @@ export function CvField({ cv, uploading, error, onFile, onReject }: CvFieldProps
 
   return (
     <div className={styles.stack}>
+      {showState ? (
       <div data-testid="cv-state">
         {cv ? (
           <>
@@ -557,6 +564,7 @@ export function CvField({ cv, uploading, error, onFile, onReject }: CvFieldProps
           <p className={styles.note}>{t('cvNone')}</p>
         )}
       </div>
+      ) : null}
 
       <Field
         label={t('cvLabel')}
