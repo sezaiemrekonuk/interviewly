@@ -56,7 +56,7 @@ export async function prepareNextCandidates({
   // priorScore is the midpoint default — D02 does not score; D01/D03 select by difficulty.
   const candidates = await aiClientInstance.generateCandidates({
     priorQuestion: currentQuestion.text,
-    priorScore: 3,
+    priorScore: 50,
     topicsUsed,
     language: interview.language,
     ctx,

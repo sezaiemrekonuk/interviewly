@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
-import Link from 'next/link';
 
+import { Link } from '../../i18n/navigation';
 import styles from './shell.module.css';
 
 const cx = (...names: Array<string | false | undefined>) => names.filter(Boolean).join(' ');
@@ -26,7 +26,7 @@ export function SplitShell({
   return (
     <div className={cx(styles.shell, styles[width], className)}>
       <aside className={styles.rail}>{rail}</aside>
-      <main className={styles.work}>{children}</main>
+      <main id="content" tabIndex={-1} className={styles.work}>{children}</main>
     </div>
   );
 }

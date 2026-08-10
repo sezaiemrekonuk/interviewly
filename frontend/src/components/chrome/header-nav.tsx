@@ -1,10 +1,9 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
+import { Link, usePathname } from '../../i18n/navigation';
 import { DEFAULT_LANDING_PATH } from '../../lib/auth-redirect';
 import { probeSession } from '../../lib/session-probe';
 
@@ -37,7 +36,11 @@ const SECTIONS = ['demo', 'mechanism', 'modes', 'report', 'faq'] as const;
 export function HeaderNav() {
   const t = useTranslations('nav');
   const pathname = usePathname();
-  const [signedIn, setSignedIn] = useState(false);
+  // Three states, not two (issue 95). `false` as the initial value is a guess, and it is the
+  // wrong one for a signed-in visitor: the header painted "Sign in" and "Try now" on every
+  // load until `/me` answered, then swapped them. `null` is "not known yet", and the actions
+  // wait for it — a header that flashes the wrong doorway is worse than one that arrives late.
+  const [signedIn, setSignedIn] = useState<boolean | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -59,6 +62,10 @@ export function HeaderNav() {
         ))}
       </>
     ) : null;
+
+  // The section anchors are the same for everyone and depend on the route, not the session, so
+  // they render immediately; only the two auth actions wait.
+  if (signedIn === null) return sectionLinks;
 
   if (!signedIn) {
     return (

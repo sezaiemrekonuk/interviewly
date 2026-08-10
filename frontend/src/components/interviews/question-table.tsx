@@ -1,16 +1,16 @@
 'use client';
 
 import { useFormatter, useTranslations } from 'next-intl';
-import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 
+import { Link, useRouter } from '../../i18n/navigation';
 import type { MyQuestion } from '../../lib/query';
+import { SCORE_MAX, scoreBand } from '../../lib/score';
 
 import styles from './question-table.module.css';
 
 const cx = (...names: Array<string | false | undefined>) => names.filter(Boolean).join(' ');
 
-const SCORE_MAX = 5;
 const ROUNDS = ['all', 'hr', 'tech'] as const;
 const SORTS = ['recent', 'worst'] as const;
 
@@ -155,7 +155,7 @@ export function QuestionTable({
                   ) : (
                     <span
                       className={cx(styles.score, 'tabular')}
-                      data-band={row.score <= 2 ? 'low' : row.score === 3 ? 'mid' : 'high'}
+                      data-band={scoreBand(row.score)}
                     >
                       {row.score}
                       <span className={styles.outOf}>{t('outOf', { max: SCORE_MAX })}</span>
@@ -163,7 +163,7 @@ export function QuestionTable({
                   )}
                 </td>
                 {/* STAR is a behavioural-story rubric. The backend scores it 0 on a technical
-                    question because it never applied, and "0%" beside a 4/5 and a praising
+                    question because it never applied, and "0%" beside an 80 and a praising
                     reason reads as either broken scoring or an unnamed disaster. Not applicable
                     is a third state, distinct from `noScore`'s "not scored yet". */}
                 <td className={cx(styles.numeric, 'tabular')}>

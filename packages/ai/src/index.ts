@@ -25,6 +25,7 @@ export {
   QuestionSchema,
   ReportPayloadSchema,
   RoundTypeSchema,
+  SCORE_MAX,
   ScoresSchema,
 } from './schemas';
 export type {

@@ -1,5 +1,7 @@
 import type { MetadataRoute } from 'next';
 
+import { getPathname } from '../i18n/navigation';
+import { locales, type Locale } from '../lib/locales';
 import { PUBLIC_ROUTES, SITE_ORIGIN } from '../lib/site';
 
 /**
@@ -9,19 +11,28 @@ import { PUBLIC_ROUTES, SITE_ORIGIN } from '../lib/site';
  * Public routes only. A signed-in surface in here would be an invitation to crawl exactly
  * what `robots.ts` disallows.
  *
- * No `alternates.languages` yet, deliberately: Turkish has no URL of its own — the locale is
- * a cookie (issue 91) — so every hreflang entry would point at the same address and tell a
- * crawler that two languages live at one URL, which is worse than saying nothing. This is the
- * file that gains them the day 91 lands.
+ * Both languages, one `<url>` each, and every entry carries the full `alternates.languages`
+ * set including its own (issue 91). Reciprocity is the part Google enforces: an entry that
+ * names its counterpart without being named back is discarded, which is why the map is built
+ * once per route and shared rather than written per entry.
  */
 export default function sitemap(): MetadataRoute.Sitemap {
   const lastModified = new Date();
+  const absolute = (route: string, locale: Locale) =>
+    new URL(getPathname({ href: route, locale }), SITE_ORIGIN).toString();
 
-  return PUBLIC_ROUTES.map((route) => ({
-    url: new URL(route, SITE_ORIGIN).toString(),
-    lastModified,
-    changeFrequency: 'monthly' as const,
-    // The landing page is the entry point; the rest are supporting surfaces.
-    priority: route === '/' ? 1 : 0.6,
-  }));
+  return PUBLIC_ROUTES.flatMap((route) => {
+    const languages = Object.fromEntries(
+      locales.map((locale) => [locale, absolute(route, locale)]),
+    );
+
+    return locales.map((locale) => ({
+      url: absolute(route, locale),
+      lastModified,
+      changeFrequency: 'monthly' as const,
+      // The landing page is the entry point; the rest are supporting surfaces.
+      priority: route === '/' ? 1 : 0.6,
+      alternates: { languages },
+    }));
+  });
 }

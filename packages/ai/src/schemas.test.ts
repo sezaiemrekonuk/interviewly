@@ -17,16 +17,16 @@ const question = {
 
 const report = {
   overall_impression: 'Solid answers throughout, with concrete examples in the technical round.',
-  overall_score: 4,
+  overall_score: 80,
   strengths: ['Concrete examples', 'Clear structure'],
   improvements: ['Quantify outcomes', 'Tighten the opening'],
-  rounds: [{ type: 'hr', score: 4, summary: 'Warm and specific.' }],
-  questions: [{ question_id: 'q1', score: 4, reason: 'Named the trade-off.', star_adherence: 0.8 }],
+  rounds: [{ type: 'hr', score: 80, summary: 'Warm and specific.' }],
+  questions: [{ question_id: 'q1', score: 80, reason: 'Named the trade-off.', star_adherence: 0.8 }],
   language: 'en',
 };
 
 const scores = {
-  overall: 3,
+  overall: 60,
   relevance: 4,
   depth: 2,
   structure: 3,
@@ -79,8 +79,8 @@ describe('ScoresSchema', () => {
   });
 
   it.each([
-    ['a non-integer overall', { ...scores, overall: 3.5 }],
-    ['an out-of-range overall', { ...scores, overall: 7 }],
+    ['a non-integer overall', { ...scores, overall: 60.5 }],
+    ['an out-of-range overall', { ...scores, overall: 101 }],
     ['star_adherence above 1', { ...scores, star_adherence: 1.2 }],
     ['no reasons', { ...scores, reasons: [] }],
   ])('rejects %s', (_label, invalid) => {
@@ -95,8 +95,8 @@ describe('ReportPayloadSchema', () => {
 
   it.each([
     // The exact shape schema_validation.feature @AC-11 drives the stub with.
-    ['overall_score 7', { ...report, overall_score: 7 }],
-    ['a non-integer round score', { ...report, rounds: [{ ...report.rounds[0], score: 2.5 }] }],
+    ['overall_score 101', { ...report, overall_score: 101 }],
+    ['a non-integer round score', { ...report, rounds: [{ ...report.rounds[0], score: 62.5 }] }],
     ['a single strength', { ...report, strengths: ['Only one'] }],
     ['six improvements', { ...report, improvements: ['a', 'b', 'c', 'd', 'e', 'f'] }],
     [

@@ -66,8 +66,13 @@ export const requeueReport: RequestHandler = async (req, res, next) => {
     // is the recoverable half of issue 082's crash window — written, then the transition never
     // landed — and refusing there would strand exactly the interview this endpoint exists for.
     // Safe to re-run because that write is an upsert onto a unique `interview_id`.
+    // `status: 'ready'`, not merely "a row exists" (issue #123). A row is now written when the
+    // job is enqueued and marked `failed` when a run gives up, so presence alone would refuse a
+    // requeue for exactly the interviews this endpoint exists to rescue — the ones whose report
+    // never arrived. What must not be re-run is a *finished* report: that costs money and would
+    // overwrite a deliverable.
     const existing = await prisma.report.findFirst({
-      where: { interview_id: interviewId },
+      where: { interview_id: interviewId, status: 'ready' },
       select: { id: true },
     });
     if (existing && from !== 'evaluating') throw new ApiError('REPORT_ALREADY_EXISTS');

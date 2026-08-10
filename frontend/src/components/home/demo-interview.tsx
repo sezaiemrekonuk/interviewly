@@ -1,9 +1,9 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { Link } from '../../i18n/navigation';
 import { Meter } from '../shell/meter';
 import {
   DEMO_CHOICES,
@@ -45,7 +45,7 @@ type Phase = 'asking' | 'choosing' | 'scored';
  * and every question here is two lines on a phone. Returns the visible prefix plus whether it
  * has finished, because the answers must not appear until the interviewer has stopped talking.
  */
-function useTyped(text: string, enabled: boolean): { shown: string; done: boolean } {
+function useTyped(text: string, enabled: boolean): { shown: string; pending: string; done: boolean } {
   // Reduced motion gets the whole question at once. The information *is* the question, and
   // withholding it for two seconds is the part someone asked us not to do. Feature-detected
   // rather than assumed: where `matchMedia` is missing the question still has to arrive, so
@@ -81,7 +81,15 @@ function useTyped(text: string, enabled: boolean): { shown: string; done: boolea
     return () => window.clearInterval(id);
   }, [text, instant]);
 
-  return { shown: text.slice(0, count), done: count >= text.length };
+  // `pending` is the rest of the string, for the caller to render invisibly. The container is
+  // then the size of the finished sentence from the first frame, so nothing below it moves as
+  // the characters arrive (issue 237). A `min-height` would need re-tuning every time this copy
+  // or a breakpoint changed, and would fail silently when it drifted.
+  return {
+    shown: text.slice(0, count),
+    pending: text.slice(count),
+    done: count >= text.length,
+  };
 }
 
 /**
@@ -114,7 +122,7 @@ function ScorePanel({
 }) {
   const t = useTranslations('landing.demo');
   const settled = useSettled(roundKey);
-  const { shown } = useTyped(reason, true);
+  const { shown, pending } = useTyped(reason, true);
   // `null` on the technical rounds, where the product returns no STAR figure at all
   // (`DemoScore.star`). No tag, no meter, and nothing about STAR in the spoken verdict.
   const percent = score.star === undefined ? null : Math.round(score.star * 100);
@@ -123,7 +131,7 @@ function ScorePanel({
   return (
     <div className={styles.score} data-testid="demo-score">
       {/* The verdict, announced once as a sentence. Read as marked-up, the figure and the tag
-          are "4", "/ 5", "STAR 82%" — three fragments in a row and no statement — so they are
+          are "82", "/ 100", "STAR 82%" — three fragments in a row and no statement — so they are
           hidden here and the region carries the sentence instead (WCAG 4.1.3). */}
       <div className={styles.scoreHead} role="status">
         <p className={styles.scoreFigureBlock} aria-hidden="true">
@@ -187,6 +195,9 @@ function ScorePanel({
           the finished panel holds the reason exactly once. */}
       <p className={styles.reason} aria-hidden={typing || undefined}>
         {shown}
+        <span className={styles.pending} aria-hidden="true">
+          {pending}
+        </span>
       </p>
       {typing ? <p className={styles.srOnly}>{reason}</p> : null}
     </div>
@@ -234,7 +245,10 @@ export function DemoInterview() {
   const phase: Phase = choice ? 'scored' : 'asking';
 
   const question = t(`roles.${role}.${round}.question`);
-  const { shown: shownQuestion, done: asked } = useTyped(question, phase === 'asking');
+  const { shown: shownQuestion, pending: pendingQuestion, done: asked } = useTyped(
+    question,
+    phase === 'asking',
+  );
 
   // The button that was just pressed unmounts with the answer list, and focus falls back to
   // <body> — a keyboard user's next Tab restarts at the top of the page, three viewports above
@@ -339,9 +353,26 @@ export function DemoInterview() {
           <p className={styles.asking}>
             {t('asks', { name: interviewer, role: roleLabel })}
           </p>
-          <p className={styles.question} data-testid="demo-question">
-            {shownQuestion}
-            {!asked ? <span className={styles.caret} aria-hidden="true" /> : null}
+          <p className={styles.question}>
+            {/* The testid stays on the *visible* text. The sizing span below is real text in
+                the DOM, so putting the id on the paragraph would make `toHaveTextContent`
+                pass on the first frame and quietly stop testing that the question arrives. */}
+            <span data-testid="demo-question">
+              {shownQuestion}
+              {/* Kept in the flow once it stops blinking, rather than removed: taking it out
+                  changed the line box by a pixel, which is the last of the shift. */}
+              <span
+                className={cx(styles.caret, asked && styles.pending)}
+                aria-hidden="true"
+              />
+            </span>
+            {/* Occupies the space the rest of the question will need, so the bands below this
+                one do not slide down while it types. `visibility: hidden` rather than a removed
+                node: it still lays out, and it still wraps exactly where the finished sentence
+                will (issue 237). */}
+            <span className={styles.pending} aria-hidden="true">
+              {pendingQuestion}
+            </span>
           </p>
           {/* Announced once, when the interviewer has finished — not per character. */}
           <p className={styles.srOnly} role="status">
@@ -354,8 +385,19 @@ export function DemoInterview() {
               Unlabelled on purpose — the visitor picks the answer they would actually give and
               finds out what it is worth. A "strong / weak" tag would give the demonstration
               away before it ran. */}
-          {phase === 'asking' && asked ? (
-            <div className={styles.answers} data-testid="demo-answers">
+          {/* Rendered from the first frame, revealed once the interviewer stops talking (issue
+              237). It used to be absent until then, and its eight elements arriving at once
+              grew the page 217px roughly a second after load — pushing every band and anchor
+              target below the demo down while the visitor was reading.
+              `visibility: hidden` keeps the space and still takes the control out of the tab
+              order and out of reach of a pointer, so the rule the conditional protected — no
+              answering over the interviewer — holds exactly as before. */}
+          {phase === 'asking' ? (
+            <div
+              className={cx(styles.answers, !asked && styles.pending)}
+              data-testid="demo-answers"
+              aria-hidden={!asked || undefined}
+            >
               <p className={styles.answersPrompt}>{t('yourTurn')}</p>
               <ul className={styles.answerList}>
                 {orders[`${role}.${round}`].map((key, index) => (

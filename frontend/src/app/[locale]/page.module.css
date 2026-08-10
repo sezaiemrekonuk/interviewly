@@ -1,0 +1,622 @@
+/*
+ * The anonymous landing.
+ *
+ * The page is an interview, so its rhythm is an interview's: a short band that says what this
+ * is, the stage (`components/home/landing.module.css`), then quiet documentary sections that
+ * only name what the visitor already watched happen. Density alternates deliberately — the
+ * stage is dark and loud, everything after it is a light document with hairline rules.
+ */
+
+.ground {
+  min-height: 100vh;
+  padding-block-end: 64px;
+  background: var(--bg);
+}
+
+/* One gutter for the whole page, so the wordmark, the headline, the stage and the closing
+   line share a left edge at every width. */
+.hero,
+.band,
+.langBand,
+.closing {
+  max-width: 72rem;
+  padding-inline: 24px;
+  margin-inline: auto;
+}
+
+/* --------------------------------------------------------------------------------- hero */
+
+/* User asked for a big, tall hero that pushes the stage down the page — the intentionally
+   short version this replaced is described in the sibling git history, not here. */
+.hero {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 88vh;
+  padding-block: 40px;
+}
+
+.title {
+  max-width: 24ch;
+  font-family: var(--font-heading), Georgia, serif;
+  font-size: 56px;
+  font-weight: 600;
+  line-height: 1.02;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+  /* 56px is the type scale's ceiling (DESIGN §6) — landing hero only, and already spent
+     here. Bigger still, without a second literal size: scale the box instead of the font. */
+  transform: scale(1.2);
+  transform-origin: left top;
+  margin-block-end: 24px;
+}
+
+.subhead {
+  max-width: 56ch;
+  margin-block-start: 12px;
+  font-size: 20px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+/* The CTA sits on the baseline of its own row with the note and the sign-in link beside it,
+   so the whole action costs one line rather than three. */
+.heroAct {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  align-items: center;
+  margin-block-start: 20px;
+}
+
+/* The page's single --primary. Flat and square-ish: the colour is the emphasis, not a lift. */
+.cta {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 12px 24px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--surface);
+  background: var(--primary);
+  border-radius: var(--radius-button);
+  transition: background-color var(--duration-default) var(--easing-default);
+}
+
+.cta:hover {
+  background: var(--primary-deep);
+}
+
+.cta:focus-visible,
+.closingCta:focus-visible,
+.faqQuestion:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* The stage gets its own ground and heading, set off from the hero rather than reading as
+   its overflow. */
+.demoSection {
+  scroll-margin-block-start: 68px;
+  padding-block: 40px 64px;
+  background: var(--surface-sunken);
+}
+
+.demoSectionTitle {
+  max-width: 72rem;
+  padding-inline: 24px;
+  padding-block-end: 24px;
+  margin-inline: auto;
+  font-family: var(--font-heading), Georgia, serif;
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+/* -------------------------------------------------------------------------- shared bands */
+
+.band,
+.langBand {
+  padding-block: 48px;
+  border-block-start: 1px solid var(--border);
+  /* The header is `position: sticky` (chrome.module.css), so an anchor jump from its own nav
+     lands the section heading underneath it. This is the offset that stops that — 68px is the
+     header's 44px control plus its 8px block padding, rounded up onto the 4px scale (issue 95). */
+  scroll-margin-block-start: 68px;
+}
+
+/* The rule belongs to the page gutter, so it is drawn by the band rather than by a wrapper
+   that would start 24px outside the text it separates. */
+.band + .band,
+.band + .langBand,
+.langBand + .band {
+  border-block-start: 1px solid var(--border);
+}
+
+.bandHead {
+  max-width: 62ch;
+  padding-block-end: 32px;
+}
+
+.bandTitle {
+  font-family: var(--font-heading), Georgia, serif;
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.bandLede {
+  margin-block-start: 8px;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+/* ------------------------------------------------------------------------ how it works */
+
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 32px;
+  list-style: none;
+}
+
+/* Numbered because the order is the mechanism: the listing has to be read before a question
+   can be written, and the report cannot exist before both rounds are answered. */
+.step {
+  padding-block-start: 16px;
+  border-block-start: 1px solid var(--border);
+}
+
+.stepIndex {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary-deep);
+}
+
+.stepTitle {
+  margin-block-start: 8px;
+  font-family: var(--font-heading), Georgia, serif;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.stepBody {
+  max-width: 40ch;
+  margin-block-start: 8px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+/* ------------------------------------------------------------------------ voice or text */
+
+.modes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+
+.modeVoice,
+.modeText {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+}
+
+/* Voice runs on the room's material, text on the working surface — the two modes are told
+   apart by the ground they are shown on, which is the difference the visitor will meet. */
+.modeVoice {
+  color: var(--rail-text);
+  background: var(--rail);
+  border-color: var(--rail);
+}
+
+.modeText {
+  background: var(--surface);
+}
+
+.modeTitle {
+  font-family: var(--font-heading), Georgia, serif;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.modeBody {
+  flex: 1 1 auto;
+  max-width: 42ch;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--rail-text-muted);
+}
+
+.modeText .modeBody {
+  color: var(--text-muted);
+}
+
+/* The room's own control bar, at rest — not an illustration of one. */
+.controlBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  background: var(--rail-raised);
+  border: 1px solid var(--rail-border);
+  border-radius: var(--radius-card);
+}
+
+.control,
+.controlLeave {
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid var(--rail-border);
+  border-radius: var(--radius-button);
+}
+
+.control {
+  color: var(--rail-text-muted);
+}
+
+.controlLeave {
+  margin-inline-start: auto;
+  color: var(--rail-text);
+}
+
+.composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 12px;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-card);
+}
+
+.composerLabel {
+  grid-column: 1 / -1;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.composerField {
+  padding: 12px;
+  font-size: 14px;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-input);
+}
+
+/* Drawn, not filled. This is a picture of the composer, and a picture of a button must not
+   wear the action colour — the page has exactly one --primary and it is the hero's. */
+.composerSend {
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-button);
+}
+
+/* ------------------------------------------------------------------- what comes back */
+
+/* A definition list, because the report is a document and this is its table of contents.
+   Cards here would describe a card grid the product does not have. */
+.anatomy {
+  display: flex;
+  flex-direction: column;
+}
+
+.anatomyRow {
+  display: grid;
+  grid-template-columns: minmax(0, 20ch) minmax(0, 1fr);
+  gap: 24px;
+  padding-block: 16px;
+  border-block-start: 1px solid var(--border);
+}
+
+.anatomyRow:last-child {
+  border-block-end: 1px solid var(--border);
+}
+
+.anatomyTerm {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.anatomyDef {
+  max-width: 60ch;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+/* ---------------------------------------------------------------------- two languages */
+
+.langPair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+
+.langCard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+}
+
+.langTag {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* Serif and set large: this is the interviewer speaking, in both languages, and the point of
+   the section is that neither is a translation of the other. */
+.langQuote {
+  font-family: var(--font-heading), Georgia, serif;
+  font-size: 20px;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+/* -------------------------------------------------------------------------------- faq */
+
+.faq {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Native <details>: the platform ships a keyboard-complete disclosure widget, and a hand-built
+   accordion here would be JS on the anonymous landing for behaviour we already have. */
+.faqItem {
+  border-block-start: 1px solid var(--border);
+}
+
+.faqItem:last-child {
+  border-block-end: 1px solid var(--border);
+}
+
+.faqQuestion {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  padding-block: 16px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+
+.faqQuestion::-webkit-details-marker {
+  display: none;
+}
+
+/* The marker is drawn rather than typed so it can rotate; the row is still a real summary. */
+.faqQuestion::after {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  content: '';
+  border-inline-end: 1.5px solid var(--text-muted);
+  border-block-end: 1.5px solid var(--text-muted);
+  transform: rotate(45deg) translate(-2px, -2px);
+  transition: transform var(--duration-default) var(--easing-default);
+}
+
+.faqItem[open] .faqQuestion::after {
+  transform: rotate(225deg) translate(-2px, -2px);
+}
+
+.faqAnswer {
+  max-width: 65ch;
+  padding-block-end: 16px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+/* A native <details> animating open, with no JS measuring anything. `interpolate-size` is
+   what makes height:auto interpolable and is Chromium-only today; everywhere else the panel
+   snaps open, which is the behaviour <details> has always had. Nothing is lost by that. */
+.faqItem::details-content {
+  height: 0;
+  overflow: clip;
+  transition:
+    height var(--duration-default) var(--easing-default),
+    content-visibility var(--duration-default) var(--easing-default) allow-discrete;
+}
+
+.faqItem[open]::details-content {
+  height: auto;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .faqItem {
+    interpolate-size: allow-keywords;
+  }
+}
+
+/* ---------------------------------------------------------------------- closing band */
+
+.closing {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  padding-block: 48px 0;
+  border-block-start: 1px solid var(--border);
+}
+
+.closingLine {
+  max-width: 32ch;
+  font-family: var(--font-heading), Georgia, serif;
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.closingCta {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 12px 20px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-button);
+  transition: background-color var(--duration-default) var(--easing-default);
+}
+
+.closingCta:hover {
+  background: var(--surface-sunken);
+}
+
+/* One authored entrance for the documentary half of the page: each band resolves as it
+   enters. Tied to the reader's own scroll rather than to a timer.
+   Two gates, both deliberate: `@supports` because scroll-driven animation is still absent
+   from Firefox, and reduced-motion because entry motion must never be how meaning arrives.
+   Outside either gate the band is simply visible, which is the correct default. */
+@supports (animation-timeline: view()) {
+  @media not (prefers-reduced-motion: reduce) {
+    .demoSection,
+    .band,
+    .langBand,
+    .closing {
+      animation: enter linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 40%;
+    }
+
+    /* Portfolio-style cascade: each card in a row tracks its own entry into view and lands
+       a beat after the one before it, instead of the whole row appearing as one block. */
+    .step,
+    .modeVoice,
+    .modeText,
+    .anatomyRow,
+    .langCard,
+    .faqItem {
+      animation: enter linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 60%;
+    }
+
+    .step:nth-child(2),
+    .modeText,
+    .langCard:nth-child(2) {
+      animation-delay: 90ms;
+    }
+
+    .step:nth-child(3) {
+      animation-delay: 180ms;
+    }
+
+    .anatomyRow:nth-child(2) {
+      animation-delay: 60ms;
+    }
+    .anatomyRow:nth-child(3) {
+      animation-delay: 120ms;
+    }
+    .anatomyRow:nth-child(4) {
+      animation-delay: 180ms;
+    }
+    .anatomyRow:nth-child(5) {
+      animation-delay: 240ms;
+    }
+    .anatomyRow:nth-child(6) {
+      animation-delay: 300ms;
+    }
+
+    .faqItem:nth-child(2) {
+      animation-delay: 60ms;
+    }
+    .faqItem:nth-child(3) {
+      animation-delay: 120ms;
+    }
+    .faqItem:nth-child(4) {
+      animation-delay: 180ms;
+    }
+    .faqItem:nth-child(5) {
+      animation-delay: 240ms;
+    }
+  }
+}
+
+/* 2px and a 2px blur, not a slide. The blur is what does the work — the distance is small
+   enough that nothing appears to move, so a reader mid-sentence is never dragged. */
+@keyframes enter {
+  from { opacity: 0; filter: blur(2px); transform: translateY(2px); }
+  to   { opacity: 1; filter: blur(0); transform: none; }
+}
+
+/* 390px is the mobile reference width (ui §4.3). */
+@media (width <= 48rem) {
+  .hero,
+  .band,
+  .langBand,
+  .closing {
+    padding-inline: 16px;
+  }
+
+  .hero {
+    padding-block: 24px 20px;
+  }
+
+  .title {
+    font-size: 40px;
+  }
+
+  .subhead {
+    font-size: 16px;
+  }
+
+  .band,
+  .langBand {
+    padding-block: 32px;
+  }
+
+  .steps,
+  .modes,
+  .langPair {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .anatomyRow {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+
+  .closing {
+    padding-block: 32px 0;
+  }
+
+  .closingLine {
+    font-size: 20px;
+  }
+}

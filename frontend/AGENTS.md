@@ -8,7 +8,7 @@ a control. `PRODUCT.md` (repo root) holds product truth and what the marketing p
 
 ---
 
-## The four rules that will bite you
+## The five rules that will bite you
 
 **1. No inline `style` attributes. Ever.** The CSP is `style-src 'self' 'nonce-…'`
 (`src/middleware.ts`), so a style attribute is **silently dropped in production** while working
@@ -37,6 +37,31 @@ No English fallback is ever rendered to a Turkish user. Turkish is informal *sen
 is a native voice, not a transliteration — the one exception is quoted interviewer dialogue,
 where a Turkish interviewer says *siz* to a candidate.
 
+**5. Navigate through `src/i18n/navigation.ts`, never `next/link` or `next/navigation`.** The
+language is a path segment (`/` English, `/tr/…` Turkish — issue 91), so a plain `<Link>` sends a
+Turkish reader to the English URL and costs a redirect at best. `Link`, `useRouter`, `usePathname`
+and `redirect` come from there; `useSearchParams` and `useParams` read the URL rather than write
+it and still come from `next/navigation`. Write `href="/dashboard"` at the call site — never
+`/tr/dashboard` — and the current locale turns it into an address.
+
+## Where the locale lives
+
+Every page is under `src/app/[locale]/`. `src/app/` itself holds only the document
+(`layout.tsx`), the 404, and the metadata routes — `sitemap.ts`, `robots.ts`, `manifest.ts`,
+`icon.tsx`, `opengraph-image.tsx` — which are single artefacts at fixed addresses and therefore
+answer in the default locale. `not-found.tsx` is up there because Next renders a not-found
+outside the matched route's layouts, and an unmatched URL has no `[locale]` to read.
+
+- `src/i18n/routing.ts` is the one description of the scheme. `localePrefix: 'as-needed'`, so
+  the default locale keeps the bare URL and every link already in the wild still resolves.
+- `src/middleware.ts` negotiates an unprefixed request from the cookie, then `Accept-Language`,
+  and carries the CSP nonce through next-intl's own response.
+- Public routes declare `alternatesFor(route, locale)` from `lib/site.ts` in their
+  `generateMetadata` — canonical plus the reciprocal `hreflang` pair. A route that skips it has
+  no canonical at all, which is better than inheriting a wrong one.
+- A test that mocks `next/navigation` must spread `serverNavigation` from `src/test/navigation.ts`
+  into the factory, or every component importing the wrappers fails to import.
+
 ## Architecture facts you cannot read off the file tree
 
 - **The server owns interview state.** The client never derives round, question index or active
@@ -49,7 +74,7 @@ where a Turkish interviewer says *siz* to a candidate.
 - **Query keys live once**, in `lib/query.ts` `queryKeys`. A key written by hand at a call site
   eventually becomes a *different* key and the SSE nudge invalidates a cache entry nobody reads.
 - The anonymous landing must not pull React Query into its chunk — asserted by
-  `src/app/page.test.tsx`. `home-switch.tsx` uses a plain `apiGet` for its one boolean.
+  `src/app/[locale]/page.test.tsx`. `home-switch.tsx` uses a plain `apiGet` for its one boolean.
 
 ## Testing landmines
 
@@ -59,7 +84,7 @@ where a Turkish interviewer says *siz* to a candidate.
   `vi.hoisted` and return the same object.
 - **`src/test/setup.ts` answers `prefers-reduced-motion: reduce`,** so every authored animation
   resolves instantly and content tests never wait on one. A test *about* motion must stub
-  `matchMedia` itself — see the typewriter test in `app/interviews/[id]/room/page.test.tsx`.
+  `matchMedia` itself — see the typewriter test in `app/[locale]/interviews/[id]/room/page.test.tsx`.
 - jsdom ships no `ResizeObserver` and no `scrollIntoView`; the setup file no-ops the first and
   components feature-detect the second.
 

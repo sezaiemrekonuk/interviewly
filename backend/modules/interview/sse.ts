@@ -13,6 +13,8 @@ import { redis } from '../auth/rate-limit';
 import { logger } from '../../src/lib/logger';
 import { REPORT_QUEUE, reportQueue } from '../../src/lib/queue';
 
+import { openReportRow } from './report-row';
+
 export const EVENT_CHANNEL_PREFIX = 'interview:events:';
 
 /**
@@ -101,6 +103,11 @@ export async function publishQuestionsReady(event: InterviewQuestionsReady): Pro
  * for the same interview enqueues no second job (AC-20) without a bespoke dedupe table.
  */
 export async function enqueueReport(interviewId: string, ctx: { traceId: string }): Promise<void> {
+  // The row before the job (issue #123): if the enqueue fails, an interview in `evaluating`
+  // with a `queued` report row is a truthful description of where it got to. The other order
+  // would leave a job whose row might never be written.
+  await openReportRow(interviewId);
+
   await reportQueue.add(REPORT_QUEUE, { interviewId }, { jobId: interviewId });
   logger.info({ traceId: ctx.traceId, interviewId }, 'REPORT_JOB_ENQUEUED');
 }

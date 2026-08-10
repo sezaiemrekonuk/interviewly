@@ -104,7 +104,7 @@ beforeEach(() => {
 
 describe('promoteNextQuestion', () => {
   it('generates the pool it promotes from — an unwritten row is no longer a dead end', async () => {
-    const client = clientReturning(5);
+    const client = clientReturning(90);
     await run(client);
 
     expect(client.generateCandidates).toHaveBeenCalledOnce();
@@ -117,12 +117,12 @@ describe('promoteNextQuestion', () => {
   });
 
   it('promotes a different question for a weak answer than for a strong one', async () => {
-    await run(clientReturning(1));
+    await run(clientReturning(20));
     const weak = writesToNextRow().find((d) => 'text' in d);
 
     questionUpdate.mockClear();
     nextRow.candidates = null;
-    await run(clientReturning(5));
+    await run(clientReturning(90));
     const strong = writesToNextRow().find((d) => 'text' in d);
 
     // @AC-3. The axis is difficulty: the selector shifts medium down for 0..2 and up for 4..5.
@@ -151,7 +151,7 @@ describe('promoteNextQuestion', () => {
 
   it('reuses a pool the row already carries instead of paying for a second one', async () => {
     nextRow.candidates = POOL;
-    const client = clientReturning(3);
+    const client = clientReturning(60);
     await run(client);
 
     expect(client.generateCandidates).not.toHaveBeenCalled();
@@ -195,7 +195,7 @@ describe('promoteNextQuestion', () => {
 
   it('never re-scores a row a previous turn already decided', async () => {
     nextRow.chosen_reason = 'score_mid';
-    const client = clientReturning(5);
+    const client = clientReturning(90);
     await run(client);
 
     expect(client.scoreAnswer).not.toHaveBeenCalled();
@@ -204,7 +204,7 @@ describe('promoteNextQuestion', () => {
 
   it('spends nothing once the interview has run out of rows to adapt', async () => {
     nextRow.id = '';
-    const client = clientReturning(5);
+    const client = clientReturning(90);
     await run(client);
 
     expect(client.generateCandidates).not.toHaveBeenCalled();

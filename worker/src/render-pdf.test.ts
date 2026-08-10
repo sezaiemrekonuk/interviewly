@@ -10,16 +10,16 @@ import { renderReportPdf } from './render-pdf';
 
 const payload: ReportPayload = {
   overall_impression: 'Solid backend fundamentals, thin on system design.',
-  overall_score: 4,
+  overall_score: 80,
   strengths: ['Clear STAR structure', 'Concrete Postgres examples'],
   improvements: ['Quantify impact', 'Name the trade-offs rejected'],
   rounds: [
-    { type: 'hr', score: 4, summary: 'Motivated, specific about the team fit.' },
-    { type: 'tech', score: 3, summary: 'Correct answers, shallow depth.', note: 'Ran short on time.' },
+    { type: 'hr', score: 80, summary: 'Motivated, specific about the team fit.' },
+    { type: 'tech', score: 60, summary: 'Correct answers, shallow depth.', note: 'Ran short on time.' },
   ],
   questions: [
-    { question_id: 'q-1', score: 4, reason: 'Named the index and why it helped.', star_adherence: 0.8 },
-    { question_id: 'q-2', score: 3, reason: 'Result stated, action implied.', star_adherence: 0.5 },
+    { question_id: 'q-1', score: 80, reason: 'Named the index and why it helped.', star_adherence: 0.8 },
+    { question_id: 'q-2', score: 60, reason: 'Result stated, action implied.', star_adherence: 0.5 },
   ],
   language: 'en',
 };
@@ -47,7 +47,7 @@ describe('renderReportPdf', () => {
 
   it('renders a payload whose rounds carry no note', async () => {
     const pdf = await renderReportPdf(
-      { ...payload, rounds: [{ type: 'hr', score: 5, summary: 'Strong.' }] },
+      { ...payload, rounds: [{ type: 'hr', score: 95, summary: 'Strong.' }] },
       meta,
     );
 

@@ -37,7 +37,14 @@ http://localhost {
     handle /{$S3_BUCKET:interviewly}/* {
         reverse_proxy bucket:9000
     }
+    # `/` answers in English or redirects to `/tr` depending on the `NEXT_LOCALE` cookie and
+    # then `Accept-Language` (issue 91), so a cache keyed only on the path would hand one
+    # visitor's language to the next. Here rather than in the middleware that does the
+    # negotiating, because Next rebuilds `Vary` from its own RSC entries when it renders a page.
+    # Excluded from the immutable static chunks, where a cookie key would be pure fragmentation.
+    @negotiated not path /_next/static/* /_next/image*
     handle {
+        header @negotiated +Vary "Cookie, Accept-Language"
         reverse_proxy web:3000
     }
 

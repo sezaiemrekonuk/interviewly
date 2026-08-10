@@ -3,13 +3,11 @@
 import { useFormatter, useTranslations } from 'next-intl';
 
 import type { AdminStatsResponse } from '../../lib/query';
+import { SCORE_MAX } from '../../lib/score';
 import { Meter } from '../shell/meter';
 import { Spec } from '../shell/split-shell';
 
 import styles from './panels.module.css';
-
-/** `report_questions.score` is an integer 0..5 (packages/ai `schemas.ts`) — the bar's ceiling. */
-const SCORE_MAX = 5;
 
 /**
  * The Overview surface: what is true across the whole platform. `/admin/stats` is all-time

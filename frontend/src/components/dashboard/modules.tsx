@@ -1,10 +1,11 @@
 'use client';
 
 import { useFormatter, useNow, useTranslations } from 'next-intl';
-import Link from 'next/link';
 import { useState } from 'react';
 
+import { Link } from '../../i18n/navigation';
 import { useDeleteInterview, type MyInterview, type MyQuestion } from '../../lib/query';
+import { SCORE_MAX, scoreBand } from '../../lib/score';
 import { useErrorMessage } from '../../lib/use-error-message';
 import { Meter } from '../shell/meter';
 
@@ -28,7 +29,6 @@ import styles from './dashboard.module.css';
 
 const cx = (...names: Array<string | false | undefined>) => names.filter(Boolean).join(' ');
 
-const SCORE_MAX = 5;
 const SPARK = { width: 240, height: 44, max: SCORE_MAX };
 
 /**
@@ -254,9 +254,9 @@ export function RoundSplit({ items }: { items: MyInterview[] }) {
  * `questions` is `weakest()`, so it holds only answers at or below `WEAKNESS_CEILING`. Three
  * states, not two: rows, a floor that has nothing under the ceiling, and an account with no
  * scored answer yet. The middle one is the whole point of the ceiling — a candidate whose
- * lowest mark is a 4 was being shown two commendations under a remediation heading.
+ * lowest mark is an 80 was being shown two commendations under a remediation heading.
  *
- * Each row carries the reason it was marked down, because "you scored 2" is a grade and the
+ * Each row carries the reason it was marked down, because "you scored 40" is a grade and the
  * sentence under it is the only part anyone can act on.
  */
 export function Focus({
@@ -297,16 +297,10 @@ export function Focus({
               <div className={styles.focusHead}>
                 <span className={styles.roundChip}>{tRound(question.roundType)}</span>
                 {/* Toned by the score, not by the section: this list is "your lowest", and
-                    when your lowest is a 4 it must not be printed in the failure colour. */}
+                    when your lowest is an 80 it must not be printed in the failure colour. */}
                 <span
                   className={cx(styles.focusScore, 'tabular')}
-                  data-band={
-                    (question.score as number) <= 2
-                      ? 'low'
-                      : (question.score as number) === 3
-                        ? 'mid'
-                        : 'high'
-                  }
+                  data-band={scoreBand(question.score as number)}
                 >
                   {question.score}
                   <span className={styles.figureUnit}>{t('outOf', { max: SCORE_MAX })}</span>
