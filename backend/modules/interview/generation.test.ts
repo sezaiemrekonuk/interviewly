@@ -23,10 +23,19 @@ const tx = {
 
 const existingQuestions = { count: 0 };
 
+// Models the polluted dev DB: the seed row lives on its deterministic id, and a stray fixture
+// (cuid id, which sorts before `seed-…`) is the by-role `orderBy id asc` winner. The resolver
+// must pick the seed off its id, never the fixture the role query would hand back.
+const personaFindFirst = vi.fn(async ({ where }: { where: { id?: string; role?: string } }) => {
+  if (where.id?.startsWith('seed-persona-'))
+    return { id: where.id, name: 'Ada', system_prompt: 'seeded brief' };
+  return { id: 'cmsnfixture0000', role: where.role, name: 'Stub Persona', system_prompt: 'stub' };
+});
+
 vi.mock('../../src/lib/db', () => ({
   prisma: {
     question: { count: vi.fn(async () => existingQuestions.count) },
-    persona: { findFirst: vi.fn(async () => ({ id: 'per_1' })) },
+    persona: { findFirst: personaFindFirst },
     $transaction: (run: (client: unknown) => Promise<unknown>) => run(tx),
   },
 }));
@@ -46,7 +55,7 @@ vi.mock('./sse', () => ({
   enqueueReport: vi.fn(),
 }));
 
-const { generateRound } = await import('./generation');
+const { generateRound, seededPersona } = await import('./generation');
 
 const interview = {
   id: 'itv_1',
@@ -131,5 +140,15 @@ describe('generateRound', () => {
     ).rejects.toThrow();
 
     expect(publishQuestionsReady).not.toHaveBeenCalled();
+  });
+});
+
+// Regression for the leftover "Stub Persona" conducting HR rounds: with the seed present, a
+// stray fixture must never win selection. Shared by generation-time assignment and the room's
+// name read, so this pins both.
+describe('seededPersona', () => {
+  it('picks the seed off its id, not the by-role fixture', async () => {
+    expect((await seededPersona('hr')).id).toBe('seed-persona-hr');
+    expect((await seededPersona('tech')).id).toBe('seed-persona-tech');
   });
 });

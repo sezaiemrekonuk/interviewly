@@ -39,7 +39,7 @@ import { aiClient } from '../ai';
 import { promoteNextQuestion } from './adaptive';
 import { recordAnswer } from './answers';
 import { BudgetExceeded, withBudget, withBudgetOrEnd } from './budget';
-import { ensureTechBatch } from './generation';
+import { ensureTechBatch, seededPersona } from './generation';
 import { trackLanguage } from './language';
 import { applyTransition } from './machine';
 import { currentQuestionRow } from './state';
@@ -791,15 +791,11 @@ async function note(interview: Interview, content: string, traceId: string): Pro
 
 async function personaForRound(interview: Interview): Promise<{ name: string; system_prompt: string }> {
   const type = interview.state === 'tech_round' ? 'tech' : 'hr';
-  const round = await prisma.interviewRound.findFirst({
-    where: { interview_id: interview.id, type },
-    include: { persona: true },
-  });
-  // `personas.system_prompt` has been seeded since F02 and read by nothing until now. The
-  // fallback is not decoration: an interview whose round row is missing still has to be
-  // conductable, and a null brief would fail the prompt build rather than the round.
-  if (!round) return { name: 'the interviewer', system_prompt: 'You are an experienced interviewer.' };
-  return { name: round.persona.name, system_prompt: round.persona.system_prompt };
+  // Resolve by round type through the same resolver generation.ts assigns with, not the round's
+  // stored persona_id: an interview seeded before that resolver was fixed carries a stray fixture
+  // ("Stub Persona") on its round row. Keying on type keeps the two sites in sync.
+  const persona = await seededPersona(type);
+  return { name: persona.name, system_prompt: persona.system_prompt };
 }
 
 /** What this round still has to cover, so the interviewer can pace rather than sprint. */

@@ -6,7 +6,7 @@
  * prompt compilation, the provider chain and the per-attempt audit row — nothing here builds
  * a prompt string or reads a provider key.
  */
-import type { Interview, Prisma } from '@prisma/client';
+import type { Interview, Persona, Prisma } from '@prisma/client';
 import {
   AiError,
   type AiClient,
@@ -82,16 +82,32 @@ export function roundQuestionArgs(
   };
 }
 
-/** The seeded persona for a round type. Personas are F02 reference data, never invented here. */
-async function personaFor(roundType: RoundType): Promise<string> {
-  const persona = await prisma.persona.findFirst({
-    where: { role: roundType, active: true },
-    orderBy: { id: 'asc' },
-  });
+/**
+ * The seeded persona for a round type. Personas are F02 reference data, never invented here.
+ *
+ * Prefer the deterministic `seed-persona-{role}` id. Nothing guarantees one active persona per
+ * role, so `orderBy id asc` alone is fixture-roulette — test fixtures carry cuid ids that sort
+ * before `seed-…` and would win the round. The by-role query stays as a fallback for
+ * deployments predating the seeded ids. Shared with the conductor's `personaForRound` so
+ * assignment and the name/brief the room reads back can't diverge.
+ */
+export async function seededPersona(roundType: RoundType): Promise<Persona> {
+  const persona =
+    (await prisma.persona.findFirst({
+      where: { id: `seed-persona-${roundType}`, active: true },
+    })) ??
+    (await prisma.persona.findFirst({
+      where: { role: roundType, active: true },
+      orderBy: { id: 'asc' },
+    }));
   // Not an ApiError: a missing seeded persona is a broken deployment, not a request the
   // caller got wrong, and app.ts already turns an unknown throw into an opaque 500.
   if (!persona) throw new Error(`no active persona seeded for round type ${roundType}`);
-  return persona.id;
+  return persona;
+}
+
+async function personaFor(roundType: RoundType): Promise<string> {
+  return (await seededPersona(roundType)).id;
 }
 
 export async function generateRound(
