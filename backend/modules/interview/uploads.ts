@@ -40,6 +40,18 @@ const MULTIPART_SLACK = 4096;
 
 const kindSchema = z.enum(['listing', 'cv']);
 
+/**
+ * multer has taken `defParamCharset` since 2.x (`multer/index.js` defaults it to `latin1`) and
+ * `@types/multer` has never declared it. Augmented rather than cast: an `as Options` on the
+ * config below would take the whole object out of the type checker to smuggle one key in.
+ */
+declare module 'multer' {
+  interface Options {
+    /** busboy's charset for header parameters — the `filename=` in Content-Disposition. */
+    defParamCharset?: string;
+  }
+}
+
 const MAX_FILENAME_CHARS = 120;
 
 /**
@@ -50,10 +62,15 @@ const MAX_FILENAME_CHARS = 120;
  * Directory parts are dropped (browsers send a bare name, a scripted client need not),
  * control characters go because they wreck a log line and a table cell alike, and the whole
  * thing is capped. An empty result is `null`: no name is honest, `""` is not.
+ *
+ * Composed to NFC on the way through. Apple's filesystems hand over decomposed names —
+ * `türkçe` arrives as `tu` + U+0308 + `rkc` + U+0327 + `e` — which renders correctly but is a
+ * different string to every comparison, and which the cap below can cut between a letter and
+ * the mark that belongs to it, orphaning an accent onto whatever precedes it.
  */
-function safeFilename(raw: string | undefined): string | null {
+export function safeFilename(raw: string | undefined): string | null {
   if (!raw) return null;
-  const base = raw.split(/[\\/]/).pop() ?? '';
+  const base = (raw.split(/[\\/]/).pop() ?? '').normalize('NFC');
   const cleaned = base.replace(/[\u0000-\u001f\u007f]/g, '').trim();
   return cleaned ? cleaned.slice(0, MAX_FILENAME_CHARS) : null;
 }
@@ -66,6 +83,12 @@ function safeFilename(raw: string | undefined): string | null {
 const parseFile = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_BYTES, files: 1, fields: 1, fieldSize: 64, parts: 3 },
+  // multer defaults this to `latin1` (`multer/index.js`), which is wrong for every filename
+  // that is not ASCII: the browser sends the `filename=` parameter as UTF-8, so each of those
+  // bytes came back as its own Latin-1 character and `fatih-türkçe-cv.pdf` was stored, and
+  // shown, as `fatih-tuÌrkcÌ§e-cv.pdf`. Nothing downstream can undo that — by then the
+  // original bytes are gone — so it has to be right where the header is parsed.
+  defParamCharset: 'utf8',
 }).single('file');
 
 /**
