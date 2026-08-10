@@ -196,23 +196,39 @@ describe('the month picker', () => {
     expect(screen.getByRole('button', { name: messages.dashboard.practice.nextMonth })).toBeDisabled();
   });
 
-  // Walking back through years of empty grids is not history, it is a dead end with arrows.
-  it('stops at the month of the first interview', async () => {
-    const asked = stub({
-      '2026-08': { max: 1, days: [{ date: '2026-08-06', count: 1 }], earliest: '2026-07' },
-      '2026-07': { max: 1, days: [{ date: '2026-07-02', count: 1 }], earliest: '2026-07' },
-    });
+  // An account that started in August can still look at February and see for itself that
+  // there is nothing there. The first interview as the floor made both arrows dead on a fresh
+  // account, which is a control that does nothing.
+  it('goes back past the first interview to the start of the calendar year', async () => {
+    stub({ '2026-08': { max: 1, days: [{ date: '2026-08-06', count: 1 }], earliest: '2026-08' } });
     await render();
     const user = userEvent.setup();
 
     await waitFor(() => expect(screen.getByTestId('practice-month')).toHaveTextContent('August 2026'));
-    await user.click(screen.getByRole('button', { name: messages.dashboard.practice.previousMonth }));
+    const back = screen.getByRole('button', { name: messages.dashboard.practice.previousMonth });
 
-    await waitFor(() =>
-      expect(
-        screen.getByRole('button', { name: messages.dashboard.practice.previousMonth }),
-      ).toBeDisabled(),
-    );
-    expect(asked.some((url) => url.includes('month=2026-06'))).toBe(false);
+    for (const expected of ['July', 'June', 'May', 'April', 'March', 'February', 'January']) {
+      await user.click(back);
+      await waitFor(() =>
+        expect(screen.getByTestId('practice-month')).toHaveTextContent(`${expected} 2026`),
+      );
+    }
+    // …and no further: a practice log has nothing to say about the year before it.
+    expect(back).toBeDisabled();
+  });
+
+  // Older history is still reachable — the year is a floor for accounts that have none, not a
+  // ceiling on the ones that do.
+  it('goes back past January when the account is older than the year', async () => {
+    stub({
+      '2026-01': { max: 1, days: [{ date: '2026-01-06', count: 1 }], earliest: '2025-11' },
+      '2026-08': { max: 1, days: [{ date: '2026-08-06', count: 1 }], earliest: '2025-11' },
+    });
+    await render();
+
+    await waitFor(() => expect(screen.getByTestId('practice-month')).toBeInTheDocument());
+    expect(
+      screen.getByRole('button', { name: messages.dashboard.practice.previousMonth }),
+    ).toBeEnabled();
   });
 });
