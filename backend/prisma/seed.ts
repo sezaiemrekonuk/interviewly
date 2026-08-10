@@ -161,6 +161,15 @@ const DEMO_ADMIN_EMAIL = 'admin@demo.com';
 // terminal, never to the database (K8, K8.5).
 const DEMO_ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD ?? 'AdminDemo1!';
 
+// The two ElevenLabs voices the personas speak with. Real ids, not placeholders: a voice id
+// the API does not know is a 400 on every question, retried three times and then a
+// `VOICE_UNAVAILABLE` downgrade — voice looks broken rather than unconfigured, on every fresh
+// clone. These are premade library voices, identical for every account and not credentials, so
+// they belong in the seed rather than in `.env`. Overridable the way the demo password is, for
+// a deployment that wants its own.
+const HR_VOICE_ID = process.env.SEED_VOICE_ID_HR ?? 'EXAVITQu4vr4xnSDxMaL'; // Sarah
+const TECH_VOICE_ID = process.env.SEED_VOICE_ID_TECH ?? 'JBFqnCBsd6RMkjVDRZzb'; // George
+
 const SAMPLE_LISTING = readFileSync(
   join(__dirname, 'fixtures', 'sample-listing.txt'),
   'utf8'
@@ -194,7 +203,7 @@ async function seedPersonas() {
       id: HR_PERSONA_ID,
       role: 'hr',
       name: 'Ada',
-      voice_id: 'placeholder-voice-hr',
+      voice_id: HR_VOICE_ID,
       system_prompt:
         'You are Ada, an experienced HR interviewer. Ask one question at a time, ' +
         'stay warm but neutral, and never reveal your evaluation to the candidate.',
@@ -203,7 +212,7 @@ async function seedPersonas() {
       id: TECH_PERSONA_ID,
       role: 'tech',
       name: 'Turing',
-      voice_id: 'placeholder-voice-tech',
+      voice_id: TECH_VOICE_ID,
       system_prompt:
         'You are Turing, a senior technical interviewer. Probe depth over breadth, ' +
         'ask one question at a time, and never supply the answer you are testing for.',
