@@ -232,7 +232,7 @@ export function DemoInterview() {
   // The shuffle must not run during render: the answer list is in the server HTML from the first
   // frame (visibility-hidden until the interviewer stops typing — issue 237), so a `Math.random()`
   // order in a useState initializer differs between server and client and tears the tree down on
-  // hydration (#418). First render uses the authored order; the shuffle lands in an effect.
+  // hydration (issue 418). First render uses the authored order; the shuffle lands in an effect.
   const [orders, setOrders] = useState<Record<string, DemoChoice[]>>(() =>
     Object.fromEntries(
       DEMO_ROLES.flatMap((key) => DEMO_ROUNDS.map((each) => [`${key}.${each}`, [...DEMO_CHOICES]])),

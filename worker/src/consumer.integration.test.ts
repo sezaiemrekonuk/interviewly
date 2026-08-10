@@ -178,6 +178,10 @@ describe('report artifact over a payload with per-question scores', () => {
         voice_id: 'stub-voice',
         avatar_set: {},
         system_prompt: 'stub',
+        // Never selectable. This exists to satisfy the round's FK and nothing here asks the
+        // product to find it — left active it outranks the seeded persona by id order and
+        // conducts real interviews with a voice id no provider knows (issue 257).
+        active: false,
       },
     });
     const round = await prisma.interviewRound.create({

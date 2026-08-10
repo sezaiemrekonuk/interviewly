@@ -27,6 +27,7 @@ export const queryKeys = {
   meProfile: () => ['me', 'profile'] as const,
   meInterviews: (cursor: string | null = null) => ['me', 'interviews', { cursor }] as const,
   meQuestions: (cursor: string | null = null) => ['me', 'questions', { cursor }] as const,
+  meActivity: (month: string) => ['me', 'interviews', 'activity', month] as const,
   interviewState: (id: string) => ['interview', id, 'state'] as const,
   interview: (id: string) => ['interview', id] as const,
   adminInterviews: (filters: Record<string, unknown> = {}) =>
@@ -386,6 +387,42 @@ export function useMyInterviews(
   });
 }
 
+/** One day of the practice grid. Only days the account practised on are sent (issue 245). */
+export interface ActivityDay {
+  /** `YYYY-MM-DD`, UTC — the day the interview was started. */
+  date: string;
+  count: number;
+}
+
+export interface MonthActivity {
+  month: string;
+  days: ActivityDay[];
+  /** The busiest day of this month, and therefore the top of the shading scale. */
+  max: number;
+  /** `YYYY-MM` of the account's first started interview, or null — the picker's floor. */
+  earliest: string | null;
+}
+
+/**
+ * The month grid's own read, deliberately not derived from `useMyInterviews`: that answers
+ * twenty rows, which is neither a whole month nor an old one (issue 245).
+ *
+ * `placeholderData` holds the month already on screen while the next one loads, so stepping
+ * through months redraws rather than blanking — the grid is the thing being navigated, and a
+ * flash of empty cells reads as "you did nothing that month".
+ */
+export function useMonthActivity(
+  month: string,
+  enabled = true,
+): UseQueryResult<MonthActivity, ApiError> {
+  return useQuery({
+    queryKey: queryKeys.meActivity(month),
+    queryFn: () => fetchJson<MonthActivity>(`/me/interviews/activity?month=${month}`),
+    placeholderData: (previous) => previous,
+    enabled,
+  });
+}
+
 /**
  * W08 — soft delete. Not retried (W02 policy: a repeated DELETE is a second write) and not
  * optimistic: the row goes on the refetch, so a refusal never resurrects a row the list
@@ -480,6 +517,14 @@ export interface InterviewStateResponse {
   targetQuestionCount: number;
   endedReason: string | null;
   language: string;
+  /** Server-stamped; null until the interview started. The room's elapsed clock reads this. */
+  startedAt: string | null;
+  /**
+   * The instant the speech ceiling ends the interview (S09). Null in text mode and before the
+   * start — the ceiling bounds voice only. Never recomputed here: the countdown re-derives from
+   * this on every tick so it cannot promise time the server will refuse.
+   */
+  expiresAt: string | null;
   /** The ACTIVE speaker only — `null` outside a live round. */
   persona: { id: string; role: string; name: string; avatarState: string } | null;
   /** Both rounds' personas, hr then tech: the two tiles, never a second live speaker. */

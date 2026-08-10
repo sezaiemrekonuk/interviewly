@@ -13,11 +13,9 @@ import {
   ADVICE_MINIMUM,
   REPORTED,
   RESUMABLE,
-  RHYTHM_WEEKS,
   TREND_MINIMUM,
   UNFINISHED,
   WEAKNESS_CEILING,
-  rhythm,
   roundAverages,
   scoredRuns,
   sparkPoints,
@@ -199,7 +197,7 @@ export function RoundSplit({ items }: { items: MyInterview[] }) {
             <dt className={styles.barLabel}>{t(key)}</dt>
             <dd className={styles.barValue}>
               {/* --accent, not --primary: this is a measurement, and the sparkline and the
-                  rhythm grid two cards away already draw the same category in --accent. */}
+                  practice grid two cards away already draw the same category in --accent. */}
               <Meter
                 value={value ?? 0}
                 max={SCORE_MAX}
@@ -315,42 +313,6 @@ export function Focus({
           ))}
         </ol>
       )}
-    </section>
-  );
-}
-
-/* --------------------------------------------------------------------------------- rhythm */
-
-/** How often you practise, as twelve weeks. Reads as progress from the first interview. */
-export function Rhythm({ items, now }: { items: MyInterview[]; now: number }) {
-  const t = useTranslations('dashboard.rhythm');
-  const weeks = rhythm(items, now);
-  const total = weeks.reduce((sum, week) => sum + week.count, 0);
-  const active = weeks.filter((week) => week.count > 0).length;
-
-  return (
-    <section className={styles.card} data-testid="rhythm">
-      <h2 className={styles.cardTitle}>{t('title')}</h2>
-
-      {/* Decorative as a graphic; the line under it carries both numbers as text. */}
-      <ol className={styles.weeks} aria-hidden="true">
-        {weeks.map((week) => (
-          <li
-            key={week.offset}
-            className={cx(
-              styles.week,
-              week.count > 0 && styles.weekOn,
-              week.count > 1 && styles.weekBusy,
-            )}
-          />
-        ))}
-      </ol>
-
-      <p className={styles.cardNote}>
-        {total === 0
-          ? t('none', { weeks: RHYTHM_WEEKS })
-          : t('summary', { total, active, weeks: RHYTHM_WEEKS })}
-      </p>
     </section>
   );
 }

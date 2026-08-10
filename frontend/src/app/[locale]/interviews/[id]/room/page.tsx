@@ -378,6 +378,7 @@ export default function InterviewRoomPage() {
                 {room.state !== 'paused' && !stalled && !starting ? (
                   <VoiceControls
                     session={voice}
+                    expiresAt={room.expiresAt}
                     captionsOn={captionsOn}
                     onToggleCaptions={() => setCaptionsOn((on) => !on)}
                     transcriptOpen={showTranscript}

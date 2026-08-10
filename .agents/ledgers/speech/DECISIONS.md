@@ -220,3 +220,25 @@ candidate asked for — they would be told 40 minutes and get 25 with no notice.
 **Consequences:** migration `20260809210000_interview_max_duration_seconds` (nullable column +
 `> 0` CHECK; the upper bound is deliberately not a CHECK, being config). S09's `expiresAt` must
 apply the same min or the room timer will contradict the server's 403.
+
+---
+
+## ADR-S09 — 2026-08-10 — `expiresAt` is the ceiling's own arithmetic, and text reports none
+
+**Context:** `GET /state` must carry the window the room counts down (AC-12). Two questions: how
+`expiresAt` is computed, and what a text interview reports. Options for the arithmetic:
+(A) `/state` recomputes `min(round, interview, chosen)` itself; (B) one exported helper both
+`/state` and `isPastSpeechCeiling` call. For text: report the same number, or `null`.
+
+**Decision:** (B) plus `null`. `speechExpiresAt` moved to `modules/speech/ceiling.ts` and
+`isPastSpeechCeiling` is now defined as "now is past it"; `tts.ts` re-exports the guard so
+`stt.ts` and its tests are untouched. Text reports `startedAt` and `expiresAt: null`.
+
+**Why not (A):** a second copy of the min is a second ceiling, and the failure it produces is a
+candidate told four minutes and cut off in one. **Why not a number for text:** only the two
+speech routes enforce the ceiling and both refuse `mode !== 'voice'`, so a text deadline would
+be one nothing applies — including for an interview downgraded mid-run.
+
+**Consequences:** the room's rail clock now derives from `startedAt` instead of counting from
+arrival, closing the `useElapsed` ponytail. The countdown re-derives from `expiresAt` each tick
+and is never the enforcement; hiding it changes nothing about when the interview ends.

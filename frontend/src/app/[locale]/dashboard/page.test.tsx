@@ -33,7 +33,7 @@ const PROFILE = {
   cv: { id: 'u1', filename: 'cv.pdf', mime: 'application/pdf', sizeBytes: 10, uploadedAt: 'now' },
 };
 
-/** A day, in ms — used to age fixtures so the rhythm grid has something to bucket. */
+/** A day, in ms — used to age fixtures so "latest" and "best" are different runs. */
 const DAY = 86_400_000;
 
 function run(over: Record<string, unknown> = {}) {
@@ -88,6 +88,11 @@ function stub(options: { runs?: unknown[]; questions?: unknown[]; profile?: unkn
           user: { id: 'u1', email: 'a@b.c', role: 'candidate', emailVerifiedAt: 'now' },
         });
       if (url === '/api/me/profile') return json(200, options.profile ?? PROFILE);
+      // Ahead of the list branch, which `startsWith` would otherwise answer for it — the
+      // practice grid reads its own aggregate and `month-heatmap.test.tsx` owns what it does
+      // with it. Here it only has to not be a 404 dressed as a card-wide error.
+      if (url.startsWith('/api/me/interviews/activity'))
+        return json(200, { month: '2026-08', days: [], max: 0, earliest: null });
       if (url.startsWith('/api/me/interviews'))
         return json(200, { items: options.runs ?? [run()], nextCursor: null });
       if (url.startsWith('/api/me/questions'))
@@ -358,5 +363,53 @@ describe('/dashboard — the briefing', () => {
     stub();
     await render();
     expect(screen.queryByRole('link', { name: messages.nav.admin })).toBeNull();
+  });
+
+  // The rule this whole arrangement exists to keep: DESIGN.md §2 gives a surface one
+  // `--primary`, and three different things on this screen want to be it.
+  describe('the surface keeps exactly one primary action', () => {
+    /** Every element drawn as the primary CTA, whichever module put it there. */
+    const primaries = () =>
+      Array.from(document.querySelectorAll('a[class*="primaryCta"]')).map(
+        (node) => node.textContent?.trim() ?? '',
+      );
+
+    it('offers a new interview when nothing is in flight', async () => {
+      stub();
+      await render();
+
+      await waitFor(() => expect(screen.getByTestId('start-new')).toBeInTheDocument());
+      expect(screen.getByTestId('start-new')).toHaveAttribute('href', '/interviews/new');
+      expect(primaries()).toEqual([messages.dashboard.startNew]);
+    });
+
+    // Somebody with a half-finished interview should finish it, not start a second.
+    it('yields to carry-on while an interview is open', async () => {
+      stub({ runs: [run({ id: 'open', state: 'hr_round', endedReason: null, overallScore: null })] });
+      await render();
+
+      await screen.findByTestId('carry-on');
+      expect(screen.queryByTestId('start-new')).toBeNull();
+      expect(primaries()).toEqual([messages.dashboard.carryOn.cta]);
+    });
+
+    it('yields to the runway on day one', async () => {
+      stub({ runs: [] });
+      await render();
+
+      await screen.findByTestId('runway');
+      expect(screen.queryByTestId('start-new')).toBeNull();
+      expect(primaries()).toEqual([messages.dashboard.runway.steps.first.cta]);
+    });
+
+    // A skeleton is not an empty account: an action that appears and then withdraws is worse
+    // than one that waits a beat.
+    it('claims nothing while the list is still loading', async () => {
+      vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => {})));
+      await render();
+
+      expect(screen.queryByTestId('start-new')).toBeNull();
+      expect(primaries()).toEqual([]);
+    });
   });
 });

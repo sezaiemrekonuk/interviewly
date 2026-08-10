@@ -106,7 +106,7 @@ export async function seededPersona(roundType: RoundType): Promise<Persona> {
   return persona;
 }
 
-async function personaFor(roundType: RoundType): Promise<string> {
+export async function personaFor(roundType: RoundType): Promise<string> {
   return (await seededPersona(roundType)).id;
 }
 

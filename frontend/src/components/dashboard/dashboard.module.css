@@ -423,28 +423,129 @@
   min-height: 0;
 }
 
-/* --------------------------------------------------------------------------------- rhythm */
+/* ------------------------------------------------------------------------------- practice */
 
-.weeks {
-  display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
-  gap: 4px;
-  list-style: none;
+.practiceHead {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
 }
 
-.week {
-  height: 32px;
-  background: var(--surface-sunken);
+.monthPicker {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.monthName {
+  min-width: 13ch;
+  font-size: 13px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* A control, so it carries the app's target floor and the one focus recipe. */
+.monthStep {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  color: var(--text);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-button);
+  cursor: pointer;
+}
+
+.monthStep:hover:not(:disabled) {
+  border-color: var(--border);
+}
+
+.monthStep:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.monthStep:disabled {
+  color: var(--text-muted);
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Seven columns, Monday first: the weekday header and the days share one grid so a column is
+   the same weekday all the way down. `1fr` cells rather than a fixed size — at 390px the card
+   is ~330px wide, which is what keeps thirty-one squares from overflowing it. */
+.monthGrid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+/* The month has not answered yet. Held back rather than shaded, so an unanswered query never
+   looks like a month somebody spent doing nothing. */
+.monthGrid[data-loading] {
+  opacity: 0.5;
+}
+
+.weekday {
+  font-size: 13px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* The transparent border is on every cell so the hairline below costs no size: `border-box` is
+   global, but an outlined cell beside an unoutlined one would still differ by a pixel of fill. */
+.day,
+.dayBlank {
+  aspect-ratio: 1;
+  border: 1px solid transparent;
   border-radius: var(--radius-input);
 }
 
-.weekOn {
-  background: var(--accent);
-  opacity: 0.45;
+/* The empty ground, and the one comparison this module cannot get wrong. It carries a hairline
+   the filled steps do not, so "no interviews" and "one interview" differ in outline as well as
+   in lightness — 1.69:1 between those two fills is a visible step, but not one to rest a
+   reading on alone. */
+.day[data-tier='0'] {
+  background: var(--surface-sunken);
+  border-color: var(--border);
 }
 
-.weekBusy {
-  opacity: 1;
+/* Three steps mixed from the one informational hue into the ground they sit on. Mixed rather
+   than three new tokens: the ramp stays derived from --accent, and `color-mix` composites
+   against a named colour instead of whatever happens to be painted behind an opacity. */
+.day[data-tier='1'] {
+  background: color-mix(in srgb, var(--accent) 34%, var(--surface-sunken));
+}
+
+.day[data-tier='2'] {
+  background: color-mix(in srgb, var(--accent) 64%, var(--surface-sunken));
+}
+
+.day[data-tier='3'] {
+  background: var(--accent);
+}
+
+.legend {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.legendSteps {
+  display: flex;
+  gap: 4px;
+}
+
+.legendSteps .day {
+  width: 12px;
+  height: 12px;
 }
 
 /* -------------------------------------------------------------------------------- recent */

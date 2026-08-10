@@ -414,6 +414,11 @@
   "setup": {
     "title": "Set up your interview",
     "subtitle": "The questions come from the listing you add.",
+    "cvTitle": "No CV attached",
+    "cvBody": "Your questions are written from your CV, and your answers are scored against it. Adding one now makes this interview yours — it runs either way.",
+    "cvAttached": "This interview will be prepared from {name}, added {date}.",
+    "cvChange": "Change",
+    "cvKeep": "Keep it",
     "listingPaste": "Job listing",
     "listingHint": "Paste the listing you are practising for — every question is written from it.",
     "listingUpload": "Or upload the listing as a PDF",
@@ -513,7 +518,10 @@
     "roundHr": "HR",
     "roundTech": "Technical",
     "elapsedLabel": "Elapsed",
-    "elapsedNote": "Since you joined this room.",
+    "elapsedNote": "Since the interview started.",
+    "timeLeftLabel": "Time left",
+    "timeLeftWarning": "Time is almost up",
+    "timeLeftAnnounce": "Less than a minute of interview time remains.",
     "railLive": "Live",
     "roomTitle": "Interview room",
     "hasFloor": "{name} has the floor",
@@ -610,6 +618,7 @@
     "title": "Today",
     "greeting": "Good to see you, {name}",
     "greetingPlain": "Good to see you",
+    "startNew": "Start a new interview",
     "newInterview": "New interview",
     "loading": "Loading your practice…",
     "carryOn": {
@@ -651,10 +660,14 @@
       "outOf": "/ {max}",
       "clear": "Nothing scored {ceiling} or lower. Your floor is solid — an answer marked down will land here."
     },
-    "rhythm": {
+    "practice": {
       "title": "How often you practise",
-      "none": "Nothing in the last {weeks} weeks.",
-      "summary": "{total} {total, plural, one {interview} other {interviews}} across {active} of the last {weeks} weeks."
+      "previousMonth": "Previous month",
+      "nextMonth": "Next month",
+      "emptyMonth": "No interviews in {month}.",
+      "summary": "{total} {total, plural, one {interview} other {interviews}} across {days} {days, plural, one {day} other {days}} in {month}.",
+      "legendLess": "Fewer",
+      "legendMore": "More"
     },
     "recent": {
       "title": "Recent sessions",

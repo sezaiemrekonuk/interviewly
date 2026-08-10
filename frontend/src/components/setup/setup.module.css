@@ -37,3 +37,67 @@
   font-size: 13px;
   color: var(--danger);
 }
+
+/* ---------- what this interview knows about you ---------- */
+
+/* A hairline block on the working surface, and deliberately no alarm colour: a missing CV is
+   not a failure — the interview runs without one — and --warning here would compete with the
+   one thing on this screen that can actually go wrong. The heading carries the weight. */
+.cvNotice {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+}
+
+/* 14px, not 20px. The listing is this screen's subject and the CV is an offer above it; a
+   heading that outweighs the field label below would invert the two. */
+.cvNoticeTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+.note {
+  max-width: 65ch;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+/* The CV is already on the account: which one, and the way to change it. Nothing to act on,
+   so nothing that looks like a control except the one word that is. */
+.cvLine {
+  display: flex;
+  gap: 16px;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.cvChange {
+  min-height: 44px;
+  padding: 0;
+  font-size: 13px;
+  color: var(--text);
+  background: none;
+  border: none;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.cvChange:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.cvChange:disabled {
+  color: var(--text-muted);
+  cursor: default;
+}
