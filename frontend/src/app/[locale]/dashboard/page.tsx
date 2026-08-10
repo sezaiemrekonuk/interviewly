@@ -77,11 +77,26 @@ export default function DashboardPage() {
 
   const rail = <AppRail user={user} />;
 
+  // The surface's one `--primary`, when nothing else has claimed it. `CarryOn` outranks this —
+  // somebody with a half-finished interview should finish it, not start a second — and the
+  // runway owns day one. What is left is the returning visitor with nothing in flight, whose
+  // dashboard had no action on it at all: the only way to the product's one job was the third
+  // link in the rail, at navigation weight.
+  //
+  // Yes, that link is also in the rail, and this screen is not the first to show it twice: the
+  // runway's third step and the archive's empty state both draw a `--primary` to the same
+  // place, for the same reason. A rail link says where you may go; it does not say what to do.
+  const canStart = !list.isPending && !list.isError && items.length > 0 && !open;
+
   return (
     <SplitShell rail={rail}>
-      {/* No action beside the greeting: the rail carries "New interview" on every signed-in
-          surface, and the same link twice in one viewport is the eye choosing for no reason. */}
-      <WorkTop title={name ? t('greeting', { name }) : t('greetingPlain')} />
+      <WorkTop title={name ? t('greeting', { name }) : t('greetingPlain')}>
+        {canStart ? (
+          <Link href="/interviews/new" className={styles.primaryCta} data-testid="start-new">
+            {t('startNew')}
+          </Link>
+        ) : null}
+      </WorkTop>
 
       <WorkBody className={styles.body}>
         {list.isPending ? (

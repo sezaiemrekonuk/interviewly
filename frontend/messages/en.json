@@ -615,6 +615,7 @@
     "title": "Today",
     "greeting": "Good to see you, {name}",
     "greetingPlain": "Good to see you",
+    "startNew": "Start a new interview",
     "newInterview": "New interview",
     "loading": "Loading your practice…",
     "carryOn": {
