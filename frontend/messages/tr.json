@@ -615,6 +615,7 @@
     "title": "Bugün",
     "greeting": "Seni görmek güzel, {name}",
     "greetingPlain": "Seni görmek güzel",
+    "startNew": "Yeni mülakat başlat",
     "newInterview": "Yeni mülakat",
     "loading": "Çalışmaların yükleniyor…",
     "carryOn": {

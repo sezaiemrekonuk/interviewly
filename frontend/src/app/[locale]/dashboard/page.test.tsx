@@ -364,4 +364,52 @@ describe('/dashboard — the briefing', () => {
     await render();
     expect(screen.queryByRole('link', { name: messages.nav.admin })).toBeNull();
   });
+
+  // The rule this whole arrangement exists to keep: DESIGN.md §2 gives a surface one
+  // `--primary`, and three different things on this screen want to be it.
+  describe('the surface keeps exactly one primary action', () => {
+    /** Every element drawn as the primary CTA, whichever module put it there. */
+    const primaries = () =>
+      Array.from(document.querySelectorAll('a[class*="primaryCta"]')).map(
+        (node) => node.textContent?.trim() ?? '',
+      );
+
+    it('offers a new interview when nothing is in flight', async () => {
+      stub();
+      await render();
+
+      await waitFor(() => expect(screen.getByTestId('start-new')).toBeInTheDocument());
+      expect(screen.getByTestId('start-new')).toHaveAttribute('href', '/interviews/new');
+      expect(primaries()).toEqual([messages.dashboard.startNew]);
+    });
+
+    // Somebody with a half-finished interview should finish it, not start a second.
+    it('yields to carry-on while an interview is open', async () => {
+      stub({ runs: [run({ id: 'open', state: 'hr_round', endedReason: null, overallScore: null })] });
+      await render();
+
+      await screen.findByTestId('carry-on');
+      expect(screen.queryByTestId('start-new')).toBeNull();
+      expect(primaries()).toEqual([messages.dashboard.carryOn.cta]);
+    });
+
+    it('yields to the runway on day one', async () => {
+      stub({ runs: [] });
+      await render();
+
+      await screen.findByTestId('runway');
+      expect(screen.queryByTestId('start-new')).toBeNull();
+      expect(primaries()).toEqual([messages.dashboard.runway.steps.first.cta]);
+    });
+
+    // A skeleton is not an empty account: an action that appears and then withdraws is worse
+    // than one that waits a beat.
+    it('claims nothing while the list is still loading', async () => {
+      vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => {})));
+      await render();
+
+      expect(screen.queryByTestId('start-new')).toBeNull();
+      expect(primaries()).toEqual([]);
+    });
+  });
 });
