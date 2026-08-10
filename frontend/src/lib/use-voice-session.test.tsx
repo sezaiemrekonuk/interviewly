@@ -16,6 +16,7 @@ function msg(id: string, role: RoomMessage['role']): RoomMessage {
     content: id,
     action: role === 'assistant' ? 'continue' : null,
     questionId: 'q1',
+    roundType: 'hr',
     createdAt: '2026-01-01T00:00:00.000Z',
   };
 }

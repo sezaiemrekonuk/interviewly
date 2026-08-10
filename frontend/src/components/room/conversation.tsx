@@ -9,6 +9,8 @@ export interface ConversationMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
+  /** Which interviewer said it. Null for the lines that belong to no question. */
+  roundType?: 'hr' | 'tech' | null;
 }
 
 /**
@@ -29,12 +31,19 @@ export interface ConversationMessage {
 export function Conversation({
   messages,
   speakerName,
+  personas = [],
   live = false,
   open = true,
 }: {
   messages: ConversationMessage[];
-  /** Who is in the chair, for the assistant's label. Falls back to the generic role word. */
+  /** Who is in the chair now — the label for any line that belongs to no round. */
   speakerName?: string;
+  /**
+   * The roster, so a line is labelled with the interviewer who actually said it. Using the
+   * current speaker for every line reattributes the whole HR round to the technical
+   * interviewer the moment the handover happens.
+   */
+  personas?: { name: string; roundType: 'hr' | 'tech' }[];
   live?: boolean;
   open?: boolean;
 }) {
@@ -57,7 +66,9 @@ export function Conversation({
       data-testid="conversation"
       data-open={open ? 'true' : 'false'}
     >
-      <h2 className={styles.transcriptTitle}>{t('transcriptTitle')}</h2>
+      {/* Not "Answers so far" — that heading belongs to `Transcript`, which really is a list of
+          answers. Half of what is in here is not an answer and not even a question. */}
+      <h2 className={styles.transcriptTitle}>{t('conversationTitle')}</h2>
       {count === 0 ? (
         <p className={styles.transcriptEmpty}>{t('transcriptEmpty')}</p>
       ) : (
@@ -65,7 +76,7 @@ export function Conversation({
           {messages.map((message) => (
             <li key={message.id} className={styles.turn} data-role={message.role}>
               <div className={styles.turnPart}>
-                <p className={styles.turnSpeaker}>{speakerFor(message.role)}</p>
+                <p className={styles.turnSpeaker}>{speakerFor(message)}</p>
                 <p className={message.role === 'user' ? styles.turnAnswer : styles.turnQuestion}>
                   {message.content}
                 </p>
@@ -78,11 +89,12 @@ export function Conversation({
     </section>
   );
 
-  function speakerFor(role: ConversationMessage['role']): string {
-    if (role === 'user') return t('speakerYou');
+  function speakerFor(message: ConversationMessage): string {
+    if (message.role === 'user') return t('speakerYou');
     // A system row is the server speaking, and saying so matters: it is where the interviewer
     // was overridden, and attributing that to the interviewer would misreport the interview.
-    if (role === 'system') return t('roleSystem');
-    return speakerName ?? t('roleHr');
+    if (message.role === 'system') return t('roleSystem');
+    const own = message.roundType && personas.find((p) => p.roundType === message.roundType);
+    return own ? own.name : (speakerName ?? t('roleHr'));
   }
 }

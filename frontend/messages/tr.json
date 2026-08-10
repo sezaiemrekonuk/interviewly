@@ -493,6 +493,7 @@
     "resume": "Devam et",
     "stalled": "Sıradaki soru hazırlanamadı. Verdiğin cevapların hiçbiri kaybolmadı — yeniden oluşturmak için tekrar dene.",
     "retry": "Tekrar dene",
+    "conversationTitle": "Konuşma",
     "transcriptTitle": "Verdiğin cevaplar",
     "transcriptEmpty": "Henüz cevap yok.",
     "voice": {

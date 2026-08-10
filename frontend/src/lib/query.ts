@@ -466,6 +466,8 @@ export interface RoomMessage {
     | 'drift'
     | null;
   questionId: string | null;
+  /** Which interviewer said it; null for lines belonging to no question. */
+  roundType: 'hr' | 'tech' | null;
   createdAt: string;
 }
 

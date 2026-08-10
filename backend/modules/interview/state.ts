@@ -177,7 +177,22 @@ async function resolveMessages(interviewId: string) {
     // Same order the conductor replays in. A user utterance and the reply to it are written
     // inside one request and can share a millisecond; `id` breaks that tie the same way twice.
     orderBy: [{ created_at: 'asc' }, { id: 'asc' }],
-    select: { id: true, role: true, content: true, action: true, question_id: true, created_at: true },
+    select: {
+      id: true,
+      role: true,
+      content: true,
+      action: true,
+      question_id: true,
+      created_at: true,
+      // Which interviewer said it. Without this the room labels every past line with whoever
+      // holds the floor *now*, so after the handover the HR round's questions are attributed to
+      // the technical interviewer — a transcript that misreports who asked what.
+      //
+      // Derived from the question rather than stored on the message: the round a question
+      // belongs to is already a fact of the schema, and a copy on `chat_messages` would be a
+      // second place for it to be wrong.
+      question: { select: { round: { select: { type: true } } } },
+    },
   });
   return rows.map((m) => ({
     id: m.id,
@@ -185,6 +200,10 @@ async function resolveMessages(interviewId: string) {
     content: m.content,
     action: m.action,
     questionId: m.question_id,
+    // Null for the lines that belong to no question — the welcome, the handover, the closing
+    // line. The room falls back to whoever has the floor for those, which is right: they are
+    // said by the interviewer who is speaking at that moment.
+    roundType: m.question?.round.type ?? null,
     createdAt: m.created_at,
   }));
 }

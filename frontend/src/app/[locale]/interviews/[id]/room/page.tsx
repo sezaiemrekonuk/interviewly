@@ -393,7 +393,11 @@ export default function InterviewRoomPage() {
             // itself — the side panel would be the same content twice and is not rendered.
             <div className={styles.written}>
               {tiles}
-              <Conversation messages={messages} speakerName={speaker ?? undefined} />
+              <Conversation
+                messages={messages}
+                speakerName={speaker ?? undefined}
+                personas={room.personas}
+              />
               {/* The waiting beat survives C02. A live round with no question is a real state —
                   the batch is still generating — and the conversation alone would leave the
                   last thing said on screen with no sign anything is coming, which reads as a
@@ -415,6 +419,7 @@ export default function InterviewRoomPage() {
             <Conversation
               messages={messages}
               speakerName={speaker ?? undefined}
+              personas={room.personas}
               live
               open={showTranscript}
             />
