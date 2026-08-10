@@ -77,6 +77,13 @@ export class AiWorld extends World {
     priorTopics: 'none',
     transcript: 'Q: Tell me about yourself. A: I build backend services.',
     perAnswerScores: 'none',
+    // C03: `interview.report.generate` v3 also renders {{endedReason}} and {{coverage}}, and
+    // neither has a null marker — a build without them throws before any security assertion
+    // runs. These are the "ran to the end" values: security.feature is about how the cv is
+    // truncated, not about how the interview stopped. Already flattened, like the two above:
+    // `vars` is what the builder receives, not `GenerateReportArgs`.
+    endedReason: 'completed',
+    coverage: '1 of 1 planned questions were answered',
   };
 
   ctx = { interviewId: 'itv_security_test', traceId: 'trace_security_test' };

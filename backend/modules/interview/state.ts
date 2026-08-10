@@ -216,9 +216,12 @@ export const getInterviewState: RequestHandler = async (req, res) => {
     currentQuestion,
     transcript,
     messages,
-    // Kept as the message count it always was — the room uses it as a cheap "has anything been
-    // said" check, and `messages.length` is now the same number by construction.
-    transcriptCursor: messages.length,
+    // Answers, not messages. This was `chatMessage.count(...)` and the two were the same number
+    // only because `chat_messages` held exactly one row per answered turn. C02 puts the
+    // interviewer's own lines in the same table, so counting rows would make the cursor jump on
+    // a greeting — `interview_flow.feature` caught it as "3 answers" reading 4. The field means
+    // how far through the transcript the interview is, and that is still the answer count.
+    transcriptCursor: messages.filter((m) => m.role === 'user').length,
   });
 };
 
