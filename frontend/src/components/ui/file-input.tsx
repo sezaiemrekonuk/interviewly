@@ -183,9 +183,13 @@ export function FileInput({
         // empties and a form reading `input.files` sees what the label is showing. Guarded:
         // `DataTransfer` is constructible in browsers and not everywhere else.
         if (inputRef.current && typeof DataTransfer !== 'undefined') {
-          const carrier = new DataTransfer();
-          carrier.items.add(file);
-          inputRef.current.files = carrier.files;
+          try {
+            const carrier = new DataTransfer();
+            carrier.items.add(file);
+            inputRef.current.files = carrier.files;
+          } catch {
+            // Environment does not allow constructing/assigning `DataTransfer`.
+          }
         }
         take(file);
       }}
