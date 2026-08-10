@@ -35,11 +35,9 @@ export const ADVICE_MINIMUM = 2;
  */
 export const WEAKNESS_CEILING = 60;
 
-/** Weeks in the practice grid. Twelve is a quarter — long enough to show a gap. */
-export const RHYTHM_WEEKS = 12;
+/** Filled steps above the empty ground in the practice grid. */
+export const ACTIVITY_TIERS = 3;
 
-const DAY_MS = 86_400_000;
-const WEEK_MS = 7 * DAY_MS;
 
 /**
  * The one interview still open, if there is one. Newest first, because the list is — an older
@@ -144,36 +142,72 @@ export function weakest(questions: MyQuestion[], limit: number): MyQuestion[] {
     .slice(0, limit);
 }
 
-export interface RhythmWeek {
-  /** Weeks back from the current one; 0 is this week. */
-  offset: number;
+/** One square of the practice grid. A `null` day is the padding before the 1st. */
+export interface ActivityCell {
+  /** `YYYY-MM-DD`, or null for a leading blank that only exists to align the columns. */
+  date: string | null;
   count: number;
-  startsAt: string;
+  /** 0 is the empty ground; 1..`ACTIVITY_TIERS` are the filled steps. */
+  tier: number;
 }
 
 /**
- * Interviews per week for the last `RHYTHM_WEEKS`, oldest first.
+ * Which filled step a day's count lands on, scaled to the busiest day of the month shown.
  *
- * `now` is a parameter rather than a `Date.now()` call so the grid is deterministic in a test
- * and so the server and the first client paint agree on which week is "this" one.
+ * Relative, not absolute: "three tiers rising to the day with the most" is what the grid
+ * claims, and a fixed 1/2/3+ ladder would render a quiet month entirely in the lightest step
+ * and say nothing about its shape. The consequence is that in a month where every active day
+ * held one interview, every active day is the top step — true, and the sentence underneath
+ * carries the actual number.
  */
-export function rhythm(items: MyInterview[], now: number, weeks = RHYTHM_WEEKS): RhythmWeek[] {
-  const buckets = Array.from({ length: weeks }, (_, index) => ({
-    offset: weeks - 1 - index,
+export function activityTier(count: number, max: number): number {
+  if (count <= 0 || max <= 0) return 0;
+  return Math.min(ACTIVITY_TIERS, Math.ceil((count / max) * ACTIVITY_TIERS));
+}
+
+/** ISO weekday of the 1st, 0-indexed from Monday — how many blanks the first row needs. */
+function leadingBlanks(year: number, month: number): number {
+  return (new Date(Date.UTC(year, month - 1, 1)).getUTCDay() + 6) % 7;
+}
+
+/**
+ * One month as Monday-first rows of seven: leading blanks, then every day of the month.
+ *
+ * Built from the month string rather than from `Date.now()` so the grid is the month the user
+ * asked for and nothing about it depends on the machine's clock or zone. `days` carries only
+ * the days that were practised on (the endpoint groups), so everything else is a zero here.
+ */
+export function monthGrid(month: string, days: { date: string; count: number }[], max: number): ActivityCell[] {
+  const [year, index] = month.split('-').map(Number);
+  const counts = new Map(days.map((day) => [day.date, day.count]));
+  const length = new Date(Date.UTC(year, index, 0)).getUTCDate();
+
+  const blanks: ActivityCell[] = Array.from({ length: leadingBlanks(year, index) }, () => ({
+    date: null,
     count: 0,
-    startsAt: new Date(now - (weeks - 1 - index) * WEEK_MS).toISOString(),
+    tier: 0,
   }));
 
-  for (const item of items) {
-    const age = now - new Date(item.createdAt).getTime();
-    if (age < 0) continue;
-    const offset = Math.floor(age / WEEK_MS);
-    if (offset >= weeks) continue;
-    const bucket = buckets.find((b) => b.offset === offset);
-    if (bucket) bucket.count += 1;
-  }
+  return blanks.concat(
+    Array.from({ length }, (_, offset) => {
+      const date = `${month}-${String(offset + 1).padStart(2, '0')}`;
+      const count = counts.get(date) ?? 0;
+      return { date, count, tier: activityTier(count, max) };
+    }),
+  );
+}
 
-  return buckets;
+/** The month one step either side of `YYYY-MM`, for the picker's two buttons. */
+export function shiftMonth(month: string, by: number): string {
+  const [year, index] = month.split('-').map(Number);
+  const shifted = new Date(Date.UTC(year, index - 1 + by, 1));
+  return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+/** `YYYY-MM` for an instant, in UTC — the same zone the endpoint buckets in. */
+export function monthOf(at: number): string {
+  const date = new Date(at);
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
 }
 
 /**

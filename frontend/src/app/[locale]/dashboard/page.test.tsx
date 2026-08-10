@@ -33,7 +33,7 @@ const PROFILE = {
   cv: { id: 'u1', filename: 'cv.pdf', mime: 'application/pdf', sizeBytes: 10, uploadedAt: 'now' },
 };
 
-/** A day, in ms — used to age fixtures so the rhythm grid has something to bucket. */
+/** A day, in ms — used to age fixtures so "latest" and "best" are different runs. */
 const DAY = 86_400_000;
 
 function run(over: Record<string, unknown> = {}) {
@@ -88,6 +88,11 @@ function stub(options: { runs?: unknown[]; questions?: unknown[]; profile?: unkn
           user: { id: 'u1', email: 'a@b.c', role: 'candidate', emailVerifiedAt: 'now' },
         });
       if (url === '/api/me/profile') return json(200, options.profile ?? PROFILE);
+      // Ahead of the list branch, which `startsWith` would otherwise answer for it — the
+      // practice grid reads its own aggregate and `month-heatmap.test.tsx` owns what it does
+      // with it. Here it only has to not be a 404 dressed as a card-wide error.
+      if (url.startsWith('/api/me/interviews/activity'))
+        return json(200, { month: '2026-08', days: [], max: 0, earliest: null });
       if (url.startsWith('/api/me/interviews'))
         return json(200, { items: options.runs ?? [run()], nextCursor: null });
       if (url.startsWith('/api/me/questions'))
