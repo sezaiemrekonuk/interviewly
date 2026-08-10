@@ -24,7 +24,7 @@ vi.mock('../../src/lib/db', () => ({
 const info = vi.fn();
 vi.mock('../../src/lib/logger', () => ({ logger: { info: (...a: unknown[]) => info(...a) } }));
 
-const { orderTranscript, deliverCurrentQuestion } = await import('./state');
+const { orderTranscript, deliverCurrentQuestion, interviewWindow } = await import('./state');
 type TranscriptQuestion = Parameters<typeof orderTranscript>[0][number];
 
 const question = (
@@ -68,6 +68,51 @@ describe('deliverCurrentQuestion', () => {
     await deliverCurrentQuestion(interview);
 
     expect(info).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * S09. The room derives its countdown from these two, so they are the same arithmetic
+ * `isPastSpeechCeiling` refuses on — 720 is `VOICE_MAX_ROUND_SECONDS`, the lower of the two
+ * configured ceilings.
+ */
+describe('interviewWindow', () => {
+  const started_at = new Date('2026-08-06T10:00:00.000Z');
+  const at = (seconds: number) => new Date(started_at.getTime() + seconds * 1000).toISOString();
+
+  it('expires a voice interview at the configured ceiling', () => {
+    expect(interviewWindow({ mode: 'voice', started_at, max_duration_seconds: null })).toEqual({
+      startedAt: started_at.toISOString(),
+      expiresAt: at(720),
+    });
+  });
+
+  it('reports the chosen duration when it is shorter than the ceiling', () => {
+    expect(interviewWindow({ mode: 'voice', started_at, max_duration_seconds: 300 })).toEqual({
+      startedAt: started_at.toISOString(),
+      expiresAt: at(300),
+    });
+  });
+
+  it('never reports past the ceiling, however long the choice was', () => {
+    expect(
+      interviewWindow({ mode: 'voice', started_at, max_duration_seconds: 86_400 }).expiresAt,
+    ).toBe(at(720));
+  });
+
+  // The ceiling bounds voice only, and a text interview never reaches the routes that enforce
+  // it — an expiry here would be a deadline nothing applies.
+  it('reports no expiry for a text interview', () => {
+    expect(interviewWindow({ mode: 'text', started_at, max_duration_seconds: 300 })).toEqual({
+      startedAt: started_at.toISOString(),
+      expiresAt: null,
+    });
+  });
+
+  it('reports neither field before the interview started', () => {
+    expect(
+      interviewWindow({ mode: 'voice', started_at: null, max_duration_seconds: null }),
+    ).toEqual({ startedAt: null, expiresAt: null });
   });
 });
 

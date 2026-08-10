@@ -91,21 +91,23 @@ past ceiling  → NO provider call
               → VOICE_SESSION_EXPIRED (403)
 ```
 
-`isPastSpeechCeiling` (`modules/speech/tts.ts`) is the whole enforcement, called by
-`serveQuestionSpeech` and by `guardVoiceAnswer` (`stt.ts`) before either reaches the provider.
-S05 deleted `webhook-auth.ts`'s original; `speech_turn.feature` @AC-6 is what holds it.
+`isPastSpeechCeiling` (`modules/speech/ceiling.ts`, re-exported from `tts.ts`) is the whole
+enforcement, called by `serveQuestionSpeech` and by `guardVoiceAnswer` (`stt.ts`) before either
+reaches the provider. S05 deleted `webhook-auth.ts`'s original; `speech_turn.feature` @AC-6 is
+what holds it. S09 split out `speechExpiresAt` — the same instant, which `GET /state` reports as
+`expiresAt` so the room's countdown cannot disagree with the 403 (ADR-S09).
 
 ## Key code anchors
 
 | Path | What lives there |
 |---|---|
-| `backend/modules/speech/` | **created by this ledger** — seam, driver, fake, `tts.ts`, `stt.ts`, `router.ts` |
+| `backend/modules/speech/` | **created by this ledger** — seam, driver, fake, `ceiling.ts`, `tts.ts`, `stt.ts`, `router.ts` |
 | `backend/modules/interview/answers.ts:31,40` | `answerInputSchema` (accepts `inputMode: 'voice'`) and `advanceWithAnswer` — the STT route's only way in |
 | `backend/modules/interview/machine.ts` | `applyTransition`, sole writer of `interviews.state` |
 | `backend/modules/interview/budget.ts:37` | `withBudget(interviewId, fn)` — wraps every provider call |
 | `backend/modules/interview/uploads.ts:37-39` | multer memory-storage limits to copy for the audio part |
 | `backend/modules/interview/profile.ts:112` | where `started_at` is stamped |
-| `backend/modules/interview/state.ts:160-173` | the `/state` payload S09 extends |
+| `backend/modules/interview/state.ts` | the `/state` payload; `interviewWindow` is S09's `startedAt`/`expiresAt` |
 | `backend/modules/voice/downgrade.ts` | `downgradeToText`, `preJoinDowngrade` + `POST /:id/voice/downgrade` — the only voice module left after S05 |
 | `backend/src/lib/storage.ts:15-19` | `Storage` interface: `put` / `get` / `signedUrl` — the TTS cache |
 | `backend/src/lib/db.ts` | `prisma`, `recordLlmCall` — the metering insert |

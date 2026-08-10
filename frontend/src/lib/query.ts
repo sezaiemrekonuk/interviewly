@@ -473,6 +473,14 @@ export interface InterviewStateResponse {
   targetQuestionCount: number;
   endedReason: string | null;
   language: string;
+  /** Server-stamped; null until the interview started. The room's elapsed clock reads this. */
+  startedAt: string | null;
+  /**
+   * The instant the speech ceiling ends the interview (S09). Null in text mode and before the
+   * start — the ceiling bounds voice only. Never recomputed here: the countdown re-derives from
+   * this on every tick so it cannot promise time the server will refuse.
+   */
+  expiresAt: string | null;
   /** The ACTIVE speaker only — `null` outside a live round. */
   persona: { id: string; role: string; name: string; avatarState: string } | null;
   /** Both rounds' personas, hr then tech: the two tiles, never a second live speaker. */

@@ -53,9 +53,9 @@ After({ tags: '@speech' }, function () {
   lastContentType = '';
 });
 
-async function createVoiceInterview(world: AiWorld): Promise<void> {
+async function createVoiceInterview(world: AiWorld, mode: 'voice' | 'text' = 'voice'): Promise<void> {
   await world.httpPost('/interviews', {
-    mode: 'voice',
+    mode,
     jobText: 'Speech route test role.',
     targetQuestionCount: 4,
   });
@@ -66,7 +66,7 @@ async function createVoiceInterview(world: AiWorld): Promise<void> {
   await prisma.interview.update({
     where: { id: world.interviewId },
     data: {
-      mode: 'voice',
+      mode,
       state: 'hr_round',
       started_at: new Date(),
       current_index: 1,
@@ -104,7 +104,7 @@ async function createVoiceInterview(world: AiWorld): Promise<void> {
   }
 
   // keep mutable copy in sync with DB row updates done by handlers.
-  interview.mode = 'voice';
+  interview.mode = mode;
 }
 
 function resolveSpeechPath(path: string, interviewId: string): string {
@@ -154,6 +154,20 @@ Given('that interview started {int} seconds ago', async function (this: AiWorld,
     data: { started_at: new Date(Date.now() - seconds * 1000) },
   });
 });
+
+Given('I have a text interview in hr_round with current index 1', async function (this: AiWorld) {
+  await createVoiceInterview(this, 'text');
+});
+
+Given(
+  'that interview has a chosen duration of {int} seconds',
+  async function (this: AiWorld, seconds: number) {
+    await prisma.interview.update({
+      where: { id: this.interviewId },
+      data: { max_duration_seconds: seconds },
+    });
+  },
+);
 
 // ---------------------------------------------------------------- when
 
@@ -278,6 +292,46 @@ Then('the fake speech provider speak call count is {int}', function (this: AiWor
 Then('that interview ended reason is {string}', async function (this: AiWorld, endedReason: string) {
   const row = await prisma.interview.findUniqueOrThrow({ where: { id: this.interviewId } });
   assert.equal(row.ended_reason, endedReason);
+});
+
+// ---------------------------------------------------------------- S09: the room's window
+
+When('I GET the interview state as that owner', async function (this: AiWorld) {
+  await this.httpGet(`/interviews/${this.interviewId}/state`);
+  assert.equal(this.lastStatus, 200, `state failed: ${JSON.stringify(this.lastBody)}`);
+});
+
+const stateWindow = (world: AiWorld) =>
+  world.lastBody as { startedAt?: string | null; expiresAt?: string | null } | undefined;
+
+Then('the state startedAt is not null', function (this: AiWorld) {
+  const startedAt = stateWindow(this)?.startedAt;
+  assert.ok(startedAt, `startedAt missing: ${JSON.stringify(this.lastBody)}`);
+  assert.ok(!Number.isNaN(Date.parse(startedAt)), `startedAt is not a timestamp: ${startedAt}`);
+});
+
+Then('the state expiresAt is null', function (this: AiWorld) {
+  const body = stateWindow(this);
+  assert.ok(body && 'expiresAt' in body, `expiresAt key missing: ${JSON.stringify(this.lastBody)}`);
+  assert.equal(body.expiresAt, null, `expected no ceiling, got ${body.expiresAt}`);
+});
+
+Then(
+  'the state expiresAt is {int} seconds after the state startedAt',
+  function (this: AiWorld, seconds: number) {
+    const body = stateWindow(this);
+    assert.ok(body?.startedAt && body.expiresAt, `window missing: ${JSON.stringify(this.lastBody)}`);
+    assert.equal((Date.parse(body.expiresAt) - Date.parse(body.startedAt)) / 1000, seconds);
+  },
+);
+
+// The @AC-6 ceiling and this payload are one helper: an interview one second short of expiry
+// must report an expiry one second away, not a number of its own.
+Then('the state expiresAt is within {int} seconds of now', function (this: AiWorld, slack: number) {
+  const expiresAt = stateWindow(this)?.expiresAt;
+  assert.ok(expiresAt, `expiresAt missing: ${JSON.stringify(this.lastBody)}`);
+  const drift = Math.abs(Date.parse(expiresAt) - Date.now()) / 1000;
+  assert.ok(drift <= slack, `expiresAt drifted ${drift}s from now`);
 });
 
 // ---------------------------------------------------------------- S03: STT answer route

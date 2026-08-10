@@ -180,3 +180,40 @@ Feature: Speech provider seam — SpeechProvider interface contract
     Then the response status is 422
     And the response error code is "VALIDATION_ERROR"
     And no interview is created
+
+  # S09: /state carries the window the room counts down. The number the room shows is the
+  # number the @AC-6 ceiling enforces — same helper, so they cannot disagree.
+
+  @speech @AC-12
+  Scenario: state carries the start and the ceiling of a voice interview
+    Given I am signed in as a speech candidate
+    And I have a voice interview in hr_round with current index 1
+    When I GET the interview state as that owner
+    Then the state startedAt is not null
+    And the state expiresAt is 720 seconds after the state startedAt
+
+  @speech @AC-12
+  Scenario: a chosen duration shortens the window the room counts down
+    Given I am signed in as a speech candidate
+    And I have a voice interview in hr_round with current index 1
+    And that interview has a chosen duration of 300 seconds
+    When I GET the interview state as that owner
+    Then the state expiresAt is 300 seconds after the state startedAt
+
+  @speech @AC-12
+  Scenario: the expiry state reports is the one the speech route enforces
+    Given I am signed in as a speech candidate
+    And I have a voice interview in hr_round with current index 1
+    And that interview started 719 seconds ago
+    When I GET "/interviews/:id/questions/:index/speech" as that owner
+    Then the response is "audio/mpeg" bytes
+    When I GET the interview state as that owner
+    Then the state expiresAt is within 2 seconds of now
+
+  @speech @AC-12
+  Scenario: a text interview carries a start and no ceiling
+    Given I am signed in as a speech candidate
+    And I have a text interview in hr_round with current index 1
+    When I GET the interview state as that owner
+    Then the state startedAt is not null
+    And the state expiresAt is null

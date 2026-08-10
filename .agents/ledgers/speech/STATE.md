@@ -1,14 +1,18 @@
 # Speech — State
 
-Last updated: 2026-08-09
-Last session ended: **S08 complete.** Voice is the default on both sides now — the form defaulted to it since
-f01217e, and `setup.ts`'s `mode` enum carries `.default('voice')`, so a body that omits it is no
-longer a 422. New nullable column `interviews.max_duration_seconds` (migration
-`20260809210000_…`) holds the candidate's choice; null keeps `VOICE_MAX_INTERVIEW_SECONDS` in
-charge. Above the ceiling is `VALIDATION_ERROR`, never a clamp, checked per request because the
-bound is config. `isPastSpeechCeiling` takes the choice as a second argument and mins it with
-both config ceilings, so it shortens and never extends. Form offers full/10/15/20 min, voice
-mode only. Lint + typecheck, unit 753, acceptance 107/107. Next: **S09**.
+Last updated: 2026-08-10
+Last session ended: **S09 complete.** `GET /state` carries `startedAt` and `expiresAt`
+(`interviewWindow` in `state.ts`). The arithmetic moved to `modules/speech/ceiling.ts` —
+`speechExpiresAt` is the instant, `isPastSpeechCeiling` is "now is past it", `tts.ts` re-exports
+the guard so `stt.ts` and `tts.test.ts` are untouched (ADR-S09). Text reports
+`expiresAt: null`: only the two speech routes enforce the ceiling and both refuse non-voice.
+`VoiceControls` gained a required `expiresAt` prop and a countdown that re-derives every tick,
+warns in words at 60s, and announces once from a fixed `role="status"` line. `room-rail.tsx`'s
+arrival clock now derives from `startedAt`, closing its ponytail. Both read the new
+`lib/use-clock.ts` (`useNowMs`, one `useSyncExternalStore` interval) — the frontend eslint config
+allows neither `Date.now()` in render nor a `setState` seed in an effect, and it runs in the
+pre-commit hook but **not** in root `npm run lint`. Lint + typecheck, unit 810, frontend 455,
+acceptance 111/111. Next: **S10**.
 
 ## Execution protocol (follow exactly)
 
@@ -24,9 +28,9 @@ EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**S09** (`startedAt`/`expiresAt` in `/state` and the room timer — sonnet tier). Note S08's
-hand-off: `expiresAt` must respect `interviews.max_duration_seconds` where it is set, or the
-timer and the server's 403 disagree.
+**S10** (speech failure codes surfaced honestly in the room — sonnet tier). Note S09's
+hand-off: the copy lands in the same `VoiceControls`, and the room's `status: 'lost'` banner is
+still untested (tech debt below).
 
 ## Environment
 
@@ -80,7 +84,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | S06 | Room turn loop: speak, VAD-record, upload, advance | | done | S02, S03, W10 |
 | S07 | Pre-join on resume, mic-denied downgrade, transient-audio copy | | done | S06, V03, W09 |
 | S08 | Voice-first default and user-selectable duration | | done | S01, W05 |
-| S09 | `startedAt` and `expiresAt` in `/state`, and the room timer | | todo | S02, I03 |
+| S09 | `startedAt` and `expiresAt` in `/state`, and the room timer | | done | S02, I03 |
 | S10 | Speech failure codes surfaced honestly in the room | | todo | S06 |
 
 **S02 and S03 are genuinely independent** — both depend on S01 but not on each other; either
