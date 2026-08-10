@@ -3,7 +3,7 @@ import { Router } from 'express';
 import { requirePublicOrigin } from '../interview/csrf';
 
 import { authCapabilities } from './capabilities';
-import { requireAuth } from './middleware';
+import { optionalAuth, requireAuth } from './middleware';
 import { loginLimiter, passwordResetLimiter, profilePatchLimiter, registerLimiter } from './rate-limit';
 import deleteMe from './delete-account';
 import { patchMyLocale } from './locale';
@@ -51,7 +51,9 @@ export const meRouter = Router();
 // including the routers mounted after it, which own their guard.
 // `/me` is the prefix of every route below, so this still covers the whole router.
 meRouter.use('/me', requirePublicOrigin);
-meRouter.get('/me', requireAuth, me);
+// Soft auth: an anonymous probe answers 200 { user: null } rather than 401, so the landing's
+// per-load /me does not log a browser console error for a non-error (see optionalAuth).
+meRouter.get('/me', optionalAuth, me);
 // A06: the account profile (K8.7, §3.3 layer 1). PATCH is rate-limited per user, not per
 // IP — the endpoint is authenticated, so the account is the thing worth protecting.
 meRouter.get('/me/profile', requireAuth, getMyProfile);

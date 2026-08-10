@@ -178,7 +178,15 @@ async function resolveMessages(interviewId: string) {
     // refused because this round has not covered enough questions yet" is a recipe. The drift
     // note is different and stays visible — it is about the candidate's own turn, not about a
     // rule they could aim at.
-    where: { interview_id: interviewId, NOT: { action: 'refused' } },
+    //
+    // The null branch is load-bearing: every candidate turn has `action = null`, and both
+    // `NOT: { action: 'refused' }` and `action: { not: 'refused' }` compile to SQL that is
+    // NULL — and so excludes the row — wherever `action` is null. Without the explicit
+    // `action: null`, the whole candidate side of the conversation vanishes from the room.
+    where: {
+      interview_id: interviewId,
+      OR: [{ action: null }, { action: { not: 'refused' } }],
+    },
     // Same order the conductor replays in. A user utterance and the reply to it are written
     // inside one request and can share a millisecond; `id` breaks that tie the same way twice.
     orderBy: [{ created_at: 'asc' }, { id: 'asc' }],

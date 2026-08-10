@@ -227,16 +227,31 @@ export function DemoInterview() {
   // One draw per question, made once per mount. `a` is the strong answer in every set
   // (`demo-content.ts`), so a fixed order taught "first is right" inside a single round and
   // handed the second one over before Turing had asked it — hence per question rather than one
-  // order for the whole demo. Not in an effect and not per render: nothing below renders until
-  // the interviewer has finished typing, which is well after hydration, so the server's HTML
-  // has no answer list for this to disagree with.
-  const [orders] = useState<Record<string, DemoChoice[]>>(() =>
+  // order for the whole demo.
+  //
+  // The shuffle must not run during render: the answer list is in the server HTML from the first
+  // frame (visibility-hidden until the interviewer stops typing — issue 237), so a `Math.random()`
+  // order in a useState initializer differs between server and client and tears the tree down on
+  // hydration (#418). First render uses the authored order; the shuffle lands in an effect.
+  const [orders, setOrders] = useState<Record<string, DemoChoice[]>>(() =>
     Object.fromEntries(
-      DEMO_ROLES.flatMap((key) =>
-        DEMO_ROUNDS.map((each) => [`${key}.${each}`, shuffled(DEMO_CHOICES)]),
-      ),
+      DEMO_ROLES.flatMap((key) => DEMO_ROUNDS.map((each) => [`${key}.${each}`, [...DEMO_CHOICES]])),
     ),
   );
+  useEffect(() => {
+    // In a frame callback like `useSettled` below, to keep the setter out of render. One frame
+    // after mount is imperceptible — the list stays hidden until the interviewer stops typing.
+    const id = window.requestAnimationFrame(() =>
+      setOrders(
+        Object.fromEntries(
+          DEMO_ROLES.flatMap((key) =>
+            DEMO_ROUNDS.map((each) => [`${key}.${each}`, shuffled(DEMO_CHOICES)]),
+          ),
+        ),
+      ),
+    );
+    return () => window.cancelAnimationFrame(id);
+  }, []);
 
   const roundRef = useRef<HTMLDivElement>(null);
   const resultRef = useRef<HTMLDivElement>(null);
