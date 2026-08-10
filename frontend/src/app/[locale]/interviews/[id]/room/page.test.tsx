@@ -41,6 +41,44 @@ const PERSONAS = [
   },
 ];
 
+/**
+ * C02 — one utterance. The conversation is the interview's state now, so a fixture without one
+ * is a room that never said anything: `askedCurrent` would be null, the avatar would sit on
+ * `speaking` forever and the main column would render the empty-conversation copy.
+ */
+function turn(
+  id: string,
+  role: 'user' | 'assistant' | 'system',
+  content: string,
+  over: { action?: string | null; questionId?: string | null } = {},
+) {
+  return {
+    id,
+    role,
+    content,
+    action: over.action ?? (role === 'assistant' ? 'continue' : null),
+    questionId: over.questionId ?? null,
+    createdAt: '2026-08-04T10:00:00.000Z',
+  };
+}
+
+/**
+ * The room as the candidate meets it mid-interview: greeted, one exchange, and asked `q1` —
+ * the shape a pair-based transcript cannot hold, which is the whole reason C01 stores it.
+ */
+const OPENING = [
+  turn('m1', 'assistant', "Hi, I'm Ada. Thanks for making the time."),
+  turn('m2', 'user', 'Happy to be here.'),
+  turn('m3', 'assistant', 'Tell me about yourself.', { action: 'next_question', questionId: 'q1' }),
+];
+
+/** The same room one turn on: the candidate answered and the interviewer moved to `q2`. */
+const NEXT_QUESTION = [
+  ...OPENING,
+  turn('m4', 'user', 'I ship things.', { questionId: 'q1' }),
+  turn('m5', 'assistant', 'Explain an index.', { action: 'next_question', questionId: 'q2' }),
+];
+
 function roomState(over: Record<string, unknown> = {}) {
   return {
     interviewId: 'i1',
@@ -59,7 +97,10 @@ function roomState(over: Record<string, unknown> = {}) {
       widget: null,
       deliveredAt: '2026-08-04T10:00:00.000Z',
     },
+    // Both, and they are not the same view: `transcript` is the answered pairs the report reads
+    // (still served, still `Transcript`'s shape), `messages` is what was actually said (C01).
     transcript: [],
+    messages: OPENING,
     transcriptCursor: 0,
     ...over,
   };
@@ -75,7 +116,8 @@ interface Call {
 function stubFetch(
   options: {
     states?: Record<string, unknown>[];
-    answer?: { status: number; body: unknown };
+    /** `POST /turns` (C02), which replaced `/answers` as the room's write. */
+    turn?: { status: number; body: unknown };
     /** Left to the 404 fallback where the scenario is about the repair failing. */
     resume?: { status: number; body: unknown };
   } = {},
@@ -100,8 +142,8 @@ function stubFetch(
         stateHits += 1;
         return json(200, body);
       }
-      if (url === '/api/interviews/i1/answers') {
-        return json(options.answer?.status ?? 200, options.answer?.body ?? { state: 'hr_round', nextIndex: 2 });
+      if (url === '/api/interviews/i1/turns') {
+        return json(options.turn?.status ?? 200, options.turn?.body ?? { state: 'hr_round', currentIndex: 1 });
       }
       if (url === '/api/interviews/i1/resume' && options.resume) {
         return json(options.resume.status, options.resume.body);
@@ -162,6 +204,17 @@ describe('interview room, text mode (W06)', () => {
             widget: null,
             deliveredAt: '2026-08-04T10:05:00.000Z',
           },
+          // A handover writes two assistant lines in one turn — the outgoing interviewer's
+          // closing sentence and the incoming one's question. Only `messages` can hold that.
+          messages: [
+            ...OPENING,
+            turn('m4', 'user', 'I ship things.', { questionId: 'q1' }),
+            turn('m5', 'assistant', "That's HR done — over to Turing.", { action: 'handover' }),
+            turn('m6', 'assistant', 'Explain an index.', {
+              action: 'next_question',
+              questionId: 'q2',
+            }),
+          ],
         }),
       ],
     });
@@ -185,7 +238,11 @@ describe('interview room, text mode (W06)', () => {
     expect(calls.filter((c) => c.url === '/api/interviews/i1/state')).toHaveLength(2);
   });
 
-  it('posts one text answer and clears the composer', async () => {
+  // C02 — the composer posts a *turn*, and a turn names no question on purpose. Sending one
+  // would be the client asserting "this closes q1, advance", which is the conductor's call and
+  // not the room's (K11). A body that grew a `questionId` back would compile and pass every
+  // type in the repo, so this is the only place that catches it.
+  it('posts one turn, names no question, and clears the composer', async () => {
     const calls = stubFetch();
     const user = userEvent.setup();
     await renderRoom();
@@ -195,13 +252,12 @@ describe('interview room, text mode (W06)', () => {
     await user.click(screen.getByRole('button', { name: messages.room.submit }));
 
     await waitFor(() => expect(input).toHaveValue(''));
-    const answers = calls.filter((c) => c.url === '/api/interviews/i1/answers');
-    expect(answers).toHaveLength(1);
-    expect(answers[0].body).toEqual({
-      questionId: 'q1',
-      transcript: 'I ship things.',
-      inputMode: 'text',
-    });
+    const turns = calls.filter((c) => c.url === '/api/interviews/i1/turns');
+    expect(turns).toHaveLength(1);
+    expect(turns[0].body).toEqual({ text: 'I ship things.', inputMode: 'text' });
+    // The one-answer-one-advance route still exists and is still the acceptance suite's (C06);
+    // the room is simply no longer one of its callers.
+    expect(calls.some((c) => c.url === '/api/interviews/i1/answers')).toBe(false);
   });
 
   it('refetches silently on 409 QUESTION_NOT_CURRENT — no alert, no client-side advance', async () => {
@@ -214,10 +270,11 @@ describe('interview room, text mode (W06)', () => {
         widget: null,
         deliveredAt: '2026-08-04T10:05:00.000Z',
       },
+      messages: NEXT_QUESTION,
     });
     const calls = stubFetch({
       states: [roomState(), second],
-      answer: { status: 409, body: { error: { code: 'QUESTION_NOT_CURRENT' } } },
+      turn: { status: 409, body: { error: { code: 'QUESTION_NOT_CURRENT' } } },
     });
     const user = userEvent.setup();
     await renderRoom();
@@ -231,7 +288,7 @@ describe('interview room, text mode (W06)', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(screen.queryByText(/QUESTION_NOT_CURRENT/)).not.toBeInTheDocument();
     expect(nav.replace).not.toHaveBeenCalled();
-    expect(calls.filter((c) => c.url === '/api/interviews/i1/answers')).toHaveLength(1);
+    expect(calls.filter((c) => c.url === '/api/interviews/i1/turns')).toHaveLength(1);
   });
 
   // Issue 90: a refused answer keeps its text, deliberately — but it used to keep it across
@@ -250,9 +307,10 @@ describe('interview room, text mode (W06)', () => {
             widget: null,
             deliveredAt: '2026-08-04T10:05:00.000Z',
           },
+          messages: NEXT_QUESTION,
         }),
       ],
-      answer: { status: 409, body: { error: { code: 'QUESTION_NOT_CURRENT' } } },
+      turn: { status: 409, body: { error: { code: 'QUESTION_NOT_CURRENT' } } },
     });
     const user = userEvent.setup();
     await renderRoom();
@@ -266,18 +324,28 @@ describe('interview room, text mode (W06)', () => {
     expect(screen.getByLabelText(messages.room.answerLabel)).toHaveValue('');
   });
 
-  it('shows the waiting beat instead of a blank panel when a live round has no question', async () => {
+  // The waiting *panel* was text mode's answer to `currentQuestion: null`, and C02 took the
+  // panel away — the main column is the conversation now. What must not come back is the
+  // composer: a Send with no question behind it posts a turn into a round that has nothing to
+  // put it against, and the conversation must stay on screen so the room is not a blank page
+  // for the 30 seconds before the stall notice.
+  it('keeps the conversation and drops the composer when a live round has no question', async () => {
     stubFetch({ states: [roomState({ currentQuestion: null })] });
     await renderRoom();
 
-    expect(screen.getByTestId('question-waiting')).toHaveTextContent(messages.room.waiting);
     expect(screen.queryByTestId('answer-composer')).not.toBeInTheDocument();
+    const conversation = screen.getByTestId('conversation');
+    expect(within(conversation).getByText('Tell me about yourself.')).toBeInTheDocument();
     // Nothing is warmed: the tiles draw the speaker as bars, so an avatar preload could only
     // ever expire unused (issue 126).
     expect(document.querySelectorAll('link[rel="preload"][as="image"]').length).toBe(0);
   });
 
-  it('renders the answered turns from state and leaves the report to W07', async () => {
+  // C02 — text mode IS the conversation: the interviewer's lines and the candidate's, in order,
+  // including the greeting that belongs to no question. The side transcript panel next to it
+  // would be the same content twice, so the room does not render one; `Transcript` still exists
+  // and the report page (W07) is still its only caller.
+  it('renders the conversation from state, and no second transcript panel beside it', async () => {
     stubFetch({
       states: [
         roomState({
@@ -290,9 +358,14 @@ describe('interview room, text mode (W06)', () => {
     });
     await renderRoom();
 
-    const transcript = screen.getByTestId('transcript');
-    expect(within(transcript).getByText('Warm up?')).toBeInTheDocument();
-    expect(within(transcript).getByText('Sure.')).toBeInTheDocument();
+    const conversation = screen.getByTestId('conversation');
+    expect(within(conversation).getByText("Hi, I'm Ada. Thanks for making the time.")).toBeInTheDocument();
+    expect(within(conversation).getByText('Happy to be here.')).toBeInTheDocument();
+    expect(within(conversation).getByText('Tell me about yourself.')).toBeInTheDocument();
+    expect(screen.queryByTestId('transcript')).not.toBeInTheDocument();
+    // `transcript` is still served and still a different view — pairs, for the report. Rendering
+    // it here would show 'Warm up?', a question this conversation never contains.
+    expect(screen.queryByText('Warm up?')).not.toBeInTheDocument();
   });
 
   it('routes to the report surface once the interview leaves the room', async () => {
@@ -357,7 +430,14 @@ describe('interview room, text mode (W06)', () => {
   it('stalls a technical round with no question, the same as an HR round', async () => {
     vi.useFakeTimers();
     const calls = stubFetch({
-      states: [roomState({ state: 'tech_round', currentIndex: 5, currentQuestion: null })],
+      states: [
+        roomState({
+          state: 'tech_round',
+          currentIndex: 5,
+          currentQuestion: null,
+          messages: [...OPENING, turn('m4', 'assistant', 'Over to Turing.', { action: 'handover' })],
+        }),
+      ],
     });
     await act(async () => {
       renderWithProviders(<RoomPage />);
@@ -366,8 +446,10 @@ describe('interview room, text mode (W06)', () => {
       await vi.advanceTimersByTimeAsync(0);
     });
 
-    // A batch can genuinely still be generating, so the beat holds for the budget first.
-    expect(screen.getByTestId('question-waiting')).toBeInTheDocument();
+    // A batch can genuinely still be generating, so the wait holds for the budget first: the
+    // handover line is on screen and nothing has been called broken yet.
+    expect(screen.queryByTestId('room-stalled')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(30_000);
@@ -398,7 +480,7 @@ describe('interview room, text mode (W06)', () => {
     expect(screen.getByRole('button', { name: messages.room.retry })).toBeInTheDocument();
   });
 
-  it('turns the waiting beat into a rebuild once nothing is generating', async () => {
+  it('turns a quiet wait into a rebuild once nothing is generating', async () => {
     vi.useFakeTimers();
     const calls = stubFetch({ states: [roomState({ currentQuestion: null })] });
     await act(async () => {
@@ -409,15 +491,17 @@ describe('interview room, text mode (W06)', () => {
     });
 
     // A batch can genuinely still be generating here — the state change is published when the
-    // transition is claimed, not when the questions land — so the beat holds first.
-    expect(screen.getByTestId('question-waiting')).toBeInTheDocument();
+    // transition is claimed, not when the questions land — so the room waits it out first, with
+    // the conversation on screen and nothing red on it.
+    expect(screen.getByTestId('conversation')).toBeInTheDocument();
     expect(screen.queryByTestId('room-stalled')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(30_000);
     });
 
-    expect(screen.queryByTestId('question-waiting')).not.toBeInTheDocument();
+    expect(screen.getByTestId('room-stalled')).toBeInTheDocument();
     expect(screen.getByRole('alert')).toHaveTextContent(messages.room.stalled);
 
     await act(async () => {
@@ -427,37 +511,9 @@ describe('interview room, text mode (W06)', () => {
     expect(calls.some((c) => c.url === '/api/interviews/i1/resume' && c.method === 'POST')).toBe(true);
   });
 
-  it('types the question at 40 chars/sec', async () => {
-    // The shared setup answers `prefers-reduced-motion: reduce`, which resolves every authored
-    // motion in the app instantly — correct for tests about content, wrong for this one, which
-    // is about the motion itself.
-    vi.stubGlobal('matchMedia', ((query: string) => ({
-      matches: false,
-      media: query,
-      addEventListener() {},
-      removeEventListener() {},
-      addListener() {},
-      removeListener() {},
-      dispatchEvent: () => false,
-    })) as unknown as typeof window.matchMedia);
-    vi.useFakeTimers();
-    stubFetch();
-    await act(async () => {
-      renderWithProviders(<RoomPage />);
-    });
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(0);
-    });
-
-    const typed = screen.getByTestId('question-typed');
-    expect(typed).toHaveTextContent('');
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(250); // 10 chars at 40/sec
-    });
-    expect(typed.textContent).toBe('Tell me ab');
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1000);
-    });
-    expect(typed.textContent).toBe('Tell me about yourself.');
-  });
+  // 'types the question at 40 chars/sec' lived here and was deleted with C02. The room mounts
+  // no `QuestionPanel` in text mode at all now — the question arrives inside the conversation —
+  // and the voice caption is mounted `instant`, so neither mode has a typewriter left to assert
+  // from. `question-panel.tsx` still owns the animation for whoever mounts it non-instant; it
+  // has no test file of its own and this room test was never the place to be its unit test.
 });

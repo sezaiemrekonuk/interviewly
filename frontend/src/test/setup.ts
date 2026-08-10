@@ -27,6 +27,14 @@ if (typeof window !== 'undefined' && typeof window.matchMedia !== 'function') {
   })) as unknown as typeof window.matchMedia;
 }
 
+// jsdom ships no `scrollIntoView`, and the room's conversation calls it to follow the latest
+// message. Without the stub the call throws, React unwinds, and the *whole room* fails to
+// mount — which presents as every assertion in the file failing to find `interview-room`,
+// nowhere near the line that caused it. A no-op is right: jsdom has no viewport to scroll.
+if (typeof Element !== 'undefined' && !Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = function scrollIntoView() {};
+}
+
 // jsdom ships no ResizeObserver, and recharts' ResponsiveContainer constructs one on mount.
 // A no-op is enough: jsdom reports zero-size elements anyway, so the charts render empty and
 // every assertion lands on the text beside them.

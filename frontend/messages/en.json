@@ -479,6 +479,8 @@
     "roleHr": "HR interviewer",
     "roleTech": "Technical interviewer",
     "speakerYou": "You",
+    "roleSystem": "Interview system",
+    "choosePlaceholder": "Choose an answer",
     "progress": "Question {index} of {total}",
     "waiting": "Preparing the next question…",
     "starting": "This interview hasn't started yet. Starting it now…",

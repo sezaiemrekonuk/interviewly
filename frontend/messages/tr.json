@@ -479,6 +479,8 @@
     "roleHr": "İK mülakatçısı",
     "roleTech": "Teknik mülakatçı",
     "speakerYou": "Sen",
+    "roleSystem": "Mülakat sistemi",
+    "choosePlaceholder": "Bir cevap seç",
     "progress": "Soru {index} / {total}",
     "waiting": "Sıradaki soru hazırlanıyor…",
     "starting": "Bu mülakat henüz başlamadı. Şimdi başlatılıyor…",

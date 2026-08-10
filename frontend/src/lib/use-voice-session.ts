@@ -1,19 +1,25 @@
-// W10, rewritten by S05, given its turn loop by S06. There is no realtime socket any more:
-// ADR-S01 replaced the conversation agent with two server-side HTTP calls (TTS for the
-// question, STT for the answer), so the mint, the socket dial and the agent frames it decoded
-// are gone with it.
+// W10, rewritten by S05, given its turn loop by S06, pointed at the conversation by C02. There
+// is no realtime socket any more: ADR-S01 replaced the conversation agent with two server-side
+// HTTP calls (TTS for what the interviewer says, STT for what the candidate says), so the mint,
+// the socket dial and the agent frames it decoded are gone with it.
 //
-// The loop is discrete (ADR-S06): play the question, record the answer, stop on silence,
-// upload, refetch. K11 still holds — this hook never advances the room index, never fills the
-// transcript and never reads room state. Truth arrives through `GET /interviews/:id/state`,
-// and `turn` is that truth handed back down.
+// The loop is still discrete (ADR-S06) and it is now keyed on MESSAGES, not on the question
+// index: speak the assistant lines this session has not spoken yet, oldest first, then record,
+// stop on silence, upload, refetch. The index was never the right key — the conductor answers
+// every utterance with a sentence and only sometimes advances (C02), so a turn that clarifies
+// leaves the index exactly where it was and an index-keyed loop hears nothing and says nothing.
+// A message id is the stable handle: it survives a refetch and an index does not.
+//
+// K11 still holds — this hook never advances the room index, never fills the transcript and
+// never reads room state. Truth arrives through `GET /interviews/:id/state`, and `messages` is
+// that truth handed back down.
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { apiGetBlob } from '@/lib/api';
-import { queryKeys, useSubmitAudioAnswer, ApiError } from '@/lib/query';
+import { queryKeys, useSubmitAudioTurn, ApiError, type RoomMessage } from '@/lib/query';
 import { useMicPermission, type MicPermissionState } from '@/lib/use-mic-permission';
 import { voiceDowngrade } from '@/lib/voice/downgrade';
 
@@ -28,12 +34,6 @@ export const VAD_THRESHOLD = 0.05;
 
 /** How often the silence window is checked. Independent of the mic's frame rate on purpose. */
 const VAD_POLL_MS = 100;
-
-/** The server's question, and the only thing that starts a turn. */
-export interface VoiceTurn {
-  index: number;
-  questionId: string;
-}
 
 export interface UseVoiceSessionResult {
   status: VoiceConnectionStatus;
@@ -57,8 +57,19 @@ export interface UseVoiceSessionResult {
 export interface UseVoiceSessionOptions {
   /** Voice mode only — a text interview must not open a mic. */
   enabled?: boolean;
-  /** Null while the server has no question to speak (waiting, paused, report). */
-  turn?: VoiceTurn | null;
+  /**
+   * `state.messages` as the server returned it, oldest first. Pass the array through — do NOT
+   * rebuild or filter it per render: this is an effect dependency, the mic meter re-renders the
+   * room once per animation frame, and a fresh array each frame tears the speak effect down
+   * mid-fetch (the same failure the `startRecordingRef` note below describes).
+   */
+  messages?: RoomMessage[];
+  /**
+   * Whether the interviewer may speak and the mic may open at all — `hr_round || tech_round`.
+   * False parks the loop without forgetting what it has already said, which is what a paused
+   * room, a report and an ended interview all need.
+   */
+  speakable?: boolean;
   vad?: { silenceMs?: number; threshold?: number };
 }
 
@@ -90,17 +101,20 @@ const SILENT = new Set(['QUESTION_NOT_CURRENT', 'INVALID_STATE_TRANSITION', 'BUD
 /** The server already ended or downgraded the interview — the refetch is what renders that. */
 const SERVER_ENDED = new Set(['VOICE_SESSION_EXPIRED', 'VOICE_UNAVAILABLE']);
 
+/** Module-level so the default is the SAME array every render — see `messages` in the options. */
+const NO_MESSAGES: RoomMessage[] = [];
+
 export function useVoiceSession(
   interviewId: string | null,
   options: UseVoiceSessionOptions = {},
 ): UseVoiceSessionResult {
-  const { enabled = true, turn = null, vad } = options;
+  const { enabled = true, messages = NO_MESSAGES, speakable = true, vad } = options;
   const silenceMs = vad?.silenceMs ?? VAD_SILENCE_MS;
   const threshold = vad?.threshold ?? VAD_THRESHOLD;
 
   const mic = useMicPermission();
   const client = useQueryClient();
-  const submitAudio = useSubmitAudioAnswer(interviewId ?? '');
+  const submitAudio = useSubmitAudioTurn(interviewId ?? '');
 
   const [phase, setPhase] = useState<Phase>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -113,9 +127,16 @@ export function useVoiceSession(
   const srcRef = useRef<string | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
-  const spokenRef = useRef<string | null>(null);
-  // Which half to re-run on retry: the question audio, or only the recording.
+  // Every assistant message this session has already played, by id. A Set of ids and not a
+  // high-water index: `messages` is refetched whole after every turn and a position in it means
+  // nothing across two fetches, while an id means the same line in both.
+  const spokenRef = useRef<Set<string>>(new Set());
+  // Whether the backlog has been written off yet — see the seeding block in the speak effect.
+  const seededRef = useRef(false);
+  // Which half to re-run on retry: the interviewer's audio, or only the recording.
   const failedAtRef = useRef<'speak' | 'answer'>('speak');
+  // The message whose audio failed, so a retry can un-speak exactly that one.
+  const failedMessageRef = useRef<string | null>(null);
   // The VAD only arms once the candidate has been heard — a turn that opens on silence would
   // otherwise upload two seconds of nothing and come back SPEECH_AUDIO_INVALID.
   const heardRef = useRef(false);
@@ -152,7 +173,6 @@ export function useVoiceSession(
 
     heardRef.current = false;
     chunksRef.current = [];
-    const questionId = spokenRef.current;
     const recorder = new MediaRecorder(stream);
     recorderRef.current = recorder;
 
@@ -162,15 +182,18 @@ export function useVoiceSession(
     recorder.onstop = () => {
       recorderRef.current = null;
       // Unmounted mid-turn: the bytes are dropped rather than uploaded into a room nobody is in.
-      if (!liveRef.current || !questionId) return;
+      if (!liveRef.current) return;
       const audio = new Blob(chunksRef.current, { type: recorder.mimeType });
       chunksRef.current = [];
       setPhase('uploading');
+      // No question named: the utterance may not be an answer at all, and what it advances is
+      // the conductor's call (C02). The upload is the whole of what this hook asserts.
       submitAudio
-        .mutateAsync({ questionId, audio })
+        .mutateAsync({ audio })
         .then(() => {
           if (!liveRef.current) return;
-          // The next question arrives as a new `turn` off the refetch the mutation triggers.
+          // The interviewer's reply arrives as a new assistant message off the refetch the
+          // mutation triggers, and the speak effect picks it up from there.
           setPhase('idle');
         })
         .catch((err: unknown) => {
@@ -195,9 +218,9 @@ export function useVoiceSession(
   // `startRecording` closes over `submitAudio`, and a react-query mutation result is a NEW
   // object on every render. The meter re-renders this hook once per animation frame, so using
   // that callback as an effect dependency below re-runs the speak effect ~60×/s — each run
-  // cancelling the in-flight question audio and then returning at the `spokenRef` guard, so
-  // nothing ever plays. Read through a ref instead: the effect reacts to the turn, not to
-  // identity churn.
+  // cancelling the in-flight audio and then finding nothing pending (the id was marked spoken
+  // before the fetch), so nothing ever plays. Read through a ref instead: the effect reacts to
+  // the conversation, not to identity churn.
   const startRecordingRef = useRef(startRecording);
   useEffect(() => {
     startRecordingRef.current = startRecording;
@@ -211,35 +234,56 @@ export function useVoiceSession(
     recorder.stop();
   }, []);
 
-  // The question: fetched from our origin, played once, then the mic opens. Nothing here is
-  // retried on its own — a question the candidate cannot hear is a downgrade, not a loop.
+  // The interviewer's side of the conversation: every assistant line not yet spoken, in order,
+  // each fetched from our origin and played once, and then the mic opens. A single turn can
+  // produce more than one — a handover writes the outgoing interviewer's closing line and then
+  // the incoming one's greeting (`conductor.ts` `handover`) — so this is a queue, not one file,
+  // and the recorder must not open until the last of them has finished playing.
+  //
+  // Nothing here is retried on its own: a line the candidate cannot hear is a downgrade, not a
+  // loop (ADR-S06 §Downgrade).
   useEffect(() => {
-    if (!active || !turn || mic.state !== 'granted') return;
-    if (spokenRef.current === turn.questionId) return;
+    if (!active || !speakable || mic.state !== 'granted') return;
 
-    spokenRef.current = turn.questionId;
+    // The backlog, written off once per mounted session. Without this a refresh mid-interview
+    // finds every assistant line unspoken and reads the whole interview back at the candidate
+    // from the greeting — §3.8 says the room REBUILDS from `messages`, not that it re-runs
+    // them. What survives the write-off is the trailing run of assistant lines after the last
+    // candidate utterance, which is exactly the prompt they are currently being asked and the
+    // one thing a reload does have to replay.
+    if (!seededRef.current && messages.length > 0) {
+      seededRef.current = true;
+      const lastSaid = messages.map((m) => m.role).lastIndexOf('user');
+      messages.slice(0, lastSaid + 1).forEach((m) => spokenRef.current.add(m.id));
+    }
+
+    const pending = messages.filter(
+      (m) => m.role === 'assistant' && !spokenRef.current.has(m.id),
+    );
+    if (pending.length === 0) return;
+
     let cancelled = false;
     setError(null);
     setPhase('speaking');
 
-    void (async () => {
-      const result = await apiGetBlob(
-        `/interviews/${interviewId}/questions/${turn.index}/speech`,
-      );
-      if (cancelled || !liveRef.current) return;
+    /** Resolves true when the line has been heard to the end; false on any branch that stops. */
+    const speak = async (messageId: string): Promise<boolean> => {
+      const result = await apiGetBlob(`/interviews/${interviewId}/messages/${messageId}/speech`);
+      if (cancelled || !liveRef.current) return false;
 
       if (!result.ok || !result.data) {
         const code = result.code ?? 'UNKNOWN';
         if (SILENT.has(code)) {
           setPhase('idle');
           refetchState();
-          return;
+          return false;
         }
         if (SERVER_ENDED.has(code)) refetchState();
         failedAtRef.current = 'speak';
+        failedMessageRef.current = messageId;
         setError(code);
         setPhase('failed');
-        return;
+        return false;
       }
 
       const src = URL.createObjectURL(result.data);
@@ -247,33 +291,45 @@ export function useVoiceSession(
       const player = new Audio(src);
       playerRef.current = player;
 
-      player.addEventListener('ended', () => {
-        if (!liveRef.current) return;
-        releasePlayer();
-        startRecordingRef.current();
+      return new Promise<boolean>((resolve) => {
+        player.addEventListener('ended', () => {
+          if (!liveRef.current) return resolve(false);
+          releasePlayer();
+          resolve(true);
+        });
+        // Undecodable or blocked audio is a fatal voice failure, and the interview continues in
+        // text on the same turn rather than stalling on a line nobody heard.
+        const downgrade = () => {
+          if (!liveRef.current) return resolve(false);
+          releasePlayer();
+          setPhase('idle');
+          void voiceDowngrade(String(interviewId)).finally(refetchState);
+          resolve(false);
+        };
+        player.addEventListener('error', downgrade);
+        player.play().catch(downgrade);
       });
-      // ADR-S06 §Downgrade: undecodable audio is a fatal voice failure, and the interview
-      // continues in text at the same index rather than stalling on a question nobody heard.
-      player.addEventListener('error', () => {
-        if (!liveRef.current) return;
-        releasePlayer();
-        setPhase('idle');
-        void voiceDowngrade(String(interviewId)).finally(refetchState);
-      });
+    };
 
-      player.play().catch(() => {
-        if (!liveRef.current) return;
-        releasePlayer();
-        setPhase('idle');
-        void voiceDowngrade(String(interviewId)).finally(refetchState);
-      });
+    void (async () => {
+      for (const message of pending) {
+        // Marked before the fetch, never after. The meter re-renders this hook ~60×/s and every
+        // one of those renders re-derives `pending`; an id marked only once its audio arrived
+        // would be re-requested by each of them.
+        spokenRef.current.add(message.id);
+        if (!(await speak(message.id))) return;
+        if (cancelled || !liveRef.current) return;
+      }
+      startRecordingRef.current();
     })();
 
     return () => {
       cancelled = true;
     };
-    // `attempt` re-runs a failed question; `turn.questionId` is what makes the next one run.
-  }, [active, interviewId, mic.state, turn, attempt, refetchState, releasePlayer]);
+    // `attempt` re-runs a failed line; a refetch that appends an assistant message is what makes
+    // the next one run — `messages` must therefore be the server's array by identity, or this
+    // effect is torn down mid-fetch by the meter and nothing ever plays (see the options doc).
+  }, [active, speakable, interviewId, mic.state, messages, attempt, refetchState, releasePlayer]);
 
   // VAD (ADR-S06): the candidate ends the turn, the server ends the interview.
   //
@@ -319,8 +375,10 @@ export function useVoiceSession(
       startRecording();
       return;
     }
-    // Re-speak: the question audio is served from the TTS cache, so this does not re-buy it.
-    spokenRef.current = null;
+    // Re-speak just the line that failed: the audio is served from the TTS cache, so this does
+    // not re-buy it, and un-speaking the whole conversation would replay it from the greeting.
+    if (failedMessageRef.current) spokenRef.current.delete(failedMessageRef.current);
+    failedMessageRef.current = null;
     setAttempt((n) => n + 1);
   }, [startRecording]);
 

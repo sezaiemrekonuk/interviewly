@@ -427,6 +427,48 @@ export interface RoomPersona {
   avatarSet: Record<string, string>;
 }
 
+/**
+ * C04 — the typed answer surface the conductor put on screen for the current question, when it
+ * asked for one. Mirrors `WidgetSchema` (`packages/ai/src/schemas.ts`), which is the gate the
+ * server writes through: `options` is required by `choice` and meaningless to `textbox`.
+ *
+ * It hangs off `currentQuestion`, not off the message that announced it, because the surface is
+ * a property of the question — a refresh has to re-render the box and the message is prose.
+ */
+export interface RoomWidget {
+  kind: 'textbox' | 'choice';
+  label: string;
+  options?: string[];
+}
+
+/**
+ * C02 — one utterance in the conversation, which since the conductor landed is the interview's
+ * actual state. Not the same view as `transcript`: that is question/answer pairs for the report,
+ * this is everything that was said in order, including what a pair cannot hold — the welcome,
+ * the clarifications, the handover, and the system line where the server overrode the
+ * interviewer.
+ *
+ * `action` is what the server did with the turn AFTER clamping (`conductor.ts` re-derives it),
+ * never what the model asked for, so a client may read it as fact. Null on user and older rows.
+ * `id` is the only stable handle on a message: it survives a refetch, an index does not, and it
+ * is what `…/messages/:id/speech` is keyed by.
+ */
+export interface RoomMessage {
+  id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  action:
+    | 'continue'
+    | 'next_question'
+    | 'handover'
+    | 'end_interview'
+    | 'show_widget'
+    | 'drift'
+    | null;
+  questionId: string | null;
+  createdAt: string;
+}
+
 /** The single room truth (`GET /interviews/:id/state`) — see REFERENCE for the shape. */
 export interface InterviewStateResponse {
   interviewId: string;
@@ -444,7 +486,7 @@ export interface InterviewStateResponse {
     id: string;
     text: string;
     kind: string;
-    widget: unknown | null;
+    widget: RoomWidget | null;
     deliveredAt: string;
   } | null;
   transcript: {
@@ -453,6 +495,8 @@ export interface InterviewStateResponse {
     answer: string;
     roundType: 'hr' | 'tech';
   }[];
+  /** The conversation, oldest first. A room rebuilds itself from this alone (§3.8). */
+  messages: RoomMessage[];
   transcriptCursor: number;
 }
 
@@ -586,6 +630,80 @@ export function useSubmitAudioAnswer(
       form.append('questionId', questionId);
       form.append('audio', new File([audio], 'answer', { type }), 'answer');
       const result = await apiPostForm(`/interviews/${interviewId}/answers/audio`, form);
+      if (!result.ok) throw new ApiError(result.code ?? 'UNKNOWN');
+      return result.data;
+    },
+    onError: (err) => {
+      if (SILENT_REFETCH_CODES.has(err.code)) {
+        void client.invalidateQueries({ queryKey: queryKeys.interviewState(interviewId) });
+      }
+    },
+    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.interviewState(interviewId) }),
+  });
+}
+
+export interface SubmitTurnBody {
+  text: string;
+  /** How the candidate produced it. `widget` is C04's typed surface, not a third input device. */
+  inputMode: 'text' | 'voice' | 'widget';
+}
+
+/**
+ * C02 — `POST /interviews/:id/turns`, the conversational path, and deliberately not a second
+ * shape of `POST /answers`. `/answers` promises "this is the answer to question X, advance",
+ * which is why it takes a `questionId` and 409s on the wrong one. A turn promises none of that:
+ * the candidate may be answering, clarifying, asking something back or saying nothing useful,
+ * and whether the question advances is the conductor's call. So there is no question to name —
+ * sending one would only let the client assert a progression it does not own (K11).
+ *
+ * `{ state, currentIndex }` comes back and is thrown away here on purpose: the room reads both
+ * off the `interviewState` refetch below, and a mutation result that raced that refetch would be
+ * a second source of truth for the one thing K11 says has exactly one. Same silent-refetch
+ * reconciliation as `useSubmitAnswer` — every caller of a progression route owes it, and
+ * `routeForError` owns which codes those are (§4.5). Never retried (W02).
+ */
+export function useSubmitTurn(
+  interviewId: string,
+): UseMutationResult<unknown, ApiError, SubmitTurnBody> {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: SubmitTurnBody) => {
+      const result = await apiPost(`/interviews/${interviewId}/turns`, body);
+      if (!result.ok) throw new ApiError(result.code ?? 'UNKNOWN');
+      return result.data;
+    },
+    onError: (err) => {
+      if (SILENT_REFETCH_CODES.has(err.code)) {
+        void client.invalidateQueries({ queryKey: queryKeys.interviewState(interviewId) });
+      }
+    },
+    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.interviewState(interviewId) }),
+  });
+}
+
+export interface SubmitAudioTurnBody {
+  audio: Blob;
+}
+
+/**
+ * The recorded twin of `useSubmitTurn` (`POST …/turns/audio`): transcribes, then runs the SAME
+ * conductor turn, so both owe the same reconciliation and invalidate the same key. No
+ * `questionId` in the part list either — see above, the server decides what the utterance was
+ * about.
+ *
+ * The part's media type is sent bare. `MediaRecorder` reports `audio/webm;codecs=opus`, and the
+ * backend allow-list (`stt.ts`) carries media types, not codec strings.
+ */
+export function useSubmitAudioTurn(
+  interviewId: string,
+): UseMutationResult<unknown, ApiError, SubmitAudioTurnBody> {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ audio }: SubmitAudioTurnBody) => {
+      const type = (audio.type || 'audio/webm').split(';')[0];
+      const form = new FormData();
+      form.append('audio', new File([audio], 'answer', { type }), 'answer');
+      const result = await apiPostForm(`/interviews/${interviewId}/turns/audio`, form);
       if (!result.ok) throw new ApiError(result.code ?? 'UNKNOWN');
       return result.data;
     },

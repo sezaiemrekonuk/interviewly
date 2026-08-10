@@ -1,4 +1,5 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MockEventSource, installEventSourceMock } from '../../../../../test/event-source-mock';
@@ -41,6 +42,35 @@ const PERSONAS = [
   },
 ];
 
+/** C02 — one utterance. See the twin in `page.test.tsx`; voice reads `id` and `role` hardest. */
+function turn(
+  id: string,
+  role: 'user' | 'assistant' | 'system',
+  content: string,
+  over: { action?: string | null; questionId?: string | null } = {},
+) {
+  return {
+    id,
+    role,
+    content,
+    action: over.action ?? (role === 'assistant' ? 'continue' : null),
+    questionId: over.questionId ?? null,
+    createdAt: '2026-08-05T10:00:00.000Z',
+  };
+}
+
+/**
+ * A room joined mid-interview: greeted, answered once, and now asked `q1`. The user turn in the
+ * middle is not decoration — the hook writes off everything up to and including the last `user`
+ * row on its first render, so this fixture leaves exactly ONE line to be spoken (`m3`), which is
+ * what a candidate who refreshes should hear: the prompt they are on, not the interview so far.
+ */
+const OPENING = [
+  turn('m1', 'assistant', "Hi, I'm Ada. Thanks for making the time."),
+  turn('m2', 'user', 'Happy to be here.'),
+  turn('m3', 'assistant', 'Tell me about yourself.', { action: 'next_question', questionId: 'q1' }),
+];
+
 function voiceState(over: Record<string, unknown> = {}) {
   return {
     interviewId: 'i1',
@@ -60,6 +90,7 @@ function voiceState(over: Record<string, unknown> = {}) {
       deliveredAt: '2026-08-05T10:00:00.000Z',
     },
     transcript: [],
+    messages: OPENING,
     transcriptCursor: 0,
     ...over,
   };
@@ -68,7 +99,13 @@ function voiceState(over: Record<string, unknown> = {}) {
 interface Call {
   url: string;
   method: string;
+  body: unknown;
 }
+
+/** C06 — audio is bought per utterance now, so the speech route is keyed by message id. */
+const SPEECH = (id: string) => `/api/interviews/i1/messages/${id}/speech`;
+const UPLOAD = '/api/interviews/i1/turns/audio';
+const TURNS = '/api/interviews/i1/turns';
 
 function stubFetch(options: { states?: Record<string, unknown>[]; answer?: () => Response } = {}) {
   const calls: Call[] = [];
@@ -81,7 +118,12 @@ function stubFetch(options: { states?: Record<string, unknown>[]; answer?: () =>
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string, init?: RequestInit) => {
-      calls.push({ url, method: init?.method ?? 'GET' });
+      const raw = init?.body;
+      calls.push({
+        url,
+        method: init?.method ?? 'GET',
+        body: typeof raw === 'string' ? JSON.parse(raw) : (raw ?? null),
+      });
 
       if (url === '/api/me') return json(200, { user: USER });
       if (url === '/api/interviews/i1/state') {
@@ -96,9 +138,10 @@ function stubFetch(options: { states?: Record<string, unknown>[]; answer?: () =>
           headers: { 'content-type': 'audio/mpeg' },
         });
       }
-      if (url === '/api/interviews/i1/answers/audio') {
-        return options.answer ? options.answer() : json(200, { state: 'hr_round', nextIndex: 2 });
+      if (url === UPLOAD) {
+        return options.answer ? options.answer() : json(200, { state: 'hr_round', currentIndex: 1 });
       }
+      if (url === TURNS) return json(200, { state: 'hr_round', currentIndex: 1 });
       return json(404, { error: { code: 'NOT_FOUND' } });
     }),
   );
@@ -137,7 +180,9 @@ describe('interview room, voice mode (W10)', () => {
     await renderRoom();
 
     expect(screen.getByTestId('voice-controls')).toBeInTheDocument();
-    // The composer is text mode's surface — in voice the candidate speaks.
+    // Still the rule for an ordinary question: the candidate speaks. A keyboard appears only
+    // where the interviewer asked for one (the next test) — a composer under every question
+    // would make the room a chat with audio bolted on.
     expect(screen.queryByTestId('answer-composer')).not.toBeInTheDocument();
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
 
@@ -149,6 +194,46 @@ describe('interview room, voice mode (W10)', () => {
     // Room mode, not an entry surface: no mascot on this screen.
     expect(screen.queryByTestId('mascot')).not.toBeInTheDocument();
   });
+
+  // ADR-C04 — the other half of the rule above, and the point of `show_widget`: some answers are
+  // a list, a snippet or a precise value, and dictating those is worse than typing them. Voice
+  // mode had no way to type at all, so a widget the interviewer put on screen was unanswerable.
+  // The `inputMode` is the second half: sent as 'text', a typed widget answer is indistinguishable
+  // in the report from one the candidate spoke, and `InputMode.widget` goes back to being a
+  // column nothing writes.
+  it('renders a composer in voice mode when the interviewer put a widget on screen', async () => {
+    const calls = stubFetch({
+      states: [
+        voiceState({
+          currentQuestion: {
+            id: 'q1',
+            text: 'Which stack did you use?',
+            kind: 'text',
+            widget: { kind: 'textbox', label: 'Name the stack' },
+            deliveredAt: '2026-08-05T10:00:00.000Z',
+          },
+        }),
+      ],
+    });
+    const user = userEvent.setup();
+    await renderRoom();
+
+    expect(screen.getByTestId('answer-composer')).toBeInTheDocument();
+    // The widget's own label, not the generic one: it is the question the box is asking.
+    const input = screen.getByLabelText('Name the stack');
+    // The stage does not become the text room around it — voice is still how the round runs.
+    expect(screen.getByTestId('voice-controls')).toBeInTheDocument();
+
+    await user.type(input, 'Postgres and Redis.');
+    await user.click(screen.getByRole('button', { name: messages.room.submit }));
+
+    await waitFor(() => expect(calls.filter((c) => c.url === TURNS)).toHaveLength(1));
+    expect(calls.find((c) => c.url === TURNS)?.body).toEqual({
+      text: 'Postgres and Redis.',
+      inputMode: 'widget',
+    });
+  });
+
 
   it('advances only on a state refetch — nothing client-side moves the index', async () => {
     const calls = stubFetch({
@@ -163,6 +248,14 @@ describe('interview room, voice mode (W10)', () => {
             widget: null,
             deliveredAt: '2026-08-05T10:01:00.000Z',
           },
+          messages: [
+            ...OPENING,
+            turn('m4', 'user', 'I ship.', { questionId: 'q1' }),
+            turn('m5', 'assistant', 'Explain an index.', {
+              action: 'next_question',
+              questionId: 'q2',
+            }),
+          ],
           transcript: [
             { questionId: 'q1', question: 'Tell me about yourself.', answer: 'I ship.', roundType: 'hr' },
           ],
@@ -173,9 +266,13 @@ describe('interview room, voice mode (W10)', () => {
     await renderRoom();
 
     expect(screen.getByText(messages.room.progress.replace('{index}', '1').replace('{total}', '8'))).toBeInTheDocument();
+    // C02 — the caption is the interviewer's last *line*, which here is the question it just
+    // asked. It is not read off `currentQuestion` any more, so a follow-up that belongs to no
+    // question is captioned too.
     expect(screen.getByTestId('question-typed')).toHaveTextContent('Tell me about yourself.');
-    // K11: the transcript is server-filled. Nothing in the room derives it locally, so it stays
-    // empty until the refetch — S05 removed the socket that used to be the tempting shortcut.
+    // K11: the conversation is server-filled. Nothing in the room appends the candidate's own
+    // utterance locally, so it is absent until the refetch — S05 removed the socket that used
+    // to be the tempting shortcut, and the voice hook is forbidden the same shortcut.
     expect(screen.queryByText('I ship.')).not.toBeInTheDocument();
 
     const before = stateCalls(calls);
@@ -197,32 +294,34 @@ describe('interview room, voice mode (W10)', () => {
   // banner is still rendered off `status === 'lost'`, which the mic now produces; S07 owns the
   // mic-denied path and re-covers it there.
 
-  it('reads the transcript from state into a polite live region', async () => {
-    stubFetch({
-      states: [
-        voiceState({
-          transcript: [
-            { questionId: 'q1', question: 'Tell me about yourself.', answer: 'I ship.', roundType: 'hr' },
-          ],
-          transcriptCursor: 1,
-        }),
-      ],
-    });
+  // The conversation is the live region now (C02), and in voice it is not a nicety: everything
+  // the interviewer says is audio, so this panel is the only place a screen-reader user meets
+  // the interview at all. Rendered without `live` it would be a silent panel behind a toggle.
+  it('reads the conversation from state into a polite live region', async () => {
+    stubFetch();
     await renderRoom();
 
-    const list = within(screen.getByTestId('transcript')).getByRole('list');
+    const list = within(screen.getByTestId('conversation')).getByRole('list');
     expect(list).toHaveAttribute('aria-live', 'polite');
-    expect(within(list).getByText('I ship.')).toBeInTheDocument();
+    expect(within(list).getByText("Hi, I'm Ada. Thanks for making the time.")).toBeInTheDocument();
+    expect(within(list).getByText('Happy to be here.')).toBeInTheDocument();
+    expect(within(list).getByText('Tell me about yourself.')).toBeInTheDocument();
   });
 
   // S06 — the turn loop, from the room's side: the hook's own tests own the state machine,
   // these own the wiring the candidate can see and touch.
-  it('speaks the question, then offers a stop that sends the recorded answer', async () => {
+  it("speaks the interviewer's last line, then offers a stop that uploads the recorded turn", async () => {
     const calls = stubFetch();
     await renderRoom();
 
     await waitFor(() => expect(audio.players).toHaveLength(1));
-    expect(calls.some((c) => c.url === '/api/interviews/i1/questions/1/speech')).toBe(true);
+    // C06 — by message id, not by question index: the greeting, a follow-up and the handover
+    // line are all things to say and none of them is a question with an index.
+    expect(calls.some((c) => c.url === SPEECH('m3'))).toBe(true);
+    // And ONLY the trailing line. A candidate who refreshes mid-interview must not have the
+    // whole conversation read back at them from the greeting, so everything up to the last
+    // thing they said is written off as already heard.
+    expect(calls.some((c) => c.url === SPEECH('m1'))).toBe(false);
     // Nothing to stop while the interviewer is speaking.
     expect(screen.queryByTestId('voice-stop')).not.toBeInTheDocument();
 
@@ -233,9 +332,10 @@ describe('interview room, voice mode (W10)', () => {
       fireEvent.click(stop);
     });
 
-    await waitFor(() =>
-      expect(calls.filter((c) => c.url === '/api/interviews/i1/answers/audio')).toHaveLength(1),
-    );
+    // A turn, not an answer: the upload names no question, because whether the utterance
+    // answered anything is the conductor's call and not this room's.
+    await waitFor(() => expect(calls.filter((c) => c.url === UPLOAD)).toHaveLength(1));
+    expect(calls.some((c) => c.url === '/api/interviews/i1/answers/audio')).toBe(false);
   });
 
   it('lights the tile the round names, not the one the payload happens to carry', async () => {
@@ -269,7 +369,8 @@ describe('interview room, voice mode (W10)', () => {
       fireEvent.click(screen.getByTestId('voice-retry'));
     });
 
-    // Retry re-records the same question rather than re-buying its audio.
+    // Retry re-records the same turn rather than re-buying the line's audio: the upload is the
+    // half that failed, and re-speaking `m3` would charge TTS twice for one question.
     await waitFor(() => expect(screen.getByTestId('voice-stop')).toBeInTheDocument());
     expect(audio.players).toHaveLength(1);
   });
