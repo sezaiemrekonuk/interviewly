@@ -497,13 +497,21 @@
       "mute": "Sesi kapat",
       "unmute": "Sesi aç",
       "stop": "Bitir ve gönder",
-      "lost": "Ses bağlantısı koptu. Görüşmeniz güvende — devam etmek için yeniden bağlanın.",
+      "micLost": "Mikrofonun durdu. Sesli devam etmek için yeniden bağlan.",
       "reconnect": "Yeniden bağlan",
       "status": {
         "connecting": "Bağlanıyor",
         "connected": "Canlı",
         "reconnecting": "Yeniden bağlanıyor",
-        "lost": "Bağlantı kesildi"
+        "lost": "Mikrofon kapalı"
+      },
+      "failure": {
+        "SPEECH_AUDIO_INVALID": "Bu kaydı okuyamadık. Cevabını yeniden kaydet.",
+        "SPEECH_TRANSCRIPTION_FAILED": "Bu kaydı yazıya dökemedik. Yeniden kaydet ya da cevabını yaz.",
+        "VOICE_UNAVAILABLE": "Bu mülakatta sesli mod kullanılamıyor. Metinle devam ediyor — aşağıdan sürdür.",
+        "VOICE_SESSION_EXPIRED": "Mülakat süren doldu. Raporuna yönlendiriliyorsun.",
+        "FORBIDDEN": "Bu mülakat sesli olarak sürdürülemez.",
+        "INVALID_STATE_TRANSITION": "Bu mülakat sesli olarak sürdürülemez."
       }
     },
     "roundLabel": "Tur",

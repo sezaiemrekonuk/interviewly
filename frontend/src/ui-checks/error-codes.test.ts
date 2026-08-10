@@ -34,9 +34,17 @@ function registryCodes(): string[] {
 // client — so it is owned by the frontend and belongs in the file without a registry entry.
 const FRONTEND_ONLY = ['UNKNOWN'];
 
+// The one place outside `errors` that may key by code (S10). The generic copy is wrong inside
+// the room — a 403 there means "this interview cannot continue in voice", not "no permission" —
+// so `voice-controls.tsx` reads this block first and falls back to `useErrorMessage`. It is a
+// deliberate override, read by a component, not the accidental shadowing issue 112 caught: the
+// assertion below keeps every key in it a real code, so a typo here still fails the suite.
+const OVERRIDE_NAMESPACE = 'room.voice.failure';
+
 function misfiledCodes(messages: object): string[] {
   const walk = (node: unknown, path: string[]): string[] => {
     if (typeof node !== 'object' || node === null) return [];
+    if (path.join('.') === OVERRIDE_NAMESPACE) return [];
     return Object.entries(node).flatMap(([key, value]) => {
       const here = [...path, key];
       const misfiled = path[0] !== 'errors' && CODE_SHAPE.test(key) ? [here.join('.')] : [];
@@ -44,6 +52,15 @@ function misfiledCodes(messages: object): string[] {
     });
   };
   return walk(messages, []);
+}
+
+function overrideKeys(messages: object): string[] {
+  const node = OVERRIDE_NAMESPACE.split('.').reduce<unknown>(
+    (at, key) =>
+      typeof at === 'object' && at !== null ? (at as Record<string, unknown>)[key] : undefined,
+    messages,
+  );
+  return typeof node === 'object' && node !== null ? Object.keys(node) : [];
 }
 
 // Guard against a broken parse: this suite becomes meaningless if we cannot find the registry
@@ -72,5 +89,18 @@ describe('error codes', () => {
     ['tr', tr],
   ])('defines no error code outside the errors namespace in %s', (_locale, messages) => {
     expect(misfiledCodes(messages)).toEqual([]);
+  });
+
+  it.each([
+    ['en', en],
+    ['tr', tr],
+  ])(`keys ${OVERRIDE_NAMESPACE} by real codes in %s`, (_locale, messages) => {
+    const keys = overrideKeys(messages);
+    expect(keys.length).toBeGreaterThan(0);
+    expect(keys.filter((key) => !expected.includes(key))).toEqual([]);
+  });
+
+  it('overrides the same codes in both locales', () => {
+    expect(overrideKeys(tr).sort()).toEqual(overrideKeys(en).sort());
   });
 });

@@ -13,7 +13,7 @@ import type { UseVoiceSessionResult } from '../../lib/use-voice-session';
 
 const NOW = new Date('2026-08-10T10:00:00.000Z');
 
-const session = (): UseVoiceSessionResult => ({
+const session = (overrides: Partial<UseVoiceSessionResult> = {}): UseVoiceSessionResult => ({
   status: 'connected',
   beat: null,
   micLevel: 0,
@@ -25,6 +25,7 @@ const session = (): UseVoiceSessionResult => ({
   stop: vi.fn(),
   error: null,
   retry: vi.fn(),
+  ...overrides,
 });
 
 /** The provider rides along so `rerender` can hand the component a new deadline in place. */
@@ -123,5 +124,73 @@ describe('VoiceControls time remaining (S09)', () => {
     renderControls(null);
 
     expect(screen.queryByTestId('time-remaining')).not.toBeInTheDocument();
+  });
+});
+
+describe('VoiceControls failure copy (S10)', () => {
+  const renderWith = (over: Partial<UseVoiceSessionResult>) =>
+    render(
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <VoiceControls
+          session={session(over)}
+          expiresAt={null}
+          captionsOn
+          onToggleCaptions={vi.fn()}
+          transcriptOpen={false}
+          onToggleTranscript={vi.fn()}
+        />
+      </NextIntlClientProvider>,
+    );
+
+  const CONNECTION_DROPPED = 'The voice connection dropped';
+
+  it('renders each failure its own copy, none of it "connection dropped"', () => {
+    const codes = [
+      'SPEECH_AUDIO_INVALID',
+      'SPEECH_TRANSCRIPTION_FAILED',
+      'VOICE_UNAVAILABLE',
+      'VOICE_SESSION_EXPIRED',
+    ] as const;
+
+    for (const code of codes) {
+      const { unmount } = renderWith({ error: code });
+      const notice = screen.getByTestId('voice-error');
+      expect(notice).toHaveTextContent(messages.room.voice.failure[code]);
+      expect(notice).not.toHaveTextContent(CONNECTION_DROPPED);
+      unmount();
+    }
+  });
+
+  it('offers a retry only where re-recording can clear the failure', () => {
+    const retry = vi.fn();
+    renderWith({ error: 'SPEECH_AUDIO_INVALID', retry });
+
+    screen.getByTestId('voice-retry').click();
+    expect(retry).toHaveBeenCalledOnce();
+  });
+
+  it('renders no retry button — nor a reconnect — for a 403 that retrying cannot clear', () => {
+    renderWith({ error: 'FORBIDDEN' });
+
+    expect(screen.getByTestId('voice-error')).toBeInTheDocument();
+    expect(screen.queryByTestId('voice-retry')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('session-lost')).not.toBeInTheDocument();
+  });
+
+  it('renders no retry button for a passed ceiling that ends the interview', () => {
+    renderWith({ error: 'VOICE_SESSION_EXPIRED' });
+
+    expect(screen.queryByTestId('voice-retry')).not.toBeInTheDocument();
+  });
+
+  it('names the microphone, not a connection, when the mic is lost, and offers reconnect', () => {
+    const reconnect = vi.fn();
+    renderWith({ status: 'lost', micState: 'denied', reconnect });
+
+    const banner = screen.getByTestId('session-lost');
+    expect(banner).toHaveTextContent(messages.room.voice.micLost);
+    expect(banner).not.toHaveTextContent(CONNECTION_DROPPED);
+    screen.getByRole('button', { name: messages.room.voice.reconnect }).click();
+    expect(reconnect).toHaveBeenCalledOnce();
   });
 });

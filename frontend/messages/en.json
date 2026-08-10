@@ -497,13 +497,21 @@
       "mute": "Mute",
       "unmute": "Unmute",
       "stop": "Stop and send",
-      "lost": "The voice connection dropped. Your interview is safe — reconnect to keep going.",
+      "micLost": "Your microphone stopped. Reconnect it to keep answering by voice.",
       "reconnect": "Reconnect",
       "status": {
         "connecting": "Connecting",
         "connected": "Live",
         "reconnecting": "Reconnecting",
-        "lost": "Disconnected"
+        "lost": "Mic off"
+      },
+      "failure": {
+        "SPEECH_AUDIO_INVALID": "We couldn't read that recording. Record your answer again.",
+        "SPEECH_TRANSCRIPTION_FAILED": "We couldn't turn that recording into words. Record it again, or type your answer instead.",
+        "VOICE_UNAVAILABLE": "Voice isn't available for this interview. It's continuing in text — carry on below.",
+        "VOICE_SESSION_EXPIRED": "Your interview time is up. Taking you to your report.",
+        "FORBIDDEN": "This interview can't continue in voice.",
+        "INVALID_STATE_TRANSITION": "This interview can't continue in voice."
       }
     },
     "roundLabel": "Round",

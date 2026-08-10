@@ -1,18 +1,18 @@
 # Speech — State
 
 Last updated: 2026-08-10
-Last session ended: **S09 complete.** `GET /state` carries `startedAt` and `expiresAt`
-(`interviewWindow` in `state.ts`). The arithmetic moved to `modules/speech/ceiling.ts` —
-`speechExpiresAt` is the instant, `isPastSpeechCeiling` is "now is past it", `tts.ts` re-exports
-the guard so `stt.ts` and `tts.test.ts` are untouched (ADR-S09). Text reports
-`expiresAt: null`: only the two speech routes enforce the ceiling and both refuse non-voice.
-`VoiceControls` gained a required `expiresAt` prop and a countdown that re-derives every tick,
-warns in words at 60s, and announces once from a fixed `role="status"` line. `room-rail.tsx`'s
-arrival clock now derives from `startedAt`, closing its ponytail. Both read the new
-`lib/use-clock.ts` (`useNowMs`, one `useSyncExternalStore` interval) — the frontend eslint config
-allows neither `Date.now()` in render nor a `setState` seed in an effect, and it runs in the
-pre-commit hook but **not** in root `npm run lint`. Lint + typecheck, unit 810, frontend 455,
-acceptance 111/111. Next: **S10**.
+Last session ended: **S10 complete — the ledger is done.** Every speech failure now renders
+room-honest copy from `room.voice.failure.<code>` and an action that can succeed: `retry` only
+for `SPEECH_AUDIO_INVALID` / `SPEECH_TRANSCRIPTION_FAILED` / `UNKNOWN`, copy alone for the
+codes the room resolves itself (`VOICE_UNAVAILABLE`→text, `VOICE_SESSION_EXPIRED`→report) and
+for the 403 that cannot continue in voice. `voice.lost` is retired — renamed `voice.micLost`
+with mic-honest copy, the `status.lost` chip reworded to "Mic off"; grep for `voice.lost` is
+empty. The S05→S10 tech-debt line is closed: the mic-lost banner + reconnect now has a test.
+Component-only — S06 had already threaded the code into `session.error`. Issue 112's
+"no error code outside `errors`" guard was amended rather than bypassed: `room.voice.failure` is
+exempt by name, and two new assertions keep every key in it a real registry code and identical
+across locales. Frontend unit 476/476 (the narrow `room/voice-controls use-voice-session`
+selection missed both the guard and W10's copy assertion), lint + typecheck green.
 
 ## Execution protocol (follow exactly)
 
@@ -28,9 +28,8 @@ EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**S10** (speech failure codes surfaced honestly in the room — sonnet tier). Note S09's
-hand-off: the copy lands in the same `VoiceControls`, and the room's `status: 'lost'` banner is
-still untested (tech debt below).
+**All speech tasks S01–S10 are `done`.** The ledger is complete. If more speech work is needed,
+open a new task with `update-initiative`; do not reopen a `done` row.
 
 ## Environment
 
@@ -85,7 +84,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | S07 | Pre-join on resume, mic-denied downgrade, transient-audio copy | | done | S06, V03, W09 |
 | S08 | Voice-first default and user-selectable duration | | done | S01, W05 |
 | S09 | `startedAt` and `expiresAt` in `/state`, and the room timer | | done | S02, I03 |
-| S10 | Speech failure codes surfaced honestly in the room | | todo | S06 |
+| S10 | Speech failure codes surfaced honestly in the room | | done | S06 |
 
 **S02 and S03 are genuinely independent** — both depend on S01 but not on each other; either
 order is safe for the single ledger owner. **S08 and S09 do not depend on S06**: the setup
@@ -146,10 +145,9 @@ downgrade}.ts`, and the downgrade invariant itself.
 - **[S06] `voice/device-check.ts` is still an unimported second `AnalyserNode`.** S06 picked
   `use-mic-permission.ts` as the room's mic and VAD source and added no third graph, so the
   duplication is now dead code rather than a live divergence (#107).
-- **[S05→S10] Nothing tests `status: 'lost'` in the room.** `voice.test.tsx`'s dropped-session
-  reconnect test went with the socket S05 deleted. S07 covered mic denial at *pre-join*, which is
-  a different surface — the room's lost banner + `reconnect` are still untested. S10 owns the
-  room's failure copy and is where this gets covered.
+- **~~[S05→S10] Nothing tests `status: 'lost'` in the room.~~** **Closed by S10.** The room's
+  mic-lost banner and its reconnect now have a test (`voice-controls.test.tsx`, S10 block): the
+  `session-lost` banner names the microphone rather than a connection, and its reconnect fires.
 
 ## Backlog (deferred, unnumbered — promote to a task when its trigger fires)
 
