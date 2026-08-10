@@ -154,3 +154,29 @@ Feature: Speech provider seam — SpeechProvider interface contract
     When I GET "/interviews/:id/questions/:index/speech" as that owner
     And I GET "/interviews/:id/questions/:index/speech" as that owner
     Then the interview has exactly 1 elevenlabs llm_calls row for model "tts" with unit kind "character"
+
+  # S08: voice-first default and the candidate's chosen duration. The ceiling itself is @AC-6
+  # above; these say who gets to choose it and what the server does with a choice it will not
+  # honour.
+
+  @speech @AC-11
+  Scenario: a create that names no mode is a voice interview
+    Given I am signed in as a candidate
+    When I start an interview with a "Backend Engineer" listing and no mode
+    Then the response status is 201
+    And the interview mode is "voice"
+
+  @speech @AC-11
+  Scenario: a duration under the platform ceiling is stored on the interview
+    Given I am signed in as a candidate
+    When I start a voice interview with a duration of 600 seconds
+    Then the response status is 201
+    And the interview max duration is 600 seconds
+
+  @speech @AC-11
+  Scenario: a duration over the platform ceiling is refused, not clamped
+    Given I am signed in as a candidate
+    When I start a voice interview with a duration of 99999 seconds
+    Then the response status is 422
+    And the response error code is "VALIDATION_ERROR"
+    And no interview is created

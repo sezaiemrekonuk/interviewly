@@ -433,4 +433,58 @@ describe('setupInterview uploadId ownership (issue #73)', () => {
     expect(res.status).toBe(422);
     expect(res.body).toEqual({ error: { code: 'LISTING_REQUIRED' } });
   });
+
+  // S08 / speech AC-11. The default lives here as well as in the form: a client that omits
+  // `mode` gets the product's default, not a 422 and not text.
+  describe('voice-first default and the chosen duration', () => {
+    it('makes a body with no mode a voice interview', async () => {
+      const res = await setup({ mode: undefined });
+      expect(res.status).toBe(201);
+      expect(created[0]).toMatchObject({ mode: 'voice' });
+    });
+
+    it('still takes an explicit text mode', async () => {
+      const res = await setup({ mode: 'text' });
+      expect(res.status).toBe(201);
+      expect(created[0]).toMatchObject({ mode: 'text' });
+    });
+
+    it('honours a duration below the platform ceiling', async () => {
+      const res = await setup({ durationSeconds: 600 });
+      expect(res.status).toBe(201);
+      expect(created[0]).toMatchObject({ max_duration_seconds: 600 });
+    });
+
+    it('leaves the duration null when none was chosen, so the config ceiling applies', async () => {
+      const res = await setup({});
+      expect(res.status).toBe(201);
+      expect(created[0]).toMatchObject({ max_duration_seconds: null });
+    });
+
+    // The non-negotiable: refused, never clamped. A clamped value is a lie about what the
+    // candidate asked for, and a trusted one is an uncapped spend.
+    it('refuses a duration above the platform ceiling and writes no row', async () => {
+      const res = await setup({ durationSeconds: config.VOICE_MAX_INTERVIEW_SECONDS + 1 });
+      expect(res.status).toBe(422);
+      expect(res.body).toEqual({ error: { code: 'VALIDATION_ERROR' } });
+      expect(created).toHaveLength(0);
+    });
+
+    it('accepts exactly the ceiling', async () => {
+      const res = await setup({ durationSeconds: config.VOICE_MAX_INTERVIEW_SECONDS });
+      expect(res.status).toBe(201);
+      expect(created[0]).toMatchObject({
+        max_duration_seconds: config.VOICE_MAX_INTERVIEW_SECONDS,
+      });
+    });
+
+    it('answers 422 rather than 500 for a malformed duration', async () => {
+      for (const durationSeconds of ['ten minutes', 0, -60, 90.5]) {
+        created.length = 0;
+        const res = await setup({ durationSeconds });
+        expect({ durationSeconds, status: res.status }).toEqual({ durationSeconds, status: 422 });
+      }
+      expect(created).toHaveLength(0);
+    });
+  });
 });

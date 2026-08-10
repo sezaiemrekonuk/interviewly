@@ -86,7 +86,7 @@ export const guardVoiceAnswer: RequestHandler = async (req, res, next) => {
 
   // ADR-S06: the ceiling is checked before the provider is called. A recording that arrives
   // past it ends the interview; it is not billed and not transcribed.
-  if (isPastSpeechCeiling(interview.started_at)) {
+  if (isPastSpeechCeiling(interview.started_at, interview.max_duration_seconds)) {
     // ADR-I32: a losing transition must not replace the caller's error — the session is
     // expired whether or not this request is the one that moved the interview.
     try {

@@ -19,10 +19,26 @@ const VOICE_CAPABLE_STATES = new Set(['hr_round', 'tech_round']);
 
 export { VOICE_CAPABLE_STATES };
 
-export function isPastSpeechCeiling(startedAt: Date | null): boolean {
+/**
+ * `maxDurationSeconds` is the candidate's choice (S08, `interviews.max_duration_seconds`). It
+ * enters the same `Math.min` as the two configured ceilings, so it can only shorten the
+ * interview — a choice above `VOICE_MAX_INTERVIEW_SECONDS` never reaches here (setup.ts refuses
+ * it), and one that somehow did would still be capped by this.
+ */
+export function isPastSpeechCeiling(
+  startedAt: Date | null,
+  maxDurationSeconds?: number | null,
+): boolean {
   if (!startedAt) return false;
   const elapsed = (clock.now().getTime() - startedAt.getTime()) / 1000;
-  return elapsed >= Math.min(config.VOICE_MAX_ROUND_SECONDS, config.VOICE_MAX_INTERVIEW_SECONDS);
+  return (
+    elapsed >=
+    Math.min(
+      config.VOICE_MAX_ROUND_SECONDS,
+      config.VOICE_MAX_INTERVIEW_SECONDS,
+      maxDurationSeconds ?? Number.POSITIVE_INFINITY,
+    )
+  );
 }
 
 /** The cached audio, or null on a miss — `storage.get` signals a miss by throwing (I12). */
@@ -58,7 +74,7 @@ export const serveQuestionSpeech: RequestHandler = async (req, res) => {
   if (!Number.isInteger(index) || index <= 0) throw new ApiError('VALIDATION_ERROR');
   if (index !== interview.current_index) throw new ApiError('QUESTION_NOT_CURRENT');
 
-  if (isPastSpeechCeiling(interview.started_at)) {
+  if (isPastSpeechCeiling(interview.started_at, interview.max_duration_seconds)) {
     // ADR-I32: a losing transition must not replace the caller's error — the session is
     // expired whether or not this request is the one that moved the interview.
     try {

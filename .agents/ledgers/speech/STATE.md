@@ -1,14 +1,14 @@
 # Speech — State
 
 Last updated: 2026-08-09
-Last session ended: **S07 complete.** Pre-join is no longer a dead end: `denied` *and*
-`unavailable` call `voiceDowngrade` once (ref latch), enable the CTA and show
-`errors.VOICE_UNAVAILABLE`. The state query is deliberately not invalidated — refreshing `mode`
-would trip the existing redirect and swallow the line. Step 3 was already shipped by W08
-(`modules.tsx:44` `resumeHref`); it had no test, so this session added one and proved it can
-fail. Pre-join copy now states the answer audio is sent to be transcribed and not kept (ADR-S07),
-both locales. AC-10 became a real acceptance scenario in `speech_fallback.feature` (zero
-`elevenlabs` `llm_calls`). Lint + typecheck, unit 660, acceptance 103/103. Next: **S08**.
+Last session ended: **S08 complete.** Voice is the default on both sides now — the form defaulted to it since
+f01217e, and `setup.ts`'s `mode` enum carries `.default('voice')`, so a body that omits it is no
+longer a 422. New nullable column `interviews.max_duration_seconds` (migration
+`20260809210000_…`) holds the candidate's choice; null keeps `VOICE_MAX_INTERVIEW_SECONDS` in
+charge. Above the ceiling is `VALIDATION_ERROR`, never a clamp, checked per request because the
+bound is config. `isPastSpeechCeiling` takes the choice as a second argument and mins it with
+both config ceilings, so it shortens and never extends. Form offers full/10/15/20 min, voice
+mode only. Lint + typecheck, unit 753, acceptance 107/107. Next: **S09**.
 
 ## Execution protocol (follow exactly)
 
@@ -24,8 +24,9 @@ EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**S08** (voice-first default and user-selectable duration — sonnet tier). Independent of S06/S07:
-`interviews/new/page.tsx:35` still defaults to `'text'`, and the duration control does not exist.
+**S09** (`startedAt`/`expiresAt` in `/state` and the room timer — sonnet tier). Note S08's
+hand-off: `expiresAt` must respect `interviews.max_duration_seconds` where it is set, or the
+timer and the server's 403 disagree.
 
 ## Environment
 
@@ -45,16 +46,20 @@ acceptance ring runs entirely against `FakeSpeechProvider` with no network.
 Owner-supplied values. **None blocks S01–S06 against the fake**, but every one of them blocks
 the first real voice interview:
 
-- **`ELEVENLABS_API_KEY` must be rotated.** `.env:39` holds a live key and `.env` is tracked in
-  git. Under this architecture the key is billed per question and per answer, so a leaked key is
-  a metered cost, not only an access problem. **Decides:** the owner, in the ElevenLabs console.
-  **Blocks:** any real provider call. Not the acceptance ring.
+- ~~**`ELEVENLABS_API_KEY` must be rotated.**~~ **Closed 2026-08-09, was never true.** `.env` is
+  gitignored (`.gitignore:4`), `git ls-files .env` is empty, and no commit in `--all` history
+  ever added it — only `.env.example` (f721f60), whose key fields are blank. The live key sits
+  on the owner's disk and nowhere else. Key probed live the same day: `GET /v1/user` 200.
 - **Real `personas.voice_id` values.** `prisma/seed.ts:197,206` seeds
-  `'placeholder-voice-hr'` / `'placeholder-voice-tech'`. **Decides:** the owner, by picking two
-  voices in the ElevenLabs library. **Blocks:** S02 against the real driver only.
-- **TTS and STT model ids** (`ELEVENLABS_TTS_MODEL`, `ELEVENLABS_STT_MODEL`). **Decides:** the
-  owner. **Recommended default:** the current multilingual TTS model and `scribe_v1`; both are
-  config, so a change is an `.env` edit, not a code change.
+  `'placeholder-voice-hr'` / `'placeholder-voice-tech'`. A placeholder is a 400 from
+  `POST /v1/text-to-speech/{voiceId}`, retried 3× (`elevenlabs-speech.ts:52`) and then a
+  `VOICE_UNAVAILABLE` downgrade — voice looks broken, not misconfigured. **Decides:** the owner.
+  **Verified working on the account 2026-08-09:** `EXAVITQu4vr4xnSDxMaL` (Sarah),
+  `JBFqnCBsd6RMkjVDRZzb` (George) — both 200 with real MP3 bytes. **Blocks:** the real driver
+  only.
+- ~~**TTS and STT model ids**~~ **Closed 2026-08-09.** `.env` carries
+  `eleven_multilingual_v2` / `scribe_v1`; both probed live (TTS 200 + MP3, STT 200 with a
+  transcript). Config, so a change stays an `.env` edit.
 
 Spec Open questions 1–3 (Scribe language handling, the VAD threshold, TTS cache eviction) carry
 recommended defaults and block nothing — adopt them unless the owner says otherwise.
@@ -73,7 +78,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | S05 | Remove the convai, webhook and reconciliation surface; drop `voice_sessions` | | done | S02, S03, S04 |
 | S06 | Room turn loop: speak, VAD-record, upload, advance | | done | S02, S03, W10 |
 | S07 | Pre-join on resume, mic-denied downgrade, transient-audio copy | | done | S06, V03, W09 |
-| S08 | Voice-first default and user-selectable duration | | todo | S01, W05 |
+| S08 | Voice-first default and user-selectable duration | | done | S01, W05 |
 | S09 | `startedAt` and `expiresAt` in `/state`, and the room timer | | todo | S02, I03 |
 | S10 | Speech failure codes surfaced honestly in the room | | todo | S06 |
 

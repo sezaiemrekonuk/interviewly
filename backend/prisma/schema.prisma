@@ -301,6 +301,10 @@ model Interview {
   // 0..target_question_count, enforced by the `interviews_hr_question_count_range` CHECK
   // constraint (issue #176) — the companion #98 could not add until the split had a floor.
   hr_question_count     Int
+  // S08: the candidate's chosen voice length, in seconds. Null is "no choice" and leaves
+  // `VOICE_MAX_INTERVIEW_SECONDS` as the ceiling; a value only ever caps downward
+  // (`isPastSpeechCeiling`). Above the config ceiling is refused at setup, never clamped.
+  max_duration_seconds  Int?
   state                 InterviewState @default(created)
   current_index         Int            @default(0)
   ended_reason          EndedReason?

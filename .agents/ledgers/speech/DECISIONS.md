@@ -198,3 +198,25 @@ is the one place where saying nothing and saying something untrue are the same a
 **Consequences:** `speech AC-14` asserts no object-storage key and no DB column holds audio for
 a completed interview. The pre-join copy changes in both locales (S07). This does not build the
 consent surface #61 tracks — it keeps this ledger from making that issue worse.
+
+---
+
+## ADR-S08 — 2026-08-09 — The chosen duration is a column, and above the ceiling is a refusal
+
+**Context:** the candidate picks how long a voice interview runs (owner's ask, issues #102/#103,
+AC-11). Where the choice lives, and what happens to a request above `VOICE_MAX_INTERVIEW_SECONDS`.
+Options for storage: (A) a nullable `interviews.max_duration_seconds`; (B) a column with the
+config value as its default; (C) client-side only. For an over-ceiling value: clamp, or refuse.
+
+**Decision:** (A) plus refuse. Null means "no choice made" and leaves the config ceiling in
+charge; `isPastSpeechCeiling` mins the choice with both config ceilings, so it shortens only.
+A duration above the ceiling is `VALIDATION_ERROR`, checked per request against `config`.
+
+**Why not (B):** a default freezes today's config value onto every future row, and the ceiling
+stops being config the moment a row remembers it. **Why not (C):** the client is where the spend
+is decided but not where it is paid. **Why not clamp:** a clamped value is a lie about what the
+candidate asked for — they would be told 40 minutes and get 25 with no notice.
+
+**Consequences:** migration `20260809210000_interview_max_duration_seconds` (nullable column +
+`> 0` CHECK; the upper bound is deliberately not a CHECK, being config). S09's `expiresAt` must
+apply the same min or the room timer will contradict the server's 403.

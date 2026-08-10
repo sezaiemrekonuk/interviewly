@@ -28,7 +28,14 @@ const MAX_TARGET_QUESTION_COUNT = MAX_HR_QUESTION_COUNT + MAX_TECH_QUESTION_COUN
 const MIN_TARGET_QUESTION_COUNT = 2;
 
 const schema = z.object({
-  mode: z.enum(['voice', 'text']),
+  // S08: voice is the product's default, so a body that names no mode gets it. Text stays
+  // explicitly selectable — the downgrade is one-directional (§3.8), so a candidate who cannot
+  // speak must be able to say so before the interview starts, not after.
+  mode: z.enum(['voice', 'text']).default('voice'),
+  // The chosen voice length. Absent is the normal case and means "the platform ceiling".
+  // The upper bound is checked in the handler, not here: it is config, and a `.max()` read at
+  // module load would bake in whatever `VOICE_MAX_INTERVIEW_SECONDS` held at import time.
+  durationSeconds: z.coerce.number().int().positive().optional(),
   jobText: z.string().trim().min(1).optional(),
   uploadId: z.string().min(1).optional(),
   targetQuestionCount: z.coerce
@@ -169,7 +176,15 @@ async function titleInterview(
 export const setupInterview: RequestHandler = async (req, res) => {
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) throw new ApiError('VALIDATION_ERROR');
-  const { mode, jobText, uploadId, targetQuestionCount, hrQuestionCount } = parsed.data;
+  const { mode, jobText, uploadId, targetQuestionCount, hrQuestionCount, durationSeconds } =
+    parsed.data;
+
+  // Refused, never clamped (S08): a clamped value is a lie about what the candidate asked for,
+  // and a trusted one is uncapped provider spend. Server-side because the form's option list is
+  // advisory — `isPastSpeechCeiling` measures against whatever lands in the column.
+  if (durationSeconds !== undefined && durationSeconds > config.VOICE_MAX_INTERVIEW_SECONDS) {
+    throw new ApiError('VALIDATION_ERROR');
+  }
 
   if (!jobText && !uploadId) throw new ApiError('LISTING_REQUIRED');
   // `POST /uploads` answers a listing with its extracted text (I11's handoff), so a caller
@@ -214,6 +229,7 @@ export const setupInterview: RequestHandler = async (req, res) => {
         language: req.user!.locale,
         target_question_count: targetQuestionCount,
         hr_question_count: hrCount,
+        max_duration_seconds: durationSeconds ?? null,
         // The declared knob, not the column default that shadowed it (issue #117). The
         // default stays as the floor for rows created outside the API — seeds, fixtures.
         budget_usd: config.BUDGET_USD_TEXT,

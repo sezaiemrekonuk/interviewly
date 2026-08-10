@@ -109,6 +109,32 @@ describe('isPastSpeechCeiling', () => {
     const startedAt = new Date(now.getTime() - 720 * 1000);
     expect(isPastSpeechCeiling(startedAt)).toBe(true);
   });
+
+  // S08: the candidate's choice caps the interview downward only. Anything else would let a
+  // request body buy provider time the platform never offered.
+  describe('the chosen duration (S08)', () => {
+    const now = new Date('2026-08-06T10:00:00.000Z');
+    const elapsed = (seconds: number) => new Date(now.getTime() - seconds * 1000);
+
+    beforeEach(() => {
+      m.now.mockReturnValue(now);
+    });
+
+    it('ends the interview at a chosen duration shorter than the config ceiling', () => {
+      expect(isPastSpeechCeiling(elapsed(299), 300)).toBe(false);
+      expect(isPastSpeechCeiling(elapsed(300), 300)).toBe(true);
+    });
+
+    it('never extends past the config ceiling, however long the choice was', () => {
+      expect(isPastSpeechCeiling(elapsed(719), 86_400)).toBe(false);
+      expect(isPastSpeechCeiling(elapsed(720), 86_400)).toBe(true);
+    });
+
+    it('falls back to the config ceiling when no duration was chosen', () => {
+      expect(isPastSpeechCeiling(elapsed(720), null)).toBe(true);
+      expect(isPastSpeechCeiling(elapsed(719), null)).toBe(false);
+    });
+  });
 });
 
 describe('serveQuestionSpeech', () => {

@@ -21,7 +21,7 @@ vi.mock('next/navigation', async () => ({
   useSearchParams: () => new URLSearchParams(nav.search),
 }));
 
-import InterviewSetupPage from './page';
+import InterviewSetupPage, { VOICE_MAX_INTERVIEW_SECONDS } from './page';
 
 const USER = { id: 'u1', email: 'someone@example.com', onboardingCompletedAt: 'now', interviewCount: 0 };
 
@@ -327,6 +327,56 @@ describe('interview setup page (W05)', () => {
     await screen.findByRole('alert');
     expect(calls.filter((c) => c.url === '/api/interviews')).toHaveLength(0);
     expect(nav.push).not.toHaveBeenCalled();
+  });
+
+  // S08 / speech AC-11. The ceiling is the server's; this control only asks for less of it.
+  describe('the voice duration control', () => {
+    async function createWith(pick?: (user: ReturnType<typeof userEvent.setup>) => Promise<void>) {
+      const calls = stubFetch();
+      const user = userEvent.setup();
+      await renderSetup();
+
+      await user.type(screen.getByLabelText(messages.setup.listingPaste), 'Senior developer wanted');
+      await pick?.(user);
+      await user.click(screen.getByRole('button', { name: messages.setup.start }));
+      await waitFor(() => expect(nav.push).toHaveBeenCalled());
+
+      return calls.find((c) => c.url === '/api/interviews')?.body as Record<string, unknown>;
+    }
+
+    it('sends no duration by default, so the server ceiling is what applies', async () => {
+      const body = await createWith();
+      expect(body).not.toHaveProperty('durationSeconds');
+    });
+
+    it('sends the picked duration in seconds', async () => {
+      const body = await createWith(async (user) => {
+        await user.click(screen.getByRole('radio', { name: new RegExp(messages.setup.duration15) }));
+      });
+      expect(body).toMatchObject({ durationSeconds: 900 });
+    });
+
+    it('offers nothing above the platform ceiling — every option is a request for less', async () => {
+      stubFetch();
+      await renderSetup();
+
+      const seconds = screen
+        .getAllByRole('radio', { name: /min$/ })
+        .map((radio) => Number((radio as HTMLInputElement).value));
+
+      expect(seconds.length).toBeGreaterThan(0);
+      expect(Math.max(...seconds)).toBeLessThanOrEqual(VOICE_MAX_INTERVIEW_SECONDS);
+    });
+
+    it('is not offered for a text interview, and sends no duration for one', async () => {
+      const body = await createWith(async (user) => {
+        await user.click(screen.getByRole('radio', { name: new RegExp(messages.setup.duration15) }));
+        await user.click(screen.getByRole('radio', { name: new RegExp(messages.setup.modeText) }));
+      });
+
+      expect(screen.queryByText(messages.setup.duration)).not.toBeInTheDocument();
+      expect(body).not.toHaveProperty('durationSeconds');
+    });
   });
 
   it('prefills the listing from ?prefill=, with the escapes turned back into line breaks', async () => {
