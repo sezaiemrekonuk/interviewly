@@ -4,6 +4,7 @@ import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Suspense, useState, type ReactNode } from 'react';
 
+import { CvNotice } from '../../../../components/setup/cv-notice';
 import { ListingUpload } from '../../../../components/setup/listing-upload';
 import {
   RailBlock,
@@ -261,6 +262,11 @@ function InterviewSetup() {
             JS check below, which gives the specific too-many-HR / too-many-technical message,
             would never run. */}
         <form onSubmit={handleSubmit} className={styles.form} noValidate>
+          {/* What the interview about to be created already knows about the candidate, before
+              they are asked for anything. Outside the listing block but inside the form's
+              column, so it shares the one measure. */}
+          <CvNotice disabled={busy} />
+
           {/* The listing is the subject of this screen, so it leads the form. */}
           <ListingUpload
             value={jobText}

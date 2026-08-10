@@ -414,6 +414,11 @@
   "setup": {
     "title": "Set up your interview",
     "subtitle": "The questions come from the listing you add.",
+    "cvTitle": "No CV attached",
+    "cvBody": "Your questions are written from your CV, and your answers are scored against it. Adding one now makes this interview yours — it runs either way.",
+    "cvAttached": "This interview will be prepared from {name}, added {date}.",
+    "cvChange": "Change",
+    "cvKeep": "Keep it",
     "listingPaste": "Job listing",
     "listingHint": "Paste the listing you are practising for — every question is written from it.",
     "listingUpload": "Or upload the listing as a PDF",

@@ -38,6 +38,8 @@ function stubFetch(
     createBody?: unknown;
     profileStatus?: number;
     uploadBody?: unknown;
+    /** The account's CV, which the block above the listing reads. Null is "not attached". */
+    cv?: { id: string; filename: string; mime: string; sizeBytes: number; uploadedAt: string } | null;
   } = {},
 ) {
   const calls: Call[] = [];
@@ -54,6 +56,12 @@ function stubFetch(
       new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
     if (url === '/api/me') return json(200, { user: USER });
+    // Read by the CV block above the listing. `cv-notice.test.tsx` owns what it does with the
+    // answer; here it only has to be an answer, so the block is not silently absent.
+    if (url === '/api/me/profile') {
+      const cv = options.cv ?? null;
+      return json(200, { profile: {}, onboardingCompletedAt: 'now', cvUploadId: cv?.id ?? null, cv });
+    }
     // I11 answers a listing with the text it parsed out of the PDF.
     if (url === '/api/uploads') {
       return json(201, options.uploadBody ?? { uploadId: 'up1', text: 'Backend engineer, Go' });
@@ -200,6 +208,20 @@ describe('interview setup page (W05)', () => {
       expect(nav.replace).toHaveBeenCalledWith('/sign-in?returnPath=%2Finterviews%2Fnew'),
     );
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  // The CV is an offer, not a gate: the block says what a CV would do and Start works anyway.
+  it('starts an interview with no CV attached', async () => {
+    const calls = stubFetch({ cv: null });
+    const user = userEvent.setup();
+    await renderSetup();
+
+    expect(await screen.findByTestId('cv-notice')).toBeInTheDocument();
+    await user.type(screen.getByLabelText(messages.setup.listingPaste), 'Senior developer wanted');
+    await user.click(screen.getByRole('button', { name: messages.setup.start }));
+
+    await waitFor(() => expect(nav.push).toHaveBeenCalledWith('/interviews/i1/pre-join'));
+    expect(calls.filter((c) => c.url === '/api/interviews')).toHaveLength(1);
   });
 
   it('keeps the typed listing after a refused create', async () => {
