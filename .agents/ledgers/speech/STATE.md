@@ -50,13 +50,14 @@ the first real voice interview:
   gitignored (`.gitignore:4`), `git ls-files .env` is empty, and no commit in `--all` history
   ever added it — only `.env.example` (f721f60), whose key fields are blank. The live key sits
   on the owner's disk and nowhere else. Key probed live the same day: `GET /v1/user` 200.
-- **Real `personas.voice_id` values.** `prisma/seed.ts:197,206` seeds
-  `'placeholder-voice-hr'` / `'placeholder-voice-tech'`. A placeholder is a 400 from
-  `POST /v1/text-to-speech/{voiceId}`, retried 3× (`elevenlabs-speech.ts:52`) and then a
-  `VOICE_UNAVAILABLE` downgrade — voice looks broken, not misconfigured. **Decides:** the owner.
-  **Verified working on the account 2026-08-09:** `EXAVITQu4vr4xnSDxMaL` (Sarah),
-  `JBFqnCBsd6RMkjVDRZzb` (George) — both 200 with real MP3 bytes. **Blocks:** the real driver
-  only.
+- ~~**Real `personas.voice_id` values.**~~ **Closed 2026-08-10.** The seed carries
+  `EXAVITQu4vr4xnSDxMaL` (Sarah) and `JBFqnCBsd6RMkjVDRZzb` (George), both probed 200 with real
+  MP3 bytes, overridable via `SEED_VOICE_ID_HR` / `SEED_VOICE_ID_TECH`. Premade library voices,
+  identical for every account and not credentials, so they belong in the seed and not in `.env`.
+  A placeholder was a 400 from `POST /v1/text-to-speech/{voiceId}`, retried 3×
+  (`elevenlabs-speech.ts:52`) and then a `VOICE_UNAVAILABLE` downgrade — on every fresh clone,
+  voice looked broken rather than unconfigured. **Anyone whose database predates this must
+  reseed**; the column is written by the seed, so a pull alone does not fix it.
 - ~~**TTS and STT model ids**~~ **Closed 2026-08-09.** `.env` carries
   `eleven_multilingual_v2` / `scribe_v1`; both probed live (TTS 200 + MP3, STT 200 with a
   transcript). Config, so a change stays an `.env` edit.
