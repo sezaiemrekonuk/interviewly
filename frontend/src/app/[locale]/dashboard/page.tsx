@@ -18,10 +18,10 @@
 
 import { useNow, useTranslations } from 'next-intl';
 
+import { MonthHeatmap } from '../../../components/dashboard/month-heatmap';
 import {
   CarryOn,
   Focus,
-  Rhythm,
   RoundSplit,
   Runway,
   SessionCard,
@@ -115,7 +115,7 @@ export default function DashboardPage() {
             <div className={styles.grid}>
               <StandingCard items={items} />
               <RoundSplit items={items} />
-              <Rhythm items={items} now={now.getTime()} />
+              <MonthHeatmap now={now.getTime()} />
             </div>
 
             <Focus

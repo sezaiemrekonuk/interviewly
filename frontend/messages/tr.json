@@ -648,10 +648,14 @@
       "outOf": "/ {max}",
       "clear": "{ceiling} ve altına düşen cevabın yok. Zeminin sağlam — puanı kırılan bir cevap olduğunda burada görürsün."
     },
-    "rhythm": {
+    "practice": {
       "title": "Ne sıklıkta çalışıyorsun",
-      "none": "Son {weeks} haftada hiçbir şey yok.",
-      "summary": "Son {weeks} haftanın {active} haftasında toplam {total} mülakat."
+      "previousMonth": "Önceki ay",
+      "nextMonth": "Sonraki ay",
+      "emptyMonth": "{month} — hiç mülakat yok.",
+      "summary": "{month} — {days} günde toplam {total} mülakat.",
+      "legendLess": "Az",
+      "legendMore": "Çok"
     },
     "recent": {
       "title": "Son oturumlar",

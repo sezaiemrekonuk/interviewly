@@ -14,6 +14,7 @@ import { requireAuth } from '../modules/auth/middleware';
 import authRouter, { meRouter } from '../modules/auth/router';
 import { mountTestSeam } from '../modules/auth/test-seam';
 import { requirePublicOrigin } from '../modules/interview/csrf';
+import { monthActivity } from '../modules/interview/activity';
 import { listMyInterviews } from '../modules/interview/my-interviews';
 import { listMyQuestions } from '../modules/interview/my-questions';
 import interviewRouter from '../modules/interview/router';
@@ -70,6 +71,8 @@ app.get('/readyz', async (_req, res) => {
 app.use('/auth', authRouter);
 app.use('/', meRouter);
 app.get('/me/interviews', requireAuth, listMyInterviews);
+// Ahead of nothing — `/me/interviews` is an exact path, so these two cannot shadow each other.
+app.get('/me/interviews/activity', requireAuth, monthActivity);
 app.get('/me/questions', requireAuth, listMyQuestions);
 // The one state-changing route with no router of its own, so its guard is per-route by
 // necessity — first in the chain, so a cross-site request never reaches multer's parser.
