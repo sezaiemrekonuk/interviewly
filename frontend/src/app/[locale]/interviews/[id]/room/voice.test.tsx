@@ -50,6 +50,10 @@ function voiceState(over: Record<string, unknown> = {}) {
     targetQuestionCount: 8,
     endedReason: null,
     language: 'en',
+    // S09: the window the room counts down. Offset by half a second so a tick landing mid-render
+    // cannot move the floored figure the assertions read.
+    startedAt: new Date(Date.now() - 65_500).toISOString(),
+    expiresAt: new Date(Date.now() + 300_000).toISOString(),
     persona: { id: 'p-hr', role: 'hr', name: 'Ada', avatarState: 'idle' },
     personas: PERSONAS,
     currentQuestion: {
@@ -236,6 +240,23 @@ describe('interview room, voice mode (W10)', () => {
     await waitFor(() =>
       expect(calls.filter((c) => c.url === '/api/interviews/i1/answers/audio')).toHaveLength(1),
     );
+  });
+
+  // S09 — the room shows the ceiling it is actually held to, and reads elapsed off the same
+  // server field instead of counting from arrival.
+  it('renders the countdown and an elapsed clock taken from the server window', async () => {
+    stubFetch();
+    await renderRoom();
+
+    expect(screen.getByTestId('time-remaining')).toBeInTheDocument();
+    expect(screen.getByTestId('room-elapsed')).toHaveTextContent('01:05');
+  });
+
+  it('renders no countdown for a voice interview the server gave no deadline', async () => {
+    stubFetch({ states: [voiceState({ expiresAt: null })] });
+    await renderRoom();
+
+    expect(screen.queryByTestId('time-remaining')).not.toBeInTheDocument();
   });
 
   it('lights the tile the round names, not the one the payload happens to carry', async () => {

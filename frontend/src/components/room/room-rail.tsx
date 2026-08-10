@@ -1,10 +1,10 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { useEffect, useState } from 'react';
 
 import { RailBlock, RailFoot, RailMark, RailValue } from '../shell/split-shell';
 import type { InterviewStateResponse } from '../../lib/query';
+import { useNowMs } from '../../lib/use-clock';
 import type { VoiceConnectionStatus } from '../../lib/use-voice-session';
 
 import styles from './room.module.css';
@@ -15,17 +15,15 @@ const clock = (seconds: number) =>
   `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
 
 /**
- * ponytail: counts from arrival in the room. `GET /interviews/:id/state` carries no session
- * start, so a reload restarts this clock — which is exactly what the Spec mark on the label
- * admits. Read a server `startedAt` here the moment the endpoint carries one.
+ * Elapsed since the server's `startedAt` (S09), subtracted from the shared clock rather than
+ * accumulated: the clock this replaced counted from arrival, so a reload restarted it and it
+ * disagreed with the ceiling the same room counts down to. Zero until the interview has a start.
  */
-function useElapsed(): number {
-  const [seconds, setSeconds] = useState(0);
-  useEffect(() => {
-    const timer = setInterval(() => setSeconds((value) => value + 1), 1000);
-    return () => clearInterval(timer);
-  }, []);
-  return seconds;
+function useElapsed(startedAt: string | null): number {
+  const nowMs = useNowMs();
+  const from = startedAt ? Date.parse(startedAt) : Number.NaN;
+  if (!nowMs || Number.isNaN(from)) return 0;
+  return Math.max(0, Math.floor((nowMs - from) / 1000));
 }
 
 /**
@@ -44,7 +42,7 @@ export function RoomRail({
 }) {
   const t = useTranslations('room');
   const tSetup = useTranslations('setup');
-  const elapsed = useElapsed();
+  const elapsed = useElapsed(room.startedAt);
 
   const total = Math.max(room.targetQuestionCount, 0);
   const index = Math.min(room.currentIndex, total);
@@ -78,11 +76,10 @@ export function RoomRail({
         </div>
       </RailBlock>
 
-      {/* No `Spec` badge: that marker means "specified, not yet built" to an operator reading
-          the admin console, and it means nothing at all to a candidate mid-interview. The clock
-          counts from arrival in the room, which the label now says rather than a badge. */}
       <RailBlock label={t('elapsedLabel')} note={t('elapsedNote')}>
-        <span className={`tabular ${styles.timer}`}>{clock(elapsed)}</span>
+        <span className={`tabular ${styles.timer}`} data-testid="room-elapsed">
+          {clock(elapsed)}
+        </span>
       </RailBlock>
 
       {/* The way out, on the rail, in both modes. It used to live inside `VoiceControls`,

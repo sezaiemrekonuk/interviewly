@@ -302,6 +302,7 @@ useEffect(() => {
                 {room.state !== 'paused' && !stalled ? (
                   <VoiceControls
                     session={voice}
+                    expiresAt={room.expiresAt}
                     captionsOn={captionsOn}
                     onToggleCaptions={() => setCaptionsOn((on) => !on)}
                     transcriptOpen={showTranscript}

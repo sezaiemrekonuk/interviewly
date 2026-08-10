@@ -1,9 +1,7 @@
 import { type RequestHandler } from 'express';
 
 import { ApiError } from '../../src/lib/api-error';
-import { clock } from '../../src/lib/clock';
 import { activeInterview } from '../../src/lib/db';
-import { config } from '../../src/lib/env';
 import { logger } from '../../src/lib/logger';
 import { storage } from '../../src/lib/storage';
 import { BudgetExceeded, withBudget } from '../interview/budget';
@@ -12,34 +10,15 @@ import { currentQuestionRow } from '../interview/state';
 import { prisma } from '../../src/lib/db';
 import { downgradeToText } from '../voice/downgrade';
 
+import { isPastSpeechCeiling } from './ceiling';
 import { meterTts } from './metering';
 import { speechProvider } from './SpeechProvider';
 
 const VOICE_CAPABLE_STATES = new Set(['hr_round', 'tech_round']);
 
-export { VOICE_CAPABLE_STATES };
-
-/**
- * `maxDurationSeconds` is the candidate's choice (S08, `interviews.max_duration_seconds`). It
- * enters the same `Math.min` as the two configured ceilings, so it can only shorten the
- * interview — a choice above `VOICE_MAX_INTERVIEW_SECONDS` never reaches here (setup.ts refuses
- * it), and one that somehow did would still be capped by this.
- */
-export function isPastSpeechCeiling(
-  startedAt: Date | null,
-  maxDurationSeconds?: number | null,
-): boolean {
-  if (!startedAt) return false;
-  const elapsed = (clock.now().getTime() - startedAt.getTime()) / 1000;
-  return (
-    elapsed >=
-    Math.min(
-      config.VOICE_MAX_ROUND_SECONDS,
-      config.VOICE_MAX_INTERVIEW_SECONDS,
-      maxDurationSeconds ?? Number.POSITIVE_INFINITY,
-    )
-  );
-}
+// S09 moved the arithmetic to `ceiling.ts` so `GET /state` can report the same instant this
+// route refuses on. Re-exported: `stt.ts` and the tests took it from here first.
+export { VOICE_CAPABLE_STATES, isPastSpeechCeiling };
 
 /** The cached audio, or null on a miss — `storage.get` signals a miss by throwing (I12). */
 async function readCachedAudio(key: string): Promise<Buffer | null> {

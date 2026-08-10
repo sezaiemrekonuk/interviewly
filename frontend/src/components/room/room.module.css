@@ -432,6 +432,27 @@
   border-color: var(--danger);
 }
 
+/* Reads as part of the bar, not a button: no hit target, nothing to press. The warning is
+   carried by the label's words as well as this tone (ui §4.4). */
+.remaining {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.remaining[data-warn='true'] {
+  color: var(--danger);
+}
+
+.remaining[data-warn='true'] .ckSub {
+  color: var(--danger);
+}
+
 /* A four-bar glyph, not a second meter: the candidate's real level is on their tile. */
 .mini {
   display: flex;

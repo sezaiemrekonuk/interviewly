@@ -3,6 +3,7 @@ import type { RequestHandler } from 'express';
 import { clock } from '../../src/lib/clock';
 import { prisma } from '../../src/lib/db';
 import { logger } from '../../src/lib/logger';
+import { speechExpiresAt } from '../speech/ceiling';
 
 /** The columns the index walk needs — an `Interview` satisfies it; a test fixture need not. */
 export interface IndexedInterview {
@@ -158,6 +159,32 @@ async function resolveTranscript(interviewId: string) {
   return orderTranscript(questions as TranscriptQuestion[]);
 }
 
+export interface TimedInterview {
+  mode: string;
+  started_at: Date | null;
+  max_duration_seconds: number | null;
+}
+
+/**
+ * The window the room counts down (S09, speech AC-12). `expiresAt` is `speechExpiresAt` — the
+ * instant `isPastSpeechCeiling` refuses on — so a rendered countdown and a `VOICE_SESSION_EXPIRED`
+ * cannot name different times.
+ *
+ * Text reports `expiresAt: null` rather than a number: the ceiling is enforced only by the two
+ * speech routes, both of which refuse `mode !== 'voice'`, so any deadline here would be one
+ * nothing applies. A downgraded interview lands in the same branch on its next refetch.
+ */
+export function interviewWindow(interview: TimedInterview) {
+  const expiresAt =
+    interview.mode === 'voice'
+      ? speechExpiresAt(interview.started_at, interview.max_duration_seconds)
+      : null;
+  return {
+    startedAt: interview.started_at?.toISOString() ?? null,
+    expiresAt: expiresAt?.toISOString() ?? null,
+  };
+}
+
 // req.interview is attached by resolveInterview (ownership.ts); a non-owned or deleted id
 // never reaches this handler (404 INTERVIEW_NOT_FOUND).
 export const getInterviewState: RequestHandler = async (req, res) => {
@@ -180,6 +207,7 @@ export const getInterviewState: RequestHandler = async (req, res) => {
     targetQuestionCount: interview.target_question_count,
     endedReason: interview.ended_reason,
     language: interview.language,
+    ...interviewWindow(interview),
     persona,
     personas,
     currentQuestion,

@@ -50,6 +50,9 @@ function roomState(over: Record<string, unknown> = {}) {
     targetQuestionCount: 8,
     endedReason: null,
     language: 'en',
+    // S09: text carries the window too, and the server reports no ceiling for it.
+    startedAt: new Date(Date.now() - 65_500).toISOString(),
+    expiresAt: null,
     persona: { id: 'p-hr', role: 'hr', name: 'Ada', avatarState: 'idle' },
     personas: PERSONAS,
     currentQuestion: {
@@ -135,6 +138,16 @@ describe('interview room, text mode (W06)', () => {
     // The inactive tile is a roster row, not a second speaker: it never animates. The room has
     // no cameras, so the resolved avatar state now drives that persona's waveform, not an image.
     expect(within(tech).getByTestId('wave')).toHaveAttribute('data-avatar-state', 'idle');
+  });
+
+  // S09 — the ceiling bounds voice only, so a written interview gets no countdown and no
+  // invented pressure. Elapsed is still the server's, so a reload does not restart it.
+  it('shows no countdown, and an elapsed clock read from the server start', async () => {
+    stubFetch();
+    await renderRoom();
+
+    expect(screen.queryByTestId('time-remaining')).not.toBeInTheDocument();
+    expect(screen.getByTestId('room-elapsed')).toHaveTextContent('01:05');
   });
 
   it('re-renders from the refetched state after an SSE event, never from the event body', async () => {
