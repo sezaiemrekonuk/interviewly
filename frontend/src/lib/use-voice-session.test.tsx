@@ -92,6 +92,25 @@ describe('useVoiceSession — the turn loop (S06)', () => {
     return hook;
   }
 
+  // The meter re-renders this hook on every animation frame. If a render during the in-flight
+  // TTS fetch tears the speak effect down, its `cancelled` flag drops the audio that arrives —
+  // and the `spokenRef` guard stops the re-run from fetching it again. The turn then sits in
+  // `speaking` forever: nothing plays, the recorder never opens, and talking does nothing.
+  it('still plays the question when the meter re-renders during the fetch', async () => {
+    stubApi();
+    const hook = mount();
+
+    // Frames the browser would deliver while the audio is downloading.
+    await act(async () => audio.level(0.002, 3));
+    await act(async () => audio.level(0.003, 3));
+
+    await waitFor(() => expect(audio.players).toHaveLength(1));
+    expect(audio.players[0].playCalls).toBe(1);
+    await act(async () => audio.players[0].end());
+    await waitFor(() => expect(audio.recorders).toHaveLength(1));
+    expect(hook.result.current.recording).toBe(true);
+  });
+
   it('plays the current question before it records anything', async () => {
     const calls = stubApi();
     const hook = mount();
@@ -132,6 +151,30 @@ describe('useVoiceSession — the turn loop (S06)', () => {
     // Bare media type: the backend's allow-list has no `;codecs=` member.
     expect((form.get('audio') as File).type).toBe('audio/webm');
     await waitFor(() => expect(hook.result.current.beat).toBe(null));
+  });
+
+  // A real microphone never reports the same RMS twice: room tone jitters in the fourth
+  // decimal every animation frame. The window has to survive that, or it only ever closes on
+  // a mic that is bit-identically silent — which no real one is.
+  it('stops after the silence window even though the noise floor keeps jittering', async () => {
+    const calls = stubApi();
+    await recording(mount());
+
+    await act(async () => audio.level(VAD_THRESHOLD + 0.2));
+
+    // Room tone, one value per animation frame, for five times the silence window. Never the
+    // same value twice — a real noise floor is not bit-identical from frame to frame.
+    const floor = [0.0011, 0.0009, 0.0013, 0.0008, 0.0012, 0.001, 0.0014, 0.0007];
+    for (let i = 0; i < VAD.silenceMs * 5; i += 4) {
+      await act(async () => {
+        audio.level(floor[(i / 4) % floor.length]);
+        await new Promise((resolve) => setTimeout(resolve, 4));
+      });
+      if (audio.recorders[0].stops > 0) break;
+    }
+
+    expect(audio.recorders[0].stops).toBe(1);
+    await waitFor(() => expect(hits(calls, '/api/interviews/i1/answers/audio')).toBe(1));
   });
 
   it('does not stop on silence the candidate never broke — an unspoken turn keeps listening', async () => {
