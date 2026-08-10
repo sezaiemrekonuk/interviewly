@@ -7,6 +7,9 @@ import { keyedLimiter } from '../auth/rate-limit';
 // Keyed by `user_id`, not IP: rotating IPs must not buy a candidate more interviews.
 const byUser = (req: Request): string => req.user!.id;
 
+// Admins run demos/support checks all day and are not the candidates the caps protect.
+const isAdmin = (req: Request): boolean => req.user!.role === 'admin';
+
 // Rolling 24 h, not a calendar day — the window is measured back from `clock.now()`.
 export const DAILY_INTERVIEW_PREFIX = 'dailyinterview';
 export const DAILY_INTERVIEW_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -25,6 +28,7 @@ export const dailyInterviewCap = keyedLimiter({
   code: 'DAILY_INTERVIEW_LIMIT',
   event: 'DAILY_LIMIT_HIT',
   record: false,
+  bypass: isAdmin,
 });
 
 // Left recording every attempt, deliberately: this one is abuse protection, where the
@@ -34,4 +38,5 @@ export const interviewStartLimiter = keyedLimiter({
   limit: 10,
   windowMs: 60 * 60 * 1000,
   keyOf: byUser,
+  bypass: isAdmin,
 });
