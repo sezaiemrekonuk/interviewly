@@ -318,7 +318,11 @@ useEffect(() => {
               {question}
               {notice}
               {room.currentQuestion && room.state !== 'paused' ? (
+                // Keyed like the panel above: a retained draft belongs to the question it was
+                // typed for. It used to survive into the next one — across a pause and resume
+                // most of all — and be sent as the answer to a question it never read (#90).
                 <AnswerComposer
+                  key={room.currentQuestion.id}
                   onSubmit={handleSubmit}
                   pending={submit.isPending}
                   error={submitError}

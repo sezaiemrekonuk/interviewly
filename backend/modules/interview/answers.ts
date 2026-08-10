@@ -122,14 +122,33 @@ export async function advanceWithAnswer(
   // it. An exhausted budget ends the interview rather than refusing this one call, because
   // every remaining turn — and the report — would cost too.
   if (interview.state === 'hr_round') {
-    await withBudgetOrEnd(interview, () => ensureTechBatch(interview, { traceId }), { traceId });
+    try {
+      await withBudgetOrEnd(interview, () => ensureTechBatch(interview, { traceId }), { traceId });
+    } catch (err) {
+      // The same principle the K4 hook below is already written to: a failure here must not
+      // fail the answer, which was stored two statements ago (#90). A provider outage used to
+      // answer 503 to a request that had succeeded at its primary job, so the candidate was
+      // told their answer was lost while `generation.ts` had already paused the interview —
+      // the room then showed an inline error instead of the paused block, and pressing Send
+      // again 409'd against the pause.
+      //
+      // `BUDGET_EXCEEDED` keeps its 402. It is not a failed side-effect but the end of the
+      // interview (@AC-11 keeps this answer, I08 ends the rest), and the room routes the code
+      // to a silent refetch that lands on the ended state.
+      if (err instanceof ApiError && err.code === 'BUDGET_EXCEEDED') throw err;
+      logger.warn({ err, traceId, interviewId: interview.id }, 'TECH_BATCH_FAILED');
+    }
   }
 
   let state: InterviewState = interview.state;
-  if (nextIndex > interview.target_question_count) {
-    state = await applyTransition(interview, 'evaluating', { traceId });
-  } else if (interview.state === 'hr_round' && nextIndex > interview.hr_question_count) {
-    state = await applyTransition(interview, 'tech_round', { traceId });
+  // Only from a round. A batch that failed has already paused the interview, and `paused` has
+  // no handover edge — attempting one would replace a recorded answer with a 409.
+  if (state === 'hr_round' || state === 'tech_round') {
+    if (nextIndex > interview.target_question_count) {
+      state = await applyTransition(interview, 'evaluating', { traceId });
+    } else if (state === 'hr_round' && nextIndex > interview.hr_question_count) {
+      state = await applyTransition(interview, 'tech_round', { traceId });
+    }
   }
 
   // K4 (ADR-D03): additive adaptive hook. A failure here must not fail the answer — the
