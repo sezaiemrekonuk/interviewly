@@ -36,6 +36,26 @@ type LengthKey = (typeof LENGTHS)[number]['key'] | 'custom';
 const MAX_HR = 5;
 const MAX_TECH = 13;
 
+/**
+ * `VOICE_MAX_INTERVIEW_SECONDS`'s default (S08). Mirrored the same way the two counts above are
+ * — as a bound on what the control may offer, never as the enforcement: the server refuses a
+ * duration above its own configured ceiling, so a deployment that lowered it answers
+ * VALIDATION_ERROR rather than silently running the longer interview.
+ */
+export const VOICE_MAX_INTERVIEW_SECONDS = 1500;
+
+// The offered voice lengths. `null` is the default and sends no duration at all, which is what
+// leaves the server's ceiling in charge — sending "1500" instead would pin the interview to a
+// number this file guessed.
+const DURATIONS = [
+  { key: 'full', seconds: null, label: 'durationFull', meta: 'durationFullMeta' },
+  { key: '600', seconds: 600, label: 'duration10' },
+  { key: '900', seconds: 900, label: 'duration15' },
+  { key: '1200', seconds: 1200, label: 'duration20' },
+] as const;
+
+type DurationKey = (typeof DURATIONS)[number]['key'];
+
 // Mirrors I03's deterministic split so the shape is visible *before* the create. The 201
 // returns the same two counts, but setup navigates away on success, so the response copy is
 // never on screen — this preview is the only place the split can be read (see task Notes).
@@ -112,6 +132,7 @@ function InterviewSetup() {
   const submitProfile = useSubmitProfile();
 
   const [mode, setMode] = useState<'text' | 'voice'>('voice');
+  const [durationKey, setDurationKey] = useState<DurationKey>('full');
   const [lengthKey, setLengthKey] = useState<LengthKey>('medium');
   const [customHr, setCustomHr] = useState('4');
   const [customTech, setCustomTech] = useState('6');
@@ -132,6 +153,11 @@ function InterviewSetup() {
     ? splitRounds(preset.count)
     : { hrCount: hr, techCount: tech };
   const targetQuestionCount = hrCount + techCount;
+
+  // A text interview makes no provider calls the voice ceiling measures, so the choice is not
+  // offered there and is not sent when the candidate switches away from voice.
+  const durationSeconds =
+    mode === 'voice' ? DURATIONS.find((d) => d.key === durationKey)?.seconds ?? null : null;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -167,6 +193,7 @@ function InterviewSetup() {
         // Omitted for a preset: the server owns the 40/60 split and re-deriving it here would
         // give it a second home. Sent for custom, which is the whole point of custom.
         ...(preset ? {} : { hrQuestionCount: hrCount }),
+        ...(durationSeconds === null ? {} : { durationSeconds }),
       });
       // `profiling → hr_round` is the only exit from the born-parked state, and setup is its
       // only caller (issue 53). Skip the pre-question form for now: the room enters on
@@ -239,6 +266,7 @@ function InterviewSetup() {
 
           <Segmented
             legend={t('mode')}
+            note={t('modeNote')}
             name="mode"
             value={mode}
             disabled={busy}
@@ -248,6 +276,22 @@ function InterviewSetup() {
               { value: 'text', label: t('modeText'), meta: t('modeTextMeta') },
             ]}
           />
+
+          {mode === 'voice' ? (
+            <Segmented
+              legend={t('duration')}
+              note={t('durationNote')}
+              name="duration"
+              value={durationKey}
+              disabled={busy}
+              onChange={setDurationKey}
+              options={DURATIONS.map((d) => ({
+                value: d.key as DurationKey,
+                label: t(d.label),
+                ...('meta' in d ? { meta: t(d.meta) } : {}),
+              }))}
+            />
+          ) : null}
 
           <Segmented
             legend={t('roundShape')}

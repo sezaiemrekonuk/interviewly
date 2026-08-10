@@ -45,16 +45,16 @@ picks how long a voice interview runs, up to the platform ceiling.
 - `frontend/messages/{en,tr}.json:168` — `setup.modeVoice`; the new copy goes beside it.
 
 ## Steps
-- [ ] **1. Test red** — a create with no mode yields `mode='voice'`; a duration above the ceiling
+- [x] **1. Test red** — a create with no mode yields `mode='voice'`; a duration above the ceiling
   is refused; a duration below it is honoured. See them red.
-- [ ] **2. Default flip** to `'voice'`, with the mode control labelled and explained in both
+- [x] **2. Default flip** to `'voice'`, with the mode control labelled and explained in both
   locales.
-- [ ] **3. Duration field** — a bounded control at setup, persisted per interview, defaulting to
+- [x] **3. Duration field** — a bounded control at setup, persisted per interview, defaulting to
   the configured ceiling.
-- [ ] **4. Server validation** — refuse above the ceiling with `VALIDATION_ERROR`; never clamp.
-- [ ] **5. Wire it to the ceiling** — S02 and S03's elapsed check reads the interview's chosen
+- [x] **4. Server validation** — refuse above the ceiling with `VALIDATION_ERROR`; never clamp.
+- [x] **5. Wire it to the ceiling** — S02 and S03's elapsed check reads the interview's chosen
   duration where one was set, the config ceiling otherwise.
-- [ ] **6. Unit test** — the default, the refusal, and that a chosen duration shortens the
+- [x] **6. Unit test** — the default, the refusal, and that a chosen duration shortens the
   effective ceiling rather than extending it.
 
 ## Definition of done
@@ -71,4 +71,45 @@ npm run test:acceptance -- --tags "@speech"
 ```
 Expected: all green, including a refused over-ceiling duration.
 
+Ran green: frontend 18, `interview/setup` 38, `@speech` 20 scenarios / 127 steps. The
+acceptance line needs host overrides outside compose — `.env` names `db:5432`:
+`DATABASE_URL=…@localhost:15432/interviewly REDIS_URL=redis://localhost:16399 S3_ENDPOINT=http://localhost:9001`.
+
 ## Notes
+
+**Step 2 was already done.** `new/page.tsx` defaulted to `'voice'` since f01217e (W-side setup
+rework), and the mode control is a labelled `Segmented`, not the unlabelled `<Select>` the task
+anchors describe. All `Context (anchors)` line numbers in this file are stale by ~80 lines.
+What this session added on that axis: `setup.modeNote` in both locales, saying the interview
+falls back to text on its own — the owner's "ses yoksa metine otomatik fallback", which the
+control never stated.
+
+**The default now lives server-side too.** `mode` is `z.enum([...]).default('voice')`
+(`setup.ts:31`), so a body that omits it is a voice interview. Previously omitting it was a 422.
+
+**New column: `interviews.max_duration_seconds Int?`** + migration
+`20260809210000_interview_max_duration_seconds` (nullable column + a `> 0` CHECK — what
+ADR-F02 lets a feature ledger add). **Null means "no choice"**, which is what keeps
+`VOICE_MAX_INTERVIEW_SECONDS` in charge; there is deliberately no column default, because one
+would freeze today's config value onto every future row.
+
+**The upper bound is not in Zod and not a CHECK.** It is config, and both of those read it once
+— at module load / at migration time. `setup.ts:180` compares against `config.VOICE_MAX_INTERVIEW_SECONDS`
+per request and throws `VALIDATION_ERROR`. Never clamps.
+
+**`isPastSpeechCeiling(startedAt, maxDurationSeconds?)`** (`speech/tts.ts:22`) — the choice
+joins the same `Math.min` as the two config ceilings, so it can only shorten. Both callers
+(`tts.ts:75`, `stt.ts:89`) pass `interview.max_duration_seconds`; `activeInterview` returns the
+full row, so no select changed.
+
+**For S09:** `expiresAt` must be computed from `max_duration_seconds` where set, not from
+`config.VOICE_MAX_INTERVIEW_SECONDS` alone, or the room timer will disagree with the 403 the
+server issues. Same `Math.min` as `isPastSpeechCeiling`.
+
+**Frontend:** `DURATIONS` offers full / 10 / 15 / 20 min; "full" sends no `durationSeconds` at
+all. The control renders only for `mode === 'voice'` and a switch to text drops the value.
+`VOICE_MAX_INTERVIEW_SECONDS = 1500` is exported from `new/page.tsx` as a bound on what may be
+offered — mirrored the way `MAX_HR`/`MAX_TECH` already are, never as the enforcement.
+
+**Unrelated local repair:** `env-drift.test.ts` was red on a clean tree — local `.env` was
+missing `WORKER_HEALTH_PORT`, which `.env.example:18` documents. Added to `.env` (untracked).
