@@ -18,7 +18,19 @@ import { redis } from './rate-limit';
 const STATE_COOKIE = 'oauth_state';
 const STATE_TTL_SECONDS = 600;
 const VERIFIER_KEY = (state: string) => `oauth:verifier:${state}`;
-const REDIRECT_URI = `${config.PUBLIC_ORIGIN}/auth/google/callback`;
+/**
+ * Where Google sends the browser back, and therefore a *browser-facing* URL rather than a
+ * mount path: `/api` is the public prefix in F03's route table, and `Caddyfile`'s
+ * `handle_path /api/*` is what strips it before the request reaches this router at `/auth`.
+ * Without the prefix the callback falls through the edge's catch-all to Next.js and answers
+ * 404 — the auth ledger's third packaging defect, whose other half (`handle` → `handle_path`)
+ * landed and whose half of the fix this is.
+ *
+ * Exported because it is a deployment contract, not an implementation detail: this exact
+ * string has to be registered as an Authorized redirect URI in the Google client, and the
+ * `/api` is the easiest part of it to lose again.
+ */
+export const REDIRECT_URI = `${config.PUBLIC_ORIGIN}/api/auth/google/callback`;
 const USERINFO_URL = 'https://openidconnect.googleapis.com/v1/userinfo';
 
 if (!config.GOOGLE_CLIENT_ID && config.NODE_ENV !== 'test') {
