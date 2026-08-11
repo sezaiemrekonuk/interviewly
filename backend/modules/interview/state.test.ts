@@ -14,12 +14,26 @@ const row = {
   asked_at: null as Date | null,
 };
 
+/** The `interview_rounds` rows `resolvePersonas` finds; reassigned per test. */
+let roundRows: Array<{ type: 'hr' | 'tech'; persona: Record<string, unknown> }> = [];
+
 vi.mock('../../src/lib/db', () => ({
   prisma: {
-    interviewRound: { findFirst: vi.fn(async () => ({ id: 'rnd_1' })) },
+    interviewRound: {
+      findFirst: vi.fn(async () => ({ id: 'rnd_1' })),
+      findMany: vi.fn(async () => roundRows),
+    },
     question: { findFirst: vi.fn(async () => row), update: vi.fn(async () => row) },
   },
 }));
+
+const seededPersona = vi.fn(async (roundType: 'hr' | 'tech') => ({
+  id: `seed-persona-${roundType}`,
+  role: roundType,
+  name: roundType === 'hr' ? 'Ada' : 'Turing',
+  avatar_set: { idle: `${roundType}/idle.webp` },
+}));
+vi.mock('./generation', () => ({ seededPersona: (t: 'hr' | 'tech') => seededPersona(t) }));
 
 const info = vi.fn();
 vi.mock('../../src/lib/logger', () => ({ logger: { info: (...a: unknown[]) => info(...a) } }));
@@ -28,9 +42,8 @@ const peek = vi.fn();
 const take = vi.fn();
 vi.mock('../speech/pending-turn', () => ({ peekPendingTurn: peek, takePendingTurn: take }));
 
-const { orderTranscript, deliverCurrentQuestion, interviewWindow, __testing } = await import(
-  './state'
-);
+const { orderTranscript, deliverCurrentQuestion, interviewWindow, resolvePersonas, __testing } =
+  await import('./state');
 const { pendingTurnFor, messagesWhere } = __testing;
 type TranscriptQuestion = Parameters<typeof orderTranscript>[0][number];
 
@@ -224,5 +237,84 @@ describe('orderTranscript', () => {
     expect(orderTranscript(rows)).toEqual([
       { questionId: 'h1', question: 'h1?', answer: 'hr one', roundType: 'hr' },
     ]);
+  });
+});
+
+/**
+ * Issue 129 — the roster is the interview's round shape, not the `interview_rounds` rows that
+ * happen to exist yet. The technical row is written with its batch, so deriving the roster from
+ * rows made the room's tile count a side effect of question generation: one tile for the whole
+ * HR round, and a second interviewer appearing mid-interview.
+ */
+describe('resolvePersonas', () => {
+  const generated = (type: 'hr' | 'tech') => ({
+    type,
+    persona: {
+      id: `assigned-${type}`,
+      role: type,
+      name: type === 'hr' ? 'Ada' : 'Turing',
+      avatar_set: { idle: `${type}/idle.webp` },
+    },
+  });
+
+  const interview = {
+    id: 'itv_1',
+    state: 'hr_round',
+    hr_question_count: 3,
+    target_question_count: 8,
+  };
+
+  beforeEach(() => {
+    roundRows = [];
+    seededPersona.mockClear();
+  });
+
+  it('rosters both interviewers while only the HR round row exists', async () => {
+    roundRows = [generated('hr')];
+
+    const { personas } = await resolvePersonas(interview);
+
+    expect(personas.map((p) => p.roundType)).toEqual(['hr', 'tech']);
+    // The generated row wins where there is one; the seeded lookup fills only the round whose
+    // batch has not been written, and it is the same lookup `generation.ts` will use for it.
+    expect(personas.map((p) => p.id)).toEqual(['assigned-hr', 'seed-persona-tech']);
+    expect(seededPersona).toHaveBeenCalledExactlyOnceWith('tech');
+  });
+
+  it('does not change the tile count at the handover', async () => {
+    roundRows = [generated('hr')];
+    const before = await resolvePersonas(interview);
+
+    roundRows = [generated('hr'), generated('tech')];
+    const after = await resolvePersonas({ ...interview, state: 'tech_round' });
+
+    expect(after.personas).toHaveLength(before.personas.length);
+    expect(after.personas.map((p) => p.roundType)).toEqual(['hr', 'tech']);
+  });
+
+  it('promises no technical interviewer when the split leaves that round empty', async () => {
+    roundRows = [generated('hr')];
+
+    // `target 2 → hr 2, tech 0` — a legal interview that ends straight out of the HR round.
+    const { personas } = await resolvePersonas({
+      ...interview,
+      hr_question_count: 2,
+      target_question_count: 2,
+    });
+
+    expect(personas.map((p) => p.roundType)).toEqual(['hr']);
+    expect(seededPersona).not.toHaveBeenCalled();
+  });
+
+  it('lights exactly one tile — the round the interview is in', async () => {
+    roundRows = [generated('hr')];
+
+    const inHr = await resolvePersonas(interview);
+    const inTech = await resolvePersonas({ ...interview, state: 'tech_round' });
+    const ended = await resolvePersonas({ ...interview, state: 'evaluating' });
+
+    expect(inHr.persona).toMatchObject({ id: 'assigned-hr' });
+    expect(inTech.persona).toMatchObject({ id: 'seed-persona-tech' });
+    expect(ended.persona).toBeNull();
   });
 });
