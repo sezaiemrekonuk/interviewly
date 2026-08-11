@@ -21,7 +21,15 @@ const zBoolean = (defaultValue: boolean) =>
 const emptyAsUnset = <T extends z.ZodType>(inner: T) =>
   z.preprocess((v) => (v === '' ? undefined : v), inner);
 
-const schema = z.object({
+/** What every unrotated secret in `.env.example` starts with. See the SESSION_SECRET refine. */
+export const PLACEHOLDER_PREFIX = 'change-me';
+
+/**
+ * Exported for the tests only. `config` below is the value every caller wants; the schema is
+ * reachable so a rule can be asserted without booting a process that `process.exit(1)`s on the
+ * failure it is trying to observe.
+ */
+export const schema = z.object({
   NODE_ENV:                    z.enum(['development', 'production', 'test']).default('development'),
   PUBLIC_ORIGIN:               z.string().url(),
   API_PORT:                    z.coerce.number().default(4000),
@@ -109,6 +117,19 @@ const schema = z.object({
       code: 'custom',
       path: ['ELEVENLABS_API_KEY'],
       message: 'required and non-empty when AI_ENABLED=true',
+    });
+  }
+
+  // Issue #118: the `.env.example` placeholder is exactly 32 characters, so `min(32)` above
+  // cannot tell it from a real secret and the live `.env` carried it byte for byte. Gated on
+  // production for the same reason the rule above is gated on AI_ENABLED: `cp .env.example
+  // .env` is the documented first boot and what all three CI jobs do, so refusing it
+  // everywhere would fail them by construction.
+  if (env.NODE_ENV === 'production' && env.SESSION_SECRET.startsWith(PLACEHOLDER_PREFIX)) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['SESSION_SECRET'],
+      message: 'still the .env.example placeholder — set a real secret before deploying',
     });
   }
 });
