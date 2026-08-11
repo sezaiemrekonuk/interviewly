@@ -111,12 +111,21 @@ export function StatsPanel({ stats }: { stats: AdminStatsResponse }) {
           ) : (
             <ul className={styles.rows} data-testid="admin-weakest">
               {stats.weakestQuestions.map((question) => (
-                <li className={styles.row} key={question.questionId}>
+                /* Keyed on the text: issue 196 groups by wording, so there is no single
+                   question id behind a row any more, and the text is unique after the
+                   GROUP BY that produced it. */
+                <li className={styles.row} key={question.text}>
                   <span className={`${styles.rowLabel} ${styles.rowLabelWrap}`}>
                     {question.text}
                   </span>
                   <span className={`${styles.rowValue} tabular`}>
                     {format.number(question.score)}
+                  </span>
+                  {/* The mean alone reads as a fact about the question; over one answer it is
+                      a fact about one candidate. The count is what tells the two apart, and
+                      it is the reason there is no minimum-sample filter behind this list. */}
+                  <span className={styles.rowSamples}>
+                    {t('stats.weakestSamples', { count: question.sampleSize })}
                   </span>
                   <Meter
                     className={styles.rowMeter}

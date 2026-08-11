@@ -99,6 +99,14 @@
   text-align: end;
 }
 
+/* Its own line under the question, spanning both columns: the sample count qualifies the
+   score, and putting it beside the sentence would compete with the sentence for the row. */
+.rowSamples {
+  grid-column: 1 / -1;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
 .rowMeter {
   grid-column: 1 / -1;
 }

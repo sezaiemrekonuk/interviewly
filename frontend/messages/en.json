@@ -811,6 +811,7 @@
       "occupationCount": "Interviews",
       "weakestTitle": "Weakest questions",
       "weakestScore": "Score",
+      "weakestSamples": "{count, plural, one {From a single answer} other {Mean of # answers}}",
       "empty": "No data yet",
       "completed": "Completed",
       "cutShort": "Cut short",

@@ -22,6 +22,13 @@ interface CompletedAggregate {
   cut_short: bigint;
 }
 
+/** One weakest-questions row: a wording, its mean score, and how many answers that mean is over. */
+interface WeakestQuestion {
+  text: string;
+  score: number;
+  sample_size: number;
+}
+
 interface OccupationGroup {
   occupation_cluster_id: string | null;
   occupation: string;
@@ -60,6 +67,44 @@ export function summariseOccupations(
   return [...perCluster.entries()]
     .map(([cluster, entry]) => ({ cluster, label: entry.label, count: entry.count }))
     .sort((a, b) => b.count - a.count || a.cluster.localeCompare(b.cluster));
+}
+
+/**
+ * Issue 196. This ranked `report_questions` ROWS, not questions: `ORDER BY score ASC,
+ * question_id ASC LIMIT 5` over one row per scored answer. Scores repeat heavily — 53 rows sit
+ * at 0 on the dev database — so past the first few the selection was decided entirely by the
+ * `question_id` tie-break, and a Prisma `cuid()` leads with a timestamp, so ascending meant
+ * OLDEST FIRST. The panel named the five oldest zero-scored answers and went on naming them
+ * however many worse ones arrived; a question answered badly today could never reach it.
+ *
+ * Aggregate first, then rank. Grouped by `text` rather than `question_id`, because a `questions`
+ * row belongs to one interview: the same wording asked of forty candidates is forty ids, and
+ * grouping by id would not combine any of them. That is also why no id comes back — after the
+ * grouping there is no single one of the forty that is *the* question.
+ *
+ * Raw, because Prisma's `groupBy` cannot group on a relation's column.
+ *
+ * `limit` is a parameter only so the integration test can ask for a superset and assert the
+ * ordering of its own fixtures without depending on what else is in the database. Production
+ * takes the default.
+ */
+export function weakestQuestions(limit = 5): Promise<WeakestQuestion[]> {
+  return prisma.$queryRaw<WeakestQuestion[]>`
+    SELECT
+      q."text"                     AS text,
+      ROUND(AVG(rq."score"))::int  AS score,
+      COUNT(*)::int                AS sample_size
+    FROM "report_questions" rq
+    JOIN "questions" q ON q."id" = rq."question_id"
+    GROUP BY q."text"
+    -- Ties are the whole story here, so all three keys earn their place. Weakest first; then
+    -- the most-asked, so a wording scored 0 forty times outranks one scored 0 once; then the
+    -- text, because without a total order the panel reshuffles between two reads of an
+    -- unchanged database. That last one is the same non-determinism summariseOccupations
+    -- breaks on its occupation key above.
+    ORDER BY AVG(rq."score") ASC, COUNT(*) DESC, q."text" ASC
+    LIMIT ${limit}
+  `;
 }
 
 export const getAdminStats: RequestHandler = async (req, res, next) => {
@@ -106,14 +151,7 @@ export const getAdminStats: RequestHandler = async (req, res, next) => {
         // The cluster keys, once, instead of a join on every interview row. This is a small
         // seeded reference table (`prisma/seed.ts` owns the canonical list).
         prisma.occupationCluster.findMany({ select: { id: true, key: true } }),
-        // weakestQuestions: plain relational, no jsonb (db AC-12). The question text comes
-        // from the relation — an id is not a label anyone can read (issue 143). Bounded, and
-        // the `(score, question_id)` index serves the ORDER BY.
-        prisma.reportQuestion.findMany({
-          orderBy: [{ score: 'asc' }, { question_id: 'asc' }],
-          take: 5,
-          select: { question_id: true, score: true, question: { select: { text: true } } },
-        }),
+        weakestQuestions(),
       ]);
 
     // averageDurationMs: mean of ended_at - started_at over completed; 0 if none qualify
@@ -152,10 +190,18 @@ export const getAdminStats: RequestHandler = async (req, res, next) => {
       unfinished,
       totalTokens,
       perOccupation,
+      // `sampleSize` ships rather than being filtered on. A `HAVING COUNT(*) >= n` floor was
+      // the obvious guard against one bad answer outranking a well-sampled question, and it is
+      // wrong here: 39 of the 50 distinct wordings on the dev database occur exactly once,
+      // because the conductor writes each question for the candidate in front of it. A floor of
+      // 2 would discard 78% of the corpus and, once every wording is unique, empty the panel
+      // permanently — an invisible failure in place of a visible one. Showing the count instead
+      // lets the reader discount a 0 that came from a single answer, which is the judgement the
+      // floor was trying to make for them.
       weakestQuestions: weakest.map((q) => ({
-        questionId: q.question_id,
-        text: q.question.text,
+        text: q.text,
         score: q.score,
+        sampleSize: q.sample_size,
       })),
     });
   } catch (err) {

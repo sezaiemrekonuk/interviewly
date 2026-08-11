@@ -455,8 +455,11 @@ model ReportQuestion {
 
   /// Issue 082: a question is scored once per report, so a concurrent rewrite cannot double it.
   @@unique([report_id, question_id])
-  /// Issue 143: the admin weakest-questions query is `ORDER BY score ASC, question_id ASC
-  /// LIMIT 5`; both columns keep it an index scan instead of a full scan plus sort.
+  /// Added for issue 143, when the admin weakest-questions query was `ORDER BY score ASC,
+  /// question_id ASC LIMIT 5`. Issue 196 replaced that with an aggregate grouped by question
+  /// text, which reads every row by definition and cannot use this index — ranking rows was the
+  /// bug. Kept rather than dropped: it still serves a lookup by score, and a migration to remove
+  /// an index that costs one small write amplification buys nothing measurable.
   @@index([score, question_id])
   @@map("report_questions")
 }

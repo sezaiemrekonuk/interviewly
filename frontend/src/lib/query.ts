@@ -103,7 +103,9 @@ export interface AdminStatsResponse {
   unfinished: number;
   totalTokens: number;
   perOccupation: { cluster: string; label: string; count: number }[];
-  weakestQuestions: { questionId: string; text: string; score: number }[];
+  /** Issue 196: one row per question *wording*, not per scored answer. `score` is the mean
+   *  over `sampleSize` answers — there is no id, because a wording spans many question rows. */
+  weakestQuestions: { text: string; score: number; sampleSize: number }[];
 }
 
 export function useAdminStats(enabled = true): UseQueryResult<AdminStatsResponse, ApiError> {

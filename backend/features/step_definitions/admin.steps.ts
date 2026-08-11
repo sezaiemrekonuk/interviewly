@@ -355,7 +355,7 @@ interface AdminStats {
   unfinished: number;
   totalTokens: number;
   perOccupation: unknown[];
-  weakestQuestions: { questionId: string; text: string; score: number }[];
+  weakestQuestions: { text: string; score: number; sampleSize: number }[];
 }
 
 Then('averageDurationMs is computed from completed interviews', function (this: AiWorld) {
@@ -387,6 +387,12 @@ Then(
       assert.ok(
         typeof q.text === 'string' && q.text.length > 0,
         `weakestQuestions row must carry the question text, got ${JSON.stringify(q)}`,
+      );
+      // Issue 196: a row is a wording aggregated over answers, so it has to say how many.
+      // A mean with no sample size behind it cannot be read.
+      assert.ok(
+        Number.isInteger(q.sampleSize) && q.sampleSize > 0,
+        `weakestQuestions row must carry a positive sampleSize, got ${JSON.stringify(q)}`,
       );
     }
     // at least one cluster row since we seeded completed interviews with a cluster

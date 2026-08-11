@@ -168,6 +168,11 @@ function fakeConductor(...script: (ConductorTurn | Error)[]): AiClient {
       return next instanceof Error ? Promise.reject(next) : Promise.resolve(next);
     },
     scoreAnswer: unavailable,
+    // T01's completeness gate and the listing guard. Neither belongs to the conductor's path,
+    // so both reject with the rest. This mock had drifted behind AiClient twice over without
+    // anything noticing, because integration tests sat outside the typechecker's include.
+    turnComplete: unavailable,
+    validateListing: unavailable,
     generateCandidates: unavailable,
     generateRoundQuestions: unavailable,
     generateReport: unavailable,

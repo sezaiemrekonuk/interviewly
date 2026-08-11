@@ -811,6 +811,7 @@
       "occupationCount": "Mülakat",
       "weakestTitle": "En zayıf sorular",
       "weakestScore": "Puan",
+      "weakestSamples": "{count, plural, one {Tek cevaba dayanıyor} other {# cevabın ortalaması}}",
       "empty": "Henüz veri yok",
       "completed": "Tamamlandı",
       "cutShort": "Yarıda kesildi",
