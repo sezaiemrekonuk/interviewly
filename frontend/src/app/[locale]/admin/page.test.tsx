@@ -54,7 +54,14 @@ const STATS = {
   totalTokens: 84210,
   perOccupation: [{ cluster: 'software', label: 'Backend engineer', count: 9 }],
   weakestQuestions: [
-    { questionId: 'q-sql-joins', text: 'Explain the difference between an inner and an outer join.', score: 20 },
+    {
+      text: 'Explain the difference between an inner and an outer join.',
+      score: 20,
+      sampleSize: 7,
+    },
+    // Same mean, one answer behind it. Issue 196 ships the count rather than filtering these
+    // out, so the panel has to distinguish them.
+    { text: 'Tell me about a deadline you missed.', score: 20, sampleSize: 1 },
   ],
 };
 
@@ -202,6 +209,11 @@ describe('admin list + stats (W11)', () => {
     const weakest = within(screen.getByTestId('admin-weakest'));
     expect(weakest.getByText(STATS.weakestQuestions[0].text)).toBeInTheDocument();
     expect(weakest.queryByText('q-sql-joins')).not.toBeInTheDocument();
+
+    // Issue 196: two rows share a score of 20 and mean opposite things. Without the sample
+    // count the panel presents one answer's 20 as the platform's weakest question.
+    expect(weakest.getByText('Mean of 7 answers')).toBeInTheDocument();
+    expect(weakest.getByText('From a single answer')).toBeInTheDocument();
   });
 
   it('loads the next page from nextCursor, never an offset', async () => {
