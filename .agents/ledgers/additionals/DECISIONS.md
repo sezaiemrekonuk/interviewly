@@ -63,3 +63,50 @@ happens; otherwise the new avatar is pushed so the candidate sees it live, mid-i
 **Upgrade path:** when the room grows an expression tile, it reads `persona.avatar` from
 `GET /interviews/:id/state` (already shipped) and resolves it against whatever storage-key
 scheme is added to `avatar_set`.
+
+## ADR-ADD02 — the expression tile and the self-camera
+
+**Ask (owner, 2026-08-11):** ADR-ADD01's backend shipped without a face — the room never drew
+the expressions `change_avatar` was setting. And the candidate could neither try nor see their
+own camera anywhere: not in pre-join, not in the room. Both, in the frontend.
+
+**Shape chosen:**
+
+- **`components/avatar.tsx` reused, not replaced.** It already did the whole job — content-
+  addressed `<img>`, monogram fallback, the 1×1-placeholder size check — and had been dead since
+  issue 126. Three changes: `AvatarSet` is keyed by `string` (the set holds `AvatarState` keys
+  *and* `expr-n` ones), an `expression?: number` prop picks the artwork while `state` keeps
+  labelling the tile, and the failure flag became the *key* that failed rather than a boolean —
+  a boolean latched the first placeholder and rendered every later expression as the monogram.
+- **The inline styles came out.** The monogram fallback was a `style={{…}}`, which the CSP drops
+  in production — the component was exempted from `grounds.test.ts` only because nothing imported
+  it. Now it has `avatar.module.css` and the exemption list is empty.
+- **Only the speaker gets an expression.** `GET /state` resolves `persona.avatar` for the live
+  persona alone (ADR-ADD01), so `PersonaTiles` takes one `activeExpression` and every other tile
+  draws slot 1. An interviewer who is not talking has nothing to react to.
+- **The camera is one component used twice** (`components/camera-view.tsx`), pre-join and the
+  room's candidate tile. Off by default and toggled by the candidate, per the voice spec (§3.2):
+  the stream is bound to a local `<video>`, is never recorded or uploaded, and is not exposed to
+  the caller — there is no API by which a parent could get at it. Turning it off **unmounts the
+  capture** rather than hiding it, which stops the tracks and puts the hardware light out.
+- **Mount as the reset.** `CameraView` is a two-component split (`Capture` / `Frame`): the
+  capture's whole lifecycle is its mount, so a refusal cannot still be on screen the next time the
+  camera is switched on, and no state is written synchronously from an effect (the React lint
+  forbids it, and it is the cascade it says it is).
+- **The camera gates nothing.** Only the microphone decides whether pre-join's CTA is live —
+  a blocked or missing camera is a sentence inside the frame and nothing else. Voice spec §3.2 and
+  the error table both say a camera denial is not an error.
+
+**Skipped, deliberately:**
+
+- **No camera device picker.** The mic has one because switching input mid-interview is a real
+  recovery path; a second webcam is not. Add it when someone asks.
+- **The pre-join choice is not carried into the room.** Both surfaces start off, which is what
+  "off by default" means; a remembered `on` would turn a camera on without a click on the screen
+  it turns on in. `sessionStorage` if that ever reads as friction rather than as care.
+- **No preload of the expression objects.** Issue 126 expired its hints unused; the tile requests
+  one image per persona and the SSE nudge that follows a `change_avatar` is not a hot path.
+
+**Supersedes:** ADR-ADD01's "no `persona-tiles.tsx` wiring", and W09/W10's mic-only reading of
+the spec (`.agents/ledgers/frontend/STATE.md`) — the self-camera those rows named was always in
+`.agents/specs/2026-07-29-voice.md` §3.2 and is now built.

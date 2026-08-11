@@ -68,3 +68,50 @@ that way, and the mapping is a one-line swap if wrong.
 - Still not wired into `persona-tiles.tsx` (see the entry above) — the real art is at the
   expected keys, ready for whenever that UI task happens.
 
+
+## 2026-08-11 — the expressions on screen, and the candidate's own camera
+
+The backend half of `change_avatar` had nowhere to show up, and the candidate had no camera on
+any screen. Both are frontend-only; nothing on the wire changed. See DECISIONS.md ADR-ADD02.
+
+**The interviewer's face**
+
+- `frontend/src/components/avatar.tsx` — `AvatarSet` is now `Record<string, string | undefined>`
+  (the set holds `AvatarState` keys and `expr-n` ones), new `expression?: number` prop, and the
+  failure state is the key that failed rather than a boolean. Inline styles moved to the new
+  `avatar.module.css`; `ui-checks/grounds.test.ts`'s `KNOWN_DEAD` exemption list is now empty.
+- `frontend/src/components/room/persona-tiles.tsx` — every tile draws its persona: 176px above
+  the waveform on the speaker, 40px beside the name on the small ones. New `activeExpression`
+  prop (default 1) applies only to the tile whose id matches `activeId`.
+- `frontend/src/app/[locale]/interviews/[id]/room/page.tsx` — passes
+  `activeExpression={room.persona?.avatar ?? 1}`. The SSE nudge that already refetches `/state`
+  is what brings a new expression down; there is no second path.
+- `frontend/src/components/room/room.module.css` — `.portrait`, `.portraitSm`, `.presence`
+  (face over voice, centred), `.tileWho`, `.selfCam`.
+
+**The candidate's camera**
+
+- `frontend/src/components/camera-view.tsx` + `.module.css` — new, used by both surfaces. `off`
+  renders the empty frame and asks for nothing; enabling mounts the capture, which requests
+  `{ video: true, audio: false }`, binds it to a muted mirrored `<video>`, and stops the tracks
+  on unmount. `blocked` / `unavailable` are sentences in the frame, never an error.
+- `frontend/src/app/[locale]/interviews/[id]/pre-join/page.tsx` — a second panel under the mic
+  check: preview, one toggle, and the note about where the picture goes (nowhere). It never
+  affects the CTA — only the microphone does.
+- `frontend/src/components/room/voice-controls.tsx` — a `Camera on/off` control beside Captions,
+  stated in words like every other toggle in the bar (DESIGN §5). `page.tsx` owns the flag.
+- `frontend/src/lib/use-mic-permission.ts` — comment corrected: it is the microphone half of the
+  gate now, and must still never ask for video.
+- Copy: `common.camera.*` (the four frame states), `preJoin.camera.*`, `room.camera`, and a
+  pre-join title/subtitle that names the camera. en + tr.
+
+**Verified**
+
+- `npm test` — 105 files / 1015 tests pass. New: `camera-view.test.tsx` (nothing requested while
+  off, video-only when on, track stopped on toggle-off and on unmount, refusal vs no-device),
+  `persona-tiles.test.tsx` (speaker draws the asked-for slot, everyone else slot 1, camera
+  replaces the waveform on the candidate tile only). Extended: `voice.test.tsx` (the control-bar
+  toggle, both ways), `pre-join/page.test.tsx` (no video request until the click).
+- `npm run typecheck` + `tsc -p frontend` — clean. `eslint --max-warnings=0` on every touched
+  file — clean, including `react-hooks/set-state-in-effect`, which is what shaped both the
+  `Capture`/`Frame` split and the failed-key state in `Avatar`.

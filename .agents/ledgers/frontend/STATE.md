@@ -1,5 +1,11 @@
 # Frontend — State
 
+**Superseded below (2026-08-11, additionals ADR-ADD02):** the W09 row's "no camera preview" and
+the W10 row's "**No self-camera**" are no longer true. Pre-join has a camera panel and the room's
+candidate tile has a self-view, both off by default and both local-only, and the persona tiles
+draw `change_avatar`'s expressions. No `W` task was opened or renumbered for it — the work is
+recorded in `.agents/ledgers/additionals/`.
+
 Last updated: 2026-08-05
 Last session ended: **W11 done — the frontend ledger is green (W01–W11).** `/admin` renders
 `StatsPanel` + `InterviewTable`; `useAdminInterviews(enabled)`/`useAdminStats(enabled)` gate on
