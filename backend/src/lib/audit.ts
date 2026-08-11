@@ -25,6 +25,11 @@ export type AuditAction =
   | 'admin.interviews_read'
   | 'admin.interview_read'
   | 'admin.stats_read'
+  | 'admin.llm_calls_read'
+  | 'admin.users_read'
+  | 'admin.sessions_read'
+  | 'admin.audit_read'
+  | 'admin.queue_read'
   | 'auth.password_reset_completed'
   // US-29 — "see when the system defended itself". These three were log lines and nothing
   // else, so the panel the story asks for had no table to read: `SECURITY_PROMPT_INJECTION_
