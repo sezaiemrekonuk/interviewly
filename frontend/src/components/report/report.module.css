@@ -9,6 +9,14 @@
  * 'nonce-…'`) drops style attributes, so those render empty in production.
  */
 
+/* The working surface's measure, consumed by `.workTop` and `.workBody` in
+   `shell.module.css`. On the shell rather than on the column, so the "Your report" title and
+   the report under it share an edge — and so the transcript panel at the foot inherits the same
+   measure instead of restating it. */
+.shell {
+  --container-max: 76ch;
+}
+
 /* ---------------------------------------------------------------------- rail */
 
 .railFigure {
@@ -92,28 +100,35 @@
   background: var(--bg);
 }
 
-/* One column, capped: the per-question rows are dense, and a dense list run to 1600px is
-   a list nobody reads across. */
+/* One column. The cap that used to live here is `.shell`'s `--container-max` above — a dense
+   list run to 1600px is a list nobody reads across, but capping it *here* pinned it to the
+   inline-start edge and left a screen's worth of empty ground to its right. */
 .report {
   display: flex;
   flex-direction: column;
   gap: 32px;
-  max-width: 76ch;
 }
 
 /* Informational, so `--accent` and not `--primary`: this states the scope of the scoring, it
    does not ask for anything. Orange means "do this now" (§2 rule 1) and the report's only
    action is the PDF on the rail — which is bordered, so this screen carries no orange at all. */
 .earlyEnd {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   max-width: 70ch;
   margin: 0;
   padding: 12px 16px;
-  font-size: 14px;
-  line-height: 1.5;
   color: var(--text);
   background: var(--surface-sunken);
   border-radius: var(--radius-input);
   border-inline-start: 2px solid var(--accent);
+}
+
+.earlyEndText {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 /* The verdict. One sentence in the heading face at the top of the column, because it is
@@ -212,6 +227,66 @@
   color: var(--text-muted);
 }
 
+/* What was said on this question, one box per exchange. Sunken beds inside a ruled row rather
+   than bordered cards: the row is already the boundary (§3.4's frame-within-a-frame rule), and
+   these are a quotation of the conversation, not a second stack of panels. The whole block is
+   set at 14px — it is evidence under the scoring reason, not a peer of it. */
+.exchange {
+  display: flex;
+  grid-column: 1 / -1;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 70ch;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.exchangeBox {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-input);
+}
+
+/* "Question", "Clarification 1" — the label is the whole point of splitting the boxes, so it
+   carries the same eyebrow treatment the section titles use, one step smaller. */
+.exchangeLabel {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.exchangeAsk {
+  margin: 0;
+  font-size: 14px;
+  font-style: italic;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+/* `white-space: pre-line` and not `pre-wrap`: an answer spoken in voice mode arrives as one
+   line and must still wrap, while a typed one keeps the paragraph breaks the candidate made. */
+.exchangeAnswer {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+  white-space: pre-line;
+}
+
+.exchangeUnanswered {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
 /* The footnote under the question list: what "STAR n/a" means on a technical row. Muted and
    13px because it explains the rows rather than joining them. */
 .starNote {
@@ -243,7 +318,6 @@
 .transcriptWrap {
   display: flex;
   flex-direction: column;
-  max-width: 76ch;
   overflow: hidden;
   border-block: 1px solid var(--border);
   border-radius: var(--radius-card);

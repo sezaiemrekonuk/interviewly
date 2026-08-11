@@ -569,7 +569,19 @@
     "downloadNotReady": "PDF'in henüz hazır değil — birazdan tekrar dene.",
     "downloadError": "İndirme bağlantısı alınamadı. Tekrar dene.",
     "starNotApplicable": "STAR yok",
-    "starNote": "STAR, cevabı bir hikâye gibi kurup kurmadığını ölçer; teknik sorularda puanlanmaz."
+    "starNote": "STAR, cevabı bir hikâye gibi kurup kurmadığını ölçer; teknik sorularda puanlanmaz.",
+    "endedReasonLine": "Bitiş nedeni: {reason}",
+    "endedReason": {
+      "cut_short": "görüşmeci mülakatı erken bitirdi",
+      "time_exhausted": "mülakatın süresi doldu",
+      "budget_exhausted": "mülakat maliyet sınırına ulaştı",
+      "abandoned": "yarım bırakıldı ve otomatik olarak kapatıldı",
+      "error": "mülakat sırasında bir hata oluştu"
+    },
+    "questionLabel": "Soru",
+    "clarificationLabel": "Açıklama isteği {n}",
+    "answerLabel": "Cevabınız",
+    "exchangeUnanswered": "Mülakat devam etmeden önce cevap verilmedi."
   },
   "errors": {
     "PASSWORD_TOO_SHORT": "Şifre en az 10 karakter olmalı.",

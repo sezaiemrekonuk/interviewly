@@ -28,6 +28,19 @@ const TRANSCRIPT = [
   { questionId: 'q1', question: 'Tell me about yourself.', answer: 'I ship things.', roundType: 'hr' as const },
 ];
 
+/**
+ * The conversation behind that transcript row, as `GET /state` returns it. `transcript[].answer`
+ * is every candidate utterance for the question joined into one string, so a question that was
+ * clarified is where the two views diverge — q1 here took a follow-up, and the report has to
+ * show the follow-up rather than gluing its answer onto the first one.
+ */
+const CONVERSATION = [
+  { id: 'm1', role: 'assistant' as const, content: 'Tell me about yourself.', action: null, questionId: 'q1', roundType: 'hr' as const, createdAt: '2026-01-01T10:00:00.000Z' },
+  { id: 'm2', role: 'user' as const, content: 'I ship things.', action: null, questionId: 'q1', roundType: 'hr' as const, createdAt: '2026-01-01T10:00:10.000Z' },
+  { id: 'm3', role: 'assistant' as const, content: 'Which things, and what changed because you shipped them?', action: 'continue' as const, questionId: 'q1', roundType: 'hr' as const, createdAt: '2026-01-01T10:00:20.000Z' },
+  { id: 'm4', role: 'user' as const, content: 'A billing migration; support tickets halved.', action: null, questionId: 'q1', roundType: 'hr' as const, createdAt: '2026-01-01T10:00:30.000Z' },
+];
+
 function payload(over: Record<string, unknown> = {}) {
   return {
     overall_impression: 'Solid, structured answers.',
@@ -54,6 +67,7 @@ function interviewState(over: Record<string, unknown> = {}) {
     personas: [],
     currentQuestion: null,
     transcript: TRANSCRIPT,
+    messages: CONVERSATION,
     transcriptCursor: 1,
     ...over,
   };
@@ -105,6 +119,15 @@ function stubFetch(
   );
 
   return calls;
+}
+
+/**
+ * The per-question rows, and only those. `getAllByRole('listitem')` walks the whole subtree, so
+ * once a row contains its own `<ol>` of exchange boxes it returns those too and `rows[1]` stops
+ * being the second question. Direct children are what "a row" means here.
+ */
+function questionRows(): HTMLElement[] {
+  return Array.from(screen.getByTestId('report-questions').children) as HTMLElement[];
 }
 
 async function renderReport() {
@@ -228,7 +251,7 @@ describe('report + transcript (W07)', () => {
     await renderReport();
 
     // The regression first, so it is asserted whether or not the copy has been merged yet.
-    const rows = within(screen.getByTestId('report-questions')).getAllByRole('listitem');
+    const rows = questionRows();
     expect(rows[1]).not.toHaveTextContent('0%');
     // The HR row still carries its real reading — this suppresses a rubric, not a number.
     expect(rows[0]).toHaveTextContent('80%');
@@ -243,12 +266,61 @@ describe('report + transcript (W07)', () => {
     expect(screen.queryByText(messages.report.starNote)).not.toBeInTheDocument();
   });
 
-  it('states the interview ended early on a cut-short endedReason', async () => {
+  it('states the interview ended early on a cut-short endedReason, and says which reason', async () => {
     stubFetch({ states: [interviewState({ endedReason: 'budget_exhausted' })] });
     await renderReport();
 
-    expect(screen.getByTestId('report-early-end')).toHaveTextContent(messages.report.earlyEnd);
+    const banner = screen.getByTestId('report-early-end');
+    expect(banner).toHaveTextContent(messages.report.earlyEnd);
+    // "ended early" alone leaves the candidate guessing which of five things happened, and the
+    // row already knows. The reason is the half of this banner that is actionable.
+    expect(banner).toHaveTextContent(messages.report.endedReason.budget_exhausted);
     expect(screen.getByTestId('report-view')).toBeInTheDocument();
+  });
+
+  // The report the relaxed payload schema now lets through: `cut_short` after one question,
+  // where the model returns no strengths at all. A heading over an empty <ul> is what that
+  // used to render as once the schema stopped rejecting it.
+  it('leaves out a block the model had nothing to put in', async () => {
+    stubFetch({
+      reports: [
+        {
+          interviewId: 'i1',
+          state: 'completed',
+          report: { status: 'ready', payload: payload({ strengths: [], rounds: [] }) },
+        },
+      ],
+    });
+    await renderReport();
+
+    expect(screen.queryByText(messages.report.strengths)).not.toBeInTheDocument();
+    expect(screen.queryByText(messages.report.roundsTitle)).not.toBeInTheDocument();
+    expect(screen.getByText(messages.report.improvements)).toBeInTheDocument();
+  });
+
+  it('breaks a clarified question into its own labelled boxes, not one joined answer', async () => {
+    stubFetch();
+    await renderReport();
+
+    const boxes = within(screen.getByTestId('report-exchange')).getAllByRole('listitem');
+    expect(boxes).toHaveLength(2);
+    expect(boxes[0]).toHaveTextContent(messages.report.questionLabel);
+    expect(boxes[0]).toHaveTextContent('Tell me about yourself.');
+    expect(boxes[0]).toHaveTextContent('I ship things.');
+    // The clarification is the thing the joined answer used to hide: its reply was appended to
+    // the first one under a question that was never shown being re-asked.
+    expect(boxes[1]).toHaveTextContent('Clarification 1');
+    expect(boxes[1]).toHaveTextContent('Which things, and what changed because you shipped them?');
+    expect(boxes[1]).toHaveTextContent('A billing migration; support tickets halved.');
+  });
+
+  it('falls back to the joined answer when the interview has no conversation rows', async () => {
+    stubFetch({ states: [interviewState({ messages: [] })] });
+    await renderReport();
+
+    expect(screen.queryByTestId('report-exchange')).not.toBeInTheDocument();
+    const rows = questionRows();
+    expect(rows[0]).toHaveTextContent('I ship things.');
   });
 
   it('renders the report shell for a completed interview with an empty transcript', async () => {
