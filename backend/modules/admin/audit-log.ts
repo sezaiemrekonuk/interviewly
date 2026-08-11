@@ -15,7 +15,9 @@ import type { Request, RequestHandler } from 'express';
 import { recordAudit } from '../../src/lib/audit';
 import { prisma } from '../../src/lib/db';
 import { logger } from '../../src/lib/logger';
-import { decodeCursor, encodeCursor, pageLimit } from '../interview/cursor';
+
+import { findManyArgs, listEnvelope, listParams } from './list';
+import { AUDIT_SPEC } from './specs';
 
 const asString = (value: unknown): string | undefined =>
   typeof value === 'string' && value !== '' ? value : undefined;
@@ -34,22 +36,22 @@ export function auditFilters(query: Request['query']): Prisma.AuditLogWhereInput
 
 export const listAuditLog: RequestHandler = async (req, res, next) => {
   try {
-    const limit = pageLimit(req.query.limit);
-    const where = auditFilters(req.query);
-    const decoded = decodeCursor(req.query.cursor);
-    const cursor = decoded
-      ? (await prisma.auditLog.findUnique({ where: { id: decoded }, select: { id: true } }))?.id
-      : undefined;
+    const params = listParams(req.query, AUDIT_SPEC);
+    const where = { ...auditFilters(req.query), ...params.search.where };
+    const cursorExists = params.cursorId
+      ? Boolean(
+          await prisma.auditLog.findUnique({
+            where: { id: params.cursorId },
+            select: { id: true },
+          }),
+        )
+      : false;
 
     const rows = await prisma.auditLog.findMany({
       where,
-      orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
-      take: limit + 1,
-      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      ...findManyArgs(params, cursorExists),
       include: { actor: { select: { email_lower: true, role: true } } },
     });
-
-    const page = rows.slice(0, limit);
 
     // Which actions actually occur, counted, so the filter offers the real vocabulary rather
     // than a hardcoded copy of the union in `src/lib/audit.ts` that would drift from it.
@@ -59,18 +61,10 @@ export const listAuditLog: RequestHandler = async (req, res, next) => {
       orderBy: { _count: { id: 'desc' } },
     });
 
-    await recordAudit(prisma, {
-      actorUserId: req.user!.id,
-      action: 'admin.audit_read',
-      subjectType: 'audit_log',
-      traceId: req.traceId,
-      metadata: { count: page.length, filters: where as Prisma.InputJsonValue },
-    });
-
-    logger.info({ traceId: req.traceId, count: page.length }, 'ADMIN_AUDIT_LISTED');
-
-    res.status(200).json({
-      items: page.map((row) => ({
+    const envelope = listEnvelope(
+      rows,
+      params,
+      (row) => ({
         id: row.id,
         action: row.action,
         actorUserId: row.actor_user_id,
@@ -81,9 +75,27 @@ export const listAuditLog: RequestHandler = async (req, res, next) => {
         traceId: row.trace_id,
         metadata: row.metadata,
         createdAt: row.created_at.toISOString(),
-      })),
+      }),
+      (row) => row.id,
+    );
+
+    await recordAudit(prisma, {
+      actorUserId: req.user!.id,
+      action: 'admin.audit_read',
+      subjectType: 'audit_log',
+      traceId: req.traceId,
+      metadata: {
+        count: envelope.items.length,
+        filters: where as Prisma.InputJsonValue,
+        query: params.search.applied,
+      },
+    });
+
+    logger.info({ traceId: req.traceId, count: envelope.items.length }, 'ADMIN_AUDIT_LISTED');
+
+    res.status(200).json({
+      ...envelope,
       actions: actions.map((row) => ({ action: row.action, count: row._count._all })),
-      nextCursor: rows.length > limit ? encodeCursor(page[page.length - 1].id) : null,
     });
   } catch (err) {
     next(err);

@@ -12,12 +12,16 @@
 import { Prisma } from '@prisma/client';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
-import { encodeCursor } from '../interview/cursor';
+import { compileSort, encodeListCursor } from './query-language';
+import { CALL_SPEC } from './specs';
 
 const AT = new Date('2026-08-11T09:00:00.000Z');
 
-/** `decodeCursor` shape-checks for a cuid before it will page on one; a short id is dropped. */
+/** The cursor shape-checks for a cuid before it will page on one; a short id is dropped. */
 const CUID = 'cmsdaraqs00dyrqxsrwctae2r';
+
+/** A cursor is only valid inside the order it was minted under, so the tests mint it there. */
+const DEFAULT_CALL_SORT = compileSort(undefined, undefined, CALL_SPEC);
 
 /** Every model the five handlers touch, each recording the args it was called with. */
 const calls: { model: string; method: string; args: Record<string, unknown> }[] = [];
@@ -160,7 +164,7 @@ describe('admin console reads', () => {
 
     expect(findManyFor('llmCall')?.args.take).toBe(21);
     expect((sent.body?.items as unknown[]).length).toBe(20);
-    expect(sent.body?.nextCursor).toBe(encodeCursor('c19'));
+    expect(sent.body?.nextCursor).toBe(encodeListCursor('c19', DEFAULT_CALL_SORT));
   });
 
   it('answers a last page with no cursor', async () => {
@@ -171,7 +175,7 @@ describe('admin console reads', () => {
 
   it('resolves a cursor against the table before paging on it', async () => {
     rows.llmCall = [callRow('c1')];
-    await invoke(listLlmCalls, { cursor: encodeCursor(CUID) });
+    await invoke(listLlmCalls, { cursor: encodeListCursor(CUID, DEFAULT_CALL_SORT) });
 
     expect(calls.some((c) => c.model === 'llmCall' && c.method === 'findUnique')).toBe(true);
     expect(findManyFor('llmCall')?.args.cursor).toEqual({ id: CUID });
@@ -200,6 +204,10 @@ describe('admin console reads', () => {
       rows[name] = [];
       await invoke(handler as never);
       expect(findManyFor(name)?.args.orderBy).toEqual([{ created_at: 'desc' }, { id: 'desc' }]);
+      // …and the sort the caller asked for, when it is on the whitelist.
+      calls.length = 0;
+      await invoke(handler as never, { sort: 'created', dir: 'asc' });
+      expect(findManyFor(name)?.args.orderBy).toEqual([{ created_at: 'asc' }, { id: 'asc' }]);
     }
   });
 

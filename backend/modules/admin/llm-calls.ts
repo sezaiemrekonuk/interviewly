@@ -16,7 +16,9 @@ import type { Request, RequestHandler } from 'express';
 import { recordAudit } from '../../src/lib/audit';
 import { prisma } from '../../src/lib/db';
 import { logger } from '../../src/lib/logger';
-import { decodeCursor, encodeCursor, pageLimit } from '../interview/cursor';
+
+import { findManyArgs, listEnvelope, listParams } from './list';
+import { CALL_SPEC } from './specs';
 
 const asString = (value: unknown): string | undefined =>
   typeof value === 'string' && value !== '' ? value : undefined;
@@ -35,24 +37,17 @@ export function llmCallFilters(query: Request['query']): Prisma.LlmCallWhereInpu
 
 export const listLlmCalls: RequestHandler = async (req, res, next) => {
   try {
-    const limit = pageLimit(req.query.limit);
-    const where = llmCallFilters(req.query);
-    const decoded = decodeCursor(req.query.cursor);
-    const cursor = decoded
-      ? (await prisma.llmCall.findUnique({ where: { id: decoded }, select: { id: true } }))?.id
-      : undefined;
+    const params = listParams(req.query, CALL_SPEC);
+    // The discrete facets and the query language AND together: a dropdown and a typed term are
+    // two ways of asking, and picking one over the other would silently drop the operator's.
+    const where = { ...llmCallFilters(req.query), ...params.search.where };
+    const cursorExists = params.cursorId
+      ? Boolean(
+          await prisma.llmCall.findUnique({ where: { id: params.cursorId }, select: { id: true } }),
+        )
+      : false;
 
-    const rows = await prisma.llmCall.findMany({
-      where,
-      // `created_at` desc with `id` as the tie-break: calls inside one turn share a
-      // millisecond often enough that time alone is not a total order, and a cursor over a
-      // non-total order repeats or skips rows between pages.
-      orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
-      take: limit + 1,
-      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-    });
-
-    const page = rows.slice(0, limit);
+    const rows = await prisma.llmCall.findMany({ where, ...findManyArgs(params, cursorExists) });
 
     // The distinct providers and models present, so the console can offer a filter it knows
     // will match something instead of a free-text box. Unfiltered on purpose — a facet list
@@ -63,18 +58,10 @@ export const listLlmCalls: RequestHandler = async (req, res, next) => {
       orderBy: { _count: { id: 'desc' } },
     });
 
-    await recordAudit(prisma, {
-      actorUserId: req.user!.id,
-      action: 'admin.llm_calls_read',
-      subjectType: 'llm_call_list',
-      traceId: req.traceId,
-      metadata: { count: page.length, filters: where as Prisma.InputJsonValue },
-    });
-
-    logger.info({ traceId: req.traceId, count: page.length }, 'ADMIN_LLM_CALLS_LISTED');
-
-    res.status(200).json({
-      items: page.map((call) => ({
+    const envelope = listEnvelope(
+      rows,
+      params,
+      (call) => ({
         id: call.id,
         interviewId: call.interview_id,
         provider: call.provider,
@@ -91,13 +78,31 @@ export const listLlmCalls: RequestHandler = async (req, res, next) => {
         latencyMs: call.latency_ms,
         traceId: call.trace_id,
         createdAt: call.created_at.toISOString(),
-      })),
+      }),
+      (call) => call.id,
+    );
+
+    await recordAudit(prisma, {
+      actorUserId: req.user!.id,
+      action: 'admin.llm_calls_read',
+      subjectType: 'llm_call_list',
+      traceId: req.traceId,
+      metadata: {
+        count: envelope.items.length,
+        filters: where as Prisma.InputJsonValue,
+        query: params.search.applied,
+      },
+    });
+
+    logger.info({ traceId: req.traceId, count: envelope.items.length }, 'ADMIN_LLM_CALLS_LISTED');
+
+    res.status(200).json({
+      ...envelope,
       facets: facets.map((facet) => ({
         provider: facet.provider,
         model: facet.model,
         count: facet._count._all,
       })),
-      nextCursor: rows.length > limit ? encodeCursor(page[page.length - 1].id) : null,
     });
   } catch (err) {
     next(err);

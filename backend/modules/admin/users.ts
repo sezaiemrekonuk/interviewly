@@ -13,7 +13,9 @@ import type { Request, RequestHandler } from 'express';
 import { recordAudit } from '../../src/lib/audit';
 import { prisma } from '../../src/lib/db';
 import { logger } from '../../src/lib/logger';
-import { decodeCursor, encodeCursor, pageLimit } from '../interview/cursor';
+
+import { findManyArgs, listEnvelope, listParams } from './list';
+import { USER_SPEC } from './specs';
 
 const asString = (value: unknown): string | undefined =>
   typeof value === 'string' && value !== '' ? value : undefined;
@@ -32,18 +34,17 @@ export function userFilters(query: Request['query']): Prisma.UserWhereInput {
 
 export const listUsers: RequestHandler = async (req, res, next) => {
   try {
-    const limit = pageLimit(req.query.limit);
-    const where = userFilters(req.query);
-    const decoded = decodeCursor(req.query.cursor);
-    const cursor = decoded
-      ? (await prisma.user.findUnique({ where: { id: decoded }, select: { id: true } }))?.id
-      : undefined;
+    const params = listParams(req.query, USER_SPEC);
+    const where = { ...userFilters(req.query), ...params.search.where };
+    const cursorExists = params.cursorId
+      ? Boolean(
+          await prisma.user.findUnique({ where: { id: params.cursorId }, select: { id: true } }),
+        )
+      : false;
 
     const rows = await prisma.user.findMany({
       where,
-      orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
-      take: limit + 1,
-      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      ...findManyArgs(params, cursorExists),
       select: {
         id: true,
         email_lower: true,
@@ -62,20 +63,10 @@ export const listUsers: RequestHandler = async (req, res, next) => {
       },
     });
 
-    const page = rows.slice(0, limit);
-
-    await recordAudit(prisma, {
-      actorUserId: req.user!.id,
-      action: 'admin.users_read',
-      subjectType: 'user_list',
-      traceId: req.traceId,
-      metadata: { count: page.length, filters: where as Prisma.InputJsonValue },
-    });
-
-    logger.info({ traceId: req.traceId, count: page.length }, 'ADMIN_USERS_LISTED');
-
-    res.status(200).json({
-      items: page.map((user) => ({
+    const envelope = listEnvelope(
+      rows,
+      params,
+      (user) => ({
         id: user.id,
         email: user.email_lower,
         role: user.role,
@@ -87,9 +78,25 @@ export const listUsers: RequestHandler = async (req, res, next) => {
         erased: user.deleted_at !== null,
         interviewCount: user._count.interviews,
         createdAt: user.created_at.toISOString(),
-      })),
-      nextCursor: rows.length > limit ? encodeCursor(page[page.length - 1].id) : null,
+      }),
+      (user) => user.id,
+    );
+
+    await recordAudit(prisma, {
+      actorUserId: req.user!.id,
+      action: 'admin.users_read',
+      subjectType: 'user_list',
+      traceId: req.traceId,
+      metadata: {
+        count: envelope.items.length,
+        filters: where as Prisma.InputJsonValue,
+        query: params.search.applied,
+      },
     });
+
+    logger.info({ traceId: req.traceId, count: envelope.items.length }, 'ADMIN_USERS_LISTED');
+
+    res.status(200).json(envelope);
   } catch (err) {
     next(err);
   }

@@ -16,7 +16,9 @@ import { recordAudit } from '../../src/lib/audit';
 import { clock } from '../../src/lib/clock';
 import { prisma } from '../../src/lib/db';
 import { logger } from '../../src/lib/logger';
-import { decodeCursor, encodeCursor, pageLimit } from '../interview/cursor';
+
+import { findManyArgs, listEnvelope, listParams } from './list';
+import { SESSION_SPEC } from './specs';
 
 const asString = (value: unknown): string | undefined =>
   typeof value === 'string' && value !== '' ? value : undefined;
@@ -38,35 +40,24 @@ export function sessionFilters(query: Request['query'], now: Date): Prisma.Sessi
 export const listSessions: RequestHandler = async (req, res, next) => {
   try {
     const now = clock.now();
-    const limit = pageLimit(req.query.limit);
-    const where = sessionFilters(req.query, now);
-    const decoded = decodeCursor(req.query.cursor);
-    const cursor = decoded
-      ? (await prisma.session.findUnique({ where: { id: decoded }, select: { id: true } }))?.id
-      : undefined;
+    const params = listParams(req.query, SESSION_SPEC, now);
+    const where = { ...sessionFilters(req.query, now), ...params.search.where };
+    const cursorExists = params.cursorId
+      ? Boolean(
+          await prisma.session.findUnique({ where: { id: params.cursorId }, select: { id: true } }),
+        )
+      : false;
 
     const rows = await prisma.session.findMany({
       where,
-      orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
-      take: limit + 1,
-      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      ...findManyArgs(params, cursorExists),
       include: { user: { select: { email_lower: true, role: true } } },
     });
 
-    const page = rows.slice(0, limit);
-
-    await recordAudit(prisma, {
-      actorUserId: req.user!.id,
-      action: 'admin.sessions_read',
-      subjectType: 'session_list',
-      traceId: req.traceId,
-      metadata: { count: page.length },
-    });
-
-    logger.info({ traceId: req.traceId, count: page.length }, 'ADMIN_SESSIONS_LISTED');
-
-    res.status(200).json({
-      items: page.map((session) => ({
+    const envelope = listEnvelope(
+      rows,
+      params,
+      (session) => ({
         id: session.id,
         userId: session.user_id,
         userEmail: session.user.email_lower,
@@ -77,9 +68,21 @@ export const listSessions: RequestHandler = async (req, res, next) => {
         revokedAt: session.revoked_at?.toISOString() ?? null,
         expiresAt: session.expires_at.toISOString(),
         createdAt: session.created_at.toISOString(),
-      })),
-      nextCursor: rows.length > limit ? encodeCursor(page[page.length - 1].id) : null,
+      }),
+      (session) => session.id,
+    );
+
+    await recordAudit(prisma, {
+      actorUserId: req.user!.id,
+      action: 'admin.sessions_read',
+      subjectType: 'session_list',
+      traceId: req.traceId,
+      metadata: { count: envelope.items.length, query: params.search.applied },
     });
+
+    logger.info({ traceId: req.traceId, count: envelope.items.length }, 'ADMIN_SESSIONS_LISTED');
+
+    res.status(200).json(envelope);
   } catch (err) {
     next(err);
   }
