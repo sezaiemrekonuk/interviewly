@@ -186,8 +186,16 @@ const END_NOW: ConductorTurn = {
 const turn = (interview: Interview, text: string, ...script: (ConductorTurn | Error)[]) =>
   conductTurn(
     { ...interview },
-    { text, inputMode: 'text' },
+    { kind: 'utterance', text, inputMode: 'text' },
     { traceId: `c02-${randomUUID()}`, client: fakeConductor(...script) },
+  );
+
+/** T03 — thirteen seconds with nothing said and nothing held. No text, by construction. */
+const silence = (interview: Interview, ...script: (ConductorTurn | Error)[]) =>
+  conductTurn(
+    { ...interview },
+    { kind: 'silence', inputMode: 'voice' },
+    { traceId: `t03-${randomUUID()}`, client: fakeConductor(...script) },
   );
 
 const reread = (id: string): Promise<Interview> =>
@@ -436,3 +444,73 @@ it('lets exactly one of two concurrent turns advance (ADR-I06)', async () => {
   expect(await answersFor(hr[0].id)).toHaveLength(1);
   expect((await reread(interview.id)).current_index).toBe(2);
 }, 30_000);
+
+/**
+ * T03 (ADR-T04) — the turn nobody spoke.
+ *
+ * The invariant these pin is "the turn always ends", and its failure is silent: a silence that
+ * counts toward neither ceiling leaves a candidate who has stopped talking in a room where the
+ * interviewer nudges forever, at a provider call a nudge, with a green test suite.
+ */
+describe('the silence turn (T03)', () => {
+  it('writes a system row and no candidate row, and never says the candidate spoke', async () => {
+    const { interview, hr } = await seed({ index: 1 });
+    await greet(interview, hr[0]);
+
+    await silence(interview, { say: 'Take your time — anything come to mind?', action: 'continue' });
+
+    const rows = await messages(interview.id);
+    const silent = rows.filter((m) => m.action === 'silence');
+    expect(silent).toHaveLength(1);
+    expect(silent[0].role).toBe('system');
+    expect(silent[0].question_id).toBe(hr[0].id);
+    // The report is scored from the candidate's own rows; a silence must never become one.
+    expect(rows.filter((m) => m.role === 'user')).toHaveLength(0);
+    expect(await answersFor(hr[0].id)).toHaveLength(0);
+    expect((await reread(interview.id)).current_index).toBe(1);
+  }, 30_000);
+
+  // The loop this closes: `turnsOnQuestion` counted `role === 'user'` only, so silence spent
+  // nothing and `turnsLeftOnQuestion` never reached zero.
+  it('counts toward the per-question ceiling, so repeated silence trips the forced advance', async () => {
+    const { interview, hr } = await seed({ index: 1 });
+    await greet(interview, hr[0]);
+    const nudge: ConductorTurn = { say: 'Anything at all?', action: 'continue' };
+
+    for (let i = 0; i < config.CONDUCTOR_MAX_TURNS_PER_QUESTION; i += 1) {
+      await silence(interview, nudge);
+    }
+
+    const row = await reread(interview.id);
+    expect(row.current_index).toBe(2);
+    // The system note, not the assistant line: `say` carries the same action on the advance.
+    const noted = (await messages(interview.id)).filter(
+      (m) => m.role === 'system' && m.action === 'drift',
+    );
+    expect(noted).toHaveLength(1);
+  }, 60_000);
+
+  // The other ceiling, for the candidate who goes quiet and stays quiet: `CONDUCTOR_MAX_TURNS`
+  // ends the interview rather than conducting into an empty room forever.
+  it('counts toward the whole-interview ceiling', async () => {
+    const { interview, hr } = await seed({ index: 1 });
+    await greet(interview, hr[0]);
+    await prisma.chatMessage.createMany({
+      data: Array.from({ length: config.CONDUCTOR_MAX_TURNS }, () => ({
+        interview_id: interview.id,
+        role: 'system' as const,
+        content: '[The candidate has said nothing for 13 seconds.]',
+        action: 'silence' as const,
+        trace_id: `t03-${randomUUID()}`,
+      })),
+    });
+
+    // The ceiling returns before the provider call, so the empty script is also the assertion
+    // that no conductor was asked.
+    await silence(interview);
+
+    const row = await reread(interview.id);
+    expect(row.state).toBe('evaluating');
+    expect(row.ended_reason).toBe('cut_short');
+  }, 30_000);
+});

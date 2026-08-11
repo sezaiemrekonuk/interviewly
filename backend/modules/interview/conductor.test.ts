@@ -11,9 +11,9 @@
 import type { Interview } from '@prisma/client';
 import { describe, expect, it } from 'vitest';
 
-import { __testing } from './conductor';
+import { __testing, turnInputSchema } from './conductor';
 
-const { trimHistory, mayHandOver, mayEnd, clampAction } = __testing;
+const { trimHistory, mayHandOver, mayEnd, clampAction, countsAsTurn } = __testing;
 
 /** Only the columns the guards read. Cast once here rather than in every case. */
 function interview(over: Partial<Interview>): Interview {
@@ -150,8 +150,60 @@ describe('clampAction', () => {
   });
 });
 
+/**
+ * T03 — the wire contract for a turn nobody spoke.
+ *
+ * The room cannot tell "silent for thirteen seconds" from "stopped mid-thought and then silent";
+ * the server can, because it holds the partial. So the client says only that the clock ran out,
+ * and `kind` is the whole of what it is allowed to say.
+ */
+describe('turnInputSchema', () => {
+  it('defaults an ordinary body to an utterance and still demands text', () => {
+    expect(turnInputSchema.parse({ text: 'I rehearse migrations now.', inputMode: 'text' })).toEqual(
+      { kind: 'utterance', text: 'I rehearse migrations now.', inputMode: 'text' },
+    );
+    expect(turnInputSchema.safeParse({ inputMode: 'text' }).success).toBe(false);
+    expect(turnInputSchema.safeParse({ text: '   ', inputMode: 'voice' }).success).toBe(false);
+  });
+
+  it('accepts a silence turn with no text at all', () => {
+    expect(turnInputSchema.parse({ kind: 'silence', inputMode: 'voice' })).toEqual({
+      kind: 'silence',
+      inputMode: 'voice',
+    });
+  });
+
+  // The same trust boundary the voice route enforces: what the candidate did not say cannot be
+  // typed into the turn the conductor answers. Silence carries no text, whatever the body claims.
+  it('drops any text a silence turn tries to carry', () => {
+    expect(
+      turnInputSchema.parse({ kind: 'silence', text: 'words I never said', inputMode: 'voice' }),
+    ).toEqual({ kind: 'silence', inputMode: 'voice' });
+  });
+});
+
+/**
+ * Both ceilings count this, and the reason it is one predicate rather than two filters is the
+ * failure it prevents: a silent candidate whose silence counted toward neither loops forever
+ * with the interviewer nudging, and every test passes while it does.
+ */
+describe('countsAsTurn', () => {
+  it('counts a candidate utterance and a silence row, and nothing else', () => {
+    expect(countsAsTurn({ role: 'user', action: null })).toBe(true);
+    expect(countsAsTurn({ role: 'system', action: 'silence' })).toBe(true);
+    expect(countsAsTurn({ role: 'assistant', action: 'continue' })).toBe(false);
+    expect(countsAsTurn({ role: 'system', action: 'drift' })).toBe(false);
+    expect(countsAsTurn({ role: 'system', action: 'refused' })).toBe(false);
+  });
+});
+
 describe('trimHistory', () => {
-  const row = (content: string) => ({ role: 'user' as const, content, question_id: null });
+  const row = (content: string) => ({
+    role: 'user' as const,
+    content,
+    question_id: null,
+    action: null,
+  });
 
   it('keeps a short conversation whole and unmarked', () => {
     const out = trimHistory([row('a'), row('b')]);
