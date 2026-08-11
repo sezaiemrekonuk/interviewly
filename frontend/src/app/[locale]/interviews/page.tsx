@@ -18,18 +18,21 @@
 
 import { useTranslations } from 'next-intl';
 import { useSearchParams } from 'next/navigation';
-import { Suspense } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 
 import { SessionCard } from '../../../components/dashboard/modules';
+import { REPORTED, RESUMABLE, UNFINISHED } from '../../../components/dashboard/summary';
 import { QuestionTable } from '../../../components/interviews/question-table';
 import { AppRail } from '../../../components/shell/app-rail';
 import { SplitShell, WorkBody, WorkTop } from '../../../components/shell/split-shell';
 import { Link, useRouter } from '../../../i18n/navigation';
-import { useMyInterviews, useMyQuestions } from '../../../lib/query';
+import { useMyInterviews, useMyQuestions, type MyInterview } from '../../../lib/query';
 import { useErrorMessage } from '../../../lib/use-error-message';
 import { useRequireAuth } from '../../../lib/use-require-auth';
 
 import styles from './interviews.module.css';
+
+const cx = (...names: Array<string | false | undefined>) => names.filter(Boolean).join(' ');
 
 const VIEWS = ['sessions', 'questions'] as const;
 type View = (typeof VIEWS)[number];
@@ -38,8 +41,44 @@ function isView(value: string | null): value is View {
   return value === 'sessions' || value === 'questions';
 }
 
+const STATE_FILTERS = ['all', 'open', 'scored', 'unfinished'] as const;
+const SESSION_SORTS = ['recent', 'oldest', 'best', 'worst'] as const;
+
+type StateFilter = (typeof STATE_FILTERS)[number];
+type SessionSort = (typeof SESSION_SORTS)[number];
+
+/**
+ * Named by what can still be done with the row, not by state name — and read from the
+ * dashboard's own split rather than restated here, so the day a tenth `InterviewState` lands
+ * it is sorted in one place instead of falling silently out of every filter on this screen.
+ */
+const STATE_SETS: Record<Exclude<StateFilter, 'all'>, Set<string>> = {
+  open: RESUMABLE,
+  scored: REPORTED,
+  unfinished: UNFINISHED,
+};
+
+/** `startedAt` is when the practice happened; `createdAt` is all a never-started row has. */
+const happenedAt = (run: MyInterview) => run.startedAt ?? run.createdAt;
+
+function compareRuns(sort: SessionSort, a: MyInterview, b: MyInterview) {
+  if (sort === 'best' || sort === 'worst') {
+    // Unscored rows go last under *both* score sorts. A running interview is neither the best
+    // nor the worst practice you have done, and sorting it to the top of either hands the
+    // least informative rows the seats the sort exists to fill.
+    if (a.overallScore === null || b.overallScore === null) {
+      if (a.overallScore !== b.overallScore) return a.overallScore === null ? 1 : -1;
+    } else if (a.overallScore !== b.overallScore) {
+      return sort === 'best' ? b.overallScore - a.overallScore : a.overallScore - b.overallScore;
+    }
+  }
+  const newestFirst = happenedAt(b).localeCompare(happenedAt(a));
+  return sort === 'oldest' ? -newestFirst : newestFirst;
+}
+
 function InterviewsArchive() {
   const t = useTranslations('archive');
+  const tSessions = useTranslations('archive.sessions');
   const { user, loading: authLoading } = useRequireAuth();
   const ready = !authLoading && user !== null;
   const errorMessage = useErrorMessage();
@@ -51,14 +90,64 @@ function InterviewsArchive() {
   const list = useMyInterviews(ready && view === 'sessions');
   const questions = useMyQuestions(ready && view === 'questions');
 
+  /** Typing is not an address. State and sort are — the dashboard links into them. */
+  const [query, setQuery] = useState('');
+
+  const stateFilter = STATE_FILTERS.find((key) => key === params.get('state')) ?? 'all';
+  const sort = SESSION_SORTS.find((key) => key === params.get('sort')) ?? 'recent';
+  const needle = query.trim().toLocaleLowerCase();
+  const narrowed = view === 'sessions' && (stateFilter !== 'all' || sort !== 'recent' || needle !== '');
+
+  /**
+   * Filtering and sorting run over the pages already fetched, and a narrowed list that only
+   * answers for page one is a wrong answer, not a partial one: "no completed interviews" while
+   * three sit unfetched, "best score" that is only the best of the newest twenty. So while any
+   * of the three is on, the cursor is drained first. Off by default — an untouched archive
+   * still pages on the button.
+   *
+   * `ponytail: drains every page while narrowed. Push state/sort onto GET /me/interviews if a
+   * candidate's own history ever reaches thousands of rows.`
+   */
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = list;
+  useEffect(() => {
+    if (narrowed && hasNextPage && !isFetchingNextPage) void fetchNextPage();
+  }, [narrowed, hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  /** Narrowed and still pulling pages: the count and the "nothing matched" block would both
+      be claims about a history the client has not finished reading. */
+  const draining = narrowed && (hasNextPage === true || isFetchingNextPage);
+
   if (authLoading || !user) return null;
 
   const items = list.data?.pages.flatMap((page) => page.items) ?? [];
   const rows = questions.data?.pages.flatMap((page) => page.items) ?? [];
 
-  /** Switching view drops the question filters — they mean nothing to a list of sessions. */
+  const visible = items
+    .filter(
+      (run) =>
+        (stateFilter === 'all' || STATE_SETS[stateFilter].has(run.state)) &&
+        (needle === '' || (run.occupation ?? '').toLocaleLowerCase().includes(needle)),
+    )
+    .sort((a, b) => compareRuns(sort, a, b));
+
+  /** Switching view drops the filters — a round means nothing to a list of sessions, or back. */
   function selectView(next: View) {
+    setQuery('');
     router.replace(next === 'sessions' ? '/interviews' : `/interviews?view=${next}`);
+  }
+
+  function setSessionParam(key: 'state' | 'sort', value: string) {
+    const next = new URLSearchParams(params.toString());
+    // The default is the absence of the parameter, so a cleared filter leaves a clean URL.
+    if (value === 'all' || value === 'recent') next.delete(key);
+    else next.set(key, value);
+    const search = next.toString();
+    router.replace(search ? `/interviews?${search}` : '/interviews');
+  }
+
+  function clearFilters() {
+    setQuery('');
+    router.replace('/interviews');
   }
 
   const active = view === 'sessions' ? list : questions;
@@ -116,12 +205,80 @@ function InterviewsArchive() {
             </div>
           ) : (
             <>
-              <ul className={styles.sessions}>
-                {items.map((interview) => (
-                  <SessionCard key={interview.id} interview={interview} />
-                ))}
-              </ul>
-              {list.hasNextPage ? (
+              {/* Search, state and sort in one row above the list — the same chip the question
+                  view sets forty pixels below, so one control is learned once. Sort is a native
+                  <select>: four options is a menu, and four more chips beside four state chips
+                  is a wall of pills where the eye has to find which row means what. */}
+              <div className={styles.filters}>
+                <label className={styles.search}>
+                  <span className={styles.filterLegend}>{tSessions('searchLabel')}</span>
+                  <input
+                    type="search"
+                    className={styles.searchInput}
+                    value={query}
+                    placeholder={tSessions('searchPlaceholder')}
+                    onChange={(event) => setQuery(event.target.value)}
+                  />
+                </label>
+
+                <fieldset className={styles.filterGroup}>
+                  <legend className={styles.filterLegend}>{tSessions('stateFilter')}</legend>
+                  {STATE_FILTERS.map((key) => (
+                    <button
+                      key={key}
+                      type="button"
+                      aria-pressed={key === stateFilter}
+                      className={cx(styles.chip, key === stateFilter && styles.chipOn)}
+                      onClick={() => setSessionParam('state', key)}
+                    >
+                      {tSessions(`states.${key}`)}
+                    </button>
+                  ))}
+                </fieldset>
+
+                <label className={styles.sortField}>
+                  <span className={styles.filterLegend}>{tSessions('sortBy')}</span>
+                  <select
+                    className={styles.select}
+                    value={sort}
+                    onChange={(event) => setSessionParam('sort', event.target.value)}
+                  >
+                    {SESSION_SORTS.map((key) => (
+                      <option key={key} value={key}>
+                        {tSessions(`sorts.${key}`)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                {/* Says what is on screen against what it was drawn from, so a filter that hides
+                    nine rows is a fact rather than a disappearance. */}
+                <p className={styles.count} role="status">
+                  {draining
+                    ? tSessions('loadingAll')
+                    : tSessions('count', { shown: visible.length, total: items.length })}
+                </p>
+              </div>
+
+              {visible.length === 0 && !draining ? (
+                <div className={styles.empty}>
+                  <h2 className={styles.emptyTitle}>{tSessions('noMatch.title')}</h2>
+                  <p className={styles.emptyBody}>{tSessions('noMatch.body')}</p>
+                  <button type="button" className={styles.clear} onClick={clearFilters}>
+                    {tSessions('noMatch.clear')}
+                  </button>
+                </div>
+              ) : (
+                <ul className={styles.sessions}>
+                  {visible.map((interview) => (
+                    <SessionCard key={interview.id} interview={interview} />
+                  ))}
+                </ul>
+              )}
+
+              {/* Only unnarrowed: under a filter the rest of the history is already being
+                  fetched, and a button offering what is in flight is a second answer. */}
+              {!narrowed && list.hasNextPage ? (
                 <button
                   type="button"
                   className={styles.loadMore}

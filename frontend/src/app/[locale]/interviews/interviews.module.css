@@ -59,10 +59,139 @@
   border-radius: var(--radius-input);
 }
 
+/* ------------------------------------------------------------------------------- filters */
+
+.srOnly {
+  position: absolute;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  align-items: center;
+  padding-block-end: 16px;
+}
+
+.filterGroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 0;
+  border: 0;
+}
+
+.filterLegend {
+  padding-inline-end: 4px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* Same chip as the question table's Round and Sort, deliberately: one control, learned once. */
+.chip {
+  min-height: 44px;
+  padding: 8px 12px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-button);
+  cursor: pointer;
+  transition: background-color var(--duration-default) var(--easing-default);
+}
+
+.chip:hover {
+  background: var(--surface-sunken);
+}
+
+/* Selected inverts to the rail's material — the product's one "this is the current one". */
+.chipOn,
+.chipOn:hover {
+  font-weight: 600;
+  color: var(--rail-text);
+  background: var(--rail);
+  border-color: var(--rail);
+}
+
+/* Search, Show and Sort each label their control from above, so the three labels read as one
+   line and the three controls sit on one row — the same shape the question view's filters take. */
+.search {
+  display: flex;
+  flex: 1 1 240px;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 320px;
+}
+
+/* 16px, not 14: anything smaller in an input makes iOS Safari zoom the page on focus. */
+.searchInput {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 16px;
+  font-family: inherit;
+  font-size: 16px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-button);
+}
+
+.searchInput::placeholder {
+  color: var(--text-muted);
+}
+
+.sortField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+}
+
+.select {
+  min-height: 44px;
+  padding: 8px 12px;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-button);
+  cursor: pointer;
+}
+
+.count {
+  margin-inline-start: auto;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.chip:focus-visible,
+.select:focus-visible,
+.searchInput:focus-visible,
+.clear:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* The list is one panel rather than rows floating on the working surface: five interviews on a
+   1120px column with nothing around them read as a screen that had failed to load. */
 .sessions {
   display: flex;
   flex-direction: column;
+  padding: 4px 20px;
   list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
 }
 
 .loadMore {
@@ -125,6 +254,25 @@
 
 .emptyCta:hover {
   background: var(--primary-deep);
+}
+
+/* Not a --primary: undoing a filter is a way back, not the thing to do on this surface. */
+.clear {
+  min-height: 44px;
+  margin-block-start: 16px;
+  padding: 12px 20px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-button);
+  cursor: pointer;
+}
+
+.clear:hover {
+  background: var(--surface-sunken);
 }
 
 /* ----------------------------------------------------------------------------- skeleton */

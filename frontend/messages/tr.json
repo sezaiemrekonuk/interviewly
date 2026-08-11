@@ -971,6 +971,31 @@
         "cta": "Mülakat başlat"
       }
     },
+    "sessions": {
+      "searchLabel": "Ara",
+      "searchPlaceholder": "Role göre ara",
+      "stateFilter": "Göster",
+      "states": {
+        "all": "Hepsi",
+        "open": "Devam eden",
+        "scored": "Puanlanan",
+        "unfinished": "Yarım kalan"
+      },
+      "sortBy": "Sırala",
+      "sorts": {
+        "recent": "En yeni önce",
+        "oldest": "En eski önce",
+        "best": "En iyi puan",
+        "worst": "En düşük puan"
+      },
+      "count": "{total} mülakattan {shown} tanesi",
+      "loadingAll": "Tüm geçmişin okunuyor…",
+      "noMatch": {
+        "title": "Eşleşen mülakat yok",
+        "body": "Bu arama ve filtre birlikte geçmişindeki hiçbir mülakata uymuyor. Birini genişlet ya da ikisini de temizleyip tüm listeye dön.",
+        "clear": "Filtreleri temizle"
+      }
+    },
     "questions": {
       "caption": "Cevapladığın her soru; puanı ve o puanın gerekçesiyle birlikte.",
       "roundFilter": "Tur",
