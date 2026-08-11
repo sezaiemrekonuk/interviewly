@@ -102,14 +102,18 @@ async function publishAssetPrefixes() {
   );
 }
 
-/** PUTs the placeholder image at `key` with the public-read cache header (infra §K12). */
-async function putImage(key: string) {
+/**
+ * PUTs an image at `key` with the public-read cache header (infra §K12). Defaults to the
+ * placeholder bytes, which is every avatar/mascot object except the real `expr-*` photos
+ * `seedExpressionAvatars` uploads below.
+ */
+async function putImage(key: string, body: Buffer = PLACEHOLDER_WEBP, contentType = 'image/webp') {
   await s3.send(
     new PutObjectCommand({
       Bucket: S3_BUCKET,
       Key: key,
-      Body: PLACEHOLDER_WEBP,
-      ContentType: 'image/webp',
+      Body: body,
+      ContentType: contentType,
       CacheControl: 'public, max-age=31536000, immutable',
     })
   );
@@ -156,6 +160,18 @@ const INTERVIEW_ID = 'seed-interview-demo';
 const HR_ROUND_ID = 'seed-round-hr';
 const TECH_ROUND_ID = 'seed-round-tech';
 const REPORT_ID = 'seed-report-demo';
+
+/**
+ * The `change_avatar` tool's expression slots (additionals ADR-ADD01) — 3 per persona, real
+ * photos rather than the 1x1 placeholder every other avatar object here is. Keyed by fixture
+ * file stem, not persona id, because the id (`seed-persona-hr`) says nothing about which face
+ * goes with it.
+ */
+const EXPRESSION_COUNT = 3;
+const EXPRESSION_FIXTURES: Record<string, string> = {
+  [HR_PERSONA_ID]: 'ada',
+  [TECH_PERSONA_ID]: 'turing',
+};
 
 const DEMO_ADMIN_EMAIL = 'admin@demo.com';
 // A throwaway local credential for the demo stack. Stored only as an argon2id hash; the
@@ -233,6 +249,20 @@ async function seedPersonas() {
         `personas/${persona.id}/${state}-${PLACEHOLDER_SHA256}.webp`
       );
     }
+    // change_avatar's real art (additionals ADR-ADD01), content-addressed by its own bytes —
+    // not the shared placeholder sha, since these are three actually-different images.
+    const fixtureStem = EXPRESSION_FIXTURES[persona.id];
+    for (let n = 1; n <= EXPRESSION_COUNT; n++) {
+      const bytes = readFileSync(
+        join(__dirname, 'fixtures', 'avatars', `${fixtureStem}-${n}.png`)
+      );
+      const sha = createHash('sha256').update(bytes).digest('hex');
+      avatar_set[`expr-${n}`] = await putImage(
+        `personas/${persona.id}/expr-${n}-${sha}.png`,
+        bytes,
+        'image/png'
+      );
+    }
     await prisma.persona.upsert({
       where: { id: persona.id },
       update: { ...persona, avatar_set, active: true },
@@ -240,7 +270,7 @@ async function seedPersonas() {
     });
   }
   console.log(
-    `  personas: ${personas.length} (each with ${AVATAR_STATES.length} avatar objects)`
+    `  personas: ${personas.length} (each with ${AVATAR_STATES.length} avatar objects + ${EXPRESSION_COUNT} expressions)`
   );
 }
 
