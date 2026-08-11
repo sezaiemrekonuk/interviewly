@@ -6,8 +6,18 @@ candidate tile has a self-view, both off by default and both local-only, and the
 draw `change_avatar`'s expressions. No `W` task was opened or renumbered for it — the work is
 recorded in `.agents/ledgers/additionals/`.
 
-Last updated: 2026-08-05
-Last session ended: **W11 done — the frontend ledger is green (W01–W11).** `/admin` renders
+Last updated: 2026-08-11
+Last session ended: **W12 done — the frontend ledger is green (W01–W12).** All eight `/admin`
+sections now have an endpoint; `SpecPanel`/`admin.spec.*`/`admin.scope` are gone. `query.ts`
+gained six keys, `adminQuery(path, filters, cursor)` and `AdminFilters<K>` (index signature —
+one bag flows into key and URL with no cast). **Filters are IN the query key**, **one bag per
+section** (shared state carried `state=completed` into the audit trail), and every hook is
+`enabled` per section, so the console opens on two requests not eight. `/admin/interviews/:id`
+is a real route — it is a link target from the table, the dead letter and the audit trail;
+sections stay client state (ADR-W10). **Recharts rejected, `Meter` stands (ADR-W09):** the CSP
+drops inline styles, so its charts render empty in production and green in jsdom.
+
+Previous: **W11 done.** `/admin` renders
 `StatsPanel` + `InterviewTable`; `useAdminInterviews(enabled)`/`useAdminStats(enabled)` gate on
 `role === 'admin'` so a non-admin issues **no** `/admin/*` request, and a `FORBIDDEN` from either
 read still renders the same not-authorized card in place (never a redirect). Recharts series colour
@@ -16,7 +26,7 @@ which keeps `--primary` and hex literals out of the `.tsx`. Charts are `aria-hid
 lists carry every number as text. `src/test/setup.ts` gained a no-op `ResizeObserver` (jsdom has
 none; `ResponsiveContainer` needs one). Ring: frontend 238, root 359.
 
-Previous: **W10 done — voice is a branch in `room/page.tsx` on `room.mode`, not a second
+Earlier: **W10 done — voice is a branch in `room/page.tsx` on `room.mode`, not a second
 room.** `useVoiceSession` (`src/lib/use-voice-session.ts`) mints via V02, opens `WebSocket(wssOrigin)`
 and sends the token in the **init frame, never the URL** (K6: query strings reach proxy logs). It
 emits a local `beat` only — `BEAT_BY_FRAME` maps agent frames to `speaking|listening|acknowledging`,
@@ -79,7 +89,7 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**None — every row W01–W11 is `done`.** The ledger is green. New frontend work needs a numbered
+**None — every row W01–W12 is `done`.** The ledger is green. New frontend work needs a numbered
 task first (`update-initiative`); the Backlog below is where the candidates sit.
 
 ## Environment
@@ -152,7 +162,7 @@ npx playwright test                               # smokes against `docker compo
   occupation/language editor pending on an I03 response extension. Flag to the interview-core
   owner (Sezai) — it is an I03 response-shape gap, not a W05 defect.
 
-## Task ledger (W01–W11)
+## Task ledger (W01–W12)
 
 Statuses: todo → in_progress → done → (blocked if waiting on user).
 `Repo`: blank = this repo (the `frontend/` workspace). Dependency-sorted.
@@ -170,6 +180,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | W09 | Pre-join device check (screen 10, voice): camera off-by-default, mic level bar, continue-in-text | | done | W06, V02 |
 | W10 | Voice room surface (screen 11-voice): live ASR transcript, mic level, self-camera, amplitude avatar driver | | done | W09, V02, V05 |
 | W11 | Admin list + stats (screen 14): tables + Recharts bound to `/admin/stats` as-returned | | done | W02, N01, N02 |
+| W12 | Admin console: the remaining five sections, real filters, and the `/admin/interviews/:id` drill-down | | done | W11, N03, N04, N05 |
 
 ## Critical path (the demo path)
 
@@ -177,7 +188,8 @@ W01/W02 (foundation) → **W03 → W04 → W05 → W06 → W07** is the demoable
 (land → onboard → set up → answer in text mode → **see the report**). **W07 closes the demo
 path.** W08 (history) finishes "find it again". Off the spine: W03 needs W01+W02; the auth
 family (screens 2–5) already shipped in the auth ledger. Voice (W09→W10) hangs off W06 and the
-voice ledger; admin (W11) hangs off W02 and the admin ledger, off the candidate path.
+voice ledger; admin (W11 → W12) hangs off W02 and the admin ledger, off the candidate path — W12
+waits on N03–N05 the way W11 waited on N01/N02.
 
 ## Cross-ledger dependencies (blocks this ledger)
 
@@ -197,7 +209,10 @@ state (e.g. I03 done but I06 not) means the room can read state but cannot submi
 | I11 | `POST /uploads?kind=listing` | W05 |
 | R01 | ready report served at `GET /interviews/:id` (handler unowned — see blockers) | W07 |
 | N01 | `GET /me/interviews`, `DELETE /interviews/:id`, `GET /admin/interviews` | W08, W11 |
-| N02 | `GET /admin/stats` (K11 fixed metrics) | W11 |
+| N02 | `GET /admin/stats` (K11 fixed metrics, extended with `totalCostUsd` + `perModel[]`) | W11, W12 |
+| N03 | security / budget / time events written to `audit_logs` (US-29) — the rows the audit trail and the drill-down timeline read | W12 |
+| N04 | `GET /admin/interviews/:id` (drill-down) + the interview-list facets; `userEmail` and `budgetUsd` on the row | W12 |
+| N05 | `GET /admin/{llm-calls,users,sessions,audit,queue}` and `totalCostUsd`/`perModel[]` on `/admin/stats` | W12 |
 | V02 | voice session mint | W09, W10 |
 | V05 | voice webhook / reconciliation path | W10 |
 
@@ -207,11 +222,16 @@ None. The frontend is the consuming edge — no other ledger waits on a `W` task
 
 ## Backlog (deferred, unnumbered — promote to a task when its trigger fires)
 
-- **Admin per-call cost detail** (`/admin/interviews/:id`, US-26/29) — its backend endpoint is
-  unowned (admin ledger Backlog, `admin/STATE.md:113`). **Flag Fatih to number
-  `GET /admin/interviews/:id` in the admin ledger**; once it is a numbered task, promote this to
-  `W12` depending on it. Do not build the UI against a phantom route.
-- **Rich admin filters** beyond cluster/state/user list columns — promote when a filter spec exists.
+- ~~**Admin per-call cost detail** (`/admin/interviews/:id`, US-26/29)~~ — **promoted and done as
+  W12.** The endpoint landed (N03–N05) and the route exists.
+- ~~**Rich admin filters**~~ — **done in W12**: cluster/state/user, provider/model/interview,
+  role/search, session user + active-only, and audit action/actor/subject, all applied by the
+  backend and all part of the query key.
+- **Requeue a dead report job from the console.**
+  `POST /admin/interviews/:id/report/requeue` is mounted (`backend/modules/admin/router.ts:37`)
+  and nothing in the frontend calls it. The dead-letter list in `queue-panel.tsx` is where the
+  button belongs. Needs a task — it would be the console's first write; every admin surface is
+  read-only today.
 - **Admin nav affordance** — W11 shipped `/admin` with no link to it from `components/chrome`; an
   admin types the URL. The nav is W02 surface and no task numbers the entry. Promote with the
   drill-down work, or sooner if a demo needs it clickable.

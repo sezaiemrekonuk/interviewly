@@ -69,6 +69,12 @@ never renders).
 | `src/app/interviews/[id]/page.tsx` | W07 | report + transcript (screen 12); `useReport` + `useInterviewState`, `<ReportView>`/`<ReportWait>`, reused `<Transcript>` |
 | `src/app/dashboard/page.tsx` | W08 | history (screen 13) |
 | `src/app/admin/page.tsx` | W11 | admin list + stats (screen 14) |
+| `src/app/[locale]/admin/interviews/[id]/page.tsx` | W12 | per-interview drill-down: summary, the report's `promptUuid`+`promptVersion` (US-28 rollback handle), the per-call `llm_calls` table, the US-29 event timeline. In-place not-authorized, never a redirect; `INTERVIEW_NOT_FOUND` is its own state |
+| `src/components/admin/{filter-bar,call-table,user-table,session-table,queue-panel,audit-table}.tsx` | W12 | the five `Spec` sections made real, plus the shared filter bar |
+| `src/components/admin/table.module.css` | W12 | the one table vocabulary all five admin tables read (renamed from `interview-table.module.css`) |
+
+**Route note:** every page actually lives under `src/app/[locale]/…` (issue 91 — the locale is a
+path segment); the paths above are written without it where they predate the move.
 
 ## The backend surface this ledger consumes (never re-decide a shape or a code)
 
@@ -91,8 +97,43 @@ if a shape is not yet built, the task's `Depends on` names it and the task stops
 | `GET /interviews/:id` | `{ interviewId, state, report }` — thin; `transcript`/`endedReason` come from `/state` (ADR-W08) | R01 |
 | `GET /me/interviews` | `{ items, nextCursor }`, deleted excluded; item = `{id,state,mode,occupation,endedReason,createdAt,startedAt,endedAt}` — **no score, no cost** | N01 |
 | `DELETE /interviews/:id` | `204` (soft delete) | N01 |
-| `GET /admin/interviews` | `{ items, nextCursor }` (deleted included, `deleted` flag, `totalTokens`, `costUsd`) | N01 |
-| `GET /admin/stats` | `{ averageDurationMs, completed, cutShort, unfinished, totalTokens, perOccupation[], weakestQuestions[] }` | N02 |
+| `GET /admin/interviews` | `{ items, nextCursor }` (deleted included, `deleted` flag, `totalTokens`, `costUsd`; plus `userEmail` and the row's own `budgetUsd` since N03–N05). Filters: `occupationCluster`, `state`, `userId` | N01 |
+| `GET /admin/stats` | `{ averageDurationMs, completed, cutShort, unfinished, totalTokens, totalCostUsd, perModel[], perOccupation[], weakestQuestions[] }` — `totalCostUsd`/`perModel[]` aggregated in Postgres, never summed client-side | N02 (+N05) |
+| `GET /admin/interviews/:id` | `{ interview, calls[], callsTruncated, events[] }` — `interview.report` carries `promptUuid`+`promptVersion`; a call row carries `units`/`unitKind` (`'second'` for voice) | N04 |
+| `GET /admin/llm-calls` | `{ items, facets[], nextCursor }`; filters `provider`, `model`, `interviewId`. `facets` is the vocabulary the filter selects offer | N05 |
+| `GET /admin/users` | `{ items, nextCursor }`; filters `role`, `q` | N05 |
+| `GET /admin/sessions` | `{ items, nextCursor }`; filters `userId`, `active` | N05 |
+| `GET /admin/audit` | `{ items, actions[], nextCursor }`; filters `action`, `actorUserId`, `subjectId`. `action` is a **dotted** name on the wire; the rows themselves are written by N03 | N05 |
+| `GET /admin/queue` | `{ queues[], deadLetter[] }` — structurally one queue (the report queue); polled at 30 s | N05 |
+| `POST /admin/interviews/:id/report/requeue` | mounted, **unused by the frontend** — see STATE backlog | N05 |
+
+### Admin query keys and the shared URL builder (`lib/query.ts`, W11/W12)
+
+`queryKeys` is the only place a key is written (AGENTS.md). W12 added six:
+
+| Key | Hook | Notes |
+|---|---|---|
+| `['admin','interviews',id]` | `useAdminInterview(id, enabled)` | the drill-down; `id`, not a filter bag |
+| `['admin','llm-calls',filters]` | `useAdminLlmCalls` | infinite, cursor |
+| `['admin','users',filters]` | `useAdminUsers` | infinite, cursor |
+| `['admin','sessions',filters]` | `useAdminSessions` | infinite, cursor |
+| `['admin','audit',filters]` | `useAdminAudit` | infinite, cursor |
+| `['admin','queue']` | `useAdminQueue` | 30 s `refetchInterval`, no filters |
+
+- **The filters are IN the key.** A narrowed list is a different resource; one entry for both
+  shows the previous filter's rows for a frame after every change.
+- `adminQuery(path, filters, cursor)` builds every admin URL — empty values dropped, so an
+  untouched control cannot narrow anything. Six hand-built query strings is how one of them
+  sends `state=undefined`.
+- `AdminFilters<K>` = the named facets **plus an index signature**, so one bag flows into both
+  the key and the builder with no cast at the call site.
+- `useAdminStats` takes **no** filters (`adminStats()`) — it is a platform aggregate.
+
+**i18n trap:** next-intl cannot address a message key containing a dot. Audit actions arrive
+dotted (`interview.soft_deleted`), so the tree stores `audit.action.interview_soft_deleted` and
+lookup is `t.has(...replaceAll('.', '_'))` with the raw wire value as fallback. The same `t.has`
+fallback covers `admin.state.*`. `src/i18n/messages.test.ts` walks keys by `split('.')`, so a
+literal dot in a key breaks the parity check rather than the screen.
 
 ### Room-state shape (the single room truth — `GET /interviews/:id/state`)
 

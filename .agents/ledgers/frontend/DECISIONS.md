@@ -196,3 +196,44 @@ a screen that mounts both. Supersedes ADR-W02's key, not its nudge-then-refetch 
 
 **Consequences:** two reads per report render (both cached, both nudged together). If `get.ts` ever
 grows `transcript`/`endedReason`, drop the state read here — not the reverse.
+
+## ADR-W09 — 2026-08-11 — Recharts is not adopted; `Meter` stands
+
+**Context:** The frontend spec names Recharts three times (`.agents/specs/2026-07-29-frontend.md`
+`:20`, `:180`, `:425`) and `DESIGN.md` §5 specifies its series colours and
+`isAnimationActive={false}`. The dependency is installed (`frontend/package.json:20`) and has
+zero imports. Options: (A) adopt it as specified; (B) native `<progress>`; (C) a different chart
+library.
+
+**Decision:** (B). Production CSP is `style-src 'self' 'nonce-…'` (`frontend/src/middleware.ts:19`),
+which silently drops inline `style` attributes — and Recharts writes them. Its charts would render
+empty in production and pass every test, because jsdom has no CSP. `components/shell/meter.tsx`
+carries the value as a DOM property (`<progress value max>`) instead, which no policy can strip.
+The acceptance criterion that actually binds — "renders K11's metrics exactly as returned"
+(`:567-569`) — is satisfied either way; the spec named a library, not a requirement.
+
+**Why not another library:** the same failure mode. Only one that renders geometry as SVG
+attributes (`points`, `d`, `x`, `width`) survives this CSP.
+
+**Consequences:** every admin bar is `Meter`, `decorative`, with the number stated as text beside
+it. `recharts` stays in `package.json` unimported. Reopens on either a CSP decision or a library
+that draws with SVG attributes rather than inline styles. `DESIGN.md` §5's Recharts rows are now
+stale and are flagged in W12's Notes, not edited from a task file.
+
+## ADR-W10 — 2026-08-11 — Console sections are client state; the drill-down is a real route
+
+**Context:** `/admin` has eight sections. `/admin/interviews/:id` is a ninth surface. Options:
+(A) a route per section and per interview; (B) client state for all nine; (C) client state for
+the sections, a route for the drill-down.
+
+**Decision:** (C). Swapping section must not remount the shell or refetch what the previous
+section already holds — a route each does both, and the console is a working surface an operator
+sits in. The drill-down is a route because it is a **link target**: the interview table
+(`interview-table.tsx`), the dead-letter list (`queue-panel.tsx:86`) and the audit trail
+(`audit-table.tsx:86`) all link into it, and a link into client state is not a link.
+
+**Consequences:** `page.tsx` holds `section` and one filter bag **per** section — shared state
+would carry `state=completed` from the interview list into the audit trail, where it means
+nothing and silently empties the table. Every hook is `enabled`-gated on the section on screen,
+so opening the console is two requests, not eight. A section is not addressable and not
+bookmarkable; promote one to a route only when something outside the console needs to link to it.

@@ -56,7 +56,15 @@ backend/src/app.ts        ← Express app (auth A01); this ledger mounts modules
   │     middleware.ts      ← requireAdmin: req.user.role === 'admin' else 403 FORBIDDEN (N01)
   │     interviews.ts      ← GET /admin/interviews: ALL interviews incl. deleted, `deleted`
   │                           flag, token total + USD cost — bypasses the soft-delete helper (N01)
+  │                           + interviewFilters(query): ?occupationCluster&state&userId (N04)
   │     stats.ts           ← GET /admin/stats: the K11 aggregate metrics (N02)
+  │                           + totalCostUsd, perModel[] (N05)
+  │     interview-detail.ts ← GET /admin/interviews/:id: calls + US-29 events (N04)
+  │     llm-calls.ts       ← GET /admin/llm-calls: every provider call + provider/model facets (N05)
+  │     users.ts           ← GET /admin/users: accounts, no secrets, interview count (N05)
+  │     sessions.ts        ← GET /admin/sessions: AUTH sessions, `active` vs clock.now() (N05, ADR-N07)
+  │     audit-log.ts       ← GET /admin/audit: the read side of audit_logs (N05)
+  │     queue.ts           ← GET /admin/queue: BullMQ `report` counts + dead letter (N05)
   │
   ├── modules/interview/   ← I03 built router.ts + ownership.ts + csrf.ts; this ledger adds:
   │     delete.ts          ← DELETE /interviews/:id: soft delete `deleted_at = now()` (N01)
@@ -82,6 +90,9 @@ The admin reads are the **only** callers that bypass `userInterviews()` and quer
 | ADR-N02 | Deleted-row visibility for admins | Admin reads call `prisma.interview.findMany` directly (bypassing `userInterviews`), annotated at each call site | K11 counts deleted interviews ("Total tokens … deleted included"); the K13 helper is for user-facing modules only — this is the ONE sanctioned bypass |
 | ADR-N03 | Soft delete + user list | `DELETE /interviews/:id` = `UPDATE deleted_at = now()` (never `DELETE`); `GET /me/interviews` = `userInterviews()`; both reuse I03's ownership resolver and CSRF middleware | Consume F02's helper, do not rebuild it; non-owner is `404 INTERVIEW_NOT_FOUND` (existence not leaked); the audit row survives |
 | ADR-N04 | `admin_auth.feature` ownership | Owned by auth A02; this ledger builds no admin-auth task | The admin-password rule is a single security rule; double-owning it invites a divergent second implementation |
+| ADR-N05 | Where US-29's events live | Three new `AuditAction` values on the existing `audit_logs`; no new table, no migration | `audit_logs` already is actor + subject + trace + metadata, append-only; a second table is a structural change (F02's scope) and two orderings to merge for one timeline |
+| ADR-N06 | How `packages/ai` reports a suspicion | An injected `SecurityEventSink` callback, supplied by `backend` | The package depends on neither api nor worker (K1) and must not learn about a database; a caller with none keeps the log-only behaviour |
+| ADR-N07 | What the console's "Sessions" section means | The AUTH `sessions` table | ADR-S01 removed the ElevenLabs agent and the voice-session table with it; "who holds a way in" is the question the view is opened with |
 
 ## Data model additions
 
@@ -93,8 +104,15 @@ The admin reads are the **only** callers that bypass `userInterviews()` and quer
 | `llm_calls` | `interview_id`, `input_tokens`, `output_tokens`, `cost_usd` (token total + cost, deleted interviews included) |
 | `report_questions` | `question_id`, score column (lowest-scoring → `weakestQuestions`, a plain relational query — db AC-12) |
 | `occupation_clusters` | cluster key/label for the `perOccupation` grouping |
+| `users` | `email_lower`, `role`, `locale`, verification/onboarding/consent stamps, `deleted_at` — never `password_hash`, `google_sub` or a token (N04 join, N05 list) |
+| `sessions` | the AUTH table: `user_id`, `expires_at`, `revoked_at`, `created_at` (N05, ADR-N07) |
+| `audit_logs` | `action`, `actor_user_id`, `subject_type`, `subject_id`, `trace_id`, `metadata` (N04 timeline, N05 list) |
+| `reports` | `status`, `prompt_uuid`, `prompt_version` — the US-28 rollback handle on the drill-down (N04) |
 
-The only write this ledger performs is the soft delete: `interviews.deleted_at = now()`.
+Two writes, both additive and neither structural: the soft delete
+(`interviews.deleted_at = now()`), and the `audit_logs` rows this ledger records — for the
+privileged reads (issue 86), and from N03 for the US-29 security/budget/time events (ADR-N05).
+A new `AuditAction` is a TypeScript union change, never a migration: the column is a `String`.
 
 No index or column is required beyond F02's §8.1 set — `interviews(user_id, created_at)`,
 `interviews(occupation_cluster_id)`, `interviews(state)` and `llm_calls(interview_id)` cover
@@ -118,13 +136,47 @@ computed to K11's fixed definitions (backend spec *Admin stats*) — cited, neve
     `occupation` in that cluster.
   - `weakestQuestions[]` = lowest-scoring `question_id`s from `report_questions` (no jsonb).
 
+Extended by N03–N05, shapes in `REFERENCE.md`:
+
+- `GET /admin/interviews` gains the `?occupationCluster&state&userId` facets and `userEmail`,
+  `budgetUsd`, `startedAt`, `createdAt` on the row (N04).
+- `GET /admin/interviews/:id` → `{ interview, calls, callsTruncated, events }` (N04).
+- `GET /admin/stats` gains `totalCostUsd` and `perModel[]`, both aggregated in Postgres; the
+  K11 fields above are unchanged byte for byte (N05, issue 85).
+- `GET /admin/llm-calls`, `/admin/users`, `/admin/sessions`, `/admin/audit`, `/admin/queue`
+  (N05) — all cursor-paged, all on the same gate, all audited.
+
+Every read on this surface writes one `audit_logs` row, `GET /admin/audit` included: an audit
+surface readable without leaving a trace is the one an attacker uses to find out what was
+noticed.
+
 ## Phasing / task clusters (see STATE.md ledger)
 
 0. Admin-role gate + soft-delete audit path (N01) — `requireAdmin`, `GET /admin/interviews`,
    `DELETE /interviews/:id`, `GET /me/interviews`; greens `@admin-cost and @AC-17`.
 1. Admin stats aggregation (N02) — `GET /admin/stats`; greens `@admin-cost and @AC-18`.
+2. US-29 events (N03) — three `AuditAction` values, the `SecurityEventSink` seam in
+   `packages/ai`, and `recordExhaustion` at the `applyTransition` chokepoint. No endpoint.
+3. Facets + drill-down (N04) — `interviewFilters` on the audit list, `GET /admin/interviews/:id`.
+4. The console's remaining reads (N05) — `/admin/llm-calls`, `/users`, `/sessions`, `/audit`,
+   `/queue`, plus `totalCostUsd` + `perModel[]` on `/admin/stats`.
 
-**Why two tasks, not more.** `admin_cost.feature` holds exactly two scenarios, and each is a
+**Why the ledger did not stop at two.** N01/N02 were sized by the two `admin_cost.feature`
+scenarios, which is why they are the only tasks with an acceptance tag. N03–N05 close the spec
+rows and user stories those two scenarios never covered — the `?occupationCluster&state&userId`
+facets at `.agents/specs/2026-07-29-backend.md:151`, the drill-down row at `:152`, US-26's
+per-model spend, US-29's "see when the system defended itself", issue 095's queue
+observability. **They have no `@AC` scenario**, deliberately: `COVERAGE.md` maps none, and
+inventing one would be inventing an acceptance criterion. Their gate is `npm test -- --run
+backend/modules/admin` + `npm run typecheck`, and `@AC-17`/`@AC-18` are the regression check —
+they still pass because every field they read was preserved.
+
+**Why N04 depends on N03, not only on N01.** The drill-down's `events` array is
+`audit_logs where subject_type='interview'`, and before N03 nothing wrote such a row for a
+suspicion or an exhaustion. Building the reader first would have shipped a permanently empty
+US-29 panel.
+
+**Why two tasks at the start, not more.** `admin_cost.feature` holds exactly two scenarios, and each is a
 single end-to-end assertion that cross-cuts several endpoints. AC-17 needs the delete route,
 the user list **and** the admin audit list together; AC-18 needs the role gate, the admin
 list **and** the stats endpoint together. A finer split would leave a task with no runnable
@@ -135,9 +187,9 @@ N02 (AC-18) adds only the stats endpoint on top. N01 → N02 is a linear chain, 
 ## Out of scope (post-admin)
 
 - **`admin_auth.feature` / the admin-must-use-password rule (AC-4)** — auth **A02** (ADR-N04).
-- **`GET /admin/interviews/:id` per-call drill-down** (provider/model/prompt-version/latency
-  rows) — no acceptance scenario maps it (not in `COVERAGE.md`); backlog, promote when the
-  admin drill-down UI (US-29) or a scenario is specced.
+- ~~**`GET /admin/interviews/:id` per-call drill-down**~~ — **built in N04** (2026-08-11), with
+  its `events` array fed by N03. Still no acceptance scenario; the gate is the unit tests on
+  `shapeInterviewDetail`.
 - **The report pipeline that writes `report_questions`** — `report`/`worker` ledgers.
   Admin only *reads* `report_questions` (db AC-12); the acceptance ring seeds the rows.
 - **Cost *computation* per call (`spent_usd`, `llm_calls`, per-attempt cost)** —
@@ -148,9 +200,9 @@ N02 (AC-18) adds only the stats endpoint on top. N01 → N02 is a linear chain, 
 - **`requireAuth`, the session cookie, the interview ownership resolver, CSRF middleware** —
   auth A01 (`requireAuth`) and interview-core I03 (`activeInterview` ownership resolver,
   `csrf.ts`). This ledger reuses them for `DELETE /interviews/:id`.
-- **Rich admin filters** (`?occupationCluster&state&userId` faceting beyond a `cursor/limit`
-  page) — implement only the cursor pagination the green run needs; backlog richer filters
-  until a UI requires them.
+- ~~**Rich admin filters** (`?occupationCluster&state&userId` faceting)~~ — **built in N04**
+  (2026-08-11), once the console needed them. Every facet narrows; none may add a `deleted_at`
+  clause.
 - **The Recharts rendering of these numbers, the admin panel UI, locale strings** —
   `frontend`/`ui` ledgers. This ledger returns numbers and stable codes, never display text.
 

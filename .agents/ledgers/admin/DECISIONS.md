@@ -124,3 +124,86 @@ is patched.
 **Consequences:** The admin ledger's cross-ledger table lists A02 as a dependency (an admin must
 be able to obtain a session before any `/admin/*` test runs), not as work this ledger performs.
 If A02 is not green, admin tasks block on it (STATE cross-ledger gate), never re-implement it.
+
+---
+
+## ADR-N05 — 2026-08-11 — US-29's events land in the existing `audit_logs`, not a new table
+
+**Context:** US-29 asks an admin to "see when the system defended itself". Prompt-injection
+suspicions existed only as a pino line in `packages/ai/src/prompt-builder.ts`; budget and time
+exhaustion left only `interviews.ended_reason`, one value per interview and not a timeline.
+`LOG_TRANSPORT=stdout` with no log volume on `api` means `docker compose down` erased both.
+Options: (A) three new `AuditAction` values on `audit_logs`; (B) a dedicated `events` table;
+(C) leave it to `LOG_TRANSPORT=elastic` and query Kibana.
+
+**Decision:** (A). `security.prompt_injection_suspected`, `interview.budget_exhausted`,
+`interview.time_exhausted`. No migration — `audit_logs.action` is a `String` by design, so a
+new action is a compile-time change to the union in `src/lib/audit.ts`.
+
+**Why not a dedicated `events` table:** It is `audit_logs` with a different name — actor,
+subject, trace id, metadata, append-only — and a structural change belongs to F02, not here
+(ADR-F02). Two tables also mean the drill-down does two queries and merges two orderings to
+show one timeline.
+
+**Why not Elastic:** it is an optional profile (~2.7 GB), off by default. A story about seeing
+what happened cannot depend on an observability stack a fresh clone does not run.
+
+**Consequences:** The actor on these rows is the interview's own account, not an operator —
+nobody privileged is present, and the row still answers "whose data was this". The drill-down
+(N04) queries `subject_type = 'interview'` + `subject_id`, never `action`, so admin list reads
+do not crowd the timeline.
+
+---
+
+## ADR-N06 — 2026-08-11 — The security sink is an injected callback, not a Prisma import
+
+**Context:** The scan that emits `SECURITY_PROMPT_INJECTION_SUSPECTED` lives in
+`packages/ai`, which depends on neither `api` nor `worker` (K1) and owns no database. ADR-N05
+needs that suspicion to reach `audit_logs`. Options: (A) `packages/ai` exports a
+`SecurityEventSink` type and takes one optionally, the caller supplies the durable half;
+(B) import Prisma in `packages/ai` and write the row there; (C) re-scan in `backend` after the
+build so the package stays untouched.
+
+**Decision:** (A). `PromptBuilder` takes an optional fourth constructor arg,
+`createPromptBuilder({ logger, onSecurityEvent })` threads it, `ChainDeps.onSecurityEvent`
+carries it through the chain. `backend/modules/ai/index.ts` supplies `recordSecurityEvent`;
+`worker` and every test pass nothing and keep the log-only behaviour.
+
+**Why not a Prisma import:** it would give a package the whole repo depends on a dependency on
+one deployment's database, and make the worker and the unit tests need a connection to build a
+prompt.
+
+**Why not re-scanning in `backend`:** two copies of a security check, drifting apart. The
+pattern set and the scan stay in one place.
+
+**Consequences:** The sink is fire-and-forget by contract — the scan does not block a call
+(§7.1.5), so a sink that could fail a build would hand the regex a veto it deliberately does
+not have. It carries the field NAME and the pattern id only; the matched value is the
+candidate's text and must not reach a durable table (issue 063).
+
+---
+
+## ADR-N07 — 2026-08-11 — The console's "Sessions" section means auth sessions
+
+**Context:** The admin console was specced with a "Sessions" section, sketched when a voice
+*session* was a first-class row. ADR-S01 removed the ElevenLabs agent and the `voice_sessions`
+table with it, so that reading has no table behind it. Options: (A) the section lists the auth
+`sessions` rows; (B) drop the section; (C) reconstruct voice sessions from `llm_calls` with
+`unit_kind = 'second'`.
+
+**Decision:** (A). `GET /admin/sessions` reads the AUTH `sessions` table — who currently holds
+a way in, and when it lapses — filtered by `userId` and `active`. `active` is computed
+server-side against `clock.now()`, because a browser with a wrong clock would draw a different
+answer. The session id is projected: it is a row's primary key, not the signed cookie value.
+
+**Why not drop it:** "who is signed in right now, and whose access can be revoked" is the
+question an operator actually opens a sessions view with, and nothing else in the console
+answers it.
+
+**Why not reconstruct voice sessions:** that is a per-call cost view, which is what
+`GET /admin/llm-calls` and the N04 drill-down already are. Naming it a session would invent an
+entity the schema no longer has.
+
+**Consequences:** The section's name is inherited and now means something narrower than it did
+when it was written. Recorded here so a later reader does not go looking for the voice-session
+table that ADR-S01 deleted.
