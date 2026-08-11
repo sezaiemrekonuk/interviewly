@@ -1,5 +1,5 @@
 # T02 — The held partial: where an unfinished thought waits
-REPO: (this repo) · Depends: F03, S03 · Status: todo
+REPO: (this repo) · Depends: F03, S03 · Status: done
 Read first: STATE.md, REFERENCE.md, then this.
 **Model: claude-opus-5** — the atomic take is the whole task. A `GET` followed by a separate
 `DEL` passes every single-threaded test and double-submits a candidate's answer under
@@ -40,23 +40,23 @@ with the loop counters inside it. No route touches it in this task — T03 wires
 - `backend/src/lib/logger.ts` — structured logging; fields, not interpolated strings.
 
 ## Steps
-- [ ] **1. Test red** — hold then take returns the value; a second take returns null; two takes
+- [x] **1. Test red** — hold then take returns the value; a second take returns null; two takes
   racing yield exactly one non-null. See all three red. The concurrency one is the point of the
   task: write it so it genuinely interleaves rather than awaiting the first.
-- [ ] **2. `backend/modules/speech/pending-turn.ts`** — the module, over the shared client.
+- [x] **2. `backend/modules/speech/pending-turn.ts`** — the module, over the shared client.
   Exported constants `MAX_PROBES_PER_TURN = 8` and `MAX_PENDING_CHARS = 6_000`, so T03 imports
   the caps rather than restating them.
-- [ ] **3. `takePendingTurn(interviewId)`** — atomic MULTI GET+DEL, JSON-parsed, returning
+- [x] **3. `takePendingTurn(interviewId)`** — atomic MULTI GET+DEL, JSON-parsed, returning
   `{ text, questionId, probes } | null`. A malformed value returns null and logs a warning with
   no content.
-- [ ] **4. `holdPendingTurn(interviewId, value)`** — `SET` with `EX 300`. TTL on every write, not
+- [x] **4. `holdPendingTurn(interviewId, value)`** — `SET` with `EX 300`. TTL on every write, not
   only the first.
-- [ ] **5. `dropPendingTurn(interviewId)`** — plain `DEL`, for the callers that must discard
+- [x] **5. `dropPendingTurn(interviewId)`** — plain `DEL`, for the callers that must discard
   rather than consume.
-- [ ] **6. Redis-down behaviour** — every function swallows a connection error and behaves as
+- [x] **6. Redis-down behaviour** — every function swallows a connection error and behaves as
   "nothing held": `take` returns null, `hold` is a no-op, `drop` is a no-op. Each logs once. A
   throw here would turn a cache outage into a failed turn.
-- [ ] **7. Unit tests** — round-trip, second-take-null, concurrent-take-once, TTL set on write,
+- [x] **7. Unit tests** — round-trip, second-take-null, concurrent-take-once, TTL set on write,
   malformed value, Redis-down on all three functions, and no test fixture containing held text
   in a log assertion.
 
@@ -78,4 +78,44 @@ Expected: green, with the concurrent-take test genuinely interleaving — confir
 temporarily split the MULTI into a `get` and a `del`.
 
 ## Notes
-_(fill in when done — T03 imports the caps and the three functions from here)_
+
+`backend/modules/speech/pending-turn.ts` — 3 functions, 3 constants, 1 interface. Nothing imports
+it yet; T03 is the first caller.
+
+```ts
+import {
+  dropPendingTurn, holdPendingTurn, takePendingTurn,
+  MAX_PENDING_CHARS, MAX_PROBES_PER_TURN, PENDING_TURN_TTL_SECONDS,
+  type PendingTurn,          // { text: string; questionId: string; probes: number }
+} from './pending-turn';     // from modules/interview: '../speech/pending-turn'
+```
+
+- `takePendingTurn(interviewId): Promise<PendingTurn | null>` — `multi().get(k).del(k).exec()`,
+  one round trip. Reads `results?.[0]` and rethrows its `[err]` element into the same catch.
+- `holdPendingTurn(interviewId, value): Promise<void>` — `SET … EX 300` on every write.
+- `dropPendingTurn(interviewId): Promise<void>` — plain `DEL`.
+- `MAX_PROBES_PER_TURN = 8`, `MAX_PENDING_CHARS = 6_000`, `PENDING_TURN_TTL_SECONDS = 300`.
+
+**For T03:**
+- **No function throws and none rejects.** No call site needs a try/catch. Redis down →
+  take `null`, hold/drop no-ops, one `PENDING_TURN_UNAVAILABLE` warn each.
+- **The caps are not enforced here** — deliberate, per the task's Step 2. T03 enforces both:
+  refuse to hold past `MAX_PENDING_CHARS`, force-submit past `MAX_PROBES_PER_TURN`.
+- **The `questionId` check is the caller's too.** The module stores and returns it; joining a
+  stale fragment onto a new question is prevented by T03 comparing it to `currentQuestionRow`.
+- A malformed value is consumed (the DEL already ran), returns `null`, warns
+  `PENDING_TURN_MALFORMED` with `chars` only. It cannot be re-read on the next turn.
+- Key is `interview:{interviewId}:pending-turn`, derived inside the module — do not pass a key in.
+
+**Deviation from Step 6:** the take's connection-error branch also covers a malformed/aborted
+`exec()`, rather than a separate path. Same outcome (`null`), one log event.
+
+## Verification output
+
+`npm test -- --project node speech/pending-turn` → 17 passed. Full `npm test` → 1015 passed
+(103 files). `npm run lint`, `npm run typecheck` clean.
+
+Split-MULTI check done as the task asks: replacing the transaction with `get` then `del` fails
+`is consumed exactly once when two takes race` (`expected [ {…}, {…} ] to deeply equal [ {…} ]`)
+and nothing else. The fake Redis resolves each command on its own macrotask, so the two takes
+genuinely interleave; `multi().exec()` awaits once and then applies both commands with no gap.

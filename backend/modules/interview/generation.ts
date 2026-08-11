@@ -117,6 +117,14 @@ async function priorTopicsFor(interviewId: string, roundType: RoundType): Promis
  * before `seed-…` and would win the round. The by-role query stays as a fallback for
  * deployments predating the seeded ids. Shared with the conductor's `personaForRound` so
  * assignment and the name/brief the room reads back can't diverge.
+ *
+ * **Deliberately not memoised**, and a process-lifetime cache here has been proposed and
+ * reverted once. Personas are editable reference data, not constants: `active` is how one is
+ * retired, and `voice_id`, `name`, `brief` and `system_prompt` are all rows an admin can change.
+ * Caching the row would mean a retired persona keeps conducting interviews, and a corrected
+ * `voice_id` keeps 400ing per question, until every api and worker process happens to restart.
+ * The read it saves is a primary-key lookup on a table of a handful of rows, called once per
+ * turn — next to the LLM call that turn is waiting on, it is not measurable.
  */
 export async function seededPersona(roundType: RoundType): Promise<Persona> {
   const persona =

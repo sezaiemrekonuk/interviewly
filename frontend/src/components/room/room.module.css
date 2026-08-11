@@ -885,8 +885,9 @@
   }
 }
 
-/* The way out of the room, on the rail in both modes. Quiet, not --danger: leaving is the
-   ordinary end of a session, and the interview is resumable from the archive afterwards. */
+/* The way out of the room, on the rail in both modes. Quiet, not --danger: the button itself
+   only opens the confirm below, and it is the confirm that carries the weight — leaving ends
+   the interview now (issue 104), it no longer just navigates away from a room still running. */
 .leave {
   min-height: 44px;
   margin-block-start: 16px;
@@ -912,4 +913,65 @@
 .leave:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* The confirm step, mirroring the home list's delete-confirm: the question replaces the button
+   in place rather than opening a dialog, so the rail does not reflow and nothing is covered. */
+.leaveConfirm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
+  margin-block-start: 16px;
+}
+
+.leaveConfirmQuestion {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--rail-text-muted);
+}
+
+.leaveConfirmAction,
+.leaveCancel {
+  min-height: 44px;
+  padding: 8px 12px;
+  font-family: inherit;
+  font-size: 14px;
+  text-align: start;
+  background: none;
+  border-radius: var(--radius-button);
+  cursor: pointer;
+}
+
+.leaveConfirmAction {
+  font-weight: 600;
+  color: var(--danger);
+  border: 1px solid var(--danger);
+}
+
+.leaveConfirmAction[disabled] {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+.leaveCancel {
+  color: var(--rail-text-muted);
+  border: 1px solid var(--rail-border);
+}
+
+.leaveCancel:hover {
+  color: var(--rail-text);
+  background: var(--rail-raised);
+}
+
+.leaveConfirmAction:focus-visible,
+.leaveCancel:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.leaveError {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--danger);
 }

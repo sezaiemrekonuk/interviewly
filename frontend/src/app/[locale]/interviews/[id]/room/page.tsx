@@ -11,16 +11,22 @@ import { PersonaTiles } from '../../../../../components/room/persona-tiles';
 import { QuestionPanel } from '../../../../../components/room/question-panel';
 import { RoomRail } from '../../../../../components/room/room-rail';
 import { useRouter } from '../../../../../i18n/navigation';
-import { DEFAULT_LANDING_PATH } from '../../../../../lib/auth-redirect';
 import { VoiceControls } from '../../../../../components/room/voice-controls';
 import { SplitShell, WorkTop } from '../../../../../components/shell/split-shell';
 import { Button } from '../../../../../components/ui';
 import { routeForError } from '../../../../../lib/error-routing';
-import { ApiError, useInterviewState, useResumeInterview, useSubmitTurn } from '../../../../../lib/query';
+import {
+  ApiError,
+  useAbandonInterview,
+  useInterviewState,
+  useResumeInterview,
+  useSubmitTurn,
+} from '../../../../../lib/query';
 import { resolveAvatarState, roomPhase } from '../../../../../lib/room-avatar';
 import { useErrorMessage } from '../../../../../lib/use-error-message';
 import { useInterviewEvents } from '../../../../../lib/use-interview-events';
 import { useRequireAuth } from '../../../../../lib/use-require-auth';
+import { useRoomHeartbeat } from '../../../../../lib/use-room-clock';
 import { useVoiceSession } from '../../../../../lib/use-voice-session';
 import { resolveActiveSpeaker } from '../../../../../lib/voice/active-speaker';
 
@@ -64,9 +70,11 @@ export default function InterviewRoomPage() {
 
   const submit = useSubmitTurn(id);
   const resume = useResumeInterview(id);
+  const abandon = useAbandonInterview(id);
   const [typedFor, setTypedFor] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [resumeError, setResumeError] = useState<string | null>(null);
+  const [leaveError, setLeaveError] = useState<string | null>(null);
 
   // Room chrome, none of it server state: the speaker/grid view, the captions, and whether the
   // transcript panel is out. `null` is "the candidate has not said" — the default differs by
@@ -91,6 +99,11 @@ export default function InterviewRoomPage() {
   // refetch and the room becomes the text room — there is no client-side mode flag to unset.
   const voiceMode = room?.mode === 'voice';
   const speakable = roomState === 'hr_round' || roomState === 'tech_round';
+
+  // I16 — presence, on a timer, for as long as this room is a room. Gated on the state rather
+  // than on the component being mounted because the room stays mounted for a beat after the last
+  // answer while the redirect to the report runs, and time banked there is time nobody sat.
+  useRoomHeartbeat(id, ready && roomState !== null && !REPORT_STATES.has(roomState));
   // C06 — voice follows the conversation, not the question index: the welcome, a follow-up and
   // the handover line are all things to say and none of them is a question.
   //
@@ -359,8 +372,23 @@ export default function InterviewRoomPage() {
         rail={
           <RoomRail
             room={room}
+            roomUpdatedAt={stateQuery.dataUpdatedAt}
             voiceStatus={voiceMode ? voice.status : null}
-            onLeave={() => router.push(DEFAULT_LANDING_PATH)}
+            leaving={abandon.isPending}
+            leaveError={leaveError}
+            // issue 104: Leave ends the interview now instead of walking away from one still
+            // running. Both endings land on the interview's own page rather than the
+            // dashboard — `evaluating` waits there for the report, `abandoned` reads back
+            // the transcript — which is where the `REPORT_STATES` effect above would send
+            // this room anyway once the refetch arrived. Navigating here just makes it
+            // immediate rather than dependent on an invalidation round-trip.
+            onLeave={() => {
+              setLeaveError(null);
+              abandon.mutate(undefined, {
+                onSuccess: () => router.replace(`/interviews/${id}`),
+                onError: (err) => setLeaveError(errorMessage(err.code)),
+              });
+            }}
           />
         }
       >

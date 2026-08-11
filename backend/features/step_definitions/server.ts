@@ -2,7 +2,9 @@
 // One server for the whole cucumber run (BeforeAll/AfterAll), ephemeral port so parallel
 // local runs never collide. `serverState` is a mutable object, not a `let` export, so its
 // value stays live across the tsx/cjs interop boundary.
+import { execSync } from 'node:child_process';
 import type { Server } from 'node:http';
+import { join } from 'node:path';
 
 import { AfterAll, Before, BeforeAll } from '@cucumber/cucumber';
 
@@ -12,12 +14,33 @@ import { app } from '../../src/app';
 import { prisma } from '../../src/lib/db';
 import { setProbeOverrides } from '../../src/lib/probes';
 import { reportQueue } from '../../src/lib/queue';
+import { assertDisposableStores } from '../fixtures/disposable-stores';
 
 export const serverState: { baseUrl: string } = { baseUrl: '' };
+
+// Anchored to this file, not to `process.cwd()`, for the reason `tests/support/harness.ts`
+// gives: the runner is invoked from the repo root and a cwd-relative path stops resolving the
+// moment it is not.
+const SCHEMA = join(__dirname, '../../prisma/schema.prisma');
 
 let server: Server;
 
 BeforeAll(async function startServer() {
+  // Issues #170 and #119. This ring creates interviews and enqueues report jobs, and until now
+  // it had no equivalent of the auth ring's database check — so it was the one that stranded 26
+  // fixture interviews in the application's `evaluating`. Checked before the server listens, so
+  // a misconfigured run dies here rather than after its first write.
+  assertDisposableStores();
+  // Safe only because the line above proved this is not db 0. A run inherits nothing from the
+  // last one: the per-scenario `Before` below drops rate-limit keys, but BullMQ job state and
+  // anything a crashed run left behind outlive it.
+  await redis.flushdb();
+  // Idempotent, and new with #170: this ring used to inherit the application's database, which
+  // is migrated by the compose `migrate` service. Its own is not — a developer who has never
+  // run the auth profile has an empty `interviewly_test` — and "relation does not exist" on the
+  // first scenario is a poor way to learn that. Mirrors `tests/support/harness.ts`; CI migrates
+  // the same database a step earlier, where this is a no-op.
+  execSync(`npx prisma migrate deploy --schema "${SCHEMA}"`, { stdio: 'ignore' });
   // A04's injection seam, same as the auth ring's mail recorder: scenarios here register
   // users, and without this the first registration constructs the real BullMQ queue, whose
   // Redis connection has no owner to close it — the run then hangs after its summary

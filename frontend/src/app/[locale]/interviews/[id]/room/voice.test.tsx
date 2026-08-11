@@ -80,9 +80,10 @@ function voiceState(over: Record<string, unknown> = {}) {
     targetQuestionCount: 8,
     endedReason: null,
     language: 'en',
-    // S09: the window the room counts down. Offset by half a second so a tick landing mid-render
-    // cannot move the floored figure the assertions read.
-    startedAt: new Date(Date.now() - 65_500).toISOString(),
+    // S09: the window the room counts down. I16: elapsed comes off `elapsedSeconds` — an hour
+    // since the start, 65 s of it in the room — and `startedAt` is only the interview's date.
+    startedAt: new Date(Date.now() - 3_600_000).toISOString(),
+    elapsedSeconds: 65,
     expiresAt: new Date(Date.now() + 300_000).toISOString(),
     persona: { id: 'p-hr', role: 'hr', name: 'Ada', avatarState: 'idle' },
     personas: PERSONAS,
@@ -369,8 +370,8 @@ describe('interview room, voice mode (W10)', () => {
     expect(calls.some((c) => c.url === '/api/interviews/i1/answers/audio')).toBe(false);
   });
 
-  // S09 — the room shows the ceiling it is actually held to, and reads elapsed off the same
-  // server field instead of counting from arrival.
+  // S09 — the room shows the ceiling it is actually held to. I16 — and elapsed off the server's
+  // active-time figure instead of counting from either arrival or the interview's start.
   it('renders the countdown and an elapsed clock taken from the server window', async () => {
     stubFetch();
     await renderRoom();

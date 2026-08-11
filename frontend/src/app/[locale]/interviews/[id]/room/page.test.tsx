@@ -88,8 +88,11 @@ function roomState(over: Record<string, unknown> = {}) {
     targetQuestionCount: 8,
     endedReason: null,
     language: 'en',
-    // S09: text carries the window too, and the server reports no ceiling for it.
-    startedAt: new Date(Date.now() - 65_500).toISOString(),
+    // S09: text carries the window too, and the server reports no ceiling for it. I16: elapsed
+    // is the server's active-time figure, so `startedAt` no longer feeds the rail — an hour-old
+    // start with 65 s of room time reads 01:05, which is the whole point of the change.
+    startedAt: new Date(Date.now() - 3_600_000).toISOString(),
+    elapsedSeconds: 65,
     expiresAt: null,
     persona: { id: 'p-hr', role: 'hr', name: 'Ada', avatarState: 'idle' },
     personas: PERSONAS,
@@ -123,6 +126,8 @@ function stubFetch(
     turn?: { status: number; body: unknown };
     /** Left to the 404 fallback where the scenario is about the repair failing. */
     resume?: { status: number; body: unknown };
+    /** `POST /abandon` (issue 104) — the room's Leave, once confirmed. */
+    abandon?: { status: number; body: unknown };
   } = {},
 ) {
   const calls: Call[] = [];
@@ -150,6 +155,9 @@ function stubFetch(
       }
       if (url === '/api/interviews/i1/resume' && options.resume) {
         return json(options.resume.status, options.resume.body);
+      }
+      if (url === '/api/interviews/i1/abandon') {
+        return json(options.abandon?.status ?? 200, options.abandon?.body ?? { state: 'abandoned' });
       }
       return json(404, { error: { code: 'NOT_FOUND' } });
     }),
@@ -193,8 +201,9 @@ describe('interview room, text mode (W06)', () => {
   });
 
   // S09 — the ceiling bounds voice only, so a written interview gets no countdown and no
-  // invented pressure. Elapsed is still the server's, so a reload does not restart it.
-  it('shows no countdown, and an elapsed clock read from the server start', async () => {
+  // invented pressure. I16 — elapsed is the server's active-time figure: this interview started
+  // an hour ago and has 65 s of room time, and 01:05 is what the candidate is owed.
+  it('shows no countdown, and an elapsed clock read from the server active time', async () => {
     stubFetch();
     await renderRoom();
 
@@ -529,4 +538,112 @@ describe('interview room, text mode (W06)', () => {
   // and the voice caption is mounted `instant`, so neither mode has a typewriter left to assert
   // from. `question-panel.tsx` still owns the animation for whoever mounts it non-instant; it
   // has no test file of its own and this room test was never the place to be its unit test.
+});
+
+/**
+ * Issue 104. Leave used to be `router.push(DEFAULT_LANDING_PATH)` — it walked the candidate out
+ * of a room that carried on running, and the interview stayed "in progress" on the home list
+ * until the worker's sweep noticed it a day later. It ends the interview now, which is why it
+ * grew a confirm: an interview cannot be un-ended.
+ */
+describe('leaving the room (issue 104)', () => {
+  beforeEach(() => {
+    nav.push.mockReset();
+    nav.replace.mockReset();
+    installEventSourceMock();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  it('asks before ending, and sends nothing until it is confirmed', async () => {
+    const calls = stubFetch();
+    await renderRoom();
+
+    await userEvent.click(screen.getByRole('button', { name: messages.room.leave }));
+
+    expect(screen.getByTestId('room-leave-confirm')).toBeInTheDocument();
+    expect(calls.some((c) => c.url === '/api/interviews/i1/abandon')).toBe(false);
+  });
+
+  it('puts the candidate back in the room on cancel, still having sent nothing', async () => {
+    const calls = stubFetch();
+    await renderRoom();
+
+    await userEvent.click(screen.getByRole('button', { name: messages.room.leave }));
+    await userEvent.click(screen.getByRole('button', { name: messages.room.leaveCancel }));
+
+    expect(screen.queryByTestId('room-leave-confirm')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: messages.room.leave })).toBeInTheDocument();
+    expect(calls.some((c) => c.url === '/api/interviews/i1/abandon')).toBe(false);
+  });
+
+  it('ends the interview and leaves for its page once confirmed', async () => {
+    const calls = stubFetch({ abandon: { status: 200, body: { state: 'evaluating' } } });
+    await renderRoom();
+
+    await userEvent.click(screen.getByRole('button', { name: messages.room.leave }));
+    await userEvent.click(screen.getByRole('button', { name: messages.room.leaveConfirmAction }));
+
+    await waitFor(() => {
+      expect(calls.some((c) => c.url === '/api/interviews/i1/abandon' && c.method === 'POST')).toBe(
+        true,
+      );
+    });
+    // The interview's own page, not the dashboard: `evaluating` waits there for the report and
+    // `abandoned` reads back the transcript. `replace`, so Back does not return to a dead room.
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/interviews/i1'));
+  });
+
+  // The confirm names the ending the server will actually pick — it branches on the same fact,
+  // the answered turns — so the candidate is choosing an outcome, not agreeing to a warning.
+  it('promises a report only when something has been answered', async () => {
+    stubFetch({ states: [roomState({ transcript: [] })] });
+    await renderRoom();
+
+    await userEvent.click(screen.getByRole('button', { name: messages.room.leave }));
+
+    expect(screen.getByTestId('room-leave-confirm')).toHaveTextContent(
+      messages.room.leaveConfirmEmpty,
+    );
+  });
+
+  it('promises a report on what was covered when turns have been answered', async () => {
+    stubFetch({
+      states: [
+        roomState({
+          transcript: [
+            { questionId: 'q1', question: 'Tell me about yourself.', answer: 'I ship things.', roundType: 'hr' },
+          ],
+        }),
+      ],
+    });
+    await renderRoom();
+
+    await userEvent.click(screen.getByRole('button', { name: messages.room.leave }));
+
+    expect(screen.getByTestId('room-leave-confirm')).toHaveTextContent(
+      messages.room.leaveConfirmScored,
+    );
+  });
+
+  // A refused leave must not strand the candidate between the two: the room is still live and
+  // still answerable, so the error goes inline and the navigation does not happen.
+  it('keeps the candidate in the room when the call is refused', async () => {
+    stubFetch({
+      abandon: { status: 409, body: { error: { code: 'INVALID_STATE_TRANSITION' } } },
+    });
+    await renderRoom();
+
+    await userEvent.click(screen.getByRole('button', { name: messages.room.leave }));
+    await userEvent.click(screen.getByRole('button', { name: messages.room.leaveConfirmAction }));
+
+    await waitFor(() => {
+      expect(within(screen.getByTestId('room-leave-confirm')).getByRole('alert')).toBeInTheDocument();
+    });
+    expect(nav.replace).not.toHaveBeenCalledWith('/interviews/i1');
+    expect(screen.getByTestId('interview-room')).toBeInTheDocument();
+  });
 });

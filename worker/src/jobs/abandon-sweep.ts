@@ -4,7 +4,15 @@ import type { Interview, InterviewState } from '@prisma/client';
 import { logger } from '../lib/logger';
 
 const STALE_AFTER_MS = 24 * 60 * 60 * 1000;
-const SWEEP_STATES: InterviewState[] = ['profiling', 'hr_round', 'paused'];
+// `tech_round` joined the list when the machine grew an edge for it (#104). It had been the
+// omission that mattered most: the technical round is the last one, so it is where a candidate
+// who gives up actually stops, and many interviews were stranded in it.
+//
+// The sweep ends them at `abandoned` rather than routing a partial run through `evaluating` the
+// way the leave button does: these rows have been untouched for a day, and spending a provider
+// call on a report nobody asked for is not what "clean up after a candidate who never came back"
+// should mean.
+const SWEEP_STATES: InterviewState[] = ['profiling', 'hr_round', 'tech_round', 'paused'];
 // `take` bounds the transitions one tick performs, not the rows it reads: the staleness
 // predicate is in the WHERE clause below, so the database returns stale rows only. A swept row
 // leaves `SWEEP_STATES`, so the next tick continues where this one stopped.

@@ -1,16 +1,14 @@
 # Turn-taking — State
 
 Last updated: 2026-08-11
-Last session ended: **`T01` done (Ahmet, 2026-08-11, opus-5 on a sonnet-tier task — owner
-override, see the devlog).** The gate exists as a seam method only; nothing calls it yet.
-Changed: `packages/ai/` (`AiClient.ts`, `live-client.ts`, `stub.ts`, `resolve-client.ts`,
-`schemas.ts`, `prompt-vars.ts`, `providers.ts`, `index.ts`, new
-`prompts/interview.turn.complete.prompt.yaml`, new `src/turn-complete.test.ts`,
-`prompt-builder.test.ts` name list) plus one delegating method in
-`backend/features/step_definitions/adaptive.steps.ts`.
-For `T03`: `turnComplete` never rejects — no call site needs a catch — and the chain opt-out is
-`buildSoloChain`, not a slice of `buildChain`. Real nano verdicts (9/9 correct, both languages)
-are in the task's `## Notes`; they are the only data spec Open question 1 has.
+Last session ended: **`T03` done (Ahmet, 2026-08-11, opus-5).** The gate, the buffer and the
+silence turn are wired: `stt.ts` `submitTurnAudio`, `conductor.ts` (`kind`, the silence row, both
+ceilings), `turns.ts`, `state.ts` (`pendingTurn`, the widened filter), `peekPendingTurn` on T02's
+module. **The ledger was wrong that no migration was needed** — `chat_messages.action` is the
+`ConductorAction` enum, so `20260811120000_conductor_silence` adds the value the C07 way;
+REFERENCE.md is patched and the task's Notes say the rest.
+**`T04` is now unblocked** and is the last row. It consumes `pendingTurn` and `kind: 'silence'`;
+the wire contract is at the top of T03's `## Notes` and is the only thing T04 needs from here.
 
 **The gate costs 780 ms, measured (2026-08-11).** `gpt-4.1-nano`, warm median over n=5, min 556,
 max 887 — which confirms ADR-T03's 3 s timeout as a ceiling rather than a target. It is a real
@@ -33,15 +31,16 @@ EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**`T02`** — the only unblocked `todo` row. `T03` still needs it.
+**`T04`** — the last row, and the only one that edits the room. It is where issue #219's flaky
+`voice.test.tsx` timing gets rewritten, and it is what speech-latency `L02`/`L03` wait on.
 
 ## Ledger
 
 | ID | Title | Repo | Status | Depends on |
 |----|-------|------|--------|------------|
 | T01 | The completeness gate: prompt, schema, seam method, chainless, fail-open | | done | C02, I02 |
-| T02 | The held partial: `pending-turn.ts`, atomic take, the two caps | | todo | F03, S03 |
-| T03 | Turn paths: gate + join + hold, the silence turn, `pendingTurn` on `/state` | | todo | T01, T02, C01, C02 |
+| T02 | The held partial: `pending-turn.ts`, atomic take, the two caps | | done | F03, S03 |
+| T03 | Turn paths: gate + join + hold, the silence turn, `pendingTurn` on `/state` | | done | T01, T02, C01, C02 |
 | T04 | The room: probe-vs-final stop, the 13 s clock, the recovery notice | | todo | T03, S06 |
 
 ## Dependency graph

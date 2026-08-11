@@ -25,10 +25,11 @@ moderate tier.
 | I13 | Rate limits: daily interview cap + interview-start limiter | `claude-sonnet-4.6` | Wiring over the A01 Redis limiter factory; no new trust boundary |
 | I14 | Reliability probes: `/healthz`, `/readyz` | `claude-sonnet-4.6` | Two dependency checks; mechanical |
 | I15 | Config: extend env schema with this ledger's keys, fail-fast | `claude-sonnet-4.6` | Zod schema extension over the F03 env base; mechanical |
+| I16 | Active elapsed: room clock + speech ceiling on time-in-room, presence heartbeat | `claude-opus-4.8` | Moves the measure `isPastSpeechCeiling` enforces on — a ceiling a client can extend is a cost hole, one that fires early cuts a candidate off mid-answer |
 
 ## Summary
 
-- **`claude-opus-4.8` (10 tasks):** I01, I02, I04, I05, I06, I07, I08, I09, I11, I12
+- **`claude-opus-4.8` (11 tasks):** I01, I02, I04, I05, I06, I07, I08, I09, I11, I12, I16
 - **`claude-sonnet-4.6` (5 tasks):** I03, I10, I13, I14, I15
 
 Rule of thumb: **AI seam / prompt boundary / state machine / budget transaction / untrusted

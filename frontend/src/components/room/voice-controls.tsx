@@ -40,8 +40,10 @@ function useRemaining(expiresAt: string | null): number | null {
  *
  * The warning is a word as well as a tone (`ui` §4.4), and it is announced from a live region
  * holding one fixed sentence: putting the ticking figure in there would re-read every second.
- * No latch on the announcement — the sentence appears when `warn` does and its text never
- * changes after, because `expiresAt` only ever shortens and the remaining time only falls.
+ * Its text never changes once shown, so there is no latch — but since I16 made `expiresAt` a
+ * moving deadline (it slides forward by whatever the candidate spends out of the room), the
+ * warning can now un-show as well as show. That is correct and not a flicker: the deadline moved
+ * because the interview genuinely has more time left than it did.
  */
 function TimeRemaining({ expiresAt }: { expiresAt: string | null }) {
   const t = useTranslations('room');

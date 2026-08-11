@@ -45,11 +45,31 @@ import { trackLanguage } from './language';
 import { applyTransition } from './machine';
 import { currentQuestionRow } from './state';
 
-/** One candidate utterance. Same bounds as a typed answer — S03's transcript arrives here too. */
-export const turnInputSchema = z.object({
-  text: z.string().trim().min(1).max(20_000),
-  inputMode: z.enum(['voice', 'text', 'widget']),
-});
+/**
+ * One candidate turn. Same bounds as a typed answer — S03's transcript arrives here too.
+ *
+ * T03 adds `kind`. A `silence` turn is the room saying only "the clock ran out"; it carries no
+ * text and the transform drops any that arrives, because what the candidate did not say must not
+ * be typeable into the turn the conductor answers (ADR-T02). Whether a silence request is really
+ * a silence is the server's call, not the room's: `submitTurn` takes the held partial first and
+ * turns one carrying a fragment back into an ordinary utterance.
+ */
+export const turnInputSchema = z
+  .object({
+    kind: z.enum(['utterance', 'silence']).default('utterance'),
+    text: z.string().trim().min(1).max(20_000).optional(),
+    inputMode: z.enum(['voice', 'text', 'widget']),
+  })
+  .superRefine((value, ctx) => {
+    if (value.kind !== 'silence' && !value.text) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['text'], message: 'required' });
+    }
+  })
+  .transform((value) =>
+    value.kind === 'silence'
+      ? ({ kind: 'silence', inputMode: value.inputMode } as const)
+      : ({ kind: 'utterance', text: value.text!, inputMode: value.inputMode } as const),
+  );
 
 export type TurnInput = z.infer<typeof turnInputSchema>;
 
@@ -79,6 +99,24 @@ const MAX_HISTORY_CHARS = 7_000;
  */
 const HISTORY_ROW_OVERHEAD = 17;
 const HISTORY_ELIDED = '[earlier turns omitted]';
+
+/**
+ * What the interviewer reads where the candidate's utterance would have been. Written as an
+ * observation rather than an instruction: the interviewer decides whether to nudge, re-ask or
+ * move on, exactly as it decides everything else about a turn.
+ */
+const SILENCE_NOTE = '[The candidate has said nothing for 13 seconds.]';
+
+/**
+ * A turn the candidate spent, for both ceilings. Silence is one of them (ADR-T04): a silent
+ * candidate whose silence counted toward neither loops forever, with the interviewer nudging
+ * into a room nobody is talking in and every test green.
+ *
+ * The interviewer's own lines and the two server notes are not turns — `drift` and `refused`
+ * are what the server did about a turn, and counting them would spend the ceiling twice.
+ */
+const countsAsTurn = (m: { role: ChatRole; action: ConductorAction | null }): boolean =>
+  m.role === 'user' || (m.role === 'system' && m.action === 'silence');
 
 /** The `EndedReason` values a conductor may ask for, mapped from its own vocabulary. */
 const END_REASONS = { completed: 'completed', cut_short: 'cut_short' } as const;
@@ -164,7 +202,29 @@ async function runTurn(
   // must be free once it has been.
   if (!input && asked) return { state: interview.state, currentIndex: interview.current_index };
 
-  if (input) {
+  // ADR-T04 — the turn nobody spoke. A `system` row the conductor reads back and the room never
+  // shows, so the interviewer can nudge, move on, or end without a candidate utterance to react
+  // to. No injection scan and no `trackLanguage`: there is no candidate text to scan, and
+  // detecting a language from the server's own sentence would switch the interview on silence.
+  if (input?.kind === 'silence') {
+    await prisma.chatMessage.create({
+      data: {
+        interview_id: interview.id,
+        role: 'system',
+        content: SILENCE_NOTE,
+        action: 'silence',
+        question_id: question.id,
+        trace_id: traceId,
+      },
+    });
+    history.push({ role: 'system', content: SILENCE_NOTE, question_id: question.id, action: 'silence' });
+    logger.info(
+      { traceId, interviewId: interview.id, questionId: question.id },
+      'CONDUCTOR_SILENCE_TURN',
+    );
+  }
+
+  if (input?.kind === 'utterance') {
     // C07 — the injection scan runs here as well as inside the prompt builder, because the
     // builder's hit is a log line and this one is a column: the report has to be able to see
     // that the candidate tried to rewrite the interviewer's instructions, and a Kibana entry
@@ -186,7 +246,7 @@ async function runTurn(
         trace_id: traceId,
       },
     });
-    history.push({ role: 'user', content: input.text, question_id: question.id });
+    history.push({ role: 'user', content: input.text, question_id: question.id, action: null });
     // I10 keeps its position: before anything that generates, so a switch reaches the batch
     // and the conductor's own reply in the language the candidate just moved to.
     interview.language = await trackLanguage(interview, input.text, { traceId });
@@ -194,7 +254,7 @@ async function runTurn(
 
   // The whole-interview backstop, counted in candidate utterances. `budget_usd` is the real
   // ceiling; this one catches a provider answering cheaply and wrongly for a very long time.
-  const utterances = history.filter((m) => m.role === 'user').length;
+  const utterances = history.filter(countsAsTurn).length;
   if (utterances > config.CONDUCTOR_MAX_TURNS) {
     logger.warn({ traceId, interviewId: interview.id, utterances }, 'CONDUCTOR_TURN_CEILING');
     return endInterview(
@@ -207,7 +267,7 @@ async function runTurn(
   }
 
   const turnsOnQuestion = history.filter(
-    (m) => m.role === 'user' && m.question_id === question.id,
+    (m) => countsAsTurn(m) && m.question_id === question.id,
   ).length;
   const turnsLeftOnQuestion = Math.max(0, config.CONDUCTOR_MAX_TURNS_PER_QUESTION - turnsOnQuestion);
 
@@ -396,11 +456,13 @@ async function applyAction(
     case 'next_question':
       return nextQuestion(interview, question, turn, action, opts);
 
-    // `refused` marks the system row `noteRefusal` writes; it is never something to *do*.
-    // `clampAction` turns a refused request into `continue` and reports the refusal
-    // separately, so reaching here would mean that contract had been broken — and the safe
-    // reading of "the server refused this" is to stay exactly where the interview is.
+    // `refused` marks the system row `noteRefusal` writes and `silence` the one T03 writes;
+    // both are records of what happened to a turn, never something to *do*. `clampAction`
+    // turns a refused request into `continue` and reports the refusal separately, so reaching
+    // here would mean that contract had been broken — and the safe reading of either is to stay
+    // exactly where the interview is. The model cannot produce them: both are server values.
     case 'refused':
+    case 'silence':
       await say(interview, turn.say ?? question.text, 'continue', question.id, traceId);
       return { state: interview.state, currentIndex: interview.current_index };
   }
@@ -678,6 +740,8 @@ interface ConversationRow {
   role: ChatRole;
   content: string;
   question_id: string | null;
+  /** Read only by `countsAsTurn` — it is what tells a silence row apart from the other notes. */
+  action: ConductorAction | null;
 }
 
 /**
@@ -721,7 +785,7 @@ async function loadConversation(interviewId: string): Promise<ConversationRow[]>
   return prisma.chatMessage.findMany({
     where: { interview_id: interviewId },
     orderBy: [{ created_at: 'asc' }, { id: 'asc' }],
-    select: { role: true, content: true, question_id: true },
+    select: { role: true, content: true, question_id: true, action: true },
   });
 }
 
@@ -846,4 +910,4 @@ function lastInputMode(interview: Interview): InputMode {
   return interview.mode === 'voice' ? 'voice' : 'text';
 }
 
-export const __testing = { trimHistory, mayHandOver, mayEnd, clampAction };
+export const __testing = { trimHistory, mayHandOver, mayEnd, clampAction, countsAsTurn };

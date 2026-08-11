@@ -21,6 +21,7 @@ import multer, { MulterError } from 'multer';
 import { ApiError } from '../../src/lib/api-error';
 import { activeInterview } from '../../src/lib/db';
 import { logger } from '../../src/lib/logger';
+import { aiClient } from '../ai';
 import { advanceWithAnswer, answerInputSchema } from '../interview/answers';
 import { BudgetExceeded, withBudget } from '../interview/budget';
 import { conductTurn, turnInputSchema } from '../interview/conductor';
@@ -28,6 +29,12 @@ import { applyTransition } from '../interview/machine';
 import { currentQuestionRow } from '../interview/state';
 
 import { meterStt } from './metering';
+import {
+  holdPendingTurn,
+  MAX_PENDING_CHARS,
+  MAX_PROBES_PER_TURN,
+  takePendingTurn,
+} from './pending-turn';
 import { speechProvider } from './SpeechProvider';
 import { isPastSpeechCeiling, VOICE_CAPABLE_STATES } from './tts';
 
@@ -64,8 +71,17 @@ function audioParser(limits: { fields: number; parts: number }): RequestHandler 
 
 /** An answer names the question it answers, so one text field rides along with the recording. */
 const parseAudio = audioParser({ fields: 1, parts: 3 });
-/** A turn names nothing (C06) — the recording is the whole body, so no field is allowed in. */
-const parseTurnAudio = audioParser({ fields: 0, parts: 2 });
+/**
+ * A turn names nothing (C06), and T03's one field is `force`, never text.
+ *
+ * ADR-T02 is why the held partial is server-side rather than round-tripped: a `pending` field on
+ * the wire would let a candidate post words they never spoke into the utterance the conductor
+ * answers, the transcript records and the report scores, while paying for a fraction of a second
+ * of audio. `force` cannot buy that — all it skips is a gate the candidate skips anyway by
+ * staying quiet for thirteen seconds. The multer limit caps the COUNT; `turnFields` below is
+ * what refuses a field by name.
+ */
+const parseTurnAudio = audioParser({ fields: 1, parts: 3 });
 
 /**
  * Content-Length is the cheap path: an honest oversized upload is refused before a byte is
@@ -116,7 +132,7 @@ export const guardVoiceAnswer: RequestHandler = async (req, res, next) => {
 
   // ADR-S06: the ceiling is checked before the provider is called. A recording that arrives
   // past it ends the interview; it is not billed and not transcribed.
-  if (isPastSpeechCeiling(interview.started_at, interview.max_duration_seconds)) {
+  if (isPastSpeechCeiling(interview)) {
     // ADR-I32: a losing transition must not replace the caller's error — the session is
     // expired whether or not this request is the one that moved the interview.
     try {
@@ -230,6 +246,54 @@ export const submitAnswerAudio: RequestHandler = async (req, res) => {
 };
 
 /**
+ * The only field the turn route accepts, and the check that no other one got through: multer's
+ * `fields` limit caps how many arrive, not what they are called.
+ */
+function turnFields(req: Request): boolean {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const keys = Object.keys(body);
+  if (keys.some((key) => key !== 'force')) throw new ApiError('VALIDATION_ERROR');
+  if (keys.length > 0 && body.force !== '1') throw new ApiError('VALIDATION_ERROR');
+  return body.force === '1';
+}
+
+/** What a held turn returns in place of a conductor result: the interview, exactly as it is. */
+const turnState = (interview: VoiceInterview) => ({
+  state: interview.state,
+  currentIndex: interview.current_index,
+});
+
+/**
+ * T01's gate, billed like every other provider call (I08).
+ *
+ * Fails open on everything, including `BudgetExceeded`: `turnComplete` itself never rejects, so
+ * what this catch covers is the wrapper around it — and a gate that cannot answer must degrade
+ * to today's product, where every fragment was forwarded. The conductor's own `withBudget` still
+ * ends the interview if the budget is really gone.
+ */
+async function utteranceFinished(
+  interview: VoiceInterview,
+  currentQuestion: string,
+  utterance: string,
+  traceId: string,
+): Promise<boolean> {
+  try {
+    const verdict = await withBudget(interview.id, () =>
+      aiClient().turnComplete({
+        utterance,
+        currentQuestion,
+        language: interview.language,
+        ctx: { interviewId: interview.id, traceId },
+      }),
+    );
+    return verdict.finished;
+  } catch (err) {
+    logger.warn({ err, traceId, interviewId: interview.id }, 'CONDUCTOR_TURN_GATE_FAILED');
+    return true;
+  }
+}
+
+/**
  * `POST /interviews/:id/turns/audio` (C06) — one spoken utterance, whatever it turns out to be.
  *
  * No `questionId` and no `QUESTION_NOT_CURRENT` pre-check, and their absence is the point: a
@@ -240,22 +304,65 @@ export const submitAnswerAudio: RequestHandler = async (req, res) => {
  */
 export const submitTurnAudio: RequestHandler = async (req, res) => {
   const { interview, file } = recordingFrom(req, res);
+  const force = turnFields(req);
+  const traceId = req.traceId!;
 
-  const { transcript, seconds } = await transcribeRecording(interview, file, req.traceId!);
+  // Read before the provider is paid: the row is what the partial is keyed to, and a fragment
+  // spoken against a question the interview has since left is dropped rather than joined
+  // (spec Open question 3). Not a staleness check on the upload — a turn names no question.
+  const question = await currentQuestionRow(interview);
+  const taken = await takePendingTurn(interview.id);
+  const held = taken && question && taken.questionId === question.id ? taken : null;
+
+  const { transcript, seconds } = await transcribeRecording(interview, file, traceId);
   // The audio buffer is not referenced past this point (ADR-S07).
+
+  // Per fragment, not per turn: a turn made of three probes was billed three times, and a log
+  // line per conducted turn would report a third of what was spent.
+  logger.info({ traceId, interviewId: interview.id, seconds }, 'SPEECH_STT_TRANSCRIBED');
+
+  // A probe that caught nothing but silence: the fragment is worth no verdict and the thought
+  // already held is worth keeping. Re-held unchanged, so the probe count does not move either.
+  if (!transcript.trim() && held) {
+    await holdPendingTurn(interview.id, held);
+    res.status(200).json({ ...turnState(interview), pendingTurn: held.text });
+    return;
+  }
+
+  const utterance = [held?.text, transcript.trim()].filter(Boolean).join(' ');
+  const probes = held?.probes ?? 0;
+
+  // Three ways past the gate, and the reason all three exist: the turn always ends. `force` is
+  // the candidate's Stop, and the two caps are the server's — both counters live in the stored
+  // value, so a client cannot reset them by lying about a probe count it does not hold.
+  const gated =
+    !force &&
+    utterance.length > 0 &&
+    probes < MAX_PROBES_PER_TURN &&
+    utterance.length <= MAX_PENDING_CHARS;
+
+  if (gated && question && !(await utteranceFinished(interview, question.text, utterance, traceId))) {
+    await holdPendingTurn(interview.id, {
+      text: utterance,
+      questionId: question.id,
+      probes: probes + 1,
+    });
+    // K6: length and probe count, never the text — the held partial is candidate speech.
+    logger.info(
+      { traceId, interviewId: interview.id, chars: utterance.length, probes: probes + 1 },
+      'CONDUCTOR_TURN_HELD',
+    );
+    res.status(200).json({ ...turnState(interview), pendingTurn: utterance });
+    return;
+  }
 
   // Same §7.1 boundary the answer path enforces: the transcript is provider output, and it
   // reaches the conductor only through the schema a typed turn is parsed by. An empty or
   // over-long one is a failed transcription, not an utterance.
-  const parsed = turnInputSchema.safeParse({ text: transcript, inputMode: 'voice' });
+  const parsed = turnInputSchema.safeParse({ text: utterance, inputMode: 'voice' });
   if (!parsed.success) throw new ApiError('SPEECH_TRANSCRIPTION_FAILED');
 
-  const result = await conductTurn(interview, parsed.data, { traceId: req.traceId! });
+  const result = await conductTurn(interview, parsed.data, { traceId });
 
-  logger.info(
-    { traceId: req.traceId, interviewId: interview.id, seconds },
-    'SPEECH_STT_TRANSCRIBED',
-  );
-
-  res.status(200).json(result);
+  res.status(200).json({ ...result, pendingTurn: null });
 };

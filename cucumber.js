@@ -59,6 +59,55 @@ process.env.NODE_ENV = 'test';
 process.env.GOOGLE_CLIENT_ID = '';
 process.env.GOOGLE_CLIENT_SECRET = '';
 //
+// Issues #170 and #119 — the same forcing, and the same reason, for the two stores.
+//
+// The repo-root .env names the compose stack (`db:5432/interviewly`, `cache:6379` — db 0) and
+// loadEnvFile below fills anything still unset, so an acceptance run wrote its fixtures into
+// the running application: 26 interviews stranded in `evaluating` and 4 dead-lettered report
+// jobs, all owned by suite accounts and none of them removable by the suite that made them.
+//
+// Setting the keys HERE, ahead of loadEnvFile, is what takes .env out of the decision. What
+// remains is a precedence: exported TEST_* first (a developer with a separate target), then an
+// exported DATABASE_URL/REDIS_URL (how CI points at its ephemeral services), then a disposable
+// local default. TEST_* must be exported, not written into .env — it is read too late there,
+// and .env is where this bug came from. disposable-stores.ts refuses whatever slips through.
+process.env.DATABASE_URL =
+  process.env.TEST_DATABASE_URL ??
+  process.env.DATABASE_URL ??
+  'postgresql://interviewly:interviewly@localhost:5432/interviewly_test';
+// Port 6380: compose.dev.yaml publishes the cache there, because 6379 on the host is where a
+// developer's own Redis usually is. Db 1, never 0 — see disposable-stores.ts.
+process.env.REDIS_URL =
+  process.env.TEST_REDIS_URL ?? process.env.REDIS_URL ?? 'redis://localhost:6380/1';
+//
+// Redis has no database names, only numbered ones, and a URL with no path selects db 0 — the
+// application's. That is the shape almost every REDIS_URL in this repo has, including CI's, so
+// requiring each caller to spell an index out would mean the isolation holds only where someone
+// remembered it. The runner picks its own keyspace instead, exactly as it picks AI_ENABLED:
+// anything resolving to db 0 moves to db 1, whatever the environment said.
+//
+// Only the index is rewritten — host, port, credentials and query are the caller's. An explicit
+// `/0` is moved too, which is the point: it is never what an acceptance run wants, and the
+// suite FLUSHDBs the database it connects to. ACCEPTANCE_ALLOW_DESTRUCTIVE_DB=1 opts out of
+// both this and the check that backs it.
+process.env.REDIS_URL = withTestRedisDb(process.env.REDIS_URL);
+
+function withTestRedisDb(url) {
+  if (process.env.ACCEPTANCE_ALLOW_DESTRUCTIVE_DB === '1') return url;
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    // Unparseable: leave it be. ioredis names the problem better than this line could, and
+    // disposable-stores.ts refuses it either way rather than letting a run start on a guess.
+    return url;
+  }
+  const index = Number(parsed.pathname.replace(/^\//, ''));
+  if (Number.isInteger(index) && index !== 0) return url;
+  parsed.pathname = '/1';
+  return parsed.toString();
+}
+//
 // I03 is the first task whose steps import backend/src/app.ts, which loads env.ts's Zod
 // schema at require time — every key must resolve or the process exits before a single
 // scenario runs. Loaded here (once, before requireModule) rather than via a CLI flag so

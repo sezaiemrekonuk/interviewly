@@ -517,12 +517,22 @@ export interface InterviewStateResponse {
   targetQuestionCount: number;
   endedReason: string | null;
   language: string;
-  /** Server-stamped; null until the interview started. The room's elapsed clock reads this. */
+  /** Server-stamped; null until the interview started. The interview's date, nothing more. */
   startedAt: string | null;
+  /**
+   * I16 — seconds the candidate has actually spent in the room, which is what the rail shows.
+   * Not `now - startedAt`: leaving and returning an hour later resumes the clock where it
+   * stopped. A snapshot as of the response, so a reader ticks forward from when it arrived
+   * rather than treating it as still current (`useRoomElapsed`).
+   */
+  elapsedSeconds: number;
   /**
    * The instant the speech ceiling ends the interview (S09). Null in text mode and before the
    * start — the ceiling bounds voice only. Never recomputed here: the countdown re-derives from
    * this on every tick so it cannot promise time the server will refuse.
+   *
+   * Since I16 it can move *later* as well as earlier — it is now `now + seconds of active time
+   * left`, so a break pushes it out by however long the break was.
    */
   expiresAt: string | null;
   /** The ACTIVE speaker only — `null` outside a live round. */
@@ -832,6 +842,31 @@ export function useResumeInterview(
       return result.data;
     },
     onSettled: () => client.invalidateQueries({ queryKey: queryKeys.interviewState(interviewId) }),
+  });
+}
+
+/**
+ * `POST /interviews/:id/abandon` (issue 104) — the room's Leave, once confirmed.
+ *
+ * Returns the state it landed in, which the caller needs: a run with answers goes to
+ * `evaluating` and its report, one without ends at `abandoned` and has none. Both list
+ * caches are invalidated because the row's state and `endedReason` both just changed, and
+ * the home list renders "in progress" off exactly those.
+ */
+export function useAbandonInterview(
+  interviewId: string,
+): UseMutationResult<{ state: string }, ApiError, void> {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const result = await apiPost<{ state: string }>(`/interviews/${interviewId}/abandon`, {});
+      if (!result.ok) throw new ApiError(result.code ?? 'UNKNOWN');
+      return result.data as { state: string };
+    },
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: queryKeys.interviewState(interviewId) });
+      void client.invalidateQueries({ queryKey: queryKeys.meInterviews() });
+    },
   });
 }
 

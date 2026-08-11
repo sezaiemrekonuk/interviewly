@@ -1,0 +1,16 @@
+-- T03 (ADR-T04) — the turn nobody spoke needs a row of its own.
+--
+-- Thirteen seconds of silence has to reach the conductor as something, and a candidate row would
+-- put words in the candidate's mouth: the transcript is what the report scores. A `system` row
+-- with its own action is the shape `drift` and `refused` already use — written by the server,
+-- read back by the interviewer next turn, hidden from the room.
+--
+-- The action is what both turn ceilings count and what `resolveMessages` filters on, so it
+-- cannot be a null action: a silence that counted toward neither ceiling would let a silent
+-- candidate loop with the interviewer nudging forever, and a visible one would narrate the
+-- candidate's own pauses back at them.
+--
+-- The ledger's plan said this needed no migration, on the belief that `chat_messages.action` was
+-- free text. It is the `ConductorAction` enum, so it takes the same one-line ADD VALUE C07 used
+-- for `refused` — no table is rewritten and no column is added.
+ALTER TYPE "ConductorAction" ADD VALUE 'silence';

@@ -1,9 +1,14 @@
+import type { ConductorAction } from '@prisma/client';
 import type { RequestHandler } from 'express';
 
 import { clock } from '../../src/lib/clock';
 import { prisma } from '../../src/lib/db';
 import { logger } from '../../src/lib/logger';
-import { speechExpiresAt } from '../speech/ceiling';
+import { peekPendingTurn } from '../speech/pending-turn';
+import { type Ceilinged, speechExpiresAt } from '../speech/ceiling';
+import { activeSeconds } from './elapsed';
+
+import { seededPersona } from './generation';
 
 import { currentAvatar } from './avatar';
 
@@ -81,32 +86,70 @@ export async function deliverCurrentQuestion(interview: IndexedInterview) {
 
 const ROUND_ORDER = { hr: 0, tech: 1 } as const;
 
+/** The columns the roster is planned from — the round shape, not the rows generated so far. */
+export interface RosteredInterview {
+  id: string;
+  state: string;
+  hr_question_count: number;
+  target_question_count: number;
+}
+
+/**
+ * The rounds this interview is going to have, from its shape alone, in `ROUND_ORDER` — so the
+ * caller sorts nothing.
+ *
+ * Technical is conditional because the split can leave it empty: `target 2 → hr 2, tech 0` is a
+ * legal interview that ends straight out of the HR round (`machine.ts` carries the edge for it),
+ * and promising a second interviewer who is never coming is the same lie in the other direction.
+ */
+function plannedRounds(interview: RosteredInterview): Array<'hr' | 'tech'> {
+  const techCount = interview.target_question_count - interview.hr_question_count;
+  return techCount > 0 ? ['hr', 'tech'] : ['hr'];
+}
+
 /**
  * The active speaker plus the full round roster. The room shows two tiles and only one may be
  * live (§3.2, K2), so the inactive tile needs an identity the client cannot invent — `persona`
  * alone forced W06 to guess one. `avatar_set` rides along because it is the only source of the
  * content-addressed `personas/{id}/{state}-{sha}.webp` keys.
  *
+ * The roster is planned, not observed (#129). It used to be whatever `interview_rounds` rows
+ * happened to exist, which made the candidate's tile grid a side effect of question generation:
+ * the technical row is written with its batch, so the first HR question was asked against a
+ * one-tile room and the second interviewer appeared mid-interview. Deriving it from the round
+ * shape instead keeps the count fixed for the whole interview, and leaves untouched the
+ * invariant `currentQuestionRow` depends on — a round row still means its questions exist.
+ *
+ * The generated row still wins where there is one: it names the persona actually assigned, and
+ * `seededPersona` is only the fallback for a round whose batch has not been written yet. That
+ * is the same lookup `generation.ts` will use when it does write it, so the tile does not
+ * change identity at the handover.
+ *
  * ponytail: avatarState is a fixed 'idle' placeholder — driving it off live SSE interaction
  * is I07's job (§3.6). Upgrade when the SSE avatar driver lands.
  */
-async function resolvePersonas(interviewId: string, state: string) {
+export async function resolvePersonas(interview: RosteredInterview) {
   const rounds = await prisma.interviewRound.findMany({
-    where: { interview_id: interviewId },
+    where: { interview_id: interview.id },
     include: { persona: true },
   });
 
-  const personas = rounds
-    .slice()
-    .sort((a, b) => ROUND_ORDER[a.type] - ROUND_ORDER[b.type])
-    .map((round) => ({
-      id: round.persona.id,
-      role: round.persona.role,
-      name: round.persona.name,
-      roundType: round.type,
-      avatarSet: round.persona.avatar_set,
-    }));
+  const byType = new Map(rounds.map((round) => [round.type, round]));
 
+  const personas = await Promise.all(
+    plannedRounds(interview).map(async (roundType) => {
+      const persona = byType.get(roundType)?.persona ?? (await seededPersona(roundType));
+      return {
+        id: persona.id,
+        role: persona.role,
+        name: persona.name,
+        roundType,
+        avatarSet: persona.avatar_set,
+      };
+    }),
+  );
+
+  const { state } = interview;
   const activeType = state === 'hr_round' ? 'hr' : state === 'tech_round' ? 'tech' : null;
   const active = activeType ? personas.find((p) => p.roundType === activeType) : undefined;
 
@@ -177,23 +220,29 @@ async function resolveTranscript(interviewId: string) {
  *
  * A room rebuilds itself from this alone (§3.8), which is the whole reason assistant rows are
  * written before they are spoken rather than after.
+ *
+ * C07 — the refusal notes stay out of the room. They are written for the interviewer, and
+ * showing them to the candidate would narrate the guard that just stopped them: "the server
+ * refused because this round has not covered enough questions yet" is a recipe. T03 adds the
+ * silence rows for a different reason: they are the room's own thirteen-second clock, read back
+ * to it as prose. The drift note stays visible — it is about the candidate's own turn, not about
+ * a rule they could aim at.
+ *
+ * The null branch is load-bearing: every candidate turn has `action = null`, and both
+ * `NOT: { action: … }` and `action: { notIn: … }` compile to SQL that is NULL — and so excludes
+ * the row — wherever `action` is null. Without the explicit `action: null`, the whole candidate
+ * side of the conversation vanishes from the room.
  */
+const HIDDEN_ACTIONS: ConductorAction[] = ['refused', 'silence'];
+
+const messagesWhere = (interviewId: string) => ({
+  interview_id: interviewId,
+  OR: [{ action: null }, { action: { notIn: HIDDEN_ACTIONS } }],
+});
+
 async function resolveMessages(interviewId: string) {
   const rows = await prisma.chatMessage.findMany({
-    // C07 — the refusal notes stay out of the room. They are written for the interviewer, and
-    // showing them to the candidate would narrate the guard that just stopped them: "the server
-    // refused because this round has not covered enough questions yet" is a recipe. The drift
-    // note is different and stays visible — it is about the candidate's own turn, not about a
-    // rule they could aim at.
-    //
-    // The null branch is load-bearing: every candidate turn has `action = null`, and both
-    // `NOT: { action: 'refused' }` and `action: { not: 'refused' }` compile to SQL that is
-    // NULL — and so excludes the row — wherever `action` is null. Without the explicit
-    // `action: null`, the whole candidate side of the conversation vanishes from the room.
-    where: {
-      interview_id: interviewId,
-      OR: [{ action: null }, { action: { not: 'refused' } }],
-    },
+    where: messagesWhere(interviewId),
     // Same order the conductor replays in. A user utterance and the reply to it are written
     // inside one request and can share a millisecond; `id` breaks that tie the same way twice.
     orderBy: [{ created_at: 'asc' }, { id: 'asc' }],
@@ -228,10 +277,8 @@ async function resolveMessages(interviewId: string) {
   }));
 }
 
-export interface TimedInterview {
+export interface TimedInterview extends Ceilinged {
   mode: string;
-  started_at: Date | null;
-  max_duration_seconds: number | null;
 }
 
 /**
@@ -242,31 +289,51 @@ export interface TimedInterview {
  * Text reports `expiresAt: null` rather than a number: the ceiling is enforced only by the two
  * speech routes, both of which refuse `mode !== 'voice'`, so any deadline here would be one
  * nothing applies. A downgraded interview lands in the same branch on its next refetch.
+ *
+ * `elapsedSeconds` is I16's active time and is reported in both modes — it is the room's own
+ * readout, not the ceiling, and a text interview has one too. It is a snapshot, so the client
+ * ticks forward from the instant it received it rather than treating it as still current;
+ * `startedAt` is no longer the anchor for that and remains only as the interview's date.
  */
-export function interviewWindow(interview: TimedInterview) {
-  const expiresAt =
-    interview.mode === 'voice'
-      ? speechExpiresAt(interview.started_at, interview.max_duration_seconds)
-      : null;
+export function interviewWindow(interview: TimedInterview, now: Date = clock.now()) {
+  const expiresAt = interview.mode === 'voice' ? speechExpiresAt(interview, now) : null;
   return {
     startedAt: interview.started_at?.toISOString() ?? null,
     expiresAt: expiresAt?.toISOString() ?? null,
+    elapsedSeconds: Math.floor(activeSeconds(interview, now)),
   };
 }
 
 // req.interview is attached by resolveInterview (ownership.ts); a non-owned or deleted id
 // never reaches this handler (404 INTERVIEW_NOT_FOUND).
+/**
+ * T03 — the unfinished thought the server is holding, or null.
+ *
+ * Read with a plain `GET`: a state read never consumes, because the room refetches on every
+ * render and the first refresh would otherwise delete the sentence the candidate is still in the
+ * middle of. Surfaced only against the question it was spoken to; a partial from a question the
+ * interview has left is neither joined nor shown (spec Open question 3).
+ */
+async function pendingTurnFor(
+  interviewId: string,
+  question: { id: string } | null,
+): Promise<string | null> {
+  const held = await peekPendingTurn(interviewId);
+  return held && question && held.questionId === question.id ? held.text : null;
+}
+
 export const getInterviewState: RequestHandler = async (req, res) => {
   const interview = req.interview!;
 
   // Every field is derived from the DB, nothing from the request: a refreshed room with no
   // client memory reconstructs to the same place (§3.8, @AC-9).
   const [{ persona, personas }, currentQuestion, transcript, messages] = await Promise.all([
-    resolvePersonas(interview.id, interview.state),
+    resolvePersonas(interview),
     deliverCurrentQuestion(interview),
     resolveTranscript(interview.id),
     resolveMessages(interview.id),
   ]);
+  const pendingTurn = await pendingTurnFor(interview.id, currentQuestion);
 
   res.status(200).json({
     interviewId: interview.id,
@@ -282,6 +349,7 @@ export const getInterviewState: RequestHandler = async (req, res) => {
     currentQuestion,
     transcript,
     messages,
+    pendingTurn,
     // Answers, not messages. This was `chatMessage.count(...)` and the two were the same number
     // only because `chat_messages` held exactly one row per answered turn. C02 puts the
     // interviewer's own lines in the same table, so counting rows would make the cursor jump on
@@ -290,5 +358,7 @@ export const getInterviewState: RequestHandler = async (req, res) => {
     transcriptCursor: messages.filter((m) => m.role === 'user').length,
   });
 };
+
+export const __testing = { pendingTurnFor, messagesWhere, resolveMessages };
 
 export default getInterviewState;
