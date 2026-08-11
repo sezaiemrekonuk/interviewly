@@ -117,11 +117,52 @@ describe('useRoomHeartbeat', () => {
       renderHook(() => useRoomHeartbeat('itv-1', true), { wrapper: wrapper(client) });
     });
 
-    await act(async () => {
-      vi.advanceTimersByTime(ROOM_HEARTBEAT_MS * 2);
-    });
+    // One interval at a time, settling in between: two intervals inside a single
+    // `advanceTimersByTime` fire back to back with no chance for the first reply to land, which
+    // is the overlap the in-flight guard exists to suppress — see the test below.
+    for (let beat = 0; beat < 2; beat += 1) {
+      await act(async () => {
+        vi.advanceTimersByTime(ROOM_HEARTBEAT_MS);
+      });
+    }
 
     expect(m.apiPost).toHaveBeenCalledTimes(3);
+  });
+
+  /**
+   * A beat that has not come back yet must not have a second one stacked on top of it. Without
+   * the guard a stalled request lets beats queue up, and each one banks the stretch since the
+   * anchor the *previous* one has not moved yet — the same wall-clock second, credited once per
+   * beat in flight. The server's own optimistic guard on `last_seen_at` catches most of that,
+   * but the honest place to not send the second request is here.
+   */
+  it('does not stack a second beat on one still in flight', async () => {
+    let release = () => {};
+    m.apiPost.mockReturnValue(
+      new Promise((resolve) => {
+        release = () => resolve({ ok: true, data: { elapsedSeconds: 200, expiresAt: null } });
+      }),
+    );
+    const client = new QueryClient();
+    seedRoom(client, 'itv-1');
+    await act(async () => {
+      renderHook(() => useRoomHeartbeat('itv-1', true), { wrapper: wrapper(client) });
+    });
+
+    // Four intervals pass with the arrival beat still unanswered.
+    await act(async () => {
+      vi.advanceTimersByTime(ROOM_HEARTBEAT_MS * 4);
+    });
+    expect(m.apiPost).toHaveBeenCalledOnce();
+
+    // Once it answers, the next interval beats normally.
+    await act(async () => {
+      release();
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(ROOM_HEARTBEAT_MS);
+    });
+    expect(m.apiPost).toHaveBeenCalledTimes(2);
   });
 
   it('does not beat when disabled, so a finished room banks nothing', () => {

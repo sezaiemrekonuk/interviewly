@@ -77,6 +77,35 @@ describe('bankActiveTime', () => {
     });
   });
 
+  /**
+   * The column is whole seconds, so a 12.4 s stretch banks 12 and owes 0.4. Carrying that
+   * remainder into the anchor — setting `last_seen_at` back by it rather than to `now` — is what
+   * keeps the debt on the books: the next beat measures from where the banked second ended, so
+   * the fractions accumulate into whole seconds instead of being dropped one beat at a time.
+   * At a beat every 15 s, rounding them away would lose on the order of two minutes an hour.
+   */
+  it('carries the sub-second remainder into the anchor rather than dropping it', async () => {
+    const partial = { ...row, last_seen_at: new Date(now.getTime() - 12_400) };
+
+    expect(await bankActiveTime(partial)).toBe(192);
+    expect(m.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { elapsed_seconds: { increment: 12 }, last_seen_at: new Date(now.getTime() - 400) },
+      }),
+    );
+  });
+
+  it('never banks a second the stretch has not finished', async () => {
+    const nearly = { ...row, last_seen_at: new Date(now.getTime() - 999) };
+
+    expect(await bankActiveTime(nearly)).toBe(180);
+    expect(m.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { elapsed_seconds: { increment: 0 }, last_seen_at: new Date(now.getTime() - 999) },
+      }),
+    );
+  });
+
   it('banks nothing across a gap past the grace window, but still re-anchors', async () => {
     const returning = { ...row, last_seen_at: ago(3_600) };
 
