@@ -90,6 +90,7 @@ describe('cucumber.js store resolution', () => {
     delete base.REDIS_URL;
     delete base.TEST_DATABASE_URL;
     delete base.TEST_REDIS_URL;
+    delete base.ACCEPTANCE_ALLOW_DESTRUCTIVE_DB;
 
     const out = execFileSync(
       process.execPath,
