@@ -122,6 +122,20 @@ export async function enqueueReport(interviewId: string, ctx: { traceId: string 
  */
 const openStreams = new Set<Response>();
 
+/**
+ * Issue #120: the ceiling the `ponytail:` note below names. Every open stream holds a Redis
+ * connection of its own, and nothing capped how many one user could open — N tabs was N
+ * connections, refused by nothing.
+ *
+ * Deliberately per-process rather than per-user-across-replicas: the resource being protected
+ * is *this* process's connection pool, so a Redis-backed count would add a round trip to every
+ * stream open to bound something a replica already knows locally. 5 is well past legitimate
+ * use — a candidate has one room open, and a reconnecting EventSource closes the old response
+ * before the new one arrives.
+ */
+export const MAX_STREAMS_PER_USER = 5;
+const streamsByUser = new Map<string, Set<Response>>();
+
 /** Ends every open stream. EventSource reconnects, so a client lands on the next replica. */
 export function closeEventStreams(): void {
   for (const res of openStreams) res.end();
@@ -133,6 +147,17 @@ export function closeEventStreams(): void {
  */
 export const streamInterviewEvents: RequestHandler = async (req, res) => {
   const channel = eventChannel(req.interview!.id);
+
+  // Refused before `writeHead`, so the client gets an ordinary JSON 429 rather than an
+  // event-stream that opens and immediately ends — and before `redis.duplicate()`, which is
+  // the connection this exists to not open.
+  const userId = req.user!.id;
+  const mine = streamsByUser.get(userId) ?? new Set<Response>();
+  if (mine.size >= MAX_STREAMS_PER_USER) {
+    logger.warn({ traceId: req.traceId, userId, open: mine.size }, 'SSE_STREAM_LIMIT_HIT');
+    res.status(429).json({ error: { code: 'RATE_LIMITED' } });
+    return;
+  }
 
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
@@ -163,11 +188,17 @@ export const streamInterviewEvents: RequestHandler = async (req, res) => {
     closed = true;
     clearInterval(heartbeat);
     openStreams.delete(res);
+    // The last stream takes its user's entry with it — the map must not grow one key per
+    // account that ever opened a room.
+    mine.delete(res);
+    if (mine.size === 0) streamsByUser.delete(userId);
     if (!res.destroyed && !res.writableEnded) res.end();
     void subscriber.quit();
   };
   res.once('close', cleanup);
   openStreams.add(res);
+  mine.add(res);
+  streamsByUser.set(userId, mine);
 
   // ponytail: one Redis connection per open stream. ioredis puts a connection into subscriber
   // mode exclusively, so the shared client cannot carry this, and a single shared subscriber

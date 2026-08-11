@@ -32,6 +32,12 @@ function recorder(): { res: Response; calls: CookieCall[] } {
 
 async function sessionWith(env: Record<string, string>) {
   vi.resetModules();
+  // A case that stubs NODE_ENV=production inherits the rest of its environment from `.env`,
+  // whose SESSION_SECRET is the `change-me` placeholder — which env.ts refuses in production
+  // since issue #118, exiting the runner before the cookie under test is ever built. Stubbed
+  // rather than exempted: these cases want a production-*shaped* environment, and a real
+  // secret is part of that shape.
+  vi.stubEnv('SESSION_SECRET', 'f4c1b90e7a2d63581cfe04ab29d7melon');
   for (const [key, value] of Object.entries(env)) vi.stubEnv(key, value);
   return import('./session');
 }

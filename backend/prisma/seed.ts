@@ -23,6 +23,8 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 
+import { isDeployed } from '../src/lib/deployment';
+
 const prisma = new PrismaClient();
 
 // ---------------------------------------------------------------------------
@@ -156,9 +158,13 @@ const TECH_ROUND_ID = 'seed-round-tech';
 const REPORT_ID = 'seed-report-demo';
 
 const DEMO_ADMIN_EMAIL = 'admin@demo.com';
-// A throwaway local credential for the demo stack, overridable so a real deployment never
-// carries it. Stored only as an argon2id hash; the plaintext is echoed to the operator's
-// terminal, never to the database (K8, K8.5).
+// A throwaway local credential for the demo stack. Stored only as an argon2id hash; the
+// plaintext is echoed to the operator's terminal, never to the database (K8, K8.5).
+//
+// Issue #118: "overridable so a real deployment never carries it" was the whole guard, and an
+// override nobody sets is not one — the published default reached the running stack. The
+// fallback is now dev-only and `seedDemoAdmin` refuses to run in production at all, so the
+// account this password opens cannot exist there to be opened.
 const DEMO_ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD ?? 'AdminDemo1!';
 
 // The two ElevenLabs voices the personas speak with. Real ids, not placeholders: a voice id
@@ -532,9 +538,20 @@ async function main() {
   await seedClusters();
   await seedMascotSet();
   await seedPersonas();
-  const admin = await seedDemoAdmin();
-  console.log(`  sample listing: ${SAMPLE_LISTING.length} chars from prisma/fixtures/`);
-  await seedSampleInterview(admin.id);
+  // Issue #118: everything above is reference data every deployment needs. This pair is a dev
+  // fixture — the admin's password is published in this repository, and `/admin` lists every
+  // interview on the platform, so seeding it into production is a full-tenant exposure. A real
+  // deployment needs an operator account it created itself, not one this file invented.
+  //
+  // Keyed on `isDeployed`, not on NODE_ENV alone (review on #268): the incident this guards
+  // was `.env.example` shipped verbatim, and `NODE_ENV=development` is one of its lines.
+  if (isDeployed(process.env.NODE_ENV, process.env.PUBLIC_ORIGIN)) {
+    console.log(`  demo admin + sample interview: skipped (deployed — PUBLIC_ORIGIN=${process.env.PUBLIC_ORIGIN})`);
+  } else {
+    const admin = await seedDemoAdmin();
+    console.log(`  sample listing: ${SAMPLE_LISTING.length} chars from prisma/fixtures/`);
+    await seedSampleInterview(admin.id);
+  }
   console.log('Seed complete.');
 }
 

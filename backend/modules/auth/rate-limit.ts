@@ -134,6 +134,21 @@ export const passwordResetLimiter = keyedLimiter({
   keyOf: byIp,
 });
 
+// Issue #120: 10/hour per IP across BOTH single-use-token confirms. The request halves were
+// limited and the halves that spend the token were not, so a token could be guessed without
+// ever being slowed down — and one of the two rotates a password.
+//
+// Keyed by IP because the caller is unauthenticated (that is the point of a reset link), and
+// one shared budget rather than one each: both are the same guessing surface from the same
+// origin, and 10 is far above legitimate use — a real user opens a mailed link once, twice if
+// it expired.
+export const tokenConfirmLimiter = keyedLimiter({
+  prefix: 'tokenconfirm',
+  limit: 10,
+  windowMs: 60 * 60 * 1000,
+  keyOf: byIp,
+});
+
 // --------------------------------------------------------------------- A04: mail resends
 //
 // Both of these are keyed by USER, not by IP — unlike register and login above. The
