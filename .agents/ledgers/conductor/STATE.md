@@ -10,6 +10,31 @@ messages by id (`GET /:id/messages/:messageId/speech`) rather than questions by 
 answer surfaces render in both modes. K4 (D01–D03) survives as the degradation path.
 **All six tasks are done — the ledger is complete.**
 
+## Ledger
+
+Added 2026-08-11, after the fact. This ledger shipped without a machine-readable task table, so
+`.agents/EXECUTE.md` § 3's dependency dump could not see `C01`–`C06` — and § 4 rule 5 halts any
+session whose `Depends on` names an ID that appears in no row. `turn-taking` `T01`/`T03` and
+`speech-latency` `L04` all cite `C01`/`C02`, so the first session to pick one of them would have
+stopped with "the ledger contradicts itself" rather than working.
+
+The rows below record what already shipped — titles from this ledger's `PLAN.md`, all `done`,
+nothing reopened. This is bookkeeping, not new work.
+
+| ID | Title | Repo | Status | Depends on |
+|----|-------|------|--------|------------|
+| C01 | Conversation persistence: `chat_messages.question_id` / `.action`, `questions.widget` / `.intent`, the replay index | | done | I03, I06 |
+| C02 | The conductor: prompt lineage, `ConductorTurnSchema`, `conductTurn` on the seam, `conductor.ts`, `POST /turns`, the five guards | | done | C01, I02 |
+| C03 | The answer window, and the report told its coverage and cut reason (report prompt v3) | | done | C02 |
+| C04 | Widget answer surfaces, rendered in both modes | | done | C02 |
+| C05 | Agenda-shaped batches: `intent` alongside the fallback sentence (generation prompt v3) | | done | C01 |
+| C06 | Voice: message-keyed TTS, `POST /turns/audio`, the room's speak-unspoken loop | | done | C02, S06 |
+
+⚠️ **This ledger still has no row in `.agents/EXECUTE.md`'s ownership table**, which that file
+calls "the only authority on who owns what". Every `C` task is `done`, so nothing is currently
+unassignable — but a future `C07` would be unownable. Left for the owner to decide rather than
+guessed at here.
+
 ## Verification at close
 
 | Suite | Result |

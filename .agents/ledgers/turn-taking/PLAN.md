@@ -66,7 +66,12 @@ guarded advance (I06), and the shared Redis connection (`auth/rate-limit.ts`).
 
 - **Streaming STT or a realtime socket.** The loop stays discrete (ADR-S01, ADR-S06). This makes
   the discrete loop tolerant of pauses; it does not replace it. A true streaming transcript would
-  make the gate unnecessary and is a different architecture.
+  make the gate unnecessary and is a different architecture. See #266 and `speech-latency` ADR-L05.
+- **Latency.** The room takes ~7.1 s from a candidate's last word to the interviewer's first
+  sound, and this ledger's gate is 780 ms of it. `.agents/ledgers/speech-latency/` owns that
+  problem and pays the gate back. The one number the two ledgers share is `VAD_SILENCE_MS`:
+  ADR-T01 argued a gate makes a short window safe, and `L03` is where it actually shortens —
+  after `T04`, and only once the gate's accuracy is known.
 - **Gate the typed path.** Pressing Send is already an explicit finished signal. Gating it would
   make Send mean "maybe send".
 - **Judge answer quality.** The gate decides whether the speaker stopped talking, nothing else.
