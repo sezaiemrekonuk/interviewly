@@ -1,13 +1,16 @@
 # Turn-taking — State
 
-Last updated: 2026-08-10
-Last session ended: **Ledger opened (Ahmet, 2026-08-10, opus-5). No code written yet.** The
-spec (`.agents/specs/2026-08-10-turn-taking.md`), PLAN, the five ADRs and the four task files
-are in place; the ownership row is in `.agents/EXECUTE.md`. Every design question is settled and
-recorded — the gate judges *finished speaking* not *answered*, `VAD_SILENCE_MS` stays 2 000, the
-force ceiling is 13 000, the partial lives in Redis rather than on the client (ADR-T02 answers
-ADR-C01 directly), the gate is chainless and fails open, and the room's recovery notice is
-frozen-on-mount (ADR-T05, mocked before choosing). `T01` and `T02` are unblocked and independent.
+Last updated: 2026-08-11
+Last session ended: **`T01` done (Ahmet, 2026-08-11, opus-5 on a sonnet-tier task — owner
+override, see the devlog).** The gate exists as a seam method only; nothing calls it yet.
+Changed: `packages/ai/` (`AiClient.ts`, `live-client.ts`, `stub.ts`, `resolve-client.ts`,
+`schemas.ts`, `prompt-vars.ts`, `providers.ts`, `index.ts`, new
+`prompts/interview.turn.complete.prompt.yaml`, new `src/turn-complete.test.ts`,
+`prompt-builder.test.ts` name list) plus one delegating method in
+`backend/features/step_definitions/adaptive.steps.ts`.
+For `T03`: `turnComplete` never rejects — no call site needs a catch — and the chain opt-out is
+`buildSoloChain`, not a slice of `buildChain`. Real nano verdicts (9/9 correct, both languages)
+are in the task's `## Notes`; they are the only data spec Open question 1 has.
 
 **The gate costs 780 ms, measured (2026-08-11).** `gpt-4.1-nano`, warm median over n=5, min 556,
 max 887 — which confirms ADR-T03's 3 s timeout as a ceiling rather than a target. It is a real
@@ -30,14 +33,13 @@ EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**`T01` or `T02`** — both are `todo`, both have no dependencies, and they touch disjoint files
-(`packages/ai/` vs `backend/modules/speech/`). Either is a valid start; `T03` needs both.
+**`T02`** — the only unblocked `todo` row. `T03` still needs it.
 
 ## Ledger
 
 | ID | Title | Repo | Status | Depends on |
 |----|-------|------|--------|------------|
-| T01 | The completeness gate: prompt, schema, seam method, chainless, fail-open | | todo | C02, I02 |
+| T01 | The completeness gate: prompt, schema, seam method, chainless, fail-open | | done | C02, I02 |
 | T02 | The held partial: `pending-turn.ts`, atomic take, the two caps | | todo | F03, S03 |
 | T03 | Turn paths: gate + join + hold, the silence turn, `pendingTurn` on `/state` | | todo | T01, T02, C01, C02 |
 | T04 | The room: probe-vs-final stop, the 13 s clock, the recovery notice | | todo | T03, S06 |
@@ -101,8 +103,10 @@ assumed: the held partial is not durable and is not the conversation. ADR-C01 is
 ## ⚠ Known tech debt
 
 - **[T01] The gate is the first prompt to opt out of the fallback chain.** `buildChain` appends
-  tier-2 to everything; T01 adds a per-prompt exemption. If a second prompt ever needs it, this
-  should become a field on the prompt YAML rather than a second special case in `live-client.ts`.
+  tier-2 to everything; T01 adds a per-prompt exemption. Shipped as `buildSoloChain` in
+  `providers.ts`, passed by `LiveAiClient.turnComplete` as `call`'s optional `chainFor`. If a
+  second prompt ever needs it, this should become a field on the prompt YAML rather than a
+  second special case in `live-client.ts`.
 - **[T04] Issue #219 (flaky voice turn-loop test) is folded into T04.** `voice.test.tsx` races a
   real 1 000 ms `waitFor` and red-lights PRs that touch nothing near the room; T04 rewrites every
   timing assertion in that file anyway. If T04 slips, the standalone fix is one line —

@@ -18,6 +18,7 @@ import type {
   GenerateReportArgs,
   GenerateRoundQuestionsArgs,
   ScoreAnswerArgs,
+  TurnCompleteArgs,
 } from './AiClient';
 import { createPromptBuilder, type PromptBuilder } from './prompt-builder';
 import { detectLanguage, type LanguageDetection } from './detect-language';
@@ -29,6 +30,7 @@ import {
   reportVars,
   scoreVars,
   titleVars,
+  turnCompleteVars,
 } from './prompt-vars';
 import {
   CandidateSchema,
@@ -38,6 +40,7 @@ import {
   QuestionBatchSchema,
   ReportPayloadSchema,
   ScoresSchema,
+  TurnCompleteSchema,
   type Candidate,
   type ConductorTurn,
   type Difficulty,
@@ -46,6 +49,7 @@ import {
   type QuestionKind,
   type ReportPayload,
   type Scores,
+  type TurnComplete,
 } from './schemas';
 import { z } from 'zod';
 
@@ -208,10 +212,35 @@ export class StubAiClient implements AiClient {
     );
   }
 
+  /**
+   * T01. Deterministic and text-driven rather than always-true, so an acceptance run with no
+   * provider key still exercises the hold path: a fragment ending in a comma or a conjunction
+   * is unfinished, everything else is finished. Keeping both branches reachable is the point —
+   * a stub that always forwarded would make every keyless scenario blind to the gate.
+   */
+  async turnComplete(args: TurnCompleteArgs): Promise<TurnComplete> {
+    this.builder.build({
+      promptName: PROMPT_NAMES.turnComplete,
+      vars: turnCompleteVars(args),
+      ctx: args.ctx,
+    });
+
+    const text = args.utterance.trim().toLowerCase();
+    return parse(TurnCompleteSchema, { finished: !UNFINISHED_TAIL.test(text) }, 'turnComplete');
+  }
+
   detectLanguage(text: string, current: string): LanguageDetection {
     return detectLanguage(text, current);
   }
 }
+
+/**
+ * A trailing comma, or a trailing conjunction in either interview language. `(^|\s)` rather
+ * than `\b`: `\b` does not see a boundary in front of `çünkü`, so the Turkish half would never
+ * match.
+ */
+const UNFINISHED_TAIL =
+  /(,|(^|\s)(and|but|so|because|that|which|with|to|we|ve|ama|çünkü|ki|için|ile))$/;
 
 /**
  * The stub is only useful if its canned content is schema-valid, so it validates its own

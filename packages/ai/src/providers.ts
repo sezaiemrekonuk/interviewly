@@ -212,6 +212,19 @@ export function buildChain(built: BuiltPrompt, keys: ProviderKeys): ChainStep[] 
   return steps.filter((step) => Boolean(keys[step.provider]));
 }
 
+/**
+ * T01/ADR-T03 — the chain for a prompt that must not fall back: tier-1 alone, or nothing.
+ * `buildChain(...).slice(0, 1)` is not the same thing, because that filter drops an
+ * unconfigured tier-1 and would leave gemini in first place.
+ *
+ * The one caller is the completeness gate. A second prompt wanting this should make it a field
+ * on the prompt YAML rather than a second special case in `live-client.ts` (STATE.md tech debt).
+ */
+export function buildSoloChain(built: BuiltPrompt, keys: ProviderKeys): ChainStep[] {
+  const step: ChainStep = { provider: built.provider, model: built.model };
+  return keys[step.provider] ? [step] : [];
+}
+
 export interface RunChainArgs<T> {
   built: BuiltPrompt;
   chain: ChainStep[];

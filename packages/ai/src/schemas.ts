@@ -119,6 +119,13 @@ export const ConductorTurnSchema = z.object({
 });
 
 /**
+ * T01 — the completeness gate's whole output. Strict on purpose: `{"finished":"maybe"}` is a
+ * schema failure, which the live client turns into `finished: true` rather than a guess
+ * (ADR-T03).
+ */
+export const TurnCompleteSchema = z.object({ finished: z.boolean() });
+
+/**
  * The report artifact.
  *
  * `strengths`, `improvements` and `rounds` carry an upper bound and no lower one, and that
@@ -162,6 +169,7 @@ export type QuestionBatch = z.infer<typeof QuestionBatchSchema>;
 export type Candidate = z.infer<typeof CandidateSchema>;
 export type Widget = z.infer<typeof WidgetSchema>;
 export type ConductorTurn = z.infer<typeof ConductorTurnSchema>;
+export type TurnComplete = z.infer<typeof TurnCompleteSchema>;
 export type Scores = z.infer<typeof ScoresSchema>;
 export type InterviewTitle = z.infer<typeof InterviewTitleSchema>;
 export type ReportPayload = z.infer<typeof ReportPayloadSchema>;

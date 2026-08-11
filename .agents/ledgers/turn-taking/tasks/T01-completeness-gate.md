@@ -1,5 +1,5 @@
 # T01 — The completeness gate: is this speaker finished talking?
-REPO: (this repo) · Depends: C02, I02 · Status: todo
+REPO: (this repo) · Depends: C02, I02 · Status: done
 Read first: STATE.md, REFERENCE.md, then this.
 **Model: claude-sonnet-5** — a prompt, a one-field schema, and a fifth method on a seam that
 already has four identical ones to copy. The two judgement calls are fixed by ADR-T03, and a
@@ -50,27 +50,27 @@ that. This task ships the seam method and proves it answers sensibly.
 - `prompts/interview.title.generate.prompt.yaml` — the nano precedent.
 
 ## Steps
-- [ ] **1. Test red** — a `turnComplete` call against the stub returns `{ finished }`; a live
+- [x] **1. Test red** — a `turnComplete` call against the stub returns `{ finished }`; a live
   client whose transport throws returns `finished: true` rather than propagating. See both red.
-- [ ] **2. Prompt** — `prompts/interview.turn.complete.prompt.yaml`, `version: 1`,
+- [x] **2. Prompt** — `prompts/interview.turn.complete.prompt.yaml`, `version: 1`,
   `provider: openai`, `model: gpt-4.1-nano`, `temperature: 0`, `max_tokens: 30`, fresh uuid.
   System block: the job, the finished/unfinished rules, JSON-only output. User block:
   `<current_question>` and `<utterance>` plus the untrusted-data clause.
-- [ ] **3. Schema** — `TurnCompleteSchema = z.object({ finished: z.boolean() })` in `schemas.ts`,
+- [x] **3. Schema** — `TurnCompleteSchema = z.object({ finished: z.boolean() })` in `schemas.ts`,
   exported with its type.
-- [ ] **4. Vars + name** — `PROMPT_NAMES.turnComplete` and `turnCompleteVars(args)` in
+- [x] **4. Vars + name** — `PROMPT_NAMES.turnComplete` and `turnCompleteVars(args)` in
   `prompt-vars.ts`.
-- [ ] **5. Seam** — `TurnCompleteArgs { utterance, currentQuestion, language, ctx }` and
+- [x] **5. Seam** — `TurnCompleteArgs { utterance, currentQuestion, language, ctx }` and
   `turnComplete(args): Promise<TurnComplete>` on `AiClient`; `TIMEOUT_MS.turnComplete = 3_000`.
-- [ ] **6. Live** — the fifth `this.call(...)`, with the chain built **without** the fallback
+- [x] **6. Live** — the fifth `this.call(...)`, with the chain built **without** the fallback
   step. Keep the opt-out narrow and comment it: this is the first prompt to do it, and STATE.md
   carries the debt line saying it should become a prompt-YAML field if a second one ever needs it.
-- [ ] **7. Fail open** — any error from the chain resolves to `{ finished: true }`. Prove it with
+- [x] **7. Fail open** — any error from the chain resolves to `{ finished: true }`. Prove it with
   a transport that throws, one that times out, and one that returns `{"finished": "maybe"}`.
-- [ ] **8. Stub + wrapper** — deterministic stub (`finished: false` when the text ends in a
+- [x] **8. Stub + wrapper** — deterministic stub (`finished: false` when the text ends in a
   conjunction or a comma, `true` otherwise, so acceptance exercises both branches without a
   provider); add the method to `StubRecordingClient`.
-- [ ] **9. Speak to it** — run the prompt against real fragments in both languages, including
+- [x] **9. Speak to it** — run the prompt against real fragments in both languages, including
   `"So at my last company we"`, `"I don't know that one."`, `"Can you repeat the question?"`,
   `"şey, yani, aslında"`, and a finished Turkish sentence. Record what it said in `## Notes`;
   that is the only evidence this ledger has for spec Open question 1.
@@ -90,5 +90,46 @@ npm run lint && npm run typecheck
 Expected: green, including the three fail-open cases and the single-step chain assertion.
 
 ## Notes
-_(fill in when done — and put the step-9 verdicts here verbatim; T03 and the tuning backlog both
-read them)_
+
+**What exists now.** `turnComplete(args): Promise<TurnComplete>` on `AiClient`, `LiveAiClient`,
+`StubAiClient` and `StubRecordingClient`. `TurnCompleteSchema = { finished: boolean }`.
+`PROMPT_NAMES.turnComplete` → `interview.turn.complete` v1, `gpt-4.1-nano`, temp 0, 30 tokens,
+uuid `7e95e529-c2a6-4fec-88c8-0a07e5bfb2dd`. `TIMEOUT_MS.turnComplete = 3_000`. All exported
+from `@interviewly/ai`.
+
+**Chain opt-out** is `buildSoloChain(built, keys)` in `providers.ts` — tier-1 or nothing, never
+`buildChain(...).slice(0,1)` (that would leave gemini first when the openai key is missing).
+`LiveAiClient.call` takes it as an optional last argument; `turnComplete` is the only caller.
+
+**Fail-open is `try`/`catch`, not `.catch()`** — `builder.build` is synchronous, so a failed
+compile throws before there is a promise. Covered by a test.
+
+**For T03:** the method never rejects, so no call site needs a catch. Call it with the *joined*
+utterance (held partial + new fragment); it sees no conversation history by design. `finished:
+true` is the only value on any failure path, including an unconfigured key. The stub decides on
+text: trailing comma or trailing conjunction (`and|but|so|because|that|which|with|to|we|ve|ama|
+çünkü|ki|için|ile`) → `false`, everything else `true` — that is how a keyless acceptance
+scenario reaches the hold branch.
+
+**Step 9 — real `gpt-4.1-nano` verdicts** (2026-08-11, one call each, warm latencies):
+
+| lang | finished | ms | fragment |
+|---|---|---|---|
+| en | false | 1831 | `So at my last company we` |
+| en | true | 694 | `I don't know that one.` |
+| en | true | 940 | `Can you repeat the question?` |
+| en | true | 524 | `i led the migration off the old queue and we cut the p95 by about half` |
+| en | false | 491 | `there were three things we changed and the first one was` |
+| tr | false | 807 | `şey, yani, aslında` |
+| tr | true | 874 | `Son şirketimde ödeme servisini baştan yazdık ve gecikmeyi yarıya indirdik.` |
+| tr | true | 798 | `bilmiyorum` |
+| tr | false | 487 | `projede iki seçenek vardı çünkü` |
+
+9/9 correct, Turkish included — including the two that a quality gate would have got wrong
+("I don't know", "bilmiyorum" are finished). First call 1831 ms is cold; the rest are 487–940,
+consistent with STATE.md's measured 780 ms median.
+
+**Verification:** `npm test -- --project node packages/ai` → 7 files, 70 tests green.
+`npm run lint && npm run typecheck` → clean. Full `npm test` → 991 green.
+`npm run test:acceptance` from the host (db on 55432, redis db 9 on 56379) → 111 scenarios, 885
+steps, all passed.
