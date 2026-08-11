@@ -189,7 +189,7 @@ export function VoiceControls({
           <select
             className={styles.pick}
             aria-label={t('micDevice')}
-            value={session.deviceId ?? ''}
+value={session.deviceId ?? session.devices[0]?.deviceId ?? ''}
             disabled={session.recording}
             onChange={(event) => session.selectDevice(event.target.value)}
             data-testid="mic-device"
