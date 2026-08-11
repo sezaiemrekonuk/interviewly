@@ -1,16 +1,14 @@
 # Turn-taking — State
 
 Last updated: 2026-08-11
-Last session ended: **`T01` done (Ahmet, 2026-08-11, opus-5 on a sonnet-tier task — owner
-override, see the devlog).** The gate exists as a seam method only; nothing calls it yet.
-Changed: `packages/ai/` (`AiClient.ts`, `live-client.ts`, `stub.ts`, `resolve-client.ts`,
-`schemas.ts`, `prompt-vars.ts`, `providers.ts`, `index.ts`, new
-`prompts/interview.turn.complete.prompt.yaml`, new `src/turn-complete.test.ts`,
-`prompt-builder.test.ts` name list) plus one delegating method in
-`backend/features/step_definitions/adaptive.steps.ts`.
-For `T03`: `turnComplete` never rejects — no call site needs a catch — and the chain opt-out is
-`buildSoloChain`, not a slice of `buildChain`. Real nano verdicts (9/9 correct, both languages)
-are in the task's `## Notes`; they are the only data spec Open question 1 has.
+Last session ended: **`T02` done (Ahmet, 2026-08-11, opus-5).** New
+`backend/modules/speech/pending-turn.ts` + `pending-turn.test.ts` (17 tests). Nothing else in the
+repo changed and nothing imports it — `T03` is the first caller.
+`T01` and `T02` are both done, so **`T03` is now unblocked** and is the only remaining unblocked
+row. Both tasks' `## Notes` are written for it. Two facts it needs and neither module states
+twice: **no function in either module throws or rejects**, so no call site needs a catch; and the
+caps (`MAX_PROBES_PER_TURN`, `MAX_PENDING_CHARS`) are exported but **not enforced** in T02 — T03
+enforces both, and also owns the `questionId` comparison against `currentQuestionRow`.
 
 **The gate costs 780 ms, measured (2026-08-11).** `gpt-4.1-nano`, warm median over n=5, min 556,
 max 887 — which confirms ADR-T03's 3 s timeout as a ceiling rather than a target. It is a real
@@ -33,14 +31,15 @@ EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**`T02`** — the only unblocked `todo` row. `T03` still needs it.
+**`T03`** — the only unblocked `todo` row, and the one that finally wires the gate and the held
+partial to a route. `T04` needs it; so does speech-latency `L02`.
 
 ## Ledger
 
 | ID | Title | Repo | Status | Depends on |
 |----|-------|------|--------|------------|
 | T01 | The completeness gate: prompt, schema, seam method, chainless, fail-open | | done | C02, I02 |
-| T02 | The held partial: `pending-turn.ts`, atomic take, the two caps | | todo | F03, S03 |
+| T02 | The held partial: `pending-turn.ts`, atomic take, the two caps | | done | F03, S03 |
 | T03 | Turn paths: gate + join + hold, the silence turn, `pendingTurn` on `/state` | | todo | T01, T02, C01, C02 |
 | T04 | The room: probe-vs-final stop, the 13 s clock, the recovery notice | | todo | T03, S06 |
 
