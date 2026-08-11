@@ -10,7 +10,10 @@ process.env.INTERNAL_API_URL ??= 'http://localhost:4000';
 process.env.DATABASE_URL ??=
   'postgresql://interviewly:interviewly@localhost:5432/interviewly_test';
 process.env.SHADOW_DATABASE_URL ??= 'postgresql://interviewly:interviewly@localhost:5432/interviewly_shadow';
-process.env.REDIS_URL ??= 'redis://localhost:6379';
+// Db 1 and port 6380, matching cucumber.js: db 0 is the application's and this ring flushes
+// what it connects to (#119). In practice cucumber.js has already set this — these defaults
+// only cover a direct import, and a default that would be rejected is worse than none.
+process.env.REDIS_URL ??= 'redis://localhost:6380/1';
 process.env.SESSION_SECRET ??= 'test-session-secret-at-least-32-characters';
 process.env.SMTP_HOST ??= 'localhost';
 process.env.MAIL_FROM ??= 'Interviewly <no-reply@interviewly.local>';
