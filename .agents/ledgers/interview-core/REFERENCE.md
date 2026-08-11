@@ -106,6 +106,7 @@ SCREAMING_SNAKE_CASE code — never a display string. All `:id` routes are owner
 | `POST /interviews/:id/resume` | `requireAuth` | 200 `{ state }` | `INTERVIEW_NOT_FOUND`, `INVALID_STATE_TRANSITION`, `CSRF_ORIGIN_MISMATCH` | I07 |
 | `GET /interviews/:id/report/download` | `requireAuth` | 200 `{ url }` (signed, ≤ 300 s, not under `/assets/`) | `INTERVIEW_NOT_FOUND` | I12 |
 | `GET /interviews/:id/events` | `requireAuth` | 200 SSE stream: `INTERVIEW_STATE_CHANGED`, `INTERVIEW_QUESTIONS_READY` | `INTERVIEW_NOT_FOUND` | I07 (ADR-I29), ADR-I38 |
+| `POST /interviews/:id/heartbeat` | `requireAuth`, owner, CSRF | 200 `{ elapsedSeconds, expiresAt }` | `INTERVIEW_NOT_FOUND` | I16 |
 | `GET /healthz` | — | 200 `{ ok: true }` | — | I14 |
 | `GET /readyz` | — | 200 `{ ready: true }` / 503 `NOT_READY` | `NOT_READY` | I14 |
 
@@ -122,6 +123,18 @@ built. Resumable after a refresh — `currentIndex` and `state` reconstruct the 
 client memory (§3.8). `persona`/`currentQuestion` are null until a round exists (I04);
 `avatarState` is a fixed `'idle'` placeholder until I07 wires it to live SSE state; `widget`
 is always null until I04/I06 build widget-kind questions.
+
+The shape also carries the interview's window (S09, reworked by **I16**): `{ startedAt,
+elapsedSeconds, expiresAt }`. `startedAt` is the interview's date and nothing derives remaining
+time from it. `elapsedSeconds` is **active time** — seconds the candidate has been in the room,
+banked in `interviews.elapsed_seconds` and extended by the open stretch since `last_seen_at`,
+which `POST /heartbeat` advances every 15 s; a gap past `HEARTBEAT_GRACE_SECONDS` (30) is
+counted as absence and spends nothing. `expiresAt` is `now + remaining` from the same measure,
+so unlike the S09 original **it can move later** as well as earlier: a break pushes it out by
+the length of the break. All three come from one arithmetic (`activeMs`, `elapsed.ts`), which is
+what keeps a rendered countdown and a `VOICE_SESSION_EXPIRED` from naming different times.
+`elapsedSeconds` is a snapshot as of the response — a client ticks forward from when it arrived,
+never from a value change (`useRoomElapsed`, and the trap noted in the I16 task file).
 
 ## `@interviewly/ai` — the one seam
 
@@ -189,6 +202,8 @@ All paths relative to repo root. Each exists once its providing task lands.
 | `backend/modules/interview/answers.ts` | I06 | `POST /answers`: guarded advance, duration, transcript |
 | `backend/modules/interview/machine.ts` | I06 | K2 transition table + guard (extended I07) |
 | `backend/modules/interview/resume.ts` | I07 | `POST /resume`: `paused → round` |
+| `backend/modules/interview/elapsed.ts` | I16 | Active time: `activeMs`, `bankActiveTime`, grace window |
+| `backend/modules/interview/heartbeat.ts` | I16 | `POST /heartbeat`: bank the open stretch, re-anchor |
 | `backend/modules/interview/sse.ts` | I07 | `INTERVIEW_STATE_CHANGED` + `INTERVIEW_QUESTIONS_READY` SSE fan-out |
 | `backend/modules/interview/budget.ts` | I08 | `withBudget(id, fn)`: advisory-locked ceiling (ADR-I33) |
 | `backend/modules/interview/report-run.ts` | I09 | `evaluating → completed\|failed`, store payload |

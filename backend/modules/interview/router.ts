@@ -8,6 +8,7 @@ import { requirePublicOrigin } from './csrf';
 import { deleteInterview } from './delete';
 import { getInterview } from './get';
 import { downloadReport } from './download';
+import { heartbeatInterview } from './heartbeat';
 import { resolveInterview } from './ownership';
 import { dailyInterviewCap, interviewStartLimiter } from './rate-limit';
 import { submitProfile } from './profile';
@@ -38,6 +39,11 @@ router.post('/:id/answers', submitAnswer);
 // C02 — the conversational path the room uses. `/answers` stays: it is the plain
 // one-answer-one-advance contract, and the acceptance suite is written against it.
 router.post('/:id/turns', submitTurn);
+
+// I16 — presence, not progression. Called on a timer by the open room; it moves no state and
+// touches only the two timing columns, so it sits with the other non-`GET` routes under CSRF
+// rather than being exempted for being "just a ping".
+router.post('/:id/heartbeat', heartbeatInterview);
 
 router.post('/:id/resume', resumeInterview);
 router.get('/:id/events', streamInterviewEvents);
