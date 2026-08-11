@@ -14,6 +14,12 @@ exempt by name, and two new assertions keep every key in it a real registry code
 across locales. Frontend unit 476/476 (the narrow `room/voice-controls use-voice-session`
 selection missed both the guard and W10's copy assertion), lint + typecheck green.
 
+**Pointer (2026-08-10):** ADR-S06's silence rule and this spec's Open question 2 ("VAD threshold
+and silence window") are superseded by **ADR-T01** in `.agents/ledgers/turn-taking/`. The window
+was never the problem: silence still stops the recorder at 2 000 ms, it just no longer ends the
+turn. Nothing here is reopened, and the rest of ADR-S06 stands — the manual stop is still always
+visible, and it is now the one path that skips the completeness gate.
+
 ## Execution protocol (follow exactly)
 
 Do not start from this file. `.agents/EXECUTE.md` is the prompt, and its § 4 decides which task
