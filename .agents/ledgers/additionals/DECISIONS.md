@@ -110,3 +110,50 @@ own camera anywhere: not in pre-join, not in the room. Both, in the frontend.
 **Supersedes:** ADR-ADD01's "no `persona-tiles.tsx` wiring", and W09/W10's mic-only reading of
 the spec (`.agents/ledgers/frontend/STATE.md`) — the self-camera those rows named was always in
 `.agents/specs/2026-07-29-voice.md` §3.2 and is now built.
+
+## ADR-ADD03 — the listing screen, and the interview language as a tool
+
+**Ask (owner, 2026-08-11):** nothing checked that the pasted job listing was a job listing.
+Language was worse: the interview ran in the account's locale, the locale switch is hard to find,
+and a candidate who changed language mid-interview was not followed. Plus two prompt complaints —
+too many clarification questions, and "thank you for your answer" said back to `dsflk;dsjgds`.
+
+**Shape chosen:**
+
+- **One check, two answers.** `interview.listing.validate` (new K9 lineage, `gpt-4.1-nano`)
+  returns `{is_job_listing, language}`. The listing is the only text an interview is built from,
+  so the call that reads it for "is this real" is the same one that reads it for "what language
+  is this" — a second call to classify the language would be a second bill for one paragraph.
+- **The check runs after `interview.create`, not before.** `llm_calls.interview_id` is NOT NULL,
+  so a pre-create call has nothing to hang its audit row on, and widening the column is a
+  migration for an ordering problem. A refused listing soft-deletes the row it needed (every FK
+  here is ON DELETE RESTRICT, and the audit row points at it) and answers `LISTING_NOT_A_JOB`
+  before the daily quota is charged and before any question is generated.
+- **Fail-open when the check is unreachable, fail-closed when it answers.** Refusing every
+  interview because a screening model timed out trades a content check for an outage. A check
+  that came back and said "not a listing" is honoured; a thrown one logs
+  `LISTING_CHECK_UNAVAILABLE` and lets the interview through, where the §7.1 boundary and C07's
+  patterns are still in force.
+- **`set_interview_language` is a field on `ConductorTurnSchema`, like `avatar` (ADR-ADD01).**
+  Same reasoning: that object already *is* this codebase's tool-calling surface. The interviewer
+  reads the candidate's latest message and asks for the move by name; `conductor.ts` applies it
+  before anything downstream generates or speaks, so `ensureTechBatch`, the K4 promotion and
+  every ElevenLabs call read the new language rather than the one the candidate just left.
+- **I10's heuristic streak stays.** The tool is the fast path (one message, the model's read);
+  `trackLanguage` is the backstop for a turn the model did not act on. Both write through the
+  same `SUPPORTED = {en, tr}` guard and the tool clears the streak, so they cannot double-count.
+- **Prompt v4, not an edit of v3** (K9). Three changes: the language tool, a narrower
+  clarification rule (once per question, and only for an answer that misses the question or
+  claims a result with nothing behind it), and an unintelligible-answer rule — say plainly that
+  you did not understand, never thank the candidate for text you could not read.
+
+**Skipped, deliberately:**
+
+- **No `reason` on the check's output.** The candidate is told the listing was not one; a
+  model-written explanation of *why* is a second string to translate and a new place for listing
+  text to leak into a response body.
+- **No language in the TTS cache key.** `speech/<questionId>.mp3` could serve pre-switch audio
+  for a question re-spoken after a move; the conductor speaks through `chat_messages`, whose keys
+  are per message. Key it by language if a re-spoken question ever surfaces in the wrong one.
+- **The account locale is untouched.** The interview follows the listing; the UI still follows
+  the account. Making one write the other is a settings change nobody asked for.

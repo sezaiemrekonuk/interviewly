@@ -627,6 +627,7 @@
     "BUDGET_EXCEEDED": "Mülakat bütçesi doldu. Raporun hazırlanıyor.",
     "DAILY_INTERVIEW_LIMIT": "Günlük mülakat hakkın doldu. Yarın tekrar deneyebilirsin.",
     "LISTING_REQUIRED": "Mülakatı başlatmak için bir iş ilanı ekle.",
+    "LISTING_NOT_A_JOB": "Bu bir iş ilanına benzemiyor. Gerçek bir iş ilanının metnini yapıştır.",
     "CSRF_ORIGIN_MISMATCH": "İstek engellendi. Uygulamayı normal şekilde kullan.",
     "NOT_READY": "Servis henüz hazır değil. Birazdan tekrar dene.",
     "REPORT_ALREADY_EXISTS": "Bu mülakatın raporu zaten var.",

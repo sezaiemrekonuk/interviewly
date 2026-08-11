@@ -15,6 +15,7 @@ import type {
   ReportIntegrity,
   ScoreAnswerArgs,
   TurnCompleteArgs,
+  ValidateListingArgs,
 } from './AiClient';
 
 export const PROMPT_NAMES = {
@@ -25,6 +26,7 @@ export const PROMPT_NAMES = {
   generateInterviewTitle: 'interview.title.generate',
   conductTurn: 'interview.conduct.turn',
   turnComplete: 'interview.turn.complete',
+  validateListing: 'interview.listing.validate',
 } as const;
 
 export type AiMethod = keyof typeof PROMPT_NAMES;
@@ -176,6 +178,14 @@ export function titleVars(args: GenerateInterviewTitleArgs): Record<string, unkn
     language: args.language,
     jobListing: args.jobListing,
   };
+}
+
+/**
+ * No `language` variable, deliberately: the check is what decides the language, so telling it
+ * one up front is the answer leaking into the question.
+ */
+export function listingVars(args: ValidateListingArgs): Record<string, unknown> {
+  return { jobListing: args.jobListing };
 }
 
 export function candidateVars(args: GenerateCandidatesArgs): Record<string, unknown> {

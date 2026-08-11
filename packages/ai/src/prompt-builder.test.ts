@@ -205,7 +205,7 @@ describe('PromptBuilder', () => {
 });
 
 describe('PromptRegistry', () => {
-  it('ships the seven reserved prompt names, each resolvable and each on one provider', () => {
+  it('ships the eight reserved prompt names, each resolvable and each on one provider', () => {
     const registry = loadPromptRegistry();
     expect(registry.names()).toEqual([
       'interview.answer.score',
@@ -213,6 +213,9 @@ describe('PromptRegistry', () => {
       // a different call with a different output schema, and `PROMPT_NAMES` keys on the
       // `AiClient` method, so folding it into another name would make one prompt serve two.
       'interview.conduct.turn',
+      // ADR-ADD03 — the listing screen in front of setup. Its own lineage: a different call
+      // with a different output schema, on `gpt-4.1-nano` like the title it runs beside.
+      'interview.listing.validate',
       'interview.question.candidates',
       'interview.question.generate',
       'interview.report.generate',

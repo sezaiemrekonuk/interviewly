@@ -149,6 +149,39 @@ function shape(target: number, hr: number | undefined): { hrCount: number; techC
   return { hrCount: hr, techCount };
 }
 
+/**
+ * ADR-ADD03 — the gate. Runs after the row exists because `llm_calls.interview_id` is NOT NULL:
+ * the check is a provider call like any other and has to be auditable, and there is no
+ * interview to hang it on until `create` has returned.
+ *
+ * Fail-open on a provider failure, and only on one. Refusing every interview because the screen
+ * is unreachable trades a soft content check for an outage, and the listing still crosses the
+ * §7.1 boundary as a bound value on every call that reads it. A check that came back and said
+ * "not a listing" is honoured.
+ */
+async function checkListing(
+  interviewId: string,
+  jobText: string,
+  fallbackLanguage: string,
+  traceId: string,
+): Promise<{ ok: boolean; language: string }> {
+  try {
+    const check = await aiClient().validateListing({
+      jobListing: jobText,
+      ctx: { interviewId, traceId },
+    });
+    return { ok: check.is_job_listing, language: check.language };
+  } catch (err) {
+    logger.warn({
+      event: 'LISTING_CHECK_UNAVAILABLE',
+      interviewId,
+      traceId,
+      reason: err instanceof Error ? err.message : 'unknown',
+    });
+    return { ok: true, language: fallbackLanguage };
+  }
+}
+
 async function titleInterview(
   interviewId: string,
   jobText: string,
@@ -250,6 +283,35 @@ export const setupInterview: RequestHandler = async (req, res) => {
       throw err;
     });
 
+  // ADR-ADD03. Before the quota is charged and before anything is generated from the text: a
+  // refused listing must cost the candidate neither one of their five nor a round of questions.
+  // The row it needed is soft-deleted rather than dropped — every FK here is ON DELETE RESTRICT,
+  // and the `llm_calls` row the check itself wrote points at it.
+  const check = await checkListing(interview.id, jobText, req.user!.locale, req.traceId!);
+  if (!check.ok) {
+    await prisma.interview.update({
+      where: { id: interview.id },
+      data: { deleted_at: new Date() },
+    });
+    logger.warn({ event: 'LISTING_REJECTED', interviewId: interview.id, traceId: req.traceId });
+    throw new ApiError('LISTING_NOT_A_JOB');
+  }
+
+  // The interview runs in the language of the listing, not of the account (ADR-ADD03). A
+  // Turkish listing read by an account left on English produced English questions about a
+  // Turkish role, and the candidate's only fix was a locale switch they could not find.
+  const language = check.language;
+  if (language !== interview.language) {
+    await prisma.interview.update({ where: { id: interview.id }, data: { language } });
+    interview.language = language;
+    logger.info({
+      event: 'LANGUAGE_SET_FROM_LISTING',
+      interviewId: interview.id,
+      traceId: req.traceId,
+      language,
+    });
+  }
+
   // The daily quota is charged here, not in the middleware: the row exists, so this is the
   // first moment the user has actually spent one of their five (issue #116). Everything
   // after this point either succeeds or leaves an interview they can resume, so there is no
@@ -262,7 +324,7 @@ export const setupInterview: RequestHandler = async (req, res) => {
       'DAILY_LIMIT_RECORD_FAILED',
     );
   }
-  await titleInterview(interview.id, jobText, req.user!.locale, req.traceId!);
+  await titleInterview(interview.id, jobText, language, req.traceId!);
 
   await applyTransition(interview, 'profiling', { traceId: req.traceId! });
 
