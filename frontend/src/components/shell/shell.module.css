@@ -159,13 +159,18 @@
 
 /* ---------- working-surface header ---------- */
 
+/* The header and the body share one measure: `--container-max`, centred, never tighter than
+   the 24px gutter. Expressed as padding rather than `max-width` + `margin-inline: auto` so the
+   bottom rule below still runs edge to edge — a divider that stops in the middle of a 2560px
+   monitor reads as a broken layout, while its content lining up with the body below does not. */
 .workTop {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
-  padding: 16px 24px;
+  padding-block: 16px;
+  padding-inline: max(24px, calc((100% - var(--container-max)) / 2));
   border-block-end: 1px solid var(--border);
 }
 
@@ -178,8 +183,13 @@
   margin: 0;
 }
 
+/* Same measure as `.workTop`, so the title and the content it names share an inline-start
+   edge. The page's own column still sets its own width inside this — 880px of settings is a
+   reading measure and does not want to be 1440 — but it now centres within the cap instead of
+   hugging the rail (see the `margin-inline: auto` on each page's `.body`). */
 .workBody {
-  padding: 24px;
+  padding-block: 24px;
+  padding-inline: max(24px, calc((100% - var(--container-max)) / 2));
   min-width: 0;
 }
 

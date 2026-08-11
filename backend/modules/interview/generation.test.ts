@@ -32,9 +32,13 @@ const personaFindFirst = vi.fn(async ({ where }: { where: { id?: string; role?: 
   return { id: 'cmsnfixture0000', role: where.role, name: 'Stub Persona', system_prompt: 'stub' };
 });
 
+/** The HR batch already on disk when the technical one is generated (ADR-I22). */
+const hrTopics = [{ topic: 'teamwork' }, { topic: 'motivation' }, { topic: 'teamwork' }];
+const questionFindMany = vi.fn(async () => hrTopics);
+
 vi.mock('../../src/lib/db', () => ({
   prisma: {
-    question: { count: vi.fn(async () => existingQuestions.count) },
+    question: { count: vi.fn(async () => existingQuestions.count), findMany: questionFindMany },
     persona: { findFirst: personaFindFirst },
     $transaction: (run: (client: unknown) => Promise<unknown>) => run(tx),
   },
@@ -80,6 +84,7 @@ beforeEach(() => {
   order.length = 0;
   existingQuestions.count = 0;
   publishQuestionsReady.mockClear();
+  questionFindMany.mockClear();
   client.generateRoundQuestions.mockClear();
 });
 
@@ -106,6 +111,32 @@ describe('generateRound', () => {
 
     expect(publishQuestionsReady).toHaveBeenCalledWith(
       expect.objectContaining({ roundType: 'tech' }),
+    );
+  });
+
+  /**
+   * `priorTopics` has been a variable on this prompt since v1 with nothing bound to it, so
+   * every technical batch was written blind to the HR round and the two converged — which is
+   * how the technical interviewer opened by asking what HR had just asked. Asserted on the
+   * ARGUMENT rather than on the query, because a `findMany` that runs and whose result is
+   * dropped on the floor is exactly the defect this fixes.
+   */
+  it('tells the technical batch which topics the HR round already covers', async () => {
+    await generateRound(interview, 'tech', { traceId: 'trc_1', client: client as never });
+
+    expect(client.generateRoundQuestions).toHaveBeenCalledWith(
+      expect.objectContaining({ priorTopics: ['teamwork', 'motivation'] }),
+    );
+  });
+
+  // HR is generated first and from nothing, so it has no prior round to avoid — and reading
+  // one would be a query that can only ever return zero rows.
+  it('sends no prior topics for the HR round', async () => {
+    await generateRound(interview, 'hr', { traceId: 'trc_1', client: client as never });
+
+    expect(questionFindMany).not.toHaveBeenCalled();
+    expect(client.generateRoundQuestions).toHaveBeenCalledWith(
+      expect.objectContaining({ priorTopics: [] }),
     );
   });
 

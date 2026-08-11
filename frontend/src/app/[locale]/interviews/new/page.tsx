@@ -253,7 +253,7 @@ function InterviewSetup() {
   );
 
   return (
-    <SplitShell rail={rail} width="wide">
+    <SplitShell rail={rail} width="wide" className={styles.shell}>
       <WorkTop title={t('title')} />
 
       <WorkBody className={styles.body}>

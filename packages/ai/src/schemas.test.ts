@@ -93,11 +93,21 @@ describe('ReportPayloadSchema', () => {
     expect(ReportPayloadSchema.parse(report)).toEqual(report);
   });
 
+  // The interview that produced this is real: `cut_short` after one answered question of ten.
+  // The prompt asks for 2–5 strengths and also forbids padding a thin interview, so the model
+  // returned one — and the lower bound turned that into `AI_OUTPUT_INVALID` on every attempt
+  // and a candidate with no report at all. A short report is the honest output for a short
+  // interview; only the ceiling is a real defect.
+  it('accepts a thin report from an interview that was stopped early', () => {
+    const thin = { ...report, strengths: ['Explained the one answer clearly'], improvements: [] };
+    expect(ReportPayloadSchema.safeParse(thin).success).toBe(true);
+  });
+
   it.each([
     // The exact shape schema_validation.feature @AC-11 drives the stub with.
     ['overall_score 101', { ...report, overall_score: 101 }],
     ['a non-integer round score', { ...report, rounds: [{ ...report.rounds[0], score: 62.5 }] }],
-    ['a single strength', { ...report, strengths: ['Only one'] }],
+    ['six strengths', { ...report, strengths: ['a', 'b', 'c', 'd', 'e', 'f'] }],
     ['six improvements', { ...report, improvements: ['a', 'b', 'c', 'd', 'e', 'f'] }],
     [
       'star_adherence above 1',

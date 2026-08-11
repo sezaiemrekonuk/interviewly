@@ -9,11 +9,18 @@
    content edge across the four adjacent routes: dashboard and archive cap at 1120 because
    they are tabular, settings and profile at 880 because a row whose control is a screen away
    from the fact it changes stops being one row. */
+/* The working surface's measure, consumed by `.workTop` and `.workBody` in
+   `shell.module.css`. Set on the shell rather than on `.body` so the header and the content it
+   names share an edge: a title capped at 1440 over a column capped at 880px puts the two on
+   different left margins, which reads as a broken header rather than as a narrower column. */
+.shell {
+  --container-max: 880px;
+}
+
 .body {
   display: flex;
   flex-direction: column;
   gap: 32px;
-  max-width: 880px;
 }
 
 .section {

@@ -6,11 +6,18 @@
 /* §3.4's 880px reading measure, left-aligned on the working surface — same edge and same cap
    as `/settings`, which is the adjacent route in the rail. See that file for why it is not
    centred: `WorkTop` is outside `WorkBody` and never moves. */
+/* The working surface's measure, consumed by `.workTop` and `.workBody` in
+   `shell.module.css`. Set on the shell rather than on `.body` so the header and the content it
+   names share an edge: a title capped at 1440 over a column capped at 880px puts the two on
+   different left margins, which reads as a broken header rather than as a narrower column. */
+.shell {
+  --container-max: 880px;
+}
+
 .body {
   display: flex;
   flex-direction: column;
   gap: 20px;
-  max-width: 880px;
 }
 
 .intro {

@@ -2,6 +2,13 @@
    working surface holds one subject — the microphone. No gradient, no mascot; the shell is the
    chrome. Authored in px so the token lint sees every value. */
 
+/* The working surface's measure, consumed by `.workTop` and `.workBody` in
+   `shell.module.css`. On the shell rather than on the column, so the page title and the content
+   it names share an edge. */
+.shell {
+  --container-max: 480px;
+}
+
 .railLead {
   margin-top: 8px;
   font-family: var(--font-heading), Georgia, serif;
@@ -26,7 +33,6 @@
   flex-direction: column;
   gap: 24px;
   width: 100%;
-  max-width: 480px;
 }
 
 .panel {

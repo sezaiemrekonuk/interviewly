@@ -76,6 +76,7 @@ export default function InterviewReportPage() {
   return (
     <div data-testid="interview-report">
       <SplitShell
+        className={styles.shell}
         rail={
           <ReportRail
             interviewId={id}
@@ -91,10 +92,13 @@ export default function InterviewReportPage() {
               payload={report.payload}
               endedReason={room.endedReason}
               turns={room.transcript}
+              messages={room.messages}
             />
           ) : room.state === 'failed' || room.state === 'abandoned' ? (
             // Read before the wait, so a terminal interview never spends 60s pretending (issue 83).
-            <ReportUnavailable state={room.state} />
+            // `endedReason` rides along: "we couldn't generate your report" does not tell a
+            // candidate why their interview stopped halfway, and the row already says.
+            <ReportUnavailable state={room.state} endedReason={room.endedReason} />
           ) : (
             <ReportWait onTimeout={onTimeout} />
           )}

@@ -569,7 +569,19 @@
     "downloadNotReady": "Your PDF isn't ready yet — try again in a moment.",
     "downloadError": "Couldn't get the download link. Try again.",
     "starNotApplicable": "STAR n/a",
-    "starNote": "STAR scores how an answer is built as a story, so it is only marked on HR questions."
+    "starNote": "STAR scores how an answer is built as a story, so it is only marked on HR questions.",
+    "endedReasonLine": "Why it ended: {reason}",
+    "endedReason": {
+      "cut_short": "the interviewer ended it early",
+      "time_exhausted": "the interview ran out of time",
+      "budget_exhausted": "the interview reached its cost limit",
+      "abandoned": "it was left unfinished and closed automatically",
+      "error": "something went wrong during the interview"
+    },
+    "questionLabel": "Question",
+    "clarificationLabel": "Clarification {n}",
+    "answerLabel": "Your answer",
+    "exchangeUnanswered": "No answer was given before the interview moved on."
   },
   "errors": {
     "PASSWORD_TOO_SHORT": "Password must be at least 10 characters.",

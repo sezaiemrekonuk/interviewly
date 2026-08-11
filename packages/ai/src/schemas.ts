@@ -118,21 +118,31 @@ export const ConductorTurnSchema = z.object({
   widget: WidgetSchema.optional(),
 });
 
+/**
+ * The report artifact.
+ *
+ * `strengths`, `improvements` and `rounds` carry an upper bound and no lower one, and that
+ * asymmetry is the point. The prompt asks for 2–5 of each and also forbids padding a thin
+ * interview, so on a run that was stopped after one question the two instructions pull apart
+ * and the model — correctly — returns fewer. A lower bound here turned that into
+ * `AI_OUTPUT_INVALID` on every attempt, and the candidate got no report at all for the
+ * interview they did sit: `cut_short` with one answered question failed both attempts and
+ * landed on `failed`. A short report is the honest output; the absence of one is a defect.
+ * The ceiling stays, because a model listing fifteen strengths is padding.
+ */
 export const ReportPayloadSchema = z.object({
   overall_impression: z.string().min(1),
   overall_score: score,
-  strengths: z.array(z.string().min(1)).min(2).max(5),
-  improvements: z.array(z.string().min(1)).min(2).max(5),
-  rounds: z
-    .array(
-      z.object({
-        type: RoundTypeSchema,
-        score,
-        summary: z.string().min(1),
-        note: z.string().optional(),
-      }),
-    )
-    .min(1),
+  strengths: z.array(z.string().min(1)).max(5),
+  improvements: z.array(z.string().min(1)).max(5),
+  rounds: z.array(
+    z.object({
+      type: RoundTypeSchema,
+      score,
+      summary: z.string().min(1),
+      note: z.string().optional(),
+    }),
+  ),
   questions: z.array(
     z.object({
       question_id: z.string().min(1),

@@ -137,7 +137,14 @@ function formatConversation(turns: ConductTurnArgs['conversation']): string {
  * is a hint, never the check. `conductor.ts` re-derives all of this.
  */
 function allowedActions(args: ConductTurnArgs): string[] {
-  const actions = ['continue', 'next_question', 'show_widget'];
+  // On the last turn a question has, `continue` is not a choice the server will honour:
+  // `clampAction`'s drift guard rewrites it into an advance and writes "the interviewer was
+  // moved on automatically" into the transcript. Offering it anyway is how a candidate ends up
+  // cut off mid-clarification — the interviewer asks one more probe, the server overrules it,
+  // and the round reads as a skip. Taking it off the list makes the interviewer close the
+  // question in its own words instead, which is the same advance without the seam.
+  const actions =
+    args.turnsLeftOnQuestion <= 1 ? ['next_question'] : ['continue', 'next_question', 'show_widget'];
   if (args.mayHandOver) actions.push('handover');
   if (args.mayEnd) actions.push('end_interview');
   return actions;

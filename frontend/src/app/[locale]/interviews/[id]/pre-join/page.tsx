@@ -124,7 +124,7 @@ export default function PreJoinPage() {
   }
 
   return (
-    <SplitShell rail={rail} width="wide">
+    <SplitShell rail={rail} width="wide" className={styles.shell}>
       <WorkTop title={t('title')} />
       <WorkBody className={styles.body}>{body()}</WorkBody>
     </SplitShell>

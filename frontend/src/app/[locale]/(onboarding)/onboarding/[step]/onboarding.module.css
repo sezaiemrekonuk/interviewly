@@ -6,13 +6,20 @@
  * Only the working surface is styled here; the rail's own furniture is `shell.module.css`.
  */
 
+/* The working surface's measure, consumed by `.workTop` and `.workBody` in
+   `shell.module.css`. Set on the shell rather than on `.body` so the header and the content it
+   names share an edge: a title capped at 1440 over a column capped at 640px puts the two on
+   different left margins, which reads as a broken header rather than as a narrower column. */
+.shell {
+  --container-max: 640px;
+}
+
 .body {
   display: flex;
   flex-direction: column;
   gap: 24px;
   /* A measure, not the full width of the surface: a name input 900px wide reads as a
      mistake, and the education form is a two-column grid inside this column. */
-  max-width: 640px;
 }
 
 .form {

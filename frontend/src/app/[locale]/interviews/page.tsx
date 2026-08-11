@@ -153,7 +153,7 @@ function InterviewsArchive() {
   const active = view === 'sessions' ? list : questions;
 
   return (
-    <SplitShell rail={<AppRail user={user} />}>
+    <SplitShell rail={<AppRail user={user} />} className={styles.shell}>
       <WorkTop title={t('title')}>
         {/* Two views of one archive, so a segmented control rather than two nav entries: the
             subject does not change, only how it is cut.
