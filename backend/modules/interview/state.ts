@@ -7,6 +7,8 @@ import { type Ceilinged, speechExpiresAt } from '../speech/ceiling';
 
 import { activeSeconds } from './elapsed';
 
+import { seededPersona } from './generation';
+
 /** The columns the index walk needs — an `Interview` satisfies it; a test fixture need not. */
 export interface IndexedInterview {
   id: string;
@@ -81,32 +83,70 @@ export async function deliverCurrentQuestion(interview: IndexedInterview) {
 
 const ROUND_ORDER = { hr: 0, tech: 1 } as const;
 
+/** The columns the roster is planned from — the round shape, not the rows generated so far. */
+export interface RosteredInterview {
+  id: string;
+  state: string;
+  hr_question_count: number;
+  target_question_count: number;
+}
+
+/**
+ * The rounds this interview is going to have, from its shape alone, in `ROUND_ORDER` — so the
+ * caller sorts nothing.
+ *
+ * Technical is conditional because the split can leave it empty: `target 2 → hr 2, tech 0` is a
+ * legal interview that ends straight out of the HR round (`machine.ts` carries the edge for it),
+ * and promising a second interviewer who is never coming is the same lie in the other direction.
+ */
+function plannedRounds(interview: RosteredInterview): Array<'hr' | 'tech'> {
+  const techCount = interview.target_question_count - interview.hr_question_count;
+  return techCount > 0 ? ['hr', 'tech'] : ['hr'];
+}
+
 /**
  * The active speaker plus the full round roster. The room shows two tiles and only one may be
  * live (§3.2, K2), so the inactive tile needs an identity the client cannot invent — `persona`
  * alone forced W06 to guess one. `avatar_set` rides along because it is the only source of the
  * content-addressed `personas/{id}/{state}-{sha}.webp` keys.
  *
+ * The roster is planned, not observed (#129). It used to be whatever `interview_rounds` rows
+ * happened to exist, which made the candidate's tile grid a side effect of question generation:
+ * the technical row is written with its batch, so the first HR question was asked against a
+ * one-tile room and the second interviewer appeared mid-interview. Deriving it from the round
+ * shape instead keeps the count fixed for the whole interview, and leaves untouched the
+ * invariant `currentQuestionRow` depends on — a round row still means its questions exist.
+ *
+ * The generated row still wins where there is one: it names the persona actually assigned, and
+ * `seededPersona` is only the fallback for a round whose batch has not been written yet. That
+ * is the same lookup `generation.ts` will use when it does write it, so the tile does not
+ * change identity at the handover.
+ *
  * ponytail: avatarState is a fixed 'idle' placeholder — driving it off live SSE interaction
  * is I07's job (§3.6). Upgrade when the SSE avatar driver lands.
  */
-async function resolvePersonas(interviewId: string, state: string) {
+export async function resolvePersonas(interview: RosteredInterview) {
   const rounds = await prisma.interviewRound.findMany({
-    where: { interview_id: interviewId },
+    where: { interview_id: interview.id },
     include: { persona: true },
   });
 
-  const personas = rounds
-    .slice()
-    .sort((a, b) => ROUND_ORDER[a.type] - ROUND_ORDER[b.type])
-    .map((round) => ({
-      id: round.persona.id,
-      role: round.persona.role,
-      name: round.persona.name,
-      roundType: round.type,
-      avatarSet: round.persona.avatar_set,
-    }));
+  const byType = new Map(rounds.map((round) => [round.type, round]));
 
+  const personas = await Promise.all(
+    plannedRounds(interview).map(async (roundType) => {
+      const persona = byType.get(roundType)?.persona ?? (await seededPersona(roundType));
+      return {
+        id: persona.id,
+        role: persona.role,
+        name: persona.name,
+        roundType,
+        avatarSet: persona.avatar_set,
+      };
+    }),
+  );
+
+  const { state } = interview;
   const activeType = state === 'hr_round' ? 'hr' : state === 'tech_round' ? 'tech' : null;
   const active = activeType ? personas.find((p) => p.roundType === activeType) : undefined;
 
@@ -259,7 +299,7 @@ export const getInterviewState: RequestHandler = async (req, res) => {
   // Every field is derived from the DB, nothing from the request: a refreshed room with no
   // client memory reconstructs to the same place (§3.8, @AC-9).
   const [{ persona, personas }, currentQuestion, transcript, messages] = await Promise.all([
-    resolvePersonas(interview.id, interview.state),
+    resolvePersonas(interview),
     deliverCurrentQuestion(interview),
     resolveTranscript(interview.id),
     resolveMessages(interview.id),
