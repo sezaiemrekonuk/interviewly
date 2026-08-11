@@ -846,6 +846,31 @@ export function useResumeInterview(
 }
 
 /**
+ * `POST /interviews/:id/abandon` (issue 104) — the room's Leave, once confirmed.
+ *
+ * Returns the state it landed in, which the caller needs: a run with answers goes to
+ * `evaluating` and its report, one without ends at `abandoned` and has none. Both list
+ * caches are invalidated because the row's state and `endedReason` both just changed, and
+ * the home list renders "in progress" off exactly those.
+ */
+export function useAbandonInterview(
+  interviewId: string,
+): UseMutationResult<{ state: string }, ApiError, void> {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const result = await apiPost<{ state: string }>(`/interviews/${interviewId}/abandon`, {});
+      if (!result.ok) throw new ApiError(result.code ?? 'UNKNOWN');
+      return result.data as { state: string };
+    },
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: queryKeys.interviewState(interviewId) });
+      void client.invalidateQueries({ queryKey: queryKeys.meInterviews() });
+    },
+  });
+}
+
+/**
  * `GET /me/interviews` row (N01 `my-interviews.ts`). No score and no cost: the candidate
  * list is deliberately thinner than the admin audit, so the score lives on the report.
  */

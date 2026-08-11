@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { requireAuth } from '../auth/middleware';
 import { requireVerifiedEmail } from '../auth/verify-email';
 
+import { abandonInterview } from './abandon';
 import { submitAnswer } from './answers';
 import { requirePublicOrigin } from './csrf';
 import { deleteInterview } from './delete';
@@ -44,6 +45,11 @@ router.post('/:id/turns', submitTurn);
 // touches only the two timing columns, so it sits with the other non-`GET` routes under CSRF
 // rather than being exempted for being "just a ping".
 router.post('/:id/heartbeat', heartbeatInterview);
+
+// #104 — the room's Leave. Not `DELETE /:id`: that is a soft delete, which hides the interview
+// from the candidate's own history; leaving is the opposite, an interview they want to keep and
+// read back.
+router.post('/:id/abandon', abandonInterview);
 
 router.post('/:id/resume', resumeInterview);
 router.get('/:id/events', streamInterviewEvents);

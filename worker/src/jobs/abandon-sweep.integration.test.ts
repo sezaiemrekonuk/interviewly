@@ -98,7 +98,7 @@ beforeAll(async () => {
 });
 
 describe('sweepAbandoned staleness predicate', () => {
-  it('ends stale profiling/hr_round/paused interviews and leaves everything else alone', async () => {
+  it('ends stale profiling/hr_round/tech_round/paused interviews and leaves everything else alone', async () => {
     // Stale: last activity older than 24 h by every signal.
     const staleProfiling = await seed({ state: 'profiling', createdAt: ago(50 * HOUR) });
     const staleHr = await seed({
@@ -106,6 +106,15 @@ describe('sweepAbandoned staleness predicate', () => {
       createdAt: ago(50 * HOUR),
       startedAt: ago(49 * HOUR),
       lastMessageAt: ago(30 * HOUR),
+    });
+    // In scope since #104 gave the machine a `tech_round → abandoned` edge. It is where a
+    // candidate who gives up actually stops, so it was also where they piled up: 255 of them,
+    // more than every other sweepable state put together, none reachable by any path.
+    const staleTech = await seed({
+      state: 'tech_round',
+      createdAt: ago(50 * HOUR),
+      startedAt: ago(49 * HOUR),
+      lastMessageAt: ago(28 * HOUR),
     });
     const stalePaused = await seed({
       state: 'paused',
@@ -128,9 +137,17 @@ describe('sweepAbandoned staleness predicate', () => {
       lastMessageAt: ago(1 * HOUR),
     });
 
-    // Old, but out of scope: pre-start, mid-tech, evaluating, terminal, soft-deleted.
+    // Fresh in the newly-swept state too: adding `tech_round` must widen which states the
+    // sweep considers, not how stale a row has to be before it takes one.
+    const freshTech = await seed({
+      state: 'tech_round',
+      createdAt: ago(50 * HOUR),
+      startedAt: ago(49 * HOUR),
+      lastMessageAt: ago(1 * HOUR),
+    });
+
+    // Old, but out of scope: pre-start, evaluating, terminal, soft-deleted.
     const created = await seed({ state: 'created', createdAt: ago(50 * HOUR) });
-    const tech = await seed({ state: 'tech_round', createdAt: ago(50 * HOUR) });
     const evaluating = await seed({ state: 'evaluating', createdAt: ago(50 * HOUR) });
     const completed = await seed({ state: 'completed', createdAt: ago(50 * HOUR) });
     const deleted = await seed({
@@ -143,14 +160,15 @@ describe('sweepAbandoned staleness predicate', () => {
 
     await expectEnded(staleProfiling, 'profiling');
     await expectEnded(staleHr, 'hr_round');
+    await expectEnded(staleTech, 'tech_round');
     await expectEnded(stalePaused, 'paused');
 
     await expectUntouched(freshByCreation, 'profiling');
     await expectUntouched(freshByStart, 'paused');
     await expectUntouched(freshByMessage, 'hr_round');
+    await expectUntouched(freshTech, 'tech_round');
 
     await expectUntouched(created, 'created');
-    await expectUntouched(tech, 'tech_round');
     await expectUntouched(evaluating, 'evaluating');
     await expectUntouched(completed, 'completed');
     // K13: a soft-deleted interview is already gone from the user's view and must not come
