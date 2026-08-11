@@ -330,6 +330,13 @@ model Interview {
   budget_usd            Decimal        @default(0.50) @db.Decimal(12, 6)
   spent_usd             Decimal        @default(0) @db.Decimal(12, 6)
   started_at            DateTime?
+  // I16: active time, not wall-clock. `started_at` stays the instant the interview began (the
+  // history list and the report read it), but it is no longer what the room's elapsed and the
+  // speech ceiling are measured from — a candidate who left at 3:00 and came back an hour later
+  // resumes at 3:00, not 1:03:00. `elapsed_seconds` is the time banked by closed room sessions;
+  // `last_seen_at` is the open one's anchor, advanced by the heartbeat.
+  elapsed_seconds       Int            @default(0)
+  last_seen_at          DateTime?
   ended_at              DateTime?
   deleted_at            DateTime? // the soft-delete column user-facing reads filter on (K13)
   created_at            DateTime       @default(now())

@@ -11,6 +11,7 @@ import { Prisma, type Interview } from '@prisma/client';
 import { z } from 'zod';
 
 import { ApiError } from '../../src/lib/api-error';
+import { clock } from '../../src/lib/clock';
 import { prisma } from '../../src/lib/db';
 import { logger } from '../../src/lib/logger';
 
@@ -113,6 +114,7 @@ export async function startHrRound(
     select: { profile: true },
   });
 
+  const startedAt = clock.now();
   const updated = await prisma.interview.update({
     where: { id: interview.id },
     data: {
@@ -120,7 +122,12 @@ export async function startHrRound(
       // NULL column, not a column holding the JSON literal `null`.
       candidate_profile: (mergeProfile(account.profile, perInterview) as Prisma.InputJsonObject) ??
         Prisma.DbNull,
-      started_at: interview.started_at ?? new Date(),
+      started_at: interview.started_at ?? startedAt,
+      // I16: the candidate is in the room the moment the interview starts, so the first stretch
+      // is anchored here rather than at the first heartbeat — otherwise the seconds before that
+      // beat lands are time nothing counts. Left alone on a re-entry (`started_at` already set):
+      // re-anchoring would close whatever stretch is open without banking it.
+      ...(interview.started_at ? {} : { last_seen_at: startedAt }),
       // The first HR question becomes current the moment the batch exists. `state.ts` leaves
       // this to I04/I06 on purpose — a room refreshed mid-interview reconstructs from it.
       current_index: 1,

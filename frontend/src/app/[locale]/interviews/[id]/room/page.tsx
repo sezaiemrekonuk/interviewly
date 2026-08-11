@@ -20,6 +20,7 @@ import { resolveAvatarState, roomPhase } from '../../../../../lib/room-avatar';
 import { useErrorMessage } from '../../../../../lib/use-error-message';
 import { useInterviewEvents } from '../../../../../lib/use-interview-events';
 import { useRequireAuth } from '../../../../../lib/use-require-auth';
+import { useRoomHeartbeat } from '../../../../../lib/use-room-clock';
 import { useVoiceSession } from '../../../../../lib/use-voice-session';
 import { resolveActiveSpeaker } from '../../../../../lib/voice/active-speaker';
 
@@ -83,6 +84,11 @@ export default function InterviewRoomPage() {
   // refetch and the room becomes the text room — there is no client-side mode flag to unset.
   const voiceMode = room?.mode === 'voice';
   const speakable = roomState === 'hr_round' || roomState === 'tech_round';
+
+  // I16 — presence, on a timer, for as long as this room is a room. Gated on the state rather
+  // than on the component being mounted because the room stays mounted for a beat after the last
+  // answer while the redirect to the report runs, and time banked there is time nobody sat.
+  useRoomHeartbeat(id, ready && roomState !== null && !REPORT_STATES.has(roomState));
   // C06 — voice follows the conversation, not the question index: the welcome, a follow-up and
   // the handover line are all things to say and none of them is a question.
   //
@@ -335,6 +341,7 @@ export default function InterviewRoomPage() {
         rail={
           <RoomRail
             room={room}
+            roomUpdatedAt={stateQuery.dataUpdatedAt}
             voiceStatus={voiceMode ? voice.status : null}
             onLeave={() => router.push(DEFAULT_LANDING_PATH)}
           />
