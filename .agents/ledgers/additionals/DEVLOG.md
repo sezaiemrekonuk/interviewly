@@ -115,3 +115,25 @@ any screen. Both are frontend-only; nothing on the wire changed. See DECISIONS.m
 - `npm run typecheck` + `tsc -p frontend` — clean. `eslint --max-warnings=0` on every touched
   file — clean, including `react-hooks/set-state-in-effect`, which is what shaped both the
   `Capture`/`Frame` split and the failed-key state in `Avatar`.
+
+## 2026-08-11 — the tiles became a meeting (owner review)
+
+Owner's read of the first pass: the portrait floated in the middle of a card, and the candidate
+had to click to see themselves. Both fixed; the shape is a call surface now.
+
+- `persona-tiles.tsx` — new `VideoTile`: the picture fills the tile, the name plate sits
+  bottom-right, LIVE top-right, the drawn voice bottom-left, and the candidate's tile is the
+  same tile with their camera in it (mic meter pinned across its foot). Text mode's strip is
+  untouched — `PersonaTile` takes a `video` flag and keeps the old row for it.
+- `room.module.css` — `.videoTile`/`.videoLead`/`.videoSmall`, `.portraitFill`, `.plate`,
+  `.badgeFloat`, `.waveFloat`. The old `.tileLead` rules are deleted, not left dead.
+- `avatar.module.css` — no geometry at all now (no radius, no size): the caller's class owns it,
+  or two stylesheets fight over which loaded last.
+- `camera-view.tsx` — `rememberCamera()` / `cameraStartsOn()`. The room opens with the camera
+  already running when the candidate turned it on in pre-join (`sessionStorage`, per tab) or
+  when this browser has already granted the permission (`permissions.query`, which cannot
+  prompt). Firefox has no camera descriptor there, so it falls back to the click.
+- Pre-join is **one** panel for both devices (owner: "same container like Google Meet") —
+  preview, its toggle, a rule, then the microphone check and the privacy note.
+
+`npm test` 51 files / 529 tests pass; typecheck and eslint clean; `web` rebuilt and healthy.
