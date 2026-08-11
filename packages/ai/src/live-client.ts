@@ -18,6 +18,7 @@ import type {
   GenerateRoundQuestionsArgs,
   ScoreAnswerArgs,
   TurnCompleteArgs,
+  ValidateListingArgs,
 } from './AiClient';
 import { AiError } from './errors';
 import { createPromptBuilder, type BuiltPrompt, type PromptBuilder } from './prompt-builder';
@@ -34,6 +35,7 @@ import {
   PROMPT_NAMES,
   candidateVars,
   conductVars,
+  listingVars,
   questionVars,
   reportVars,
   scoreVars,
@@ -44,6 +46,7 @@ import {
   CandidateSchema,
   ConductorTurnSchema,
   InterviewTitleSchema,
+  ListingCheckSchema,
   QuestionBatchSchema,
   ReportPayloadSchema,
   ScoresSchema,
@@ -51,6 +54,7 @@ import {
   type Candidate,
   type ConductorTurn,
   type InterviewTitle,
+  type ListingCheck,
   type QuestionBatch,
   type ReportPayload,
   type Scores,
@@ -119,6 +123,16 @@ export class LiveAiClient implements AiClient {
       titleVars(args),
       InterviewTitleSchema,
       TIMEOUT_MS.generateInterviewTitle,
+      args.ctx,
+    );
+  }
+
+  validateListing(args: ValidateListingArgs): Promise<ListingCheck> {
+    return this.call(
+      PROMPT_NAMES.validateListing,
+      listingVars(args),
+      ListingCheckSchema,
+      TIMEOUT_MS.validateListing,
       args.ctx,
     );
   }

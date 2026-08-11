@@ -29,6 +29,33 @@ export interface TrackLanguageOpts {
   traceId: string;
 }
 
+/**
+ * ADR-ADD03 — the interviewer's own `set_interview_language`, applied.
+ *
+ * The same write `trackLanguage` performs on its second consecutive turn, reached by the other
+ * route: the conductor read the candidate's latest message and asked for the move by name. It
+ * still goes through the `SUPPORTED` guard, because "the model asked for it" is not a reason to
+ * write a `language` no prompt, no UI locale and no report renders — and it clears the streak,
+ * so the heuristic does not then count toward a move that has already happened.
+ *
+ * Returns the language the interview runs in afterwards, unchanged when there is nothing to do.
+ */
+export async function setInterviewLanguage(
+  interview: Interview,
+  language: string,
+  opts: TrackLanguageOpts,
+): Promise<string> {
+  if (!SUPPORTED.has(language) || language === interview.language) return interview.language;
+
+  streaks.delete(interview.id);
+  await prisma.interview.update({ where: { id: interview.id }, data: { language } });
+  logger.info(
+    { traceId: opts.traceId, interviewId: interview.id, from: interview.language, to: language },
+    'LANGUAGE_SET_BY_CONDUCTOR',
+  );
+  return language;
+}
+
 /** Drops an interview's streak entry. Call when it reaches a state with no more turns coming. */
 export function clearLanguageStreak(interviewId: string): void {
   streaks.delete(interviewId);

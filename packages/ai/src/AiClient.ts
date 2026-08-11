@@ -12,6 +12,7 @@ import type {
   Candidate,
   ConductorTurn,
   InterviewTitle,
+  ListingCheck,
   QuestionBatch,
   ReportPayload,
   RoundType,
@@ -28,6 +29,10 @@ export const TIMEOUT_MS = {
   generateCandidates: 15_000,
   generateReport: 90_000,
   generateInterviewTitle: 8_000,
+  // ADR-ADD03: the candidate is watching a spinner on Start with nothing else happening, and
+  // the call is one paragraph in and one JSON object out. Same ceiling as the title call it
+  // sits next to.
+  validateListing: 8_000,
   // C02: the only call a candidate waits on with nothing on screen. Every other interactive
   // call happens behind a question they are already reading, so 15 s there is a slow turn and
   // 15 s here is a room that looks dead. Ten is the point past which the retry costs less
@@ -166,6 +171,16 @@ export interface GenerateInterviewTitleArgs {
   ctx: AiCtx;
 }
 
+/**
+ * ADR-ADD03 — the screen in front of setup. The listing is the only candidate-supplied text an
+ * interview is built from, so it crosses the §7.1 boundary like every other bound value; the
+ * check exists because it is also the one that nothing else reads for meaning.
+ */
+export interface ValidateListingArgs {
+  jobListing: string;
+  ctx: AiCtx;
+}
+
 export interface GenerateCandidatesArgs {
   priorQuestion: string;
   priorScore: number;
@@ -197,6 +212,11 @@ export interface AiClient {
   /** K4 hook: easier / same / harder, in that order. */
   generateCandidates(args: GenerateCandidatesArgs): Promise<Candidate[]>;
   generateInterviewTitle(args: GenerateInterviewTitleArgs): Promise<InterviewTitle>;
+  /**
+   * ADR-ADD03 — is this text a job listing, and what language is it in? The caller refuses the
+   * setup on `is_job_listing: false` and runs the interview in `language`.
+   */
+  validateListing(args: ValidateListingArgs): Promise<ListingCheck>;
   /** No LLM call, no `llm_calls` row, no network (ai AC-13). */
   detectLanguage(text: string, current: string): LanguageDetection;
 }

@@ -5,7 +5,7 @@
  * registry is this package's. What `backend` supplies is the two things this package cannot
  * have: the `llm_calls` writer (Prisma) and the keys (env).
  */
-import type { AiClient, ConductTurnArgs, GenerateCandidatesArgs, GenerateInterviewTitleArgs, GenerateReportArgs, GenerateRoundQuestionsArgs, ScoreAnswerArgs, TurnCompleteArgs } from './AiClient';
+import type { AiClient, ConductTurnArgs, GenerateCandidatesArgs, GenerateInterviewTitleArgs, GenerateReportArgs, GenerateRoundQuestionsArgs, ScoreAnswerArgs, TurnCompleteArgs, ValidateListingArgs } from './AiClient';
 import { DEFAULT_UNIT_KIND } from './cost';
 import { AiError, noopLogger, type AiLogger } from './errors';
 import { LiveAiClient } from './live-client';
@@ -16,7 +16,7 @@ import { loadPromptRegistry, type PromptRegistry } from './registry';
 import { StubAiClient } from './stub';
 import type { LanguageDetection } from './detect-language';
 import type { AiCtx } from './prompt-builder';
-import type { Candidate, ConductorTurn, InterviewTitle, QuestionBatch, ReportPayload, Scores, TurnComplete } from './schemas';
+import type { Candidate, ConductorTurn, InterviewTitle, ListingCheck, QuestionBatch, ReportPayload, Scores, TurnComplete } from './schemas';
 
 export interface AiRuntimeConfig {
   AI_ENABLED: boolean;
@@ -126,6 +126,10 @@ class StubRecordingClient implements AiClient {
     return this.audited('generateInterviewTitle', args.ctx, () =>
       this.stub.generateInterviewTitle(args),
     );
+  }
+
+  validateListing(args: ValidateListingArgs): Promise<ListingCheck> {
+    return this.audited('validateListing', args.ctx, () => this.stub.validateListing(args));
   }
 
   conductTurn(args: ConductTurnArgs): Promise<ConductorTurn> {

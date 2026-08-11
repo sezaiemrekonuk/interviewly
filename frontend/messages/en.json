@@ -627,6 +627,7 @@
     "BUDGET_EXCEEDED": "Interview budget reached. Your report is being prepared.",
     "DAILY_INTERVIEW_LIMIT": "You have reached the daily interview limit. Try again tomorrow.",
     "LISTING_REQUIRED": "Add a job listing to start an interview.",
+    "LISTING_NOT_A_JOB": "This does not look like a job listing. Paste the text of a real job posting.",
     "CSRF_ORIGIN_MISMATCH": "Request blocked. Use the app normally.",
     "NOT_READY": "Service is not ready yet. Try again in a moment.",
     "REPORT_ALREADY_EXISTS": "This interview already has a report.",

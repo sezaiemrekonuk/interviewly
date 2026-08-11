@@ -14,6 +14,13 @@ export const DifficultySchema = z.enum(['easy', 'medium', 'hard']);
 export const RoundTypeSchema = z.enum(['hr', 'tech']);
 
 /**
+ * The two languages an interview runs in (ai Q1). The same closed set `language.ts` guards its
+ * switch with — a model naming a third one is a schema failure here rather than a `language`
+ * column no prompt, no UI locale and no report renders.
+ */
+export const InterviewLanguageSchema = z.enum(['en', 'tr']);
+
+/**
  * The score ceiling. Every score in this package is an integer 0..SCORE_MAX, without
  * exception — exported because the worker's PDF and the prompts' `0..100` wording are the
  * same fact, and a second literal is how a rescale half-lands (ADR-I39).
@@ -65,6 +72,17 @@ export const INTERVIEW_TITLE_MAX = 80;
 
 export const InterviewTitleSchema = z.object({
   title: z.string().trim().min(1).max(INTERVIEW_TITLE_MAX).refine((t) => !/[\r\n]/.test(t), { message: 'must be single line' }),
+});
+
+/**
+ * ADR-ADD03 — the gate in front of interview setup. `is_job_listing` is what decides whether an
+ * interview is built at all; `language` is the listing's own language and becomes the
+ * interview's, which is what stops a Turkish listing being interviewed in English because the
+ * account's locale happened to say so.
+ */
+export const ListingCheckSchema = z.object({
+  is_job_listing: z.boolean(),
+  language: InterviewLanguageSchema,
 });
 
 export const ScoresSchema = z.object({
@@ -124,6 +142,14 @@ export const ConductorTurnSchema = z.object({
    * expression is not worth a turn the way a bad `action` is.
    */
   avatar: z.number().int().min(1).max(3).optional(),
+  /**
+   * ADR-ADD03 — the interviewer moving the whole interview into the other language, asked for
+   * by name rather than inferred from the text. Orthogonal to `action` like `avatar`: the
+   * language can change on the turn a question advances as easily as on a clarification.
+   * `conductor.ts` re-derives whether it is a real move, so a value equal to the language the
+   * interview is already in costs nothing.
+   */
+  set_interview_language: InterviewLanguageSchema.optional(),
 });
 
 /**
@@ -172,6 +198,8 @@ export const ReportPayloadSchema = z.object({
 export type QuestionKind = z.infer<typeof QuestionKindSchema>;
 export type Difficulty = z.infer<typeof DifficultySchema>;
 export type RoundType = z.infer<typeof RoundTypeSchema>;
+export type InterviewLanguage = z.infer<typeof InterviewLanguageSchema>;
+export type ListingCheck = z.infer<typeof ListingCheckSchema>;
 export type Question = z.infer<typeof QuestionSchema>;
 export type QuestionBatch = z.infer<typeof QuestionBatchSchema>;
 export type Candidate = z.infer<typeof CandidateSchema>;
