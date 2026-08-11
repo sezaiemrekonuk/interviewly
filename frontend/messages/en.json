@@ -485,7 +485,6 @@
       "body": "Connect a microphone and reload this page, or continue this interview in text mode."
     },
     "camera": {
-      "title": "Camera",
       "note": "Optional. Your camera stays on this device — the picture is never recorded or sent anywhere, and you can turn it on and off during the interview.",
       "turnOn": "Turn camera on",
       "turnOff": "Turn camera off"

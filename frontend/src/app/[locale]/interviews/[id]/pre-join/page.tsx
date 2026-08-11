@@ -4,7 +4,7 @@ import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { CameraView } from '@/components/camera-view';
+import { CameraView, rememberCamera } from '@/components/camera-view';
 import { MicCheck } from '@/components/pre-join/mic-check';
 import { RailMark, SplitShell, WorkBody, WorkTop } from '@/components/shell/split-shell';
 import { Button } from '@/components/ui';
@@ -100,22 +100,28 @@ export default function PreJoinPage() {
 
     return (
       <section className={styles.pane} data-testid="pre-join">
-        <div className={styles.panel}>
-          <MicCheck onStateChange={onStateChange} />
-        </div>
-
-        {/* The camera check. Second, and never a gate: the interview is audio, so a candidate
-            with no camera — or no wish to be on one — enters exactly as they always did. */}
-        <div className={`${styles.panel} ${styles.camera}`} data-testid="camera-check">
-          <p className={styles.cameraTitle}>{t('camera.title')}</p>
+        {/* One device check, the way a call lobby does it: the picture on top, its control
+            under it, then the microphone. Two panels made them two errands — and only one of
+            them is a gate, which the copy has to carry rather than the layout. */}
+        <div className={`${styles.panel} ${styles.deviceCheck}`} data-testid="device-check">
           <CameraView enabled={cameraOn} />
           <Button
             variant="secondary"
             aria-pressed={cameraOn}
-            onClick={() => setCameraOn((on) => !on)}
+            onClick={() =>
+              setCameraOn((on) => {
+                // The room opens the way this screen was left (`cameraStartsOn`).
+                rememberCamera(!on);
+                return !on;
+              })
+            }
           >
             {cameraOn ? t('camera.turnOff') : t('camera.turnOn')}
           </Button>
+
+          <hr className={styles.divide} />
+
+          <MicCheck onStateChange={onStateChange} />
           <p className={styles.cameraNote}>{t('camera.note')}</p>
         </div>
 

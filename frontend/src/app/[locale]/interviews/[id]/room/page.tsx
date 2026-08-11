@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { useEffect, useState, type ReactNode } from 'react';
 
 import { AnswerComposer } from '../../../../../components/room/answer-composer';
+import { cameraStartsOn, rememberCamera } from '../../../../../components/camera-view';
 import { Conversation } from '../../../../../components/room/conversation';
 import { PersonaTiles } from '../../../../../components/room/persona-tiles';
 import { QuestionPanel } from '../../../../../components/room/question-panel';
@@ -73,8 +74,9 @@ export default function InterviewRoomPage() {
   const [view, setView] = useState<'speaker' | 'grid'>('speaker');
   const [captionsOn, setCaptionsOn] = useState(true);
   const [transcriptOpen, setTranscriptOpen] = useState<boolean | null>(null);
-  // Off by default, and not remembered from pre-join: the camera is optional and local-only
-  // (voice spec §3.2), so it is never on because a previous screen said so.
+  // Starts off and comes on by itself only where the candidate already said yes — the choice
+  // they made on pre-join, or a camera this browser has already granted (`cameraStartsOn`).
+  // Nothing here can raise a permission prompt.
   const [cameraOn, setCameraOn] = useState(false);
 
   const room = stateQuery.data;
@@ -94,6 +96,17 @@ export default function InterviewRoomPage() {
   // every render — the mic meter re-renders this room ~60x/s, which would tear the speak effect
   // down mid-fetch and, because an id is marked spoken before its fetch, nothing would ever play.
   const voice = useVoiceSession(id, { enabled: voiceMode, messages: room?.messages, speakable });
+
+  useEffect(() => {
+    if (!voiceMode) return;
+    let live = true;
+    void cameraStartsOn().then((on) => {
+      if (live && on) setCameraOn(true);
+    });
+    return () => {
+      live = false;
+    };
+  }, [voiceMode]);
 
   // Navigation belongs in an effect: routing during render is what makes a redirect fire twice.
   useEffect(() => {
@@ -388,7 +401,12 @@ export default function InterviewRoomPage() {
                     captionsOn={captionsOn}
                     onToggleCaptions={() => setCaptionsOn((on) => !on)}
                     cameraOn={cameraOn}
-                    onToggleCamera={() => setCameraOn((on) => !on)}
+                    onToggleCamera={() =>
+                      setCameraOn((on) => {
+                        rememberCamera(!on);
+                        return !on;
+                      })
+                    }
                     transcriptOpen={showTranscript}
                     onToggleTranscript={() => setTranscriptOpen(!showTranscript)}
                   />

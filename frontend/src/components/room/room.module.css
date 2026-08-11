@@ -171,16 +171,6 @@
   border-radius: var(--radius-card);
 }
 
-/* Has the floor: the rail's material, lifted onto the light stage. The inversion is the
-   label — nothing else has to say who is speaking. */
-.tileLead {
-  padding: 20px 24px;
-  min-height: 280px;
-  color: var(--rail-text);
-  background: var(--rail);
-  box-shadow: var(--shadow-soft);
-}
-
 .tileSmall {
   padding: 12px 16px;
   background: var(--surface);
@@ -211,19 +201,11 @@
   letter-spacing: -0.015em;
 }
 
-.tileLead .tileName {
-  font-size: 28px;
-}
-
 .tileRole {
   margin: 0;
   margin-top: 4px;
   font-size: 13px;
   color: var(--text-muted);
-}
-
-.tileLead .tileRole {
-  color: var(--rail-text-muted);
 }
 
 /* The live badge: on the rail's raised material, so it reads as part of the speaker's tile
@@ -254,46 +236,119 @@
   background: var(--surface);
 }
 
-/* ---------------------------------------------------------------- presence */
+/* ------------------------------------------------------------- meeting tiles */
 
-/* The interviewer's face: the expression `change_avatar` last asked for (additionals
-   ADR-ADD01), which is why it is a photograph and not the 1×1 placeholder the `AvatarState`
-   keys hold. Anything that fails to resolve falls back to the monogram inside `Avatar`. */
-.portrait {
-  width: 176px;
-  height: 176px;
+/* A tile in a call: the picture IS the tile, and the name, the badge and the voice float on
+   top of it. Everything inside is absolutely placed against this box, which is why it clips —
+   a portrait wider than its frame crops like a camera would rather than letterboxing. */
+.videoTile {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--rail);
+  border-radius: var(--radius-card);
+}
+
+.videoLead {
+  min-height: 280px;
+  box-shadow: var(--shadow-soft);
+}
+
+.videoSmall {
+  min-height: 160px;
   box-shadow: var(--shadow-hairline);
 }
 
+/* The interviewer's face: the expression `change_avatar` last asked for (additionals
+   ADR-ADD01), which is why it is a photograph and not the 1×1 placeholder the `AvatarState`
+   keys hold. Anything that fails to resolve falls back to the monogram inside `Avatar`, which
+   fills the same box — a tile is never half a picture. */
+.portraitFill,
+.selfCam {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+}
+
+/* Text mode's strip keeps the old shape: a thumbnail beside the name, not a frame. */
 .portraitSm {
   width: 40px;
   height: 40px;
   flex: none;
+  border-radius: var(--radius-card);
 }
 
-/* Face over voice, centred in whatever the speaker's tile leaves between its head and its
-   foot — the auto margins that used to live on `.wave` belong to the pair now. */
-.presence {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  align-items: center;
-  margin: auto 0;
-  min-height: 0;
+/* Bottom-right, over the picture: who this is, read at a glance and never a header row above
+   the face. Opaque rather than a wash — a translucent plate over a bright photograph is the
+   one place this room's type would drop below AA. */
+.plate {
+  position: absolute;
+  inset-inline-end: 12px;
+  inset-block-end: 12px;
+  max-width: calc(100% - 24px);
+  padding: 8px 12px;
+  text-align: end;
+  background: var(--rail-raised);
+  border-radius: var(--radius-input);
 }
 
-.presence .wave {
-  height: 72px;
+.plateName {
+  margin: 0;
+  overflow: hidden;
+  font-family: var(--font-heading), Georgia, serif;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.015em;
+  color: var(--rail-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.videoLead .plateName {
+  font-size: 20px;
+}
+
+.plateRole {
+  margin: 0;
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 1.2;
+  color: var(--rail-text-muted);
+}
+
+/* The badge and the voice take the other two corners, so nothing ever lands on the plate. */
+.badgeFloat {
+  position: absolute;
+  inset-block-start: 12px;
+  inset-inline-end: 12px;
+}
+
+/* Written as a descendant so it outranks `.wave`'s own height and the one in the narrow-width
+   media query below, whichever order the bundler emits them in. */
+.videoTile .waveFloat {
+  position: absolute;
+  inset-inline-start: 12px;
+  inset-block-end: 12px;
+  height: 32px;
   margin: 0;
 }
 
-/* The candidate's own camera, in the tile the drawn voice would otherwise fill. */
-.selfCam {
-  margin-top: 4px;
+/* The candidate's level, pinned to the foot of their own tile — the full width, because it is
+   a reading and not an ornament. */
+.videoTile .micMeter {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 0;
+  margin: 0;
 }
 
-/* Neither interviewer has a camera, so the voice is drawn. Delays are per-bar in CSS, not an
-   inline style: `style` attributes are dropped by the CSP in production. */
+/* The drawn voice: over the picture on a meeting tile, and the whole of a persona's presence
+   in text mode's strip. Delays are per-bar in CSS, not an inline style: `style` attributes are
+   dropped by the CSP in production. */
 .wave {
   display: flex;
   gap: 4px;
@@ -342,10 +397,6 @@
   height: 4px;
   background: var(--border);
   animation: none;
-}
-
-.tileLead .wave.waveOff i {
-  background: var(--rail-border);
 }
 
 .micMeter {
@@ -793,10 +844,6 @@
 
   .workGrid[data-transcript='open'] {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .tileLead {
-    min-height: 200px;
   }
 
   .wave {

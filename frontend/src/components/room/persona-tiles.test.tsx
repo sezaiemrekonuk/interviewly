@@ -8,14 +8,15 @@ import { NextIntlClientProvider } from 'next-intl';
 import { describe, expect, it } from 'vitest';
 
 import { messages } from '../../test/render';
+import type { RoomPersona } from '../../lib/query';
 import { PersonaTiles } from './persona-tiles';
 
-const PERSONAS = [
+const PERSONAS: RoomPersona[] = [
   {
     id: 'p-hr',
     role: 'hr',
     name: 'Ada',
-    roundType: 'hr' as const,
+    roundType: 'hr',
     avatarSet: {
       idle: 'personas/p-hr/idle-a.webp',
       'expr-1': 'personas/p-hr/expr-1-a.png',
@@ -27,7 +28,7 @@ const PERSONAS = [
     id: 'p-tech',
     role: 'tech',
     name: 'Turing',
-    roundType: 'tech' as const,
+    roundType: 'tech',
     avatarSet: {
       idle: 'personas/p-tech/idle-a.webp',
       'expr-1': 'personas/p-tech/expr-1-a.png',
@@ -80,11 +81,14 @@ describe('PersonaTiles self-camera', () => {
     expect(screen.queryByTestId('camera-view')).not.toBeInTheDocument();
   });
 
-  it('replaces the drawn voice once it is on', () => {
+  it('fills their own tile once it is on, with the voice still over it', () => {
     tiles({ candidate: candidate(true) });
 
+    // The picture is the tile; the bars and the level stay on top of it, the same way the
+    // interviewers' tiles carry theirs.
     const you = screen.getByTestId('persona-tile-you');
     expect(within(you).getByTestId('camera-view')).toBeInTheDocument();
-    expect(within(you).queryByTestId('wave')).not.toBeInTheDocument();
+    expect(within(you).getByTestId('wave')).toBeInTheDocument();
+    expect(within(you).getByTestId('mic-level')).toBeInTheDocument();
   });
 });

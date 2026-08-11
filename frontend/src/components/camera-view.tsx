@@ -20,6 +20,40 @@ export type CameraState = 'off' | 'starting' | 'live' | 'blocked' | 'unavailable
 /** `NotFoundError` is "this machine has no camera" — a different sentence from "you said no". */
 const NO_DEVICE = new Set(['NotFoundError', 'DevicesNotFoundError', 'OverconstrainedError']);
 
+/** Per tab, not per browser: a choice made on the way into *this* interview. */
+const CHOICE_KEY = 'interviewly.camera';
+
+/** Remember what the candidate chose, so the room opens the way pre-join left it. */
+export function rememberCamera(on: boolean): void {
+  try {
+    sessionStorage.setItem(CHOICE_KEY, on ? 'on' : 'off');
+  } catch {
+    // Private-mode storage refusals are not worth a broken toggle.
+  }
+}
+
+/**
+ * Whether the room should open with the camera already running. Their own choice wins where
+ * they made one; failing that, a camera this browser has *already* granted comes on by itself —
+ * the permission is the consent, and asking for a second click to see a picture they already
+ * agreed to is the friction, not the care. Never prompts: `permissions.query` cannot.
+ */
+export async function cameraStartsOn(): Promise<boolean> {
+  try {
+    const chosen = sessionStorage.getItem(CHOICE_KEY);
+    if (chosen) return chosen === 'on';
+  } catch {
+    // fall through to the permission below
+  }
+  try {
+    const status = await navigator.permissions?.query({ name: 'camera' as PermissionName });
+    return status?.state === 'granted';
+  } catch {
+    // Firefox has no 'camera' permission descriptor; there, a click is the way in.
+    return false;
+  }
+}
+
 export function CameraView({ enabled, className }: { enabled: boolean; className?: string }) {
   // Two components rather than one holding an `off` flag: the capture's whole lifecycle is its
   // mount, so turning the camera off releases the device and turning it back on starts from

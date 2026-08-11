@@ -43,20 +43,20 @@
   box-shadow: var(--shadow-hairline);
 }
 
-/* The camera panel: preview, the one control that owns it, then the sentence about where the
-   picture goes — which is nowhere. */
-.camera {
+/* One check, both devices: the preview and its toggle, a rule, then the microphone and the
+   sentence about where the picture goes — which is nowhere. */
+.deviceCheck {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-.cameraTitle {
+.divide {
+  width: 100%;
+  height: 1px;
   margin: 0;
-  font-family: var(--font-heading), Georgia, serif;
-  font-size: 16px;
-  font-weight: 600;
-  letter-spacing: -0.015em;
+  background: var(--border);
+  border: 0;
 }
 
 .cameraNote {

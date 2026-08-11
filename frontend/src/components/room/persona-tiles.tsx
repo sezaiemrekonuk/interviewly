@@ -1,6 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
+import type { ReactNode } from 'react';
 
 import { Avatar } from '../avatar';
 import { CameraView } from '../camera-view';
@@ -31,14 +32,16 @@ function Wave({
   speaking,
   small = false,
   state,
+  className,
 }: {
   speaking: boolean;
   small?: boolean;
   state?: AvatarState;
+  className?: string;
 }) {
   return (
     <span
-      className={cx(styles.wave, small && styles.waveSm, !speaking && styles.waveOff)}
+      className={cx(styles.wave, small && styles.waveSm, !speaking && styles.waveOff, className)}
       data-testid="wave"
       data-speaking={speaking ? 'true' : 'false'}
       data-avatar-state={state}
@@ -63,11 +66,63 @@ export function MiniBars() {
   );
 }
 
+/**
+ * A meeting tile: the picture is the tile, everything else floats on top of it. The name plate
+ * sits bottom-right and the LIVE badge top-right, the way every call surface a candidate has
+ * used puts them — the tile is read at a glance, and a header row above the face makes it a
+ * card instead.
+ *
+ * `children` is the picture: a persona's expression, or the candidate's own camera.
+ */
+function VideoTile({
+  name,
+  role,
+  live,
+  lead,
+  testId,
+  wave,
+  children,
+  className,
+}: {
+  name: string;
+  role: string;
+  live: boolean;
+  lead: boolean;
+  testId: string;
+  wave: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) {
+  const t = useTranslations('room');
+
+  return (
+    <div
+      data-testid={testId}
+      data-live={live ? 'true' : 'false'}
+      className={cx(styles.videoTile, lead ? styles.videoLead : styles.videoSmall, className)}
+    >
+      {children}
+      {live ? (
+        <span className={cx(styles.liveBadge, styles.badgeFloat)}>
+          <MiniBars />
+          {t('live')}
+        </span>
+      ) : null}
+      {wave}
+      <div className={styles.plate}>
+        <p className={styles.plateName}>{name}</p>
+        <p className={styles.plateRole}>{role}</p>
+      </div>
+    </div>
+  );
+}
+
 function PersonaTile({
   persona,
   live,
   state,
   expression,
+  video,
   lead,
   className,
 }: {
@@ -76,10 +131,14 @@ function PersonaTile({
   state: AvatarState;
   /** `change_avatar`'s live slot for this persona (1..3). Only the speaker is ever asked. */
   expression: number;
+  /** Stage layout: the tile is a picture with its name on it. Text mode's strip is a row. */
+  video: boolean;
   lead: boolean;
   className?: string;
 }) {
   const t = useTranslations('room');
+  const role = persona.roundType === 'hr' ? t('roleHr') : t('roleTech');
+  const speaking = live && state === 'speaking';
   const portrait = (
     <Avatar
       personaId={persona.id}
@@ -87,24 +146,45 @@ function PersonaTile({
       avatarSet={persona.avatarSet}
       state={state}
       expression={expression}
-      size={lead ? 176 : 40}
-      className={lead ? styles.portrait : styles.portraitSm}
+      size={video ? (lead ? 480 : 240) : 40}
+      className={video ? styles.portraitFill : styles.portraitSm}
     />
   );
+
+  if (video) {
+    return (
+      <VideoTile
+        testId={`persona-tile-${persona.roundType}`}
+        name={persona.name}
+        role={role}
+        live={live}
+        lead={lead}
+        className={className}
+        wave={
+          <Wave
+            speaking={speaking}
+            small={!lead}
+            state={live ? state : 'idle'}
+            className={styles.waveFloat}
+          />
+        }
+      >
+        {portrait}
+      </VideoTile>
+    );
+  }
 
   return (
     <div
       data-testid={`persona-tile-${persona.roundType}`}
       data-live={live ? 'true' : 'false'}
-      className={cx(styles.tile, lead ? styles.tileLead : styles.tileSmall, className)}
+      className={cx(styles.tile, styles.tileSmall, className)}
     >
       <div className={styles.tileHead}>
-        {lead ? null : portrait}
+        {portrait}
         <div className={styles.tileWho}>
           <p className={styles.tileName}>{persona.name}</p>
-          <p className={styles.tileRole}>
-            {persona.roundType === 'hr' ? t('roleHr') : t('roleTech')}
-          </p>
+          <p className={styles.tileRole}>{role}</p>
         </div>
         {live ? (
           <span className={styles.liveBadge}>
@@ -113,16 +193,7 @@ function PersonaTile({
           </span>
         ) : null}
       </div>
-      {lead ? (
-        // The speaker's face and their voice in one column: the expression is what
-        // `change_avatar` set, the bars are whether they are talking right now.
-        <div className={styles.presence}>
-          {portrait}
-          <Wave speaking={live && state === 'speaking'} state={live ? state : 'idle'} />
-        </div>
-      ) : (
-        <Wave speaking={live && state === 'speaking'} small state={live ? state : 'idle'} />
-      )}
+      <Wave speaking={speaking} small state={live ? state : 'idle'} />
     </div>
   );
 }
@@ -172,6 +243,7 @@ export function PersonaTiles({
             live={persona.id === activeId}
             state={persona.id === activeId ? activeState : 'idle'}
             expression={expressionFor(persona.id)}
+            video={false}
             lead={false}
             className={styles.stripTile}
           />
@@ -189,6 +261,7 @@ export function PersonaTiles({
         live={lead.id === activeId}
         state={lead.id === activeId ? activeState : 'idle'}
         expression={expressionFor(lead.id)}
+        video
         lead
       />
       <div className={styles.side}>
@@ -201,37 +274,37 @@ export function PersonaTiles({
               live={persona.id === activeId}
               state={persona.id === activeId ? activeState : 'idle'}
               expression={expressionFor(persona.id)}
+              video
               lead={false}
             />
           ))}
 
         {candidate ? (
-          <div className={cx(styles.tile, styles.tileSmall)} data-testid="persona-tile-you">
-            <div className={styles.tileHead}>
-              <div className={styles.tileWho}>
-                <p className={styles.tileName}>{t('speakerYou')}</p>
-                <p className={styles.tileRole}>{t('roleCandidate')}</p>
-              </div>
-            </div>
-            {/* The camera is the candidate's own, off unless they turned it on, and it replaces
-                the drawn voice rather than sitting beside it — a tile showing a face does not
-                also need a waveform to prove someone is there. */}
-            {candidate.camera ? (
-              <CameraView enabled className={styles.selfCam} />
-            ) : (
-              <Wave speaking={!candidate.muted && candidate.level > SPEAKING_LEVEL} small />
-            )}
+          // The candidate's tile is the same tile as everyone else's — their own camera where
+          // the interviewer has a portrait, and the same plate in the same corner. A room where
+          // one participant is drawn differently from the others is not a room.
+          <VideoTile
+            testId="persona-tile-you"
+            name={t('speakerYou')}
+            role={t('roleCandidate')}
+            live={false}
+            lead={false}
+            wave={
+              <Wave
+                speaking={!candidate.muted && candidate.level > SPEAKING_LEVEL}
+                small
+                className={styles.waveFloat}
+              />
+            }
+          >
+            {/* Off unless they turned it on. With no picture the tile is the drawn voice again,
+                which is what the wave above is doing — nothing else has to change. */}
+            {candidate.camera ? <CameraView enabled className={styles.selfCam} /> : null}
             {/* The candidate's own level, the one thing in this room that is measured. */}
             <div className={styles.micMeter} data-testid="mic-level">
-              <Meter
-                value={candidate.level}
-                max={1}
-                tone="live"
-                instant
-                label={t('micLevel')}
-              />
+              <Meter value={candidate.level} max={1} tone="live" instant label={t('micLevel')} />
             </div>
-          </div>
+          </VideoTile>
         ) : null}
       </div>
     </div>

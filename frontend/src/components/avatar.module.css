@@ -3,9 +3,11 @@
  * be a `style` attribute, and `style-src 'self' 'nonce-…'` drops those in production.
  */
 
+/* Geometry — size, position, radius — belongs to the caller's class, so this file sets none of
+   it: a tile that fills a meeting frame and one that sits beside a name are the same component
+   and would otherwise fight over which stylesheet loaded last. */
 .image {
   object-fit: cover;
-  border-radius: var(--radius-card);
 }
 
 /* A letter on the soft primary ground, never a blank box and never a broken-image glyph
@@ -19,5 +21,4 @@
   font-weight: 600;
   color: var(--primary);
   background: var(--primary-soft);
-  border-radius: var(--radius-card);
 }

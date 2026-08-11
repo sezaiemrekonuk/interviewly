@@ -178,9 +178,9 @@ describe('pre-join (W09)', () => {
     const getUserMedia = stubMic('grant');
     await renderPreJoin();
 
-    await screen.findByTestId('camera-check');
+    await screen.findByTestId('device-check');
     expect(screen.getByTestId('camera-view')).toHaveAttribute('data-camera', 'off');
-    expect(getUserMedia.mock.calls.some(([c]) => (c as MediaStreamConstraints)?.video)).toBe(false);
+    expect(JSON.stringify(getUserMedia.mock.calls)).not.toContain('video');
 
     await userEvent.click(screen.getByRole('button', { name: messages.preJoin.camera.turnOn }));
 
