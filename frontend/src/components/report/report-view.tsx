@@ -186,7 +186,7 @@ function QuestionExchange({
       {exchanges.map((exchange, index) => (
         <li key={index} className={styles.exchangeBox}>
           <p className={styles.exchangeLabel}>
-            {index === 0 ? t('questionLabel') : t('clarificationLabel', { n: index })}
+            {index === 0 ? (exchange.ask ? t('questionLabel') : t('answerLabel')) : t('clarificationLabel', { n: index })}
           </p>
           {exchange.ask ? <p className={styles.exchangeAsk}>{exchange.ask}</p> : null}
           {exchange.answer ? (
