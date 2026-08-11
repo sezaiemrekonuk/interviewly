@@ -14,6 +14,7 @@ import type {
   GenerateRoundQuestionsArgs,
   ReportIntegrity,
   ScoreAnswerArgs,
+  TurnCompleteArgs,
 } from './AiClient';
 
 export const PROMPT_NAMES = {
@@ -23,6 +24,7 @@ export const PROMPT_NAMES = {
   generateCandidates: 'interview.question.candidates',
   generateInterviewTitle: 'interview.title.generate',
   conductTurn: 'interview.conduct.turn',
+  turnComplete: 'interview.turn.complete',
 } as const;
 
 export type AiMethod = keyof typeof PROMPT_NAMES;
@@ -148,6 +150,16 @@ function allowedActions(args: ConductTurnArgs): string[] {
   if (args.mayHandOver) actions.push('handover');
   if (args.mayEnd) actions.push('end_interview');
   return actions;
+}
+
+export function turnCompleteVars(args: TurnCompleteArgs): Record<string, unknown> {
+  return {
+    language: args.language,
+    // The gate reads a fragment against what was asked, so the opening turn — no question yet
+    // — still has to compile rather than fail the build on a null.
+    currentQuestion: args.currentQuestion ?? 'none — the interview has not started',
+    utterance: args.utterance,
+  };
 }
 
 export function scoreVars(args: ScoreAnswerArgs): Record<string, unknown> {

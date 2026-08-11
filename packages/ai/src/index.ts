@@ -14,6 +14,7 @@ export type {
   GenerateRoundQuestionsArgs,
   ReportIntegrity,
   ScoreAnswerArgs,
+  TurnCompleteArgs,
 } from './AiClient';
 export { TIMEOUT_MS } from './AiClient';
 
@@ -30,6 +31,7 @@ export {
   RoundTypeSchema,
   SCORE_MAX,
   ScoresSchema,
+  TurnCompleteSchema,
   WidgetSchema,
 } from './schemas';
 export type {
@@ -43,6 +45,7 @@ export type {
   ReportPayload,
   RoundType,
   Scores,
+  TurnComplete,
   Widget,
 } from './schemas';
 
@@ -69,6 +72,7 @@ export {
   reportVars,
   scoreVars,
   titleVars,
+  turnCompleteVars,
 } from './prompt-vars';
 export type { AiMethod } from './prompt-vars';
 
@@ -81,6 +85,7 @@ export {
   FALLBACK_STEP,
   ProviderCallError,
   buildChain,
+  buildSoloChain,
   geminiTransport,
   openaiTransport,
   runChain,

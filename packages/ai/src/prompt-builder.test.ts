@@ -205,7 +205,7 @@ describe('PromptBuilder', () => {
 });
 
 describe('PromptRegistry', () => {
-  it('ships the six reserved prompt names, each resolvable and each on one provider', () => {
+  it('ships the seven reserved prompt names, each resolvable and each on one provider', () => {
     const registry = loadPromptRegistry();
     expect(registry.names()).toEqual([
       'interview.answer.score',
@@ -217,6 +217,9 @@ describe('PromptRegistry', () => {
       'interview.question.generate',
       'interview.report.generate',
       'interview.title.generate',
+      // T01 — the completeness gate. Its own lineage for the same reason as the conductor's,
+      // and the second prompt on `gpt-4.1-nano` (ADR-T03).
+      'interview.turn.complete',
     ]);
     expect(registry.providers()).toEqual(['openai']);
   });

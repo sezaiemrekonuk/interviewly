@@ -5,7 +5,7 @@
  * registry is this package's. What `backend` supplies is the two things this package cannot
  * have: the `llm_calls` writer (Prisma) and the keys (env).
  */
-import type { AiClient, ConductTurnArgs, GenerateCandidatesArgs, GenerateInterviewTitleArgs, GenerateReportArgs, GenerateRoundQuestionsArgs, ScoreAnswerArgs } from './AiClient';
+import type { AiClient, ConductTurnArgs, GenerateCandidatesArgs, GenerateInterviewTitleArgs, GenerateReportArgs, GenerateRoundQuestionsArgs, ScoreAnswerArgs, TurnCompleteArgs } from './AiClient';
 import { DEFAULT_UNIT_KIND } from './cost';
 import { AiError, noopLogger, type AiLogger } from './errors';
 import { LiveAiClient } from './live-client';
@@ -16,7 +16,7 @@ import { loadPromptRegistry, type PromptRegistry } from './registry';
 import { StubAiClient } from './stub';
 import type { LanguageDetection } from './detect-language';
 import type { AiCtx } from './prompt-builder';
-import type { Candidate, ConductorTurn, InterviewTitle, QuestionBatch, ReportPayload, Scores } from './schemas';
+import type { Candidate, ConductorTurn, InterviewTitle, QuestionBatch, ReportPayload, Scores, TurnComplete } from './schemas';
 
 export interface AiRuntimeConfig {
   AI_ENABLED: boolean;
@@ -130,6 +130,14 @@ class StubRecordingClient implements AiClient {
 
   conductTurn(args: ConductTurnArgs): Promise<ConductorTurn> {
     return this.audited('conductTurn', args.ctx, () => this.stub.conductTurn(args));
+  }
+
+  /** Audited like the rest, and fail-open like the live one: the wrapper's own write must
+   * not be what turns a stubbed gate into a thrown error at the call site (ADR-T03). */
+  turnComplete(args: TurnCompleteArgs): Promise<TurnComplete> {
+    return this.audited('turnComplete', args.ctx, () => this.stub.turnComplete(args)).catch(
+      () => ({ finished: true }),
+    );
   }
 
   detectLanguage(text: string, current: string): LanguageDetection {

@@ -16,6 +16,7 @@ import type {
   ReportPayload,
   RoundType,
   Scores,
+  TurnComplete,
 } from './schemas';
 
 export type { AiCtx } from './prompt-builder';
@@ -32,6 +33,10 @@ export const TIMEOUT_MS = {
   // 15 s here is a room that looks dead. Ten is the point past which the retry costs less
   // than the wait.
   conductTurn: 10_000,
+  // T01/ADR-T03: additive on top of the 10 s above, on every finished answer. A ceiling, not
+  // a target — the gate answers in ~780 ms measured, and a gate that misses this deadline is
+  // read as `finished: true` rather than waited for.
+  turnComplete: 3_000,
 } as const;
 
 export interface GenerateRoundQuestionsArgs {
@@ -134,6 +139,19 @@ export interface ConductTurnArgs {
   ctx: AiCtx;
 }
 
+/**
+ * T01 — has the candidate finished a thought, or were they cut off mid-sentence? Everything
+ * here is one fragment of one turn; the gate sees no history, because a speaker who is still
+ * mid-sentence is mid-sentence whatever they said five minutes ago.
+ */
+export interface TurnCompleteArgs {
+  /** What the candidate has said so far this turn, held fragments already joined. */
+  utterance: string;
+  currentQuestion: string | null;
+  language: string;
+  ctx: AiCtx;
+}
+
 export interface ScoreAnswerArgs {
   question: string;
   transcript: string;
@@ -168,6 +186,12 @@ export interface AiClient {
    * request the caller re-validates against the interview's state; nothing here is authority.
    */
   conductTurn(args: ConductTurnArgs): Promise<ConductorTurn>;
+  /**
+   * T01 — the completeness gate. The one method that never rejects: every failure, including
+   * an unconfigured provider, resolves to `{ finished: true }` (ADR-T03). A caller that
+   * catches it is catching something that cannot happen.
+   */
+  turnComplete(args: TurnCompleteArgs): Promise<TurnComplete>;
   /** K4 hook consumed by the `adaptive` ledger; interface and stub ship in I01. */
   scoreAnswer(args: ScoreAnswerArgs): Promise<Scores>;
   /** K4 hook: easier / same / harder, in that order. */
