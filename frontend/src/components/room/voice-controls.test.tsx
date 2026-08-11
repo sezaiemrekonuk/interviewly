@@ -244,6 +244,12 @@ describe('VoiceControls input picker', () => {
     expect(screen.getByRole('option', { name: 'Headset' })).toBeInTheDocument();
   });
 
+  it('falls back to the first input when the live device id is unknown', () => {
+    renderWith({ devices: TWO, deviceId: null });
+
+    expect(screen.getByTestId('mic-device')).toHaveValue('built-in');
+  });
+
   it('switches input on change', () => {
     const selectDevice = vi.fn();
     renderWith({ devices: TWO, deviceId: 'built-in', selectDevice });
@@ -252,7 +258,6 @@ describe('VoiceControls input picker', () => {
 
     expect(selectDevice).toHaveBeenCalledWith('headset');
   });
-
   // The case the control exists for: the mic is gone, and this is what fixes it without
   // leaving the room.
   it('stays usable while the mic is lost', () => {
