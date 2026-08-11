@@ -142,7 +142,9 @@ defect (`frontend/DESIGN.md`). The product is light-only. Informational beds are
 - **The conductor's provider-outage fallback returns `{ say: null, action: 'next_question' }`**
   (`conductor.ts:659`). A gate failure must not be confused with this — the gate fails open to
   `finished: true` and lets the conductor make its own call.
-- **`chat_messages.action` is free text**, already carrying `continue`, `drift` and `refused`.
-  `silence` needs no migration.
+- **`chat_messages.action` is the `ConductorAction` ENUM**, not free text — the ledger said
+  otherwise and was wrong (found at T03). Adding a value is one `ALTER TYPE … ADD VALUE`, the
+  shape C07 used for `refused`; T03's is `20260811120000_conductor_silence`. Adding one also
+  breaks every exhaustive `switch` over it — `applyAction` was the only one.
 - **ADR-S07:** candidate audio is a memory buffer for one request. The held partial is
   transcript *text*, never audio, and K6 keeps it out of every log line.

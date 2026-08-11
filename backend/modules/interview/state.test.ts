@@ -24,7 +24,14 @@ vi.mock('../../src/lib/db', () => ({
 const info = vi.fn();
 vi.mock('../../src/lib/logger', () => ({ logger: { info: (...a: unknown[]) => info(...a) } }));
 
-const { orderTranscript, deliverCurrentQuestion, interviewWindow } = await import('./state');
+const peek = vi.fn();
+const take = vi.fn();
+vi.mock('../speech/pending-turn', () => ({ peekPendingTurn: peek, takePendingTurn: take }));
+
+const { orderTranscript, deliverCurrentQuestion, interviewWindow, __testing } = await import(
+  './state'
+);
+const { pendingTurnFor, messagesWhere } = __testing;
 type TranscriptQuestion = Parameters<typeof orderTranscript>[0][number];
 
 const question = (
@@ -113,6 +120,59 @@ describe('interviewWindow', () => {
     expect(
       interviewWindow({ mode: 'voice', started_at: null, max_duration_seconds: null }),
     ).toEqual({ startedAt: null, expiresAt: null });
+  });
+});
+
+/**
+ * T03 — the held partial on `/state`, which is how a room rebuilt after a reload knows the
+ * candidate was mid-thought (@AC-7, @AC-6).
+ */
+describe('pendingTurnFor', () => {
+  const question = { id: 'qst_1' } as never;
+
+  beforeEach(() => {
+    peek.mockReset();
+    take.mockReset();
+  });
+
+  it('surfaces the partial held against the current question', async () => {
+    peek.mockResolvedValue({ text: 'So at my last company we', questionId: 'qst_1', probes: 1 });
+
+    expect(await pendingTurnFor('itv_1', question)).toBe('So at my last company we');
+  });
+
+  // A thought aimed at a question the interview has left is not an answer to the one it is on,
+  // and showing it in the room would invite the candidate to finish the wrong sentence.
+  it('reports nothing for a partial from a past question', async () => {
+    peek.mockResolvedValue({ text: 'about the deadline', questionId: 'qst_0', probes: 1 });
+
+    expect(await pendingTurnFor('itv_1', question)).toBeNull();
+    expect(await pendingTurnFor('itv_1', null)).toBeNull();
+  });
+
+  // The defect this pins: a state read that consumed would delete the candidate's own sentence
+  // the first time the room refetched, and the room refetches on every render.
+  it('never consumes — two consecutive reads return the same text', async () => {
+    peek.mockResolvedValue({ text: 'and then we', questionId: 'qst_1', probes: 2 });
+
+    expect(await pendingTurnFor('itv_1', question)).toBe('and then we');
+    expect(await pendingTurnFor('itv_1', question)).toBe('and then we');
+    expect(take).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * The filter's `action: null` branch is load-bearing and invisible: `notIn` compiles to SQL that
+ * is NULL — and so excludes the row — wherever `action` is null, which is every candidate turn.
+ * Widening it without the branch deletes the entire candidate side of the room, and the response
+ * still has a `messages` array. The SQL half is pinned in `state.integration.test.ts`.
+ */
+describe('messagesWhere', () => {
+  it('hides the two server notes while keeping every candidate row', () => {
+    expect(messagesWhere('itv_1')).toEqual({
+      interview_id: 'itv_1',
+      OR: [{ action: null }, { action: { notIn: ['refused', 'silence'] } }],
+    });
   });
 });
 

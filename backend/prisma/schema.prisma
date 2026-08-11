@@ -158,6 +158,9 @@ enum ConductorAction {
   /// C07 — the server refused what the interviewer asked for. Written on a system row so the
   /// next turn can read that it was overruled; a refusal the model cannot see is only a delay.
   refused
+  /// T03 (ADR-T04) — thirteen seconds of silence. A system row rather than a null action so both
+  /// turn ceilings can count it and `resolveMessages` can hide it from the room.
+  silence
 }
 
 /// K8.6 — one `email_tokens` table serves both flows.

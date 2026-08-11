@@ -74,6 +74,22 @@ export async function takePendingTurn(interviewId: string): Promise<PendingTurn 
   return held;
 }
 
+/**
+ * T03's `/state` read. A state read never consumes: the room refetches on every render and on
+ * every reconnect, and a `GET` that took the partial would delete the candidate's own sentence
+ * the first time they refreshed the page.
+ */
+export async function peekPendingTurn(interviewId: string): Promise<PendingTurn | null> {
+  let raw: string | null;
+  try {
+    raw = await redis.get(keyFor(interviewId));
+  } catch (error) {
+    logger.warn({ interviewId, err: error }, 'PENDING_TURN_UNAVAILABLE');
+    return null;
+  }
+  return raw === null ? null : parse(raw, interviewId);
+}
+
 /** TTL on every write, not only the first — a re-held fragment must not outlive the turn. */
 export async function holdPendingTurn(interviewId: string, value: PendingTurn): Promise<void> {
   try {

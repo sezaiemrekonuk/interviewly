@@ -50,34 +50,34 @@ Wire T01's gate and T02's buffer into the two turn routes, and give the room a w
 - `backend/modules/speech/pending-turn.ts` (T02) — the three functions and the two caps.
 
 ## Steps
-- [ ] **1. Test red** — the six behaviours below, all red first: unfinished holds and conducts
+- [x] **1. Test red** — the six behaviours below, all red first: unfinished holds and conducts
   nothing; a second fragment conducts one joined row; a text field is refused; a gate failure
   forwards; a stale `questionId` is dropped; silence writes a system row the room does not show.
-- [ ] **2. `submitTurnAudio`** — `takePendingTurn` first (drop on `questionId` mismatch), then
+- [x] **2. `submitTurnAudio`** — `takePendingTurn` first (drop on `questionId` mismatch), then
   `transcribeRecording`, then join `[held?.text, transcript].filter(Boolean).join(' ')`.
   Empty join ⇒ `SPEECH_AUDIO_INVALID` as today. Empty transcript with a held partial ⇒ re-hold
   unchanged and return it; no gate call, no charge for a verdict on nothing.
-- [ ] **3. The gate call** — inside `withBudget`, fail-open on everything, log
+- [x] **3. The gate call** — inside `withBudget`, fail-open on everything, log
   `CONDUCTOR_TURN_GATE_FAILED` on that branch. Skip it entirely for `force` and for either cap.
-- [ ] **4. Hold or conduct** — `finished: false` ⇒ `holdPendingTurn` with `probes + 1`, return
+- [x] **4. Hold or conduct** — `finished: false` ⇒ `holdPendingTurn` with `probes + 1`, return
   `200 { state, currentIndex, pendingTurn: full }` with **no** conductor call and **no**
   chat row; log `CONDUCTOR_TURN_HELD` with length and probe count, never text. `finished: true` ⇒
   `conductTurn` as today plus `pendingTurn: null`.
-- [ ] **5. `force`** — `parseTurnAudio` gains one field; validate the literal `'1'`; update the
+- [x] **5. `force`** — `parseTurnAudio` gains one field; validate the literal `'1'`; update the
   comment at `stt.ts:67-68` to state that no text field is allowed and why.
-- [ ] **6. `kind: 'silence'`** — on `turnInputSchema`, defaulting to `'utterance'`, `text`
+- [x] **6. `kind: 'silence'`** — on `turnInputSchema`, defaulting to `'utterance'`, `text`
   optional when silence. `submitTurn` takes the buffer first: a held partial for the current
   question turns a silence request into an ordinary utterance turn carrying that text.
-- [ ] **7. The silence row** — in `runTurn`, branch the `if (input)` block: a silence turn
+- [x] **7. The silence row** — in `runTurn`, branch the `if (input)` block: a silence turn
   persists `role: 'system'`, `action: 'silence'`, `question_id`, content
   `[The candidate has said nothing for 13 seconds.]`, pushes the same row onto `history`, and
   **skips** the injection scan and `trackLanguage` — there is no candidate text to scan or detect
   a language from. Log `CONDUCTOR_SILENCE_TURN`.
-- [ ] **8. Both ceilings** — widen the two counters to include silence rows. Test that repeated
+- [x] **8. Both ceilings** — widen the two counters to include silence rows. Test that repeated
   silence on one question trips the drift clamp rather than looping.
-- [ ] **9. `resolveMessages`** — widen to `notIn: ['refused', 'silence']`, keeping the
+- [x] **9. `resolveMessages`** — widen to `notIn: ['refused', 'silence']`, keeping the
   `action: null` branch. Test that candidate rows still appear.
-- [ ] **10. `pendingTurn` on `/state`** — plain `GET`, surfaced only when the stored `questionId`
+- [x] **10. `pendingTurn` on `/state`** — plain `GET`, surfaced only when the stored `questionId`
   matches the current question row, `null` otherwise. Test that two consecutive reads return the
   same text.
 
@@ -99,4 +99,54 @@ Expected: green. Acceptance runs from the host with port overrides and a **throw
 shared cache leaks a held partial between scenarios and the queue scenarios lie.
 
 ## Notes
-_(fill in when done — T04 consumes `pendingTurn` and the `kind: 'silence'` contract from here)_
+
+**Wire, for T04.** `POST /turns/audio` → `200 { state, currentIndex, pendingTurn: string | null }`
+on **every** path; non-null means held, nothing conducted, no chat row. One optional multipart
+field, `force`, literal `'1'`; any other field name and any other `force` value are
+`VALIDATION_ERROR` before the provider (`turnFields`, `stt.ts`). `POST /turns` takes
+`kind: 'utterance' | 'silence'`, default `'utterance'`; silence carries no text and the schema
+**drops** any that arrives. `GET /state` gains `pendingTurn: string | null`.
+
+**Deviation 1 — there IS a migration.** `chat_messages.action` is the `ConductorAction` enum, not
+free text; the task and REFERENCE.md both said otherwise and REFERENCE.md is patched.
+`20260811120000_conductor_silence` is one `ALTER TYPE … ADD VALUE 'silence'`, the same shape C07
+used for `refused` (`20260810180000_conductor_integrity`) — no table rewritten, no column added.
+`applyAction`'s switch gained a `case 'silence'` next to `refused` for exhaustiveness; neither is
+an action a model can produce.
+
+**Deviation 2 — empty join stays `SPEECH_TRANSCRIPTION_FAILED`.** Step 2 named
+`SPEECH_AUDIO_INVALID` "as today", but today an empty transcript fails the `turnInputSchema`
+parse and returns `SPEECH_TRANSCRIPTION_FAILED`. Kept, so the existing test and the acceptance
+scenario still describe the route. `SPEECH_AUDIO_INVALID` still means a missing or zero-byte part.
+
+**Deviation 3 — `submitTurn` takes the buffer on every turn**, not only a silence one, and
+discards what it does not use (spec: "every turn submission takes the buffer first"). A fragment
+the candidate stopped speaking and then typed past would otherwise be joined onto whatever they
+said next.
+
+**What T04 must know beyond the wire:**
+- The 13 s clock is the room's; the server never times anything. A silence request with a held
+  partial for the current question is silently conducted as that partial (@AC-10) — the room
+  cannot tell the two cases apart and does not need to.
+- `SPEECH_STT_TRANSCRIBED` now logs per fragment, not per conducted turn; three probes, three
+  lines, three STT charges.
+- `probes` and the joined length live in Redis only. The client sends neither and cannot reset
+  either.
+
+**Where the code is:** gate + join + hold in `stt.ts` `submitTurnAudio` (`utteranceFinished`,
+`turnFields`, `turnState`); silence row + `countsAsTurn` in `conductor.ts`; `resolveSilence` in
+`turns.ts`; `messagesWhere` + `pendingTurnFor` in `state.ts`; `peekPendingTurn` added to
+`pending-turn.ts` (plain `GET`, never consumes).
+
+## Verification output
+
+`npm test` → 1035 passed (103 files), up from T02's 1015. `npm run test:integration` → 34 passed
+(needs `db` and `cache`; a local Postgres owns 127.0.0.1:5432, so this ran with the container
+republished on 55432 and Redis on 56379). `npm run test:acceptance` → 111 scenarios, 885 steps,
+same as T01 — nothing regressed. `npm run lint`, `npm run -w frontend lint`, `npm run typecheck`
+clean.
+
+Both traps were mutation-checked rather than assumed. Dropping the `{ action: null }` branch from
+`messagesWhere` reds `state.integration.test.ts` (@AC-8) and nothing else; narrowing `countsAsTurn`
+back to `role === 'user'` reds both ceiling tests in `conductor.integration.test.ts`. Neither
+mutation is visible to the unit ring, which is why both tests are integration ones.

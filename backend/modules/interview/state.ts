@@ -1,9 +1,11 @@
+import type { ConductorAction } from '@prisma/client';
 import type { RequestHandler } from 'express';
 
 import { clock } from '../../src/lib/clock';
 import { prisma } from '../../src/lib/db';
 import { logger } from '../../src/lib/logger';
 import { speechExpiresAt } from '../speech/ceiling';
+import { peekPendingTurn } from '../speech/pending-turn';
 
 /** The columns the index walk needs — an `Interview` satisfies it; a test fixture need not. */
 export interface IndexedInterview {
@@ -171,23 +173,29 @@ async function resolveTranscript(interviewId: string) {
  *
  * A room rebuilds itself from this alone (§3.8), which is the whole reason assistant rows are
  * written before they are spoken rather than after.
+ *
+ * C07 — the refusal notes stay out of the room. They are written for the interviewer, and
+ * showing them to the candidate would narrate the guard that just stopped them: "the server
+ * refused because this round has not covered enough questions yet" is a recipe. T03 adds the
+ * silence rows for a different reason: they are the room's own thirteen-second clock, read back
+ * to it as prose. The drift note stays visible — it is about the candidate's own turn, not about
+ * a rule they could aim at.
+ *
+ * The null branch is load-bearing: every candidate turn has `action = null`, and both
+ * `NOT: { action: … }` and `action: { notIn: … }` compile to SQL that is NULL — and so excludes
+ * the row — wherever `action` is null. Without the explicit `action: null`, the whole candidate
+ * side of the conversation vanishes from the room.
  */
+const HIDDEN_ACTIONS: ConductorAction[] = ['refused', 'silence'];
+
+const messagesWhere = (interviewId: string) => ({
+  interview_id: interviewId,
+  OR: [{ action: null }, { action: { notIn: HIDDEN_ACTIONS } }],
+});
+
 async function resolveMessages(interviewId: string) {
   const rows = await prisma.chatMessage.findMany({
-    // C07 — the refusal notes stay out of the room. They are written for the interviewer, and
-    // showing them to the candidate would narrate the guard that just stopped them: "the server
-    // refused because this round has not covered enough questions yet" is a recipe. The drift
-    // note is different and stays visible — it is about the candidate's own turn, not about a
-    // rule they could aim at.
-    //
-    // The null branch is load-bearing: every candidate turn has `action = null`, and both
-    // `NOT: { action: 'refused' }` and `action: { not: 'refused' }` compile to SQL that is
-    // NULL — and so excludes the row — wherever `action` is null. Without the explicit
-    // `action: null`, the whole candidate side of the conversation vanishes from the room.
-    where: {
-      interview_id: interviewId,
-      OR: [{ action: null }, { action: { not: 'refused' } }],
-    },
+    where: messagesWhere(interviewId),
     // Same order the conductor replays in. A user utterance and the reply to it are written
     // inside one request and can share a millisecond; `id` breaks that tie the same way twice.
     orderBy: [{ created_at: 'asc' }, { id: 'asc' }],
@@ -250,6 +258,22 @@ export function interviewWindow(interview: TimedInterview) {
 
 // req.interview is attached by resolveInterview (ownership.ts); a non-owned or deleted id
 // never reaches this handler (404 INTERVIEW_NOT_FOUND).
+/**
+ * T03 — the unfinished thought the server is holding, or null.
+ *
+ * Read with a plain `GET`: a state read never consumes, because the room refetches on every
+ * render and the first refresh would otherwise delete the sentence the candidate is still in the
+ * middle of. Surfaced only against the question it was spoken to; a partial from a question the
+ * interview has left is neither joined nor shown (spec Open question 3).
+ */
+async function pendingTurnFor(
+  interviewId: string,
+  question: { id: string } | null,
+): Promise<string | null> {
+  const held = await peekPendingTurn(interviewId);
+  return held && question && held.questionId === question.id ? held.text : null;
+}
+
 export const getInterviewState: RequestHandler = async (req, res) => {
   const interview = req.interview!;
 
@@ -261,6 +285,7 @@ export const getInterviewState: RequestHandler = async (req, res) => {
     resolveTranscript(interview.id),
     resolveMessages(interview.id),
   ]);
+  const pendingTurn = await pendingTurnFor(interview.id, currentQuestion);
 
   res.status(200).json({
     interviewId: interview.id,
@@ -276,6 +301,7 @@ export const getInterviewState: RequestHandler = async (req, res) => {
     currentQuestion,
     transcript,
     messages,
+    pendingTurn,
     // Answers, not messages. This was `chatMessage.count(...)` and the two were the same number
     // only because `chat_messages` held exactly one row per answered turn. C02 puts the
     // interviewer's own lines in the same table, so counting rows would make the cursor jump on
@@ -284,5 +310,7 @@ export const getInterviewState: RequestHandler = async (req, res) => {
     transcriptCursor: messages.filter((m) => m.role === 'user').length,
   });
 };
+
+export const __testing = { pendingTurnFor, messagesWhere, resolveMessages };
 
 export default getInterviewState;
