@@ -5,7 +5,7 @@ project layout **as it exists after foundations F01/F02/F03, auth A01/A02, and
 interview-core I03/I06/I08 are done**. If a path listed here does not exist, its providing
 task has not landed — check STATE.md blockers before proceeding. Verified against the
 foundations, auth and interview-core task files and the `backend`/`db` specs as of
-2026-07-30; patched 2026-08-11 for N03–N05. If reality diverges, trust the code and patch this
+2026-07-30; patched 2026-08-11 for N03–N06. If reality diverges, trust the code and patch this
 file.
 
 ## Services, ports, roles
@@ -33,7 +33,7 @@ npx prisma migrate deploy
 npm run seed                     # seeds the role=admin demo user (db AC-10)
 npm run dev                      # tsx watch
 
-# Unit tests + typecheck (from repo root). N03–N05's gate: no AC maps those endpoints.
+# Unit tests + typecheck (from repo root). N03–N06's gate: no AC maps those endpoints.
 npm test -- --run backend/modules/admin
 npm test -- --run packages/ai/src/prompt-builder.test.ts   # N03's security sink
 npm run typecheck
@@ -78,18 +78,102 @@ ownership-checked by I03's resolver (non-owner → `404 INTERVIEW_NOT_FOUND`, ne
 |---|---|---|---|---|
 | `DELETE /interviews/:id` | `requireAuth` + I03 ownership + I03 CSRF | `204` (soft delete) | `INTERVIEW_NOT_FOUND`, `CSRF_ORIGIN_MISMATCH`, `UNAUTHENTICATED` | N01 |
 | `GET /me/interviews` | `requireAuth` | `200` `{ items, nextCursor }` (deleted excluded) | `UNAUTHENTICATED` | N01 |
-| `GET /admin/interviews` | `requireAuth` + `requireAdmin` | `200` `{ items, nextCursor }` (deleted included) | `FORBIDDEN`, `UNAUTHENTICATED` | N01, facets N04 |
+| `GET /admin/interviews` | `requireAuth` + `requireAdmin` | `200` `{ items, nextCursor }` (deleted included) + [list envelope](#search-sort-and-the-list-envelope-n06--all-five-lists) | `FORBIDDEN`, `UNAUTHENTICATED` | N01, facets N04, `q`/`sort`/`dir` N06 |
 | `GET /admin/interviews/:id` | `requireAuth` + `requireAdmin` | `200` [drill-down shape](#get-admininterviewsid-drill-down-shape) | `FORBIDDEN`, `INTERVIEW_NOT_FOUND` | N04 |
 | `GET /admin/stats` | `requireAuth` + `requireAdmin` | `200` [stats shape](#admin-stats-shape) | `FORBIDDEN`, `UNAUTHENTICATED` | N02, `perModel` N05 |
-| `GET /admin/llm-calls` | `requireAuth` + `requireAdmin` | `200` [shape](#get-adminllm-calls) | `FORBIDDEN`, `UNAUTHENTICATED` | N05 |
-| `GET /admin/users` | `requireAuth` + `requireAdmin` | `200` [shape](#get-adminusers) | `FORBIDDEN`, `UNAUTHENTICATED` | N05 |
-| `GET /admin/sessions` | `requireAuth` + `requireAdmin` | `200` [shape](#get-adminsessions) | `FORBIDDEN`, `UNAUTHENTICATED` | N05 |
-| `GET /admin/audit` | `requireAuth` + `requireAdmin` | `200` [shape](#get-adminaudit) | `FORBIDDEN`, `UNAUTHENTICATED` | N05 |
+| `GET /admin/llm-calls` | `requireAuth` + `requireAdmin` | `200` [shape](#get-adminllm-calls) | `FORBIDDEN`, `UNAUTHENTICATED` | N05, `q`/`sort`/`dir` N06 |
+| `GET /admin/users` | `requireAuth` + `requireAdmin` | `200` [shape](#get-adminusers) | `FORBIDDEN`, `UNAUTHENTICATED` | N05, `q`/`sort`/`dir` N06 |
+| `GET /admin/sessions` | `requireAuth` + `requireAdmin` | `200` [shape](#get-adminsessions) | `FORBIDDEN`, `UNAUTHENTICATED` | N05, `q`/`sort`/`dir` N06 |
+| `GET /admin/audit` | `requireAuth` + `requireAdmin` | `200` [shape](#get-adminaudit) | `FORBIDDEN`, `UNAUTHENTICATED` | N05, `q`/`sort`/`dir` N06 |
 | `GET /admin/queue` | `requireAuth` + `requireAdmin` | `200` [shape](#get-adminqueue) | `FORBIDDEN`, `UNAUTHENTICATED` | N05 |
 
 Every `/admin/*` read writes one `audit_logs` row per request (issue 86) — the read is itself
 the privileged act. `GET /admin/audit` is no exception: a reader sees their own last visit at
 the top, which is the right way round.
+
+### Search, sort and the list envelope (N06 — all five lists)
+
+The five `items`-returning lists (`/admin/interviews`, `/llm-calls`, `/users`, `/sessions`,
+`/audit`) take three more query parameters and echo two more objects. `/admin/interviews/:id`,
+`/admin/stats` and `/admin/queue` do not — they are not lists.
+
+| Param | Meaning |
+|---|---|
+| `q` | the query language below, compiled against that table's spec in `backend/modules/admin/specs.ts` |
+| `sort` | a field name from `sort.sortable`; anything else falls back to that table's default (`created` on all five) |
+| `dir` | `asc`, or `desc` for anything else |
+
+`q` grammar — one for every table (`backend/modules/admin/query-language.ts`). It is the **wire
+format**, not an interface: the console composes it by clicking (W13's filter builder), so a
+term normally arrives well-formed by construction. It is still a query string, so everything
+below has to survive being written by hand:
+
+```text
+ada@example.com      bare word — matched against the table's freeText columns, OR'd
+"senior backend"     quoted phrase — the same, spaces kept
+state:completed      field:value — exact, enum-checked or contains, per the field's kind
+action:security.*    trailing * on a text field — prefix match
+deleted:true         presence — the column IS NOT NULL / IS NULL
+cost>0.10            > < >= <= on a number, a Decimal or a date
+created:2026-08-11   a bare date is the whole DAY, not the instant midnight
+active:true          computed — built from two columns and the request's clock (ADR-N11)
+```
+
+Terms **AND**. There is no `OR`, no parenthesis and no negation. An unknown field, an
+out-of-enum value, a comparison on an unordered kind, a `computed` field whose `build` declines
+and an unparseable number/date all come back in `query.ignored` and narrow nothing — never a
+`422`, never a silent drop (ADR-N08). The compiled query is **ANDed with** the discrete facets
+each endpoint already takes, and the applied terms go into the read's
+`audit_logs.metadata.query`.
+
+Every one of the five envelopes gains:
+
+```jsonc
+{
+  "items": [ /* unchanged, per-endpoint */ ],
+  "nextCursor": null,
+  "query": {
+    "applied": ["state:completed"],   // terms that compiled
+    "ignored": ["stat:completed"],    // terms that did not — SHOW THESE
+    // The table's whole whitelist, DESCRIBED — one entry per field, `values` on an enum
+    // (and on `computed`, which is always true/false).
+    "fields": [
+      { "name": "account", "kind": "text" },
+      { "name": "cost",    "kind": "decimal" },
+      { "name": "created", "kind": "date" },
+      { "name": "state",   "kind": "enum", "values": ["created", "profiling", "hr_round", "…"] }
+    ]
+  },
+  "sort": { "field": "created", "dir": "desc", "sortable": ["created", "cost", "…"] }
+}
+```
+
+`fields` is `FieldDescriptor[]` — `{ name, kind, values? }` — not a list of names. Kinds are the
+eight `FieldKind`s: `text`, `exact`, `enum`, `number`, `decimal`, `date`, `presence`, `computed`.
+It is described rather than listed because the console **builds its filter controls from it**: a
+date field gets a date input, an enum gets a select of exactly the values the server accepts, so
+a control cannot propose a term that comes back ignored. A client keeping its own copy of the
+kinds is a copy of the whitelist, and a copy goes stale the first time a field is renamed.
+
+**The cursor changed on these five** (ADR-N09): `base64url(sort:dir:id)`, not `base64url(id)`.
+A cursor minted under a different order is dropped and the caller gets page one — Prisma seeks
+to the cursor row's position *in the given order*, so re-using one across a re-sort pages from
+the middle of a list nobody asked for. `compileSort` appends `id` to every order, so the order
+is total and the position is unique. `/me/interviews` and `/me/questions` keep the plain
+`encodeCursor`/`decodeCursor`: one order each, nothing to mismatch.
+
+**Sortable per table:** interviews `created,started,ended,cost,budget,state,occupation,account`
+· llm-calls `created,cost,latency,provider,model,version,attempt` · users
+`created,email,role,interviews` · sessions `created,expires,email` · audit
+`created,action,actor`. `users.interviews` is the relation **count** — sortable natively, and
+**not** filterable, so it is absent from `query.fields` and `interviews>5` is ignored as a term
+(ADR-N10).
+
+**Filterable per table** (the field count each envelope echoes): interviews 15 · llm-calls 15 ·
+users 9 · sessions 8 · audit 8. `sessions.active` is the one `computed` field — "neither revoked
+nor past its expiry", built from `revoked_at`, `expires_at` and the **request's** clock, which
+`listParams(query, spec, now)` threads down from the handler's `clock.now()` (ADR-N11). Nothing
+else needs a clock, and nothing else may reach for `new Date()` inside the compiler.
 
 ### `GET /admin/interviews` item shape
 
@@ -247,7 +331,11 @@ agent (ADR-N07).
 
 Filters `?userId` and `?active=true`. `active` is computed **server-side** — a browser with a
 wrong clock would draw a different answer. Anything but the literal `true` leaves the list
-unfiltered rather than inverting it.
+unfiltered rather than inverting it. Since N06 the same question is also a **field**:
+`q=active:true` (and `active:false`, which the parameter cannot express) compiles to the same
+condition through `SESSION_SPEC.active`'s `build`, which is what lets the console's filter
+builder offer it beside every other field (ADR-N11). The parameter is still accepted and is no
+longer sent by anything — W13 deleted the toggle with the facet bar.
 
 ### `GET /admin/audit`
 
@@ -319,6 +407,9 @@ All paths relative to repo root. Each exists once its providing task lands.
 | `backend/modules/admin/sessions.ts` | N05 | `GET /admin/sessions` + `sessionFilters(query, now)` |
 | `backend/modules/admin/audit-log.ts` | N05 | `GET /admin/audit` + `auditFilters` |
 | `backend/modules/admin/queue.ts` | N05 | `GET /admin/queue`: BullMQ counts + 20-row dead-letter sample |
+| `backend/modules/admin/query-language.ts` | N06 | The `q` grammar → a Prisma `where` (`compileQuery(input, spec, now)`), the whitelist-checked sort, and the order-carrying cursor (`encodeListCursor`/`decodeListCursor`). Eight `FieldKind`s, the eighth being `computed` |
+| `backend/modules/admin/specs.ts` | N06 | The five `TableSpec`s — field name → column path + kind (+ `values` on an enum, `build(value, now)` on a `computed`), `freeText`, `sortable`, `defaultSort`, `sortOverrides`. **The security boundary:** a column not named here is not reachable, and a field not named here is not offered by any control |
+| `backend/modules/admin/list.ts` | N06 | `listParams` / `findManyArgs` / `listEnvelope` + `FieldDescriptor` — the paging, searching, sorting and field-describing all five lists share |
 
 ## Schema (tables this ledger reads/writes)
 

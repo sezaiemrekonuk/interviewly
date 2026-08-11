@@ -70,8 +70,11 @@ never renders).
 | `src/app/dashboard/page.tsx` | W08 | history (screen 13) |
 | `src/app/admin/page.tsx` | W11 | admin list + stats (screen 14) |
 | `src/app/[locale]/admin/interviews/[id]/page.tsx` | W12 | per-interview drill-down: summary, the report's `promptUuid`+`promptVersion` (US-28 rollback handle), the per-call `llm_calls` table, the US-29 event timeline. In-place not-authorized, never a redirect; `INTERVIEW_NOT_FOUND` is its own state |
-| `src/components/admin/{filter-bar,call-table,user-table,session-table,queue-panel,audit-table}.tsx` | W12 | the five `Spec` sections made real, plus the shared filter bar |
+| `src/components/admin/{call-table,user-table,session-table,queue-panel,audit-table}.tsx` | W12 | the five `Spec` sections made real. `filter-bar.tsx` was the sixth and is **deleted** (W13) |
 | `src/components/admin/table.module.css` | W12 | the one table vocabulary all five admin tables read (renamed from `interview-table.module.css`) |
+| `src/components/admin/filter-builder.tsx` (+ `.module.css`) | W13 | the console's **only** narrowing control, on all eight tables: a search box for words (300 ms debounce inside, controlled from outside) plus `Add filter` → field / condition / value, producing removable chips. Fields, kinds and enum values come from the response's `query.fields`, never a local copy. `<search>`, not `<form>` (ADR-W11) |
+| `src/components/admin/sort-header.tsx` (+ `sort-header.module.css`) | W13 | one sortable column heading — renders the whole `<th>` so `aria-sort` cannot be omitted; the direction arrow is SVG `points`, not a CSS transform (ADR-W09's CSP) |
+| `src/lib/row-query.ts` | W13 | `tokenize`/`filterRows`/`sortRows` over rows already in hand, for the three tables that are not endpoints (drill-down calls + events, the queue's dead letter), plus `parseQuery`/`serialiseQuery` (exact inverses — the builder's two directions) and `fieldDescriptors` (a `RowSpec` seen the way the builder wants it). A deliberate second implementation of `backend/modules/admin/query-language.ts` — see the note below |
 
 **Route note:** every page actually lives under `src/app/[locale]/…` (issue 91 — the locale is a
 path segment); the paths above are written without it where they predate the move.
@@ -105,9 +108,10 @@ if a shape is not yet built, the task's `Depends on` names it and the task stops
 | `GET /admin/sessions` | `{ items, nextCursor }`; filters `userId`, `active` | N05 |
 | `GET /admin/audit` | `{ items, actions[], nextCursor }`; filters `action`, `actorUserId`, `subjectId`. `action` is a **dotted** name on the wire; the rows themselves are written by N03 | N05 |
 | `GET /admin/queue` | `{ queues[], deadLetter[] }` — structurally one queue (the report queue); polled at 30 s | N05 |
+| all five admin **lists** | additionally take `?q&sort&dir` and echo `query: { applied, ignored, fields }` + `sort: { field, dir, sortable }`. `fields` is `FieldDescriptor[]` — `{ name, kind, values? }`, one of eight kinds (`text`, `exact`, `enum`, `number`, `decimal`, `date`, `presence`, `computed`) — which is what the filter builder renders its controls from; an enum arrives carrying the exact values the server accepts. An unhonourable term is **reported in `ignored`**, never 422'd — render it. Optional-chain the envelope and drop a malformed descriptor: an older `api` container answers without it, or with a bare `string[]` | N06 |
 | `POST /admin/interviews/:id/report/requeue` | mounted, **unused by the frontend** — see STATE backlog | N05 |
 
-### Admin query keys and the shared URL builder (`lib/query.ts`, W11/W12)
+### Admin query keys and the shared URL builder (`lib/query.ts`, W11/W12/W13)
 
 `queryKeys` is the only place a key is written (AGENTS.md). W12 added six:
 
@@ -126,14 +130,35 @@ if a shape is not yet built, the task's `Depends on` names it and the task stops
   untouched control cannot narrow anything. Six hand-built query strings is how one of them
   sends `state=undefined`.
 - `AdminFilters<K>` = the named facets **plus an index signature**, so one bag flows into both
-  the key and the builder with no cast at the call site.
+  the key and the URL builder with no cast at the call site.
 - `useAdminStats` takes **no** filters (`adminStats()`) — it is a platform aggregate.
+- **W13 added no key.** `q`, `sort` and `dir` ride the same filter bag, so they are already in
+  the key and already in the request URL `adminQuery` builds. `AdminListMeta` is the echoed
+  envelope and `AdminFilterField` its descriptor, spread into all five page types.
+- **`q` is one string and it is the whole filter state.** The chips and the search box are two
+  views of it (`parseQuery`/`serialiseQuery`), not two pieces of state — so a query restored
+  from a link arrives as chips, and there is no second state to disagree with it (ADR-W11). The
+  builder is fully controlled: whoever owns `value` owns the filter.
+- **`FILTER_BAG` maps a section to the bag it uses.** `overview`/`interviews`/`costs` →
+  `interviews`, because they render one list; everything else maps to itself. Under W12 they
+  each wrote to `filters[section]` while the query read `filters.interviews`, so a filter built
+  on Overview changed nothing.
+- **`row-query.ts` is a second implementation on purpose.** The backend compiles to a Prisma
+  `where` and this to a predicate, so the only shareable part is the ~25-line tokenizer, and
+  hoisting that would add a `frontend` → `packages` build-graph edge for no behavioural gain.
+  Both sides pin the grammar in their own tests; that is what stops them drifting. Its
+  expressibility check is **row-independent** — probing a row confuses "this term is
+  meaningless" with "this row has no value for it", and has no answer at all on an empty table.
 
 **i18n trap:** next-intl cannot address a message key containing a dot. Audit actions arrive
 dotted (`interview.soft_deleted`), so the tree stores `audit.action.interview_soft_deleted` and
 lookup is `t.has(...replaceAll('.', '_'))` with the raw wire value as fallback. The same `t.has`
 fallback covers `admin.state.*`. `src/i18n/messages.test.ts` walks keys by `split('.')`, so a
-literal dot in a key breaks the parity check rather than the screen.
+literal dot in a key breaks the parity check rather than the screen. The filter builder leans on
+the same `t.has` guard for `admin.field.*` and its four value namespaces (`admin.state.*`,
+`admin.endedReason.*`, `admin.users.role.*`, `admin.value.*`, first hit wins): the field list
+comes from the server, so it may name a field this build has no label for, and an unlabelled
+field must fall back to its raw name rather than throw the console away.
 
 ### Room-state shape (the single room truth — `GET /interviews/:id/state`)
 
