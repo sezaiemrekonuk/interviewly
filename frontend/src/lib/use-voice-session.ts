@@ -58,7 +58,7 @@ export interface UseVoiceSessionResult {
   retry: () => void;
   /** The inputs this machine offers, for the room's picker. Empty until permission lands. */
   devices: MicDevice[];
-  /** The device backing the live capture, or null before one is granted. */
+  /** The device backing the live capture, or null if unknown. */
   deviceId: string | null;
   /**
    * Switch input mid-interview. Re-requests against the chosen device and releases the old
