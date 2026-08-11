@@ -21,6 +21,7 @@ import InterviewsPage from './page';
 
 const a = messages.archive;
 const q = a.questions;
+const s = a.sessions;
 /**
  * Copy that has not landed in `messages/*.json` yet — the i18n merge owns those files. The cast
  * keeps `tsc` green now; the two cases below stay red until the strings arrive, which is the
@@ -58,7 +59,12 @@ const RUN = {
   roundScores: { hr: 4, tech: 3 },
 };
 
-function stub(options: { runs?: unknown[]; questions?: unknown[] } = {}) {
+/** One session row, overridden per case. */
+function run(over: Record<string, unknown> = {}) {
+  return { ...RUN, ...over };
+}
+
+function stub(options: { runs?: unknown[]; pages?: unknown[][]; questions?: unknown[] } = {}) {
   const json = (status: number, body: unknown) =>
     new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
@@ -69,8 +75,18 @@ function stub(options: { runs?: unknown[]; questions?: unknown[] } = {}) {
         return json(200, {
           user: { id: 'u1', email: 'a@b.c', role: 'candidate', emailVerifiedAt: 'now' },
         });
-      if (url.startsWith('/api/me/interviews'))
+      if (url.startsWith('/api/me/interviews')) {
+        // A cursor-paged history, so a case can prove the filter answers for pages the list
+        // has not asked for yet. `?cursor=n` hands back page n.
+        if (options.pages) {
+          const index = Number(new URL(url, 'http://t').searchParams.get('cursor') ?? 0);
+          return json(200, {
+            items: options.pages[index],
+            nextCursor: index + 1 < options.pages.length ? String(index + 1) : null,
+          });
+        }
         return json(200, { items: options.runs ?? [RUN], nextCursor: null });
+      }
       if (url.startsWith('/api/me/questions'))
         return json(200, { items: options.questions ?? [question()], nextCursor: null });
       return json(404, { error: { code: 'UNKNOWN' } });
@@ -85,6 +101,13 @@ async function renderAt(search = '', options?: Parameters<typeof stub>[0]) {
   await act(async () => {
     renderWithProviders(<InterviewsPage />);
   });
+}
+
+/** The role on each session card, in the order the list put them. */
+function sessionTitles() {
+  return screen
+    .getAllByTestId('session-card')
+    .map((card) => card.querySelector('p')?.textContent ?? '');
 }
 
 /** The question itself, row by row, in the order the table put them — not the reason under it. */
@@ -213,6 +236,83 @@ describe('/interviews — the archive', () => {
     expect(within(row).queryByText(pending.starNotApplicable)).toBeNull();
     // Nothing to explain when no technical row is on screen.
     expect(screen.queryByText(pending.starNote)).toBeNull();
+  });
+
+  // ------------------------------------------------------------------ sessions: find one run
+
+  it('narrows the sessions list to one state and keeps it in the URL', async () => {
+    await renderAt('', {
+      runs: [run(), run({ id: 'i2', occupation: 'Data analyst', state: 'hr_round' })],
+    });
+
+    await screen.findByText(RUN.occupation);
+    await act(async () => {
+      await userEvent.click(screen.getByRole('button', { name: s.states.open }));
+    });
+    expect(replace).toHaveBeenCalledWith('/interviews?state=open');
+  });
+
+  it('shows only the filtered state at ?state=open', async () => {
+    await renderAt('state=open', {
+      runs: [run(), run({ id: 'i2', occupation: 'Data analyst', state: 'hr_round' })],
+    });
+
+    await screen.findByText('Data analyst');
+    expect(sessionTitles()).toEqual(['Data analyst']);
+  });
+
+  // Typing is not an address, so the search stays out of the URL — but it must still narrow.
+  it('searches the list by role', async () => {
+    await renderAt('', {
+      runs: [run(), run({ id: 'i2', occupation: 'Data analyst' })],
+    });
+
+    await screen.findByText(RUN.occupation);
+    await act(async () => {
+      await userEvent.type(screen.getByRole('searchbox'), 'analyst');
+    });
+    expect(sessionTitles()).toEqual(['Data analyst']);
+  });
+
+  it('sorts by score and leaves unscored runs last', async () => {
+    await renderAt('sort=worst', {
+      runs: [
+        run({ id: 'i1', occupation: 'Eighty', overallScore: 80 }),
+        run({ id: 'i2', occupation: 'Unscored', state: 'hr_round', overallScore: null }),
+        run({ id: 'i3', occupation: 'Twenty', overallScore: 20 }),
+      ],
+    });
+
+    await screen.findByText('Twenty');
+    expect(sessionTitles()).toEqual(['Twenty', 'Eighty', 'Unscored']);
+  });
+
+  // The defect a client-side filter invites: "no completed interviews" while three sit one
+  // cursor away. A narrowed list drains the history before it answers.
+  it('reads the pages it has not fetched before answering a filter', async () => {
+    await renderAt('state=scored', {
+      pages: [[run()], [run({ id: 'i2', occupation: 'Page two role' })]],
+    });
+
+    expect(await screen.findByText('Page two role')).toBeInTheDocument();
+    // Nothing left to page through, so the button that would offer it is gone.
+    expect(screen.queryByRole('button', { name: a.loadMore })).toBeNull();
+  });
+
+  it('composes an empty block, and a way back, when nothing matches', async () => {
+    await renderAt('', { runs: [run()] });
+
+    await screen.findByText(RUN.occupation);
+    await act(async () => {
+      await userEvent.type(screen.getByRole('searchbox'), 'zzz');
+    });
+    expect(screen.getByText(s.noMatch.title)).toBeInTheDocument();
+
+    await act(async () => {
+      await userEvent.click(screen.getByRole('button', { name: s.noMatch.clear }));
+    });
+    expect(replace).toHaveBeenCalledWith('/interviews');
+    expect(sessionTitles()).toEqual([RUN.occupation]);
   });
 
   it('offers the empty state, not a blank surface, before the first interview', async () => {

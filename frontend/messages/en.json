@@ -971,6 +971,31 @@
         "cta": "Start an interview"
       }
     },
+    "sessions": {
+      "searchLabel": "Search",
+      "searchPlaceholder": "Search by role",
+      "stateFilter": "Show",
+      "states": {
+        "all": "All",
+        "open": "In progress",
+        "scored": "Scored",
+        "unfinished": "Unfinished"
+      },
+      "sortBy": "Sort",
+      "sorts": {
+        "recent": "Newest first",
+        "oldest": "Oldest first",
+        "best": "Best score",
+        "worst": "Worst score"
+      },
+      "count": "{shown} of {total} {total, plural, one {interview} other {interviews}}",
+      "loadingAll": "Reading your whole history…",
+      "noMatch": {
+        "title": "No interviews match",
+        "body": "Nothing in your history fits this search and filter together. Widen one of them, or clear both and start from the whole list.",
+        "clear": "Clear filters"
+      }
+    },
     "questions": {
       "caption": "Every question you have answered, with its score and the reason it was marked that way.",
       "roundFilter": "Round",
