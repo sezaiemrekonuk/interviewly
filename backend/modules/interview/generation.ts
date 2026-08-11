@@ -118,7 +118,12 @@ async function priorTopicsFor(interviewId: string, roundType: RoundType): Promis
  * deployments predating the seeded ids. Shared with the conductor's `personaForRound` so
  * assignment and the name/brief the room reads back can't diverge.
  */
+const _personaCache = new Map<RoundType, Persona>();
+
 export async function seededPersona(roundType: RoundType): Promise<Persona> {
+  const cached = _personaCache.get(roundType);
+  if (cached) return cached;
+
   const persona =
     (await prisma.persona.findFirst({
       where: { id: `seed-persona-${roundType}`, active: true },
@@ -130,6 +135,8 @@ export async function seededPersona(roundType: RoundType): Promise<Persona> {
   // Not an ApiError: a missing seeded persona is a broken deployment, not a request the
   // caller got wrong, and app.ts already turns an unknown throw into an opaque 500.
   if (!persona) throw new Error(`no active persona seeded for round type ${roundType}`);
+
+  _personaCache.set(roundType, persona);
   return persona;
 }
 
