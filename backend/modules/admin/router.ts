@@ -4,6 +4,7 @@ import { requireAuth } from '../auth/middleware';
 import { adminStatsLimiter } from '../auth/rate-limit';
 import { requirePublicOrigin } from '../interview/csrf';
 
+import { getAdminInterview } from './interview-detail';
 import { listAllInterviews } from './interviews';
 import { requireAdmin } from './middleware';
 import { requeueReport } from './report-requeue';
@@ -21,6 +22,10 @@ router.use(requireAuth, requireAdmin);
 router.use(requirePublicOrigin);
 
 router.get('/interviews', listAllInterviews);
+
+// The per-call drill-down (US-26/28/29). Above the requeue only by convention — Express
+// matches on method, and the two cannot collide.
+router.get('/interviews/:id', getAdminInterview);
 
 // Issue 081: the only operational action on this router. A lost report job has no other way
 // back — see the module header.

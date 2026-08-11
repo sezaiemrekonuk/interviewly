@@ -23,6 +23,7 @@ import type { Prisma } from '@prisma/client';
 export type AuditAction =
   | 'interview.soft_deleted'
   | 'admin.interviews_read'
+  | 'admin.interview_read'
   | 'admin.stats_read'
   | 'auth.password_reset_completed'
   // US-29 — "see when the system defended itself". These three were log lines and nothing
