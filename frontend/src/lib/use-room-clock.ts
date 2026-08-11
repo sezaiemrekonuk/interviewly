@@ -39,21 +39,28 @@ export function useRoomHeartbeat(interviewId: string | null, enabled: boolean): 
     if (!interviewId || !enabled) return;
 
     let cancelled = false;
+    let inFlight = false;
 
     const beat = async () => {
-      const result = await apiPost(`/interviews/${interviewId}/heartbeat`, {});
-      // Silent on failure, and no retry: the next beat is 15 s away and the server's own grace
-      // window already covers a single miss. Surfacing it would put an error in the room over a
-      // ping the candidate cannot act on.
-      if (cancelled || !result.ok) return;
-      const { elapsedSeconds, expiresAt } = result.data as {
-        elapsedSeconds: number;
-        expiresAt: string | null;
-      };
-      client.setQueryData<InterviewStateResponse>(
-        queryKeys.interviewState(interviewId),
-        (previous) => (previous ? { ...previous, elapsedSeconds, expiresAt } : previous),
-      );
+      if (cancelled || inFlight) return;
+      inFlight = true;
+      try {
+        const result = await apiPost(`/interviews/${interviewId}/heartbeat`, {});
+        // Silent on failure, and no retry: the next beat is 15 s away and the server's own grace
+        // window already covers a single miss. Surfacing it would put an error in the room over a
+        // ping the candidate cannot act on.
+        if (cancelled || !result.ok) return;
+        const { elapsedSeconds, expiresAt } = result.data as {
+          elapsedSeconds: number;
+          expiresAt: string | null;
+        };
+        client.setQueryData<InterviewStateResponse>(
+          queryKeys.interviewState(interviewId),
+          (previous) => (previous ? { ...previous, elapsedSeconds, expiresAt } : previous),
+        );
+      } finally {
+        inFlight = false;
+      }
     };
 
     // Once on arrival, then on the timer. Waiting for the first interval would forfeit 15 s of
