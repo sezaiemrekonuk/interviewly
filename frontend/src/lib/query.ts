@@ -32,8 +32,33 @@ export const queryKeys = {
   interview: (id: string) => ['interview', id] as const,
   adminInterviews: (filters: Record<string, unknown> = {}) =>
     ['admin', 'interviews', filters] as const,
+  adminInterview: (id: string) => ['admin', 'interviews', id] as const,
   adminStats: (filters: Record<string, unknown> = {}) => ['admin', 'stats', filters] as const,
+  adminLlmCalls: (filters: Record<string, unknown> = {}) =>
+    ['admin', 'llm-calls', filters] as const,
+  adminUsers: (filters: Record<string, unknown> = {}) => ['admin', 'users', filters] as const,
+  adminSessions: (filters: Record<string, unknown> = {}) =>
+    ['admin', 'sessions', filters] as const,
+  adminAudit: (filters: Record<string, unknown> = {}) => ['admin', 'audit', filters] as const,
+  adminQueue: () => ['admin', 'queue'] as const,
 };
+
+/**
+ * `?a=1&b=2` from the filter state, with the empty values dropped so an untouched control
+ * cannot narrow anything. Written once because every admin list takes the same shape, and a
+ * hand-built query string per section is how one of them ends up sending `state=undefined`.
+ */
+export function adminQuery(
+  path: string,
+  filters: Record<string, string | undefined>,
+  cursor?: string | null,
+): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters)) if (value) params.set(key, value);
+  if (cursor) params.set('cursor', cursor);
+  const query = params.toString();
+  return query ? `${path}?${query}` : path;
+}
 
 /** A refused API call, carrying the stable code for `useErrorMessage`/`routeForError`. */
 export class ApiError extends Error {
@@ -64,31 +89,46 @@ export function createQueryClient(): QueryClient {
 export interface AdminInterviewRow {
   id: string;
   userId: string;
+  userEmail: string;
   state: string;
   deleted: boolean;
   occupation: string | null;
   occupationCluster: string | null;
   totalTokens: number;
   costUsd: string;
+  budgetUsd: string;
+  startedAt: string | null;
+  createdAt: string;
 }
+
+/**
+ * The three facets the backend accepts on `GET /admin/interviews`. An index signature rather
+ * than three optional keys, so one filter type flows into `adminQuery` and the query key
+ * without a cast at each call — the fields are documentation, the signature is the contract.
+ */
+export type AdminInterviewFilters = AdminFilters<'occupationCluster' | 'state' | 'userId'>;
+
+/** A filter bag: the named facets, plus the index signature the query helpers need. */
+export type AdminFilters<K extends string> = { [key in K]?: string } & Record<
+  string,
+  string | undefined
+>;
 export interface AdminInterviewsPage {
   items: AdminInterviewRow[];
   nextCursor: string | null;
 }
 
 /** `enabled=false` while `useRequireAuth` resolves — a 401/403 fired at an unknown viewer is noise. */
-export function useAdminInterviews(enabled = true): UseInfiniteQueryResult<
-  InfiniteData<AdminInterviewsPage>,
-  ApiError
-> {
+export function useAdminInterviews(
+  enabled = true,
+  filters: AdminInterviewFilters = {},
+): UseInfiniteQueryResult<InfiniteData<AdminInterviewsPage>, ApiError> {
   return useInfiniteQuery({
-    queryKey: queryKeys.adminInterviews(),
+    // The filters are IN the key: a narrowed list is a different resource, and reusing one
+    // cache entry for both would show the previous filter's rows for a frame after each change.
+    queryKey: queryKeys.adminInterviews(filters),
     queryFn: ({ pageParam }) =>
-      fetchJson<AdminInterviewsPage>(
-        pageParam
-          ? `/admin/interviews?cursor=${encodeURIComponent(pageParam)}`
-          : '/admin/interviews',
-      ),
+      fetchJson<AdminInterviewsPage>(adminQuery('/admin/interviews', filters, pageParam)),
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextCursor,
     enabled,
@@ -102,6 +142,16 @@ export interface AdminStatsResponse {
   cutShort: number;
   unfinished: number;
   totalTokens: number;
+  /** The platform total. The cost panel used to sum the loaded rows and say so. */
+  totalCostUsd: string;
+  perModel: {
+    provider: string;
+    model: string;
+    calls: number;
+    tokens: number;
+    costUsd: string;
+    averageLatencyMs: number;
+  }[];
   perOccupation: { cluster: string; label: string; count: number }[];
   /** Issue 196: one row per question *wording*, not per scored answer. `score` is the mean
    *  over `sampleSize` answers — there is no id, because a wording spans many question rows. */
@@ -112,6 +162,222 @@ export function useAdminStats(enabled = true): UseQueryResult<AdminStatsResponse
   return useQuery({
     queryKey: queryKeys.adminStats(),
     queryFn: () => fetchJson<AdminStatsResponse>('/admin/stats'),
+    enabled,
+  });
+}
+
+/** One `llm_calls` row, as both the drill-down and the model-calls list project it. */
+export interface AdminCallRow {
+  id: string;
+  interviewId?: string;
+  provider: string;
+  model: string;
+  promptUuid: string;
+  promptVersion: number;
+  attemptNo: number;
+  fellBackFrom: string | null;
+  units: string;
+  unitKind: string;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  costUsd: string;
+  latencyMs: number;
+  traceId: string;
+  createdAt: string;
+}
+
+/** `GET /admin/interviews/:id` (US-26/28/29) — one interview, its calls, and its events. */
+export interface AdminInterviewDetail {
+  interview: {
+    id: string;
+    userId: string;
+    userEmail: string;
+    mode: string;
+    language: string;
+    state: string;
+    endedReason: string | null;
+    deleted: boolean;
+    occupation: string | null;
+    occupationCluster: string | null;
+    occupationLabel: string | null;
+    targetQuestionCount: number;
+    hrQuestionCount: number;
+    budgetUsd: string;
+    spentUsd: string;
+    elapsedSeconds: number;
+    createdAt: string;
+    startedAt: string | null;
+    endedAt: string | null;
+    deletedAt: string | null;
+    report: { status: string; promptUuid: string; promptVersion: number } | null;
+  };
+  calls: AdminCallRow[];
+  callsTruncated: boolean;
+  events: AdminEventRow[];
+}
+
+export interface AdminEventRow {
+  id: string;
+  action: string;
+  actorUserId: string;
+  traceId: string | null;
+  metadata: unknown;
+  createdAt: string;
+}
+
+export function useAdminInterview(
+  id: string,
+  enabled = true,
+): UseQueryResult<AdminInterviewDetail, ApiError> {
+  return useQuery({
+    queryKey: queryKeys.adminInterview(id),
+    queryFn: () => fetchJson<AdminInterviewDetail>(`/admin/interviews/${encodeURIComponent(id)}`),
+    enabled,
+  });
+}
+
+/** `GET /admin/llm-calls`. `facets` is the vocabulary the provider/model filters offer. */
+export interface AdminCallsPage {
+  items: AdminCallRow[];
+  facets: { provider: string; model: string; count: number }[];
+  nextCursor: string | null;
+}
+
+export type AdminCallFilters = AdminFilters<'provider' | 'model' | 'interviewId'>;
+
+export function useAdminLlmCalls(
+  enabled = true,
+  filters: AdminCallFilters = {},
+): UseInfiniteQueryResult<InfiniteData<AdminCallsPage>, ApiError> {
+  return useInfiniteQuery({
+    queryKey: queryKeys.adminLlmCalls(filters),
+    queryFn: ({ pageParam }) =>
+      fetchJson<AdminCallsPage>(adminQuery('/admin/llm-calls', filters, pageParam)),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
+    enabled,
+  });
+}
+
+/** `GET /admin/users` — the account join the interview list never had. */
+export interface AdminUserRow {
+  id: string;
+  email: string;
+  role: string;
+  locale: string;
+  emailVerified: boolean;
+  onboarded: boolean;
+  consentVersion: string | null;
+  consentedAt: string | null;
+  erased: boolean;
+  interviewCount: number;
+  createdAt: string;
+}
+
+export interface AdminUsersPage {
+  items: AdminUserRow[];
+  nextCursor: string | null;
+}
+
+export function useAdminUsers(
+  enabled = true,
+  filters: AdminFilters<'role' | 'q'> = {},
+): UseInfiniteQueryResult<InfiniteData<AdminUsersPage>, ApiError> {
+  return useInfiniteQuery({
+    queryKey: queryKeys.adminUsers(filters),
+    queryFn: ({ pageParam }) => fetchJson<AdminUsersPage>(adminQuery('/admin/users', filters, pageParam)),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
+    enabled,
+  });
+}
+
+/** `GET /admin/sessions` — auth sessions. `active` is the server's answer, not the browser's. */
+export interface AdminSessionRow {
+  id: string;
+  userId: string;
+  userEmail: string;
+  role: string;
+  active: boolean;
+  revokedAt: string | null;
+  expiresAt: string;
+  createdAt: string;
+}
+
+export interface AdminSessionsPage {
+  items: AdminSessionRow[];
+  nextCursor: string | null;
+}
+
+export function useAdminSessions(
+  enabled = true,
+  filters: AdminFilters<'userId' | 'active'> = {},
+): UseInfiniteQueryResult<InfiniteData<AdminSessionsPage>, ApiError> {
+  return useInfiniteQuery({
+    queryKey: queryKeys.adminSessions(filters),
+    queryFn: ({ pageParam }) =>
+      fetchJson<AdminSessionsPage>(adminQuery('/admin/sessions', filters, pageParam)),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
+    enabled,
+  });
+}
+
+/** `GET /admin/audit` — the durable record issue 86 wrote and nothing read until now. */
+export interface AdminAuditRow extends AdminEventRow {
+  actorEmail: string;
+  actorRole: string;
+  subjectType: string;
+  subjectId: string | null;
+}
+
+export interface AdminAuditPage {
+  items: AdminAuditRow[];
+  actions: { action: string; count: number }[];
+  nextCursor: string | null;
+}
+
+export function useAdminAudit(
+  enabled = true,
+  filters: AdminFilters<'action' | 'actorUserId' | 'subjectId'> = {},
+): UseInfiniteQueryResult<InfiniteData<AdminAuditPage>, ApiError> {
+  return useInfiniteQuery({
+    queryKey: queryKeys.adminAudit(filters),
+    queryFn: ({ pageParam }) =>
+      fetchJson<AdminAuditPage>(adminQuery('/admin/audit', filters, pageParam)),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
+    enabled,
+  });
+}
+
+/** `GET /admin/queue` — BullMQ depth and the dead letter (issue 095). */
+export interface AdminQueueResponse {
+  queues: {
+    name: string;
+    waiting: number;
+    active: number;
+    delayed: number;
+    failed: number;
+    completed: number;
+  }[];
+  deadLetter: {
+    id: string;
+    interviewId: string;
+    attemptsMade: number;
+    failedReason: string | null;
+    failedAt: string | null;
+  }[];
+}
+
+export function useAdminQueue(enabled = true): UseQueryResult<AdminQueueResponse, ApiError> {
+  return useQuery({
+    queryKey: queryKeys.adminQueue(),
+    queryFn: () => fetchJson<AdminQueueResponse>('/admin/queue'),
+    // Depth is the one admin figure that is stale the moment it lands. Thirty seconds is a
+    // compromise: often enough that a growing backlog is visible, rare enough that an open
+    // tab is not a load generator against Redis.
+    refetchInterval: 30_000,
     enabled,
   });
 }
