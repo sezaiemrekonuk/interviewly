@@ -246,6 +246,10 @@ model AuditLog {
 
   @@index([subject_type, subject_id]) // "everything that happened to this interview"
   @@index([actor_user_id, created_at]) // "everything this account did, newest first"
+  /// "the whole trail, newest first" — `GET /admin/audit`'s default view, which neither index
+  /// above leads with. This table grows fastest of any on the admin surface: reading the trail
+  /// is itself audited, so every visit adds a row the next visit has to sort.
+  @@index([created_at])
   @@map("audit_logs")
 }
 
@@ -542,6 +546,11 @@ model LlmCall {
 
   interview Interview @relation(fields: [interview_id], references: [id], onDelete: Restrict)
 
-  @@index([interview_id])
+  /// Replaced the bare `[interview_id]` index, which was a strict prefix of this one. The
+  /// admin drill-down reads one interview's calls in time order and `/admin/llm-calls` filters
+  /// by interview, so both take the ordering off the index instead of sorting. Kept as ONE
+  /// index rather than two: this table is written on every provider call, and a redundant
+  /// prefix index charges the hottest insert path in the schema for nothing.
+  @@index([interview_id, created_at])
   @@map("llm_calls")
 }
