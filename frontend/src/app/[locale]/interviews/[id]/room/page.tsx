@@ -331,6 +331,7 @@ export default function InterviewRoomPage() {
     <div className={styles.room} data-testid="interview-room">
       <SplitShell
         width="default"
+        contain
         rail={
           <RoomRail
             room={room}

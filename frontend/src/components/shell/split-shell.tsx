@@ -16,17 +16,27 @@ export function SplitShell({
   rail,
   width = 'default',
   className,
+  contain = false,
   children,
 }: {
   rail: ReactNode;
   width?: 'narrow' | 'default' | 'wide';
   className?: string;
+  /** Bounds `.work` to the viewport instead of letting it grow with content — the room
+   * wants its own internal scroll regions, not a page that scrolls past a sticky rail. */
+  contain?: boolean;
   children: ReactNode;
 }) {
   return (
     <div className={cx(styles.shell, styles[width], className)}>
       <aside className={styles.rail}>{rail}</aside>
-      <main id="content" tabIndex={-1} className={styles.work}>{children}</main>
+      <main
+        id="content"
+        tabIndex={-1}
+        className={cx(styles.work, contain && styles.workContain)}
+      >
+        {children}
+      </main>
     </div>
   );
 }

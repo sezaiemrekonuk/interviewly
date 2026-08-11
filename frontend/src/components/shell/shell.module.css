@@ -54,6 +54,15 @@
   flex-direction: column;
 }
 
+/* Opt-in: the room is a chat, not a document — it wants a fixed viewport with its own
+   internal scroll regions (message list, transcript panel), never a page that grows with
+   every new line. Every other screen keeps the default (`.work` sized to its content, page
+   scrolls, rail stays sticky), so this stays a modifier rather than `.work`'s own rule. */
+.workContain {
+  height: 100dvh;
+  overflow: hidden;
+}
+
 /* ---------- rail pieces ---------- */
 
 .mark {
