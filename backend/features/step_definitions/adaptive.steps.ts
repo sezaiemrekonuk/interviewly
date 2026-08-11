@@ -64,6 +64,7 @@ function clientScoring(score: () => Scores): AiClient {
     generateReport: (args) => real.generateReport(args),
     generateCandidates: (args) => real.generateCandidates(args),
     generateInterviewTitle: (args) => real.generateInterviewTitle(args),
+    validateListing: (args) => real.validateListing(args),
     conductTurn: (args) => real.conductTurn(args),
     turnComplete: (args) => real.turnComplete(args),
     detectLanguage: (text, current) => real.detectLanguage(text, current),

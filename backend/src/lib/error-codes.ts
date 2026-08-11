@@ -19,6 +19,9 @@ export const ERROR_CODES = {
   BUDGET_EXCEEDED:                 { kind: 'api' as ErrorKind, http: 402, owner: 'backend' },
   DAILY_INTERVIEW_LIMIT:           { kind: 'api' as ErrorKind, http: 429, owner: 'backend' },
   LISTING_REQUIRED:                { kind: 'api' as ErrorKind, http: 422, owner: 'backend' },
+  // ADR-ADD03: the text was there, and it was not a job listing. Same 422 as the missing one —
+  // both are "the field the interview is built from cannot build one".
+  LISTING_NOT_A_JOB:               { kind: 'api' as ErrorKind, http: 422, owner: 'backend' },
   CSRF_ORIGIN_MISMATCH:            { kind: 'api' as ErrorKind, http: 403, owner: 'backend' },
   NOT_READY:                       { kind: 'api' as ErrorKind, http: 503, owner: 'backend' },
   // --- Report ledger recovery (issue 081) ---

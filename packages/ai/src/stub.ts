@@ -19,6 +19,7 @@ import type {
   GenerateRoundQuestionsArgs,
   ScoreAnswerArgs,
   TurnCompleteArgs,
+  ValidateListingArgs,
 } from './AiClient';
 import { createPromptBuilder, type PromptBuilder } from './prompt-builder';
 import { detectLanguage, type LanguageDetection } from './detect-language';
@@ -26,6 +27,7 @@ import {
   PROMPT_NAMES,
   candidateVars,
   conductVars,
+  listingVars,
   questionVars,
   reportVars,
   scoreVars,
@@ -37,6 +39,7 @@ import {
   ConductorTurnSchema,
   INTERVIEW_TITLE_MAX,
   InterviewTitleSchema,
+  ListingCheckSchema,
   QuestionBatchSchema,
   ReportPayloadSchema,
   ScoresSchema,
@@ -45,6 +48,7 @@ import {
   type ConductorTurn,
   type Difficulty,
   type InterviewTitle,
+  type ListingCheck,
   type QuestionBatch,
   type QuestionKind,
   type ReportPayload,
@@ -171,6 +175,26 @@ export class StubAiClient implements AiClient {
       InterviewTitleSchema,
       { title: firstLine.slice(0, INTERVIEW_TITLE_MAX).trim() || 'Interview' },
       'generateInterviewTitle',
+    );
+  }
+
+  /**
+   * ADR-ADD03. Accepts every listing, and reads its language with the same heuristic
+   * `detectLanguage` uses everywhere else: a keyless run must still reach the room, and a
+   * stub that guessed `en` would make a Turkish acceptance scenario run in English.
+   */
+  async validateListing(args: ValidateListingArgs): Promise<ListingCheck> {
+    this.builder.build({
+      promptName: PROMPT_NAMES.validateListing,
+      vars: listingVars(args),
+      ctx: args.ctx,
+    });
+
+    const detection = detectLanguage(args.jobListing, 'en');
+    return parse(
+      ListingCheckSchema,
+      { is_job_listing: true, language: detection.language === 'tr' ? 'tr' : 'en' },
+      'validateListing',
     );
   }
 

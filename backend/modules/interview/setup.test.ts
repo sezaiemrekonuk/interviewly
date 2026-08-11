@@ -36,9 +36,14 @@ let createRejectsWith: unknown;
 const updated: Array<Record<string, unknown>> = [];
 
 let titleResult: () => Promise<{ title: string }>;
+/** ADR-ADD03's gate, stubbed. Every existing scenario pastes a real listing. */
+let listingCheck: () => Promise<{ is_job_listing: boolean; language: string }>;
 
 vi.mock('../ai', () => ({
-  aiClient: () => ({ generateInterviewTitle: () => titleResult() }),
+  aiClient: () => ({
+    generateInterviewTitle: () => titleResult(),
+    validateListing: () => listingCheck(),
+  }),
 }));
 
 vi.mock('../../src/lib/db', () => ({
@@ -196,6 +201,9 @@ describe('setupInterview uploadId ownership (issue #73)', () => {
     recordHit.mockClear();
     createRejectsWith = undefined;
     titleResult = async () => ({ title: 'Kıdemli Backend Geliştirici' });
+    // `tr` is the stub user's locale, so the default check leaves the language alone and the
+    // `updated` assertions keep reading one write.
+    listingCheck = async () => ({ is_job_listing: true, language: 'tr' });
   });
 
   async function setup(body: Record<string, unknown>, user = 'usr_a') {
@@ -268,6 +276,33 @@ describe('setupInterview uploadId ownership (issue #73)', () => {
     expect(res.status).toBe(201);
     expect(created[0]).toMatchObject({ occupation: 'Zamboni Technician' });
     expect(updated).toHaveLength(0);
+  });
+
+  // ADR-ADD03 — the screen in front of setup.
+  it('refuses text the check says is not a job listing, without charging the quota', async () => {
+    listingCheck = async () => ({ is_job_listing: false, language: 'en' });
+    const res = await setup({ jobText: 'dsflk;dsjgds' });
+    expect(res.status).toBe(422);
+    expect(res.body).toEqual({ error: { code: 'LISTING_NOT_A_JOB' } });
+    expect(updated).toEqual([{ deleted_at: expect.any(Date) }]);
+    expect(recordHit).not.toHaveBeenCalled();
+  });
+
+  it('runs the interview in the language of the listing, not of the account', async () => {
+    listingCheck = async () => ({ is_job_listing: true, language: 'en' });
+    const res = await setup({});
+    expect(res.status).toBe(201);
+    expect(created[0]).toMatchObject({ language: 'tr' });
+    expect(updated[0]).toEqual({ language: 'en' });
+  });
+
+  it('still creates the interview when the listing check is unreachable', async () => {
+    listingCheck = async () => {
+      throw new Error('provider down');
+    };
+    const res = await setup({});
+    expect(res.status).toBe(201);
+    expect(recordHit).toHaveBeenCalledTimes(1);
   });
 
   it("still accepts a pasted listing with no uploadId as job_source 'paste'", async () => {

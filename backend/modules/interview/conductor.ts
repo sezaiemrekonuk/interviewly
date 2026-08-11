@@ -41,7 +41,7 @@ import { recordAnswer } from './answers';
 import { applyAvatarChange } from './avatar';
 import { BudgetExceeded, withBudget, withBudgetOrEnd } from './budget';
 import { ensureTechBatch, seededPersona } from './generation';
-import { trackLanguage } from './language';
+import { setInterviewLanguage, trackLanguage } from './language';
 import { applyTransition } from './machine';
 import { currentQuestionRow } from './state';
 
@@ -295,6 +295,16 @@ async function runTurn(
       throw new ApiError('BUDGET_EXCEEDED');
     }
     throw err;
+  }
+
+  // `set_interview_language`: independent of `action`, and applied before anything downstream
+  // generates or speaks — `ensureTechBatch`, the K4 promotion and every TTS call read
+  // `interviews.language`, so a move written after them would leave the next question and the
+  // next spoken line in the language the candidate has just left.
+  if (turn.set_interview_language) {
+    interview.language = await setInterviewLanguage(interview, turn.set_interview_language, {
+      traceId,
+    });
   }
 
   // `change_avatar`: independent of `action`, and best-effort — a missed expression swap is a
@@ -756,6 +766,7 @@ interface ConductorReply {
   endReason?: string;
   widget?: Widget;
   avatar?: number;
+  set_interview_language?: string;
 }
 
 /**

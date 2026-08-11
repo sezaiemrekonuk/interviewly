@@ -159,3 +159,41 @@ had to click to see themselves. Both fixed; the shape is a call surface now.
 
 `npm test` 51 files / 530 tests pass (new: the lobby mutes without closing the gate); typecheck
 and eslint clean; `web` rebuilt and healthy.
+
+## 2026-08-11 — listing check, and the interview language the interviewer can set
+
+ADR-ADD03. What changed and where.
+
+**AI package**
+
+- `prompts/interview.listing.validate.prompt.yaml` — new lineage, v1, `gpt-4.1-nano`, temp 0.
+  Returns `{"is_job_listing":…,"language":"en|tr"}`; text that tries to steer it is by that fact
+  not a listing.
+- `prompts/interview.conduct.turn.v4.prompt.yaml` — v3 verbatim plus THE INTERVIEW LANGUAGE and
+  WHEN YOU DID NOT UNDERSTAND, and a tightened HOW MUCH TO PROBE. v1–v3 untouched (K9).
+- `src/schemas.ts` — `InterviewLanguageSchema` (`en|tr`), `ListingCheckSchema`, and
+  `set_interview_language` on `ConductorTurnSchema`.
+- `src/AiClient.ts` / `live-client.ts` / `stub.ts` / `resolve-client.ts` / `prompt-vars.ts` /
+  `index.ts` — `validateListing` through the seam, 8 s timeout. The stub accepts every listing
+  and reads its language with `detectLanguage`, so a keyless Turkish run still runs in Turkish.
+
+**Backend**
+
+- `src/lib/error-codes.ts` — `LISTING_NOT_A_JOB` (422).
+- `modules/interview/setup.ts` — `checkListing` after `create`: refuse → soft-delete + 422 before
+  the quota is charged; accept → write the listing's language onto the interview and title it in
+  that language.
+- `modules/interview/language.ts` — `setInterviewLanguage`, the same write `trackLanguage` makes,
+  reached from the conductor's tool call. Guarded by `SUPPORTED`, clears the streak.
+- `modules/interview/conductor.ts` — applies `turn.set_interview_language` before the avatar hook
+  and before anything generates.
+- Deleted `src/lib/error-codes.{js,d.ts}` — committed build artifacts sitting next to the source.
+  Vitest resolved the stale July `.js` over the `.ts`, so every code added since (CONSENT_REQUIRED,
+  REPORT_ALREADY_EXISTS, SPEECH_*, and this one) read as `undefined` under test.
+
+**Frontend**
+
+- `messages/{en,tr}.json` — `LISTING_NOT_A_JOB`. The new screen needs no code: `errorMessage(code)`
+  already renders whatever the setup call refuses with.
+
+`npm test` 112 files / 1122 tests pass; typecheck and eslint clean.
