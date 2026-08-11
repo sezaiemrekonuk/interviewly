@@ -84,15 +84,20 @@ describe('canTransition', () => {
     expect(canTransition('paused', 'evaluating')).toBe(false);
   });
 
-  it('allows stale interview states to end as abandoned', () => {
+  // `tech_round` joined the list with #104's leave button. It is the round a candidate is most
+  // likely to walk out of, and it was the one round with no way out — for the worker's sweep as
+  // well as for the candidate.
+  it('allows every live interview state to end as abandoned', () => {
     expect(canTransition('profiling', 'abandoned')).toBe(true);
     expect(canTransition('hr_round', 'abandoned')).toBe(true);
+    expect(canTransition('tech_round', 'abandoned')).toBe(true);
     expect(canTransition('paused', 'abandoned')).toBe(true);
   });
 
-  it('keeps abandoned closed from non-stale or terminal states', () => {
+  it('keeps abandoned closed from pre-start and terminal states', () => {
+    // `created` stays closed: `POST /interviews` transitions out of it in the same request, so
+    // an interview anyone can reach the room for has already left it.
     expect(canTransition('created', 'abandoned')).toBe(false);
-    expect(canTransition('tech_round', 'abandoned')).toBe(false);
     expect(canTransition('evaluating', 'abandoned')).toBe(false);
     expect(canTransition('completed', 'abandoned')).toBe(false);
     expect(canTransition('failed', 'abandoned')).toBe(false);

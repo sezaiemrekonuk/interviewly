@@ -62,7 +62,10 @@ describe('sweepAbandoned', () => {
     expect(findManyMock).toHaveBeenCalledWith({
       where: {
         deleted_at: null,
-        state: { in: ['profiling', 'hr_round', 'paused'] },
+        // `tech_round` is in the list since #104 gave the machine an edge for it. Pinned
+        // here because the two have to move together: the state without the edge makes
+        // every sweep of it a logged `INTERVIEW_ABANDON_SKIP` instead of a cleanup.
+        state: { in: ['profiling', 'hr_round', 'tech_round', 'paused'] },
         created_at: { lt: cutoff },
         OR: [{ started_at: null }, { started_at: { lt: cutoff } }],
         chat_messages: { none: { created_at: { gte: cutoff } } },
@@ -81,14 +84,15 @@ describe('sweepAbandoned', () => {
       [
         interview('int-p', 'profiling'),
         interview('int-h', 'hr_round'),
+        interview('int-t', 'tech_round'),
         interview('int-z', 'paused'),
       ] as never,
     );
 
     await sweepAbandoned();
 
-    expect(applyTransitionMock).toHaveBeenCalledTimes(3);
-    for (const [index, id] of ['int-p', 'int-h', 'int-z'].entries()) {
+    expect(applyTransitionMock).toHaveBeenCalledTimes(4);
+    for (const [index, id] of ['int-p', 'int-h', 'int-t', 'int-z'].entries()) {
       expect(applyTransitionMock).toHaveBeenNthCalledWith(
         index + 1,
         expect.objectContaining({ id }),
@@ -100,6 +104,7 @@ describe('sweepAbandoned', () => {
     expect(payloads('info', 'INTERVIEW_ABANDONED')).toEqual([
       { interviewId: 'int-p', from: 'profiling' },
       { interviewId: 'int-h', from: 'hr_round' },
+      { interviewId: 'int-t', from: 'tech_round' },
       { interviewId: 'int-z', from: 'paused' },
     ]);
   });
