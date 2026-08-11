@@ -89,7 +89,7 @@ export default function DashboardPage() {
   const canStart = !list.isPending && !list.isError && items.length > 0 && !open;
 
   return (
-    <SplitShell rail={rail}>
+    <SplitShell rail={rail} className={styles.shell}>
       <WorkTop title={name ? t('greeting', { name }) : t('greetingPlain')}>
         {canStart ? (
           <Link href="/interviews/new" className={styles.primaryCta} data-testid="start-new">

@@ -74,6 +74,14 @@
   /* Motion */
   --duration-default: 200ms;
   --easing-default:   ease-out;
+
+  /* Measure — the widest any content column gets, on every screen.
+     Nothing capped the working surface before this: `.workBody` was `padding: 24px` and the
+     page's own column (880px on settings, 1120px on the console, 76ch on the report) sat at
+     its inline-start edge with the whole rest of the monitor empty to the right. That is not
+     a report bug, it is every screen at once — so the cap and the centring live here and are
+     applied in `shell.module.css`, which every screen already goes through. */
+  --container-max: 1440px;
 }
 
 @media (prefers-reduced-motion: reduce) {

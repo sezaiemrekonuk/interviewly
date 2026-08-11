@@ -227,7 +227,7 @@ export default function ProfilePage() {
   const savingStep = saveCard.isPending ? saveCard.variables?.step : undefined;
 
   return (
-    <SplitShell rail={<AppRail user={user} />}>
+    <SplitShell rail={<AppRail user={user} />} className={styles.shell}>
       <WorkTop title={t('title')} />
 
       <WorkBody className={styles.body}>

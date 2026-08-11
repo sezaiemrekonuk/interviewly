@@ -2,10 +2,17 @@
  * header rather than becoming a second rail entry.
  */
 
+/* The working surface's measure, consumed by `.workTop` and `.workBody` in
+   `shell.module.css`. Set on the shell rather than on `.body` so the header and the content it
+   names share an edge: a title capped at 1440 over a column capped at 1120px puts the two on
+   different left margins, which reads as a broken header rather than as a narrower column. */
+.shell {
+  --container-max: 1120px;
+}
+
 .body {
   display: flex;
   flex-direction: column;
-  max-width: 1120px;
 }
 
 .views {

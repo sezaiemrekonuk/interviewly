@@ -171,6 +171,22 @@ Reference: `src/components/room/room.module.css`, `src/components/report/report.
 Prose blocks (narratives, recovery copy, empty-state explanations) cap at **65–75ch** regardless
 of container width.
 
+**Every container is capped at `--container-max` (1440px) and centred.** `shell.module.css`
+does it once, for every screen, on `.workTop` and `.workBody`:
+
+```
+padding-inline: max(24px, calc((100% - var(--container-max)) / 2));
+```
+
+Padding rather than `max-width` + `margin-inline: auto`, so `.workTop`'s bottom rule still runs
+edge to edge while its title lines up with the body underneath it.
+
+A page column narrower than the cap — 880px of settings, 76ch of report — **must** carry
+`margin-inline: auto` (and `width: 100%`) of its own. `max-width` alone centres nothing: it
+pins the column to the inline-start edge and leaves the rest of the monitor empty to the right,
+which is what this rule exists to stop. A narrower measure is still correct; an off-centre one
+is not.
+
 ### 3.5 Chrome
 
 Header: wordmark in `--font-heading` 20/600, actions right, `max-width` matching the page measure,

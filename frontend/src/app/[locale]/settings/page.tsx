@@ -56,7 +56,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <SplitShell rail={<AppRail user={user} />}>
+    <SplitShell rail={<AppRail user={user} />} className={styles.shell}>
       <WorkTop title={t('title')} />
 
       <WorkBody className={styles.body}>

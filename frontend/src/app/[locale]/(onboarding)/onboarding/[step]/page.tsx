@@ -261,7 +261,7 @@ export default function OnboardingStepPage({ params }: { params: Promise<{ step:
   );
 
   return (
-    <SplitShell rail={rail}>
+    <SplitShell rail={rail} className={styles.shell}>
       <WorkTop title={t(`step${step}Title`)} />
       <WorkBody className={styles.body}>
         <div className={styles.form}>
