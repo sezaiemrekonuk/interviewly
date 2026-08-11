@@ -3,7 +3,7 @@
  * component that kept its own total would drift past a refetch, a slept tab, or a clock the
  * candidate moved, and tell them they have time the server will refuse.
  */
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -25,6 +25,11 @@ const session = (overrides: Partial<UseVoiceSessionResult> = {}): UseVoiceSessio
   stop: vi.fn(),
   error: null,
   retry: vi.fn(),
+  // One input is the default: the picker is gated on there being a choice to make, so the
+  // cases below render the bar without it unless they say otherwise.
+  devices: [{ deviceId: 'built-in', label: 'Built-in microphone' }],
+  deviceId: 'built-in',
+  selectDevice: vi.fn(),
   ...overrides,
 });
 
@@ -192,5 +197,93 @@ describe('VoiceControls failure copy (S10)', () => {
     expect(banner).not.toHaveTextContent(CONNECTION_DROPPED);
     screen.getByRole('button', { name: messages.room.voice.reconnect }).click();
     expect(reconnect).toHaveBeenCalledOnce();
+  });
+});
+
+/**
+ * The picker exists for one scenario: an input that stops working mid-interview. Before this,
+ * the device list was only on pre-join, so a candidate whose headset died had to leave the
+ * room — and the room's Leave does not end an interview (#104), so leaving is not a way out
+ * either. The plumbing was already here; `use-voice-session` held `devices`/`select` from
+ * `useMicPermission` and never surfaced them.
+ */
+describe('VoiceControls input picker', () => {
+  const renderWith = (over: Partial<UseVoiceSessionResult>) =>
+    render(
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <VoiceControls
+          session={session(over)}
+          expiresAt={null}
+          captionsOn
+          onToggleCaptions={vi.fn()}
+          transcriptOpen={false}
+          onToggleTranscript={vi.fn()}
+        />
+      </NextIntlClientProvider>,
+    );
+
+  const TWO = [
+    { deviceId: 'built-in', label: 'Built-in microphone' },
+    { deviceId: 'headset', label: 'Headset' },
+  ];
+
+  // One microphone is not a choice, and a control that cannot change anything is noise in a
+  // bar the candidate reads mid-sentence.
+  it('is not rendered when the machine offers one input', () => {
+    renderWith({});
+
+    expect(screen.queryByTestId('mic-device')).not.toBeInTheDocument();
+  });
+
+  it('offers every input, naming the live one', () => {
+    renderWith({ devices: TWO, deviceId: 'headset' });
+
+    const pick = screen.getByTestId('mic-device');
+    expect(pick).toHaveValue('headset');
+    expect(screen.getByRole('option', { name: 'Built-in microphone' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Headset' })).toBeInTheDocument();
+  });
+
+  it('falls back to the first input when the live device id is unknown', () => {
+    renderWith({ devices: TWO, deviceId: null });
+
+    expect(screen.getByTestId('mic-device')).toHaveValue('built-in');
+  });
+
+  it('switches input on change', () => {
+    const selectDevice = vi.fn();
+    renderWith({ devices: TWO, deviceId: 'built-in', selectDevice });
+
+    fireEvent.change(screen.getByTestId('mic-device'), { target: { value: 'headset' } });
+
+    expect(selectDevice).toHaveBeenCalledWith('headset');
+  });
+  // The case the control exists for: the mic is gone, and this is what fixes it without
+  // leaving the room.
+  it('stays usable while the mic is lost', () => {
+    renderWith({ devices: TWO, deviceId: 'built-in', status: 'lost', micState: 'denied' });
+
+    expect(screen.getByTestId('mic-device')).toBeEnabled();
+  });
+
+  // `selectDevice` releases the track the MediaRecorder is reading, so a swap mid-answer
+  // truncates the answer being given.
+  it('is disabled while an answer is being recorded', () => {
+    renderWith({ devices: TWO, deviceId: 'built-in', recording: true });
+
+    expect(screen.getByTestId('mic-device')).toBeDisabled();
+  });
+
+  it('falls back to a numbered name for an unlabelled input', () => {
+    renderWith({
+      devices: [
+        { deviceId: 'a', label: '' },
+        { deviceId: 'b', label: '' },
+      ],
+      deviceId: 'a',
+    });
+
+    expect(screen.getByRole('option', { name: 'Microphone 1' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Microphone 2' })).toBeInTheDocument();
   });
 });
