@@ -6,7 +6,7 @@
    `shell.module.css`. On the shell rather than on the column, so the page title and the content
    it names share an edge. */
 .shell {
-  --container-max: 480px;
+  --container-max: 1040px;
 }
 
 .railLead {
@@ -43,20 +43,101 @@
   box-shadow: var(--shadow-hairline);
 }
 
-/* One check, both devices: the preview and its toggle, a rule, then the microphone and the
-   sentence about where the picture goes — which is nowhere. */
-.deviceCheck {
+/* The lobby: what you look and sound like on the left, the way in on the right. Two columns
+   because they are two different questions — "am I ready?" and "shall I go?" — and stacking
+   them put the CTA below the fold on a laptop. */
+.lobby {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 32px;
+  align-items: center;
+  width: 100%;
+}
+
+.stagePane {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+/* The preview is the surface, not a picture on one: its controls sit on it and its label rides
+   in the corner, the same shape the room's tiles have. */
+.preview {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-soft);
+}
+
+.previewMedia {
+  display: block;
+}
+
+.previewName {
+  position: absolute;
+  inset-inline-start: 12px;
+  inset-block-start: 12px;
+  margin: 0;
+  padding: 4px 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--rail-text);
+  background: var(--rail-raised);
+  border-radius: var(--radius-input);
+}
+
+.previewControls {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 16px;
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+}
+
+/* Round, because a device control is a switch and not a sentence — the one place in this
+   product where an icon carries the state, and it carries it twice: the slash through the
+   glyph and the --danger fill say the same thing. */
+.round {
+  display: inline-flex;
+  width: 48px;
+  height: 48px;
+  align-items: center;
+  justify-content: center;
+  color: var(--rail-text);
+  background: var(--rail-raised);
+  border: 1px solid var(--rail-border);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background-color var(--duration-default) var(--easing-default);
+}
+
+.round[data-off='true'] {
+  color: var(--surface);
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
+.round:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* The way in. Its own column, vertically centred against the preview. */
+.joinPane {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-.divide {
-  width: 100%;
-  height: 1px;
+.joinTitle {
   margin: 0;
-  background: var(--border);
-  border: 0;
+  font-family: var(--font-heading), Georgia, serif;
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
 }
 
 .cameraNote {
@@ -114,4 +195,12 @@
 
 .barCta {
   height: 48px;
+}
+
+/* One column below the split shell's own breakpoint: the preview first, the way in under it. */
+@media (max-width: 60rem) {
+  .lobby {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
 }

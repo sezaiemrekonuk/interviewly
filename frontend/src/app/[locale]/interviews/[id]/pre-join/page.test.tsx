@@ -190,6 +190,23 @@ describe('pre-join (W09)', () => {
     expect(getUserMedia).toHaveBeenCalledWith({ video: true, audio: false });
   });
 
+  // The lobby's other round control. Muting disables the track rather than dropping it, so the
+  // gate stays green — a muted candidate is ready to join, they are just not talking yet.
+  it('mutes from the preview without closing the way in', async () => {
+    stubFetch('voice');
+    const t = track();
+    stubMic('grant', t);
+    await renderPreJoin();
+
+    const toggle = await screen.findByTestId('mic-toggle');
+    await waitFor(() => expect(toggle).toHaveAttribute('aria-pressed', 'true'));
+    await userEvent.click(toggle);
+
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByText(messages.preJoin.muted)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: messages.preJoin.enter })).toBeEnabled();
+  });
+
   it('leaving the screen stops the media track', async () => {
     stubFetch('voice');
     const t = track();

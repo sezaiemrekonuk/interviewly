@@ -466,6 +466,11 @@
   "preJoin": {
     "title": "Camera and microphone check",
     "subtitle": "Grant the microphone and confirm your input, and try your camera if you want one. Nothing is recorded on this screen. In the interview your answer audio is sent to be transcribed and is not kept — only the transcript is stored, and your camera never leaves this device.",
+    "you": "You",
+    "ready": "Ready to join?",
+    "mute": "Mute microphone",
+    "unmute": "Unmute microphone",
+    "muted": "Your microphone is muted",
     "deviceLabel": "Microphone",
     "deviceFallback": "Microphone {n}",
     "prompt": "Waiting for microphone permission…",

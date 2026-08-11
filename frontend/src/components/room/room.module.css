@@ -250,14 +250,35 @@
   border-radius: var(--radius-card);
 }
 
+/* Square, and sized by the room rather than by the picture: a person's tile is the same shape
+   on every surface a candidate has used, and a 3:1 letterbox of one face is not a tile.
+   The speaker takes the stage's height and centres in the width it leaves. */
 .videoLead {
-  min-height: 280px;
+  width: auto;
+  height: 100%;
+  max-width: 100%;
+  min-height: 240px;
+  aspect-ratio: 1;
+  justify-self: center;
   box-shadow: var(--shadow-soft);
 }
 
+/* The side column is the narrow one, so its tiles take the width and centre in the height. */
 .videoSmall {
+  width: 100%;
+  height: auto;
+  max-height: 100%;
   min-height: 160px;
+  aspect-ratio: 1;
+  align-self: center;
   box-shadow: var(--shadow-hairline);
+}
+
+/* Grid view has no speaker: three equal columns, three equal squares. */
+.stage[data-view='grid'] .videoLead {
+  width: 100%;
+  height: auto;
+  max-height: 100%;
 }
 
 /* The interviewer's face: the expression `change_avatar` last asked for (additionals

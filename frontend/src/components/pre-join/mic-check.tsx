@@ -1,11 +1,10 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { useEffect } from 'react';
 
 import { Meter } from '@/components/shell/meter';
 import { Button, Field, Select } from '@/components/ui';
-import { useMicPermission, type MicPermissionState } from '@/lib/use-mic-permission';
+import type { UseMicPermission } from '@/lib/use-mic-permission';
 
 import styles from './mic-check.module.css';
 
@@ -14,20 +13,18 @@ import styles from './mic-check.module.css';
 const SPEAKING = 0.02;
 
 export interface MicCheckProps {
-  onStateChange: (state: MicPermissionState) => void;
+  /**
+   * The live capture, owned by the lobby: the mute button sits on the camera preview beside the
+   * camera's, so the page holds the hook and this component reads it. It used to own the hook
+   * and report upwards through an effect, which meant the one control that had to sit outside
+   * it could not exist.
+   */
+  mic: UseMicPermission;
 }
 
-export function MicCheck({ onStateChange }: MicCheckProps) {
+export function MicCheck({ mic }: MicCheckProps) {
   const t = useTranslations('preJoin');
-  const { state, level, devices, deviceId, request, select } = useMicPermission();
-
-  useEffect(() => {
-    if (state === 'idle') request();
-  }, [state, request]);
-
-  useEffect(() => {
-    onStateChange(state);
-  }, [state, onStateChange]);
+  const { state, level, devices, deviceId, request, select } = mic;
 
   if (state === 'unavailable') {
     return (
@@ -54,7 +51,7 @@ export function MicCheck({ onStateChange }: MicCheckProps) {
     );
   }
 
-  const hearing = state === 'granted' && level >= SPEAKING;
+  const hearing = state === 'granted' && !mic.muted && level >= SPEAKING;
 
   return (
     <div className={styles.check} data-testid="mic-check">
@@ -87,7 +84,13 @@ export function MicCheck({ onStateChange }: MicCheckProps) {
 
       <p className={styles.status} aria-live="polite" data-hearing={hearing ? 'yes' : 'no'}>
         <span className={styles.dot} aria-hidden="true" />
-        {state !== 'granted' ? t('prompt') : hearing ? t('hearYou') : t('quiet')}
+        {state !== 'granted'
+          ? t('prompt')
+          : mic.muted
+            ? t('muted')
+            : hearing
+              ? t('hearYou')
+              : t('quiet')}
       </p>
     </div>
   );

@@ -466,6 +466,11 @@
   "preJoin": {
     "title": "Kamera ve mikrofon kontrolü",
     "subtitle": "Mikrofona izin verin ve girişinizi doğrulayın; isterseniz kameranızı da deneyin. Bu ekranda hiçbir kayıt alınmaz. Mülakat sırasında yanıt sesiniz yazıya dökülmek üzere gönderilir ve saklanmaz — yalnızca metni saklanır, kameranız ise bu cihazdan hiç çıkmaz.",
+    "you": "Siz",
+    "ready": "Katılmaya hazır mısınız?",
+    "mute": "Mikrofonu kapat",
+    "unmute": "Mikrofonu aç",
+    "muted": "Mikrofonunuz kapalı",
     "deviceLabel": "Mikrofon",
     "deviceFallback": "Mikrofon {n}",
     "prompt": "Mikrofon izni bekleniyor…",
