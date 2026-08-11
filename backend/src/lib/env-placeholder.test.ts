@@ -49,6 +49,25 @@ describe('SESSION_SECRET placeholder', () => {
     expect(failedKeys({ ...exampleEnv(), NODE_ENV: 'production' })).toContain('SESSION_SECRET');
   });
 
+  /**
+   * The hole review on #268 found in the first version of this guard, and the reason it now
+   * asks `isDeployed` rather than reading NODE_ENV.
+   *
+   * The incident was `.env.example` shipped whole — and `NODE_ENV=development` is one of its
+   * own lines, so a gate keyed on that value alone waves through precisely the accident it
+   * was written for. `PUBLIC_ORIGIN` is the key that cannot survive the copy: a deployment
+   * serving real users is not answering on localhost.
+   */
+  it('fails on a deployed origin even when NODE_ENV is left at development', () => {
+    const example = exampleEnv();
+    // The premise: the file being shipped whole carries this value, so the gate cannot read it.
+    expect(example.NODE_ENV).toBe('development');
+
+    const shipped = { ...example, PUBLIC_ORIGIN: 'https://interviewly.example.com' };
+
+    expect(failedKeys(shipped)).toContain('SESSION_SECRET');
+  });
+
   it('passes once the secret is rotated', () => {
     const rotated = {
       ...exampleEnv(),
@@ -59,9 +78,18 @@ describe('SESSION_SECRET placeholder', () => {
     expect(failedKeys(rotated)).not.toContain('SESSION_SECRET');
   });
 
-  it('does not refuse the placeholder in development, so `cp .env.example .env` still boots', () => {
+  it('does not refuse the placeholder locally, so `cp .env.example .env` still boots', () => {
     expect(failedKeys(exampleEnv())).toEqual([]);
   });
+
+  // The three CI jobs build their `.env` this way and serve nothing; a guard that failed here
+  // would be a red build on every PR rather than a security control.
+  it.each(['http://localhost', 'http://localhost:3000', 'http://127.0.0.1:4000', 'http://[::1]'])(
+    'treats %s as local',
+    (origin) => {
+      expect(failedKeys({ ...exampleEnv(), PUBLIC_ORIGIN: origin })).toEqual([]);
+    },
+  );
 
   it('catches any `change-me` secret, not the one string shipped today', () => {
     const renamed = {

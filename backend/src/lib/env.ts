@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { isDeployed } from './deployment';
+
 // z.coerce.boolean() runs JS's Boolean(string), which is true for ANY non-empty string —
 // including the literal text "false". Every boolean env key in this schema needs this,
 // not the coercer, or `EMAIL_VERIFICATION_REQUIRED=false` / `AI_ENABLED=false` in .env
@@ -121,11 +123,15 @@ export const schema = z.object({
   }
 
   // Issue #118: the `.env.example` placeholder is exactly 32 characters, so `min(32)` above
-  // cannot tell it from a real secret and the live `.env` carried it byte for byte. Gated on
-  // production for the same reason the rule above is gated on AI_ENABLED: `cp .env.example
+  // cannot tell it from a real secret and the live `.env` carried it byte for byte. Scoped to
+  // deployments for the same reason the rule above is scoped to AI_ENABLED: `cp .env.example
   // .env` is the documented first boot and what all three CI jobs do, so refusing it
   // everywhere would fail them by construction.
-  if (env.NODE_ENV === 'production' && env.SESSION_SECRET.startsWith(PLACEHOLDER_PREFIX)) {
+  //
+  // `isDeployed` rather than `NODE_ENV === 'production'`, per review on #268: the incident was
+  // `.env.example` shipped whole, and its own `NODE_ENV=development` would ship with it — a
+  // gate reading only that key would miss the exact accident it exists for.
+  if (isDeployed(env.NODE_ENV, env.PUBLIC_ORIGIN) && env.SESSION_SECRET.startsWith(PLACEHOLDER_PREFIX)) {
     ctx.addIssue({
       code: 'custom',
       path: ['SESSION_SECRET'],

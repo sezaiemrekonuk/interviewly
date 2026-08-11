@@ -23,6 +23,8 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 
+import { isDeployed } from '../src/lib/deployment';
+
 const prisma = new PrismaClient();
 
 // ---------------------------------------------------------------------------
@@ -540,8 +542,11 @@ async function main() {
   // fixture — the admin's password is published in this repository, and `/admin` lists every
   // interview on the platform, so seeding it into production is a full-tenant exposure. A real
   // deployment needs an operator account it created itself, not one this file invented.
-  if (process.env.NODE_ENV === 'production') {
-    console.log('  demo admin + sample interview: skipped (NODE_ENV=production)');
+  //
+  // Keyed on `isDeployed`, not on NODE_ENV alone (review on #268): the incident this guards
+  // was `.env.example` shipped verbatim, and `NODE_ENV=development` is one of its lines.
+  if (isDeployed(process.env.NODE_ENV, process.env.PUBLIC_ORIGIN)) {
+    console.log(`  demo admin + sample interview: skipped (deployed — PUBLIC_ORIGIN=${process.env.PUBLIC_ORIGIN})`);
   } else {
     const admin = await seedDemoAdmin();
     console.log(`  sample listing: ${SAMPLE_LISTING.length} chars from prisma/fixtures/`);
