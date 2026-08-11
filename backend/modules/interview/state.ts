@@ -155,7 +155,7 @@ export async function resolvePersonas(interview: RosteredInterview) {
 
   // `change_avatar`'s current value for the live speaker only — the inactive tile never asks,
   // so it needs no read.
-  const avatar = active ? await currentAvatar(interviewId, active.id) : 1;
+  const avatar = active ? await currentAvatar(interview.id, active.id) : 1;
 
   return {
     personas,
