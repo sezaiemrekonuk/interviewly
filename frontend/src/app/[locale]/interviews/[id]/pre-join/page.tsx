@@ -4,10 +4,10 @@ import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
 
-import { CameraView, rememberCamera } from '@/components/camera-view';
+import { CameraView, rememberCamera, useCameraDevices } from '@/components/camera-view';
 import { MicCheck } from '@/components/pre-join/mic-check';
 import { RailMark, SplitShell, WorkBody, WorkTop } from '@/components/shell/split-shell';
-import { Button } from '@/components/ui';
+import { Button, Field, Select } from '@/components/ui';
 import { routeForError } from '@/lib/error-routing';
 import { useInterviewState } from '@/lib/query';
 import { useErrorMessage } from '@/lib/use-error-message';
@@ -58,6 +58,7 @@ export default function PreJoinPage() {
   // Off until asked for: the camera is optional and the prompt is the candidate's to trigger
   // (voice spec §3.2). It never gates entry either — only the microphone does.
   const [cameraOn, setCameraOn] = useState(false);
+  const [cameraId, setCameraId] = useState<string | null>(null);
   const [downgrade, setDowngrade] = useState<'idle' | 'done' | { code: string }>('idle');
   const downgrading = useRef(false);
 
@@ -68,6 +69,16 @@ export default function PreJoinPage() {
 
   const micState = mic.state;
   const { request: requestMic } = mic;
+  // Labels only exist once something has been granted, so the microphone's grant is what opens
+  // the camera list — not the camera's, which the candidate may never turn on.
+  const cameras = useCameraDevices(micState === 'granted');
+
+  // Written on every render of the choice, not only when it is clicked: a candidate who leaves
+  // the camera off here must arrive in a room with it off, and an unwritten choice used to fall
+  // through to "this browser already granted the camera" and turn it on for them.
+  useEffect(() => {
+    rememberCamera(cameraOn);
+  }, [cameraOn]);
 
   useEffect(() => {
     if (queryErrorCode) routeForError(queryErrorCode, router, { pathname });
@@ -138,7 +149,11 @@ export default function PreJoinPage() {
             One errand, not two panels. */}
         <div className={styles.stagePane} data-testid="device-check">
           <div className={styles.preview}>
-            <CameraView enabled={cameraOn} className={styles.previewMedia} />
+            <CameraView
+              enabled={cameraOn}
+              deviceId={cameraId ?? undefined}
+              className={styles.previewMedia}
+            />
             <p className={styles.previewName}>{t('you')}</p>
             <div className={styles.previewControls}>
               <button
@@ -171,6 +186,47 @@ export default function PreJoinPage() {
                 <CameraGlyph off={!cameraOn} />
               </button>
             </div>
+          </div>
+
+          {/* Both pickers on one row, under the picture they belong to — the same place a call
+              lobby puts them, and half the height of two stacked fields. */}
+          <div className={styles.deviceRow}>
+            {mic.devices.length > 0 ? (
+              <Field label={t('deviceLabel')}>
+                {(control) => (
+                  <Select
+                    {...control}
+                    value={mic.deviceId ?? ''}
+                    onChange={(event) => mic.select(event.target.value)}
+                  >
+                    {mic.devices.map((device, index) => (
+                      <option key={device.deviceId} value={device.deviceId}>
+                        {device.label || t('deviceFallback', { n: index + 1 })}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </Field>
+            ) : null}
+
+            {cameras.length > 0 ? (
+              <Field label={t('camera.deviceLabel')}>
+                {(control) => (
+                  <Select
+                    {...control}
+                    value={cameraId ?? cameras[0]?.deviceId ?? ''}
+                    onChange={(event) => setCameraId(event.target.value)}
+                    data-testid="camera-device"
+                  >
+                    {cameras.map((device, index) => (
+                      <option key={device.deviceId} value={device.deviceId}>
+                        {device.label || t('camera.deviceFallback', { n: index + 1 })}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </Field>
+            ) : null}
           </div>
 
           <MicCheck mic={mic} />

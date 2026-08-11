@@ -490,6 +490,8 @@
       "body": "Connect a microphone and reload this page, or continue this interview in text mode."
     },
     "camera": {
+      "deviceLabel": "Camera",
+      "deviceFallback": "Camera {n}",
       "note": "Optional. Your camera stays on this device — the picture is never recorded or sent anywhere, and you can turn it on and off during the interview.",
       "turnOn": "Turn camera on",
       "turnOff": "Turn camera off"
@@ -561,7 +563,9 @@
     "micLevel": "Microphone level",
     "micDevice": "Microphone",
     "micDeviceFallback": "Microphone {n}",
-    "camera": "Camera"
+    "camera": "Camera",
+    "cameraDevice": "Camera",
+    "cameraDeviceFallback": "Camera {n}"
   },
   "report": {
     "title": "Your report",

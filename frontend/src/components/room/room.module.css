@@ -122,9 +122,8 @@
 /* -------------------------------------------------------------------- stage */
 
 .stage {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 240px;
-  grid-template-rows: minmax(0, 1fr) auto;
+  display: flex;
+  flex-direction: column;
   gap: 16px;
   min-height: 0;
   padding: 16px;
@@ -132,30 +131,21 @@
   background: var(--stage);
 }
 
-.stage[data-view='grid'] {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-/* The tiles are grid items of the stage itself — the wrapper exists to name them, not to
-   box them, so it generates no layout of its own. */
+/* One row of equal squares, however many people are in it — the room does not shrink one
+   participant to make another bigger. `auto-fit` wraps them rather than squashing them. */
 .tiles {
-  display: contents;
-}
-
-.side {
-  display: grid;
-  grid-template-rows: 1fr 1fr;
+  display: flex;
   gap: 16px;
-  min-width: 0;
-}
-
-.stage[data-view='grid'] .side {
-  display: contents;
+  flex: 1;
+  flex-wrap: wrap;
+  min-height: 0;
+  align-items: center;
+  align-content: center;
+  justify-content: center;
 }
 
 .footRow {
   display: flex;
-  grid-column: 1 / -1;
   flex-direction: column;
   gap: 16px;
   align-items: center;
@@ -243,42 +233,31 @@
    a portrait wider than its frame crops like a camera would rather than letterboxing. */
 .videoTile {
   position: relative;
+  width: 100%;
+  max-width: 340px;
+  flex: 0 1 340px;
+  max-height: 100%;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+  aspect-ratio: 1;
   background: var(--rail);
   border-radius: var(--radius-card);
-}
-
-/* Square, and sized by the room rather than by the picture: a person's tile is the same shape
-   on every surface a candidate has used, and a 3:1 letterbox of one face is not a tile.
-   The speaker takes the stage's height and centres in the width it leaves. */
-.videoLead {
-  width: auto;
-  height: 100%;
-  max-width: 100%;
-  min-height: 240px;
-  aspect-ratio: 1;
-  justify-self: center;
-  box-shadow: var(--shadow-soft);
-}
-
-/* The side column is the narrow one, so its tiles take the width and centre in the height. */
-.videoSmall {
-  width: 100%;
-  height: auto;
-  max-height: 100%;
-  min-height: 160px;
-  aspect-ratio: 1;
-  align-self: center;
   box-shadow: var(--shadow-hairline);
 }
 
-/* Grid view has no speaker: three equal columns, three equal squares. */
-.stage[data-view='grid'] .videoLead {
-  width: 100%;
-  height: auto;
-  max-height: 100%;
+/* Speaker view gives the floor a bigger tile; grid view leaves every tile the same size. */
+.tiles[data-view='speaker'] .videoTile[data-live='true'] {
+  max-width: 520px;
+  flex-basis: 520px;
+}
+
+/* Who is talking, said by the tile itself now that the badge and the waveform are gone from
+   the interviewers' faces. Inset so it reads as the tile's own edge, not a box around it. */
+.videoTile[data-live='true'] {
+  outline: 2px solid var(--live);
+  outline-offset: -2px;
+  box-shadow: var(--shadow-soft);
 }
 
 /* The interviewer's face: the expression `change_avatar` last asked for (additionals
@@ -329,23 +308,12 @@
   white-space: nowrap;
 }
 
-.videoLead .plateName {
-  font-size: 20px;
-}
-
 .plateRole {
   margin: 0;
   margin-top: 4px;
   font-size: 13px;
   line-height: 1.2;
   color: var(--rail-text-muted);
-}
-
-/* The badge and the voice take the other two corners, so nothing ever lands on the plate. */
-.badgeFloat {
-  position: absolute;
-  inset-block-start: 12px;
-  inset-inline-end: 12px;
 }
 
 /* Written as a descendant so it outranks `.wave`'s own height and the one in the narrow-width
@@ -355,15 +323,6 @@
   inset-inline-start: 12px;
   inset-block-end: 12px;
   height: 32px;
-  margin: 0;
-}
-
-/* The candidate's level, pinned to the foot of their own tile — the full width, because it is
-   a reading and not an ornament. */
-.videoTile .micMeter {
-  position: absolute;
-  inset-inline: 0;
-  inset-block-end: 0;
   margin: 0;
 }
 
@@ -531,8 +490,22 @@
 }
 
 .ck[aria-pressed='true'] {
-  background: var(--surface-sunken);
+  background: var(--surface);
   border-color: var(--border);
+}
+
+/* Off is the state that has to read at a glance mid-sentence, so it takes the danger tone and
+   the word stays put — the label never becomes "Unmute", which is a second thing to read. */
+.ck[data-off='true'] {
+  color: var(--surface);
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
+.group:has(.ck[data-off='true']) .caret {
+  color: var(--surface);
+  background: var(--danger);
+  border-color: var(--danger);
 }
 
 .ckSub {
@@ -597,6 +570,51 @@
   color: var(--danger);
 }
 
+/* A switch and the caret that says which device it switches, welded into one control. */
+.group {
+  display: inline-flex;
+  align-items: stretch;
+  border-radius: var(--radius-input);
+}
+
+.group .ck {
+  border-start-end-radius: 0;
+  border-end-end-radius: 0;
+}
+
+.caret {
+  position: relative;
+  display: inline-flex;
+  width: 32px;
+  min-height: 44px;
+  align-self: stretch;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-inline-start: 0;
+  border-start-end-radius: var(--radius-input);
+  border-end-end-radius: var(--radius-input);
+  cursor: pointer;
+}
+
+.caret[data-disabled] {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Invisible, not hidden: it is the control — the caret under it is only the picture of one. */
+.caretSelect {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: inherit;
+}
+
 /* A four-bar glyph, not a second meter: the candidate's real level is on their tile. */
 .mini {
   display: flex;
@@ -617,14 +635,6 @@
 
 .liveBadge .mini i {
   background: var(--rail-text);
-}
-
-.ck[data-muted='true'] {
-  color: var(--text-muted);
-}
-
-.ck[data-muted='true'] .mini i {
-  background: var(--text-muted);
 }
 
 /* ------------------------------------------------------- paused / stalled / lost */
@@ -846,23 +856,6 @@
 /* The rail stacks into a bar at this width (shell.module.css), so the stage goes to one
    column and the side tiles sit shoulder to shoulder under the speaker. */
 @media (max-width: 60rem) {
-  .stage {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .stage[data-view='grid'] {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .side {
-    grid-template-rows: none;
-    grid-auto-flow: column;
-  }
-
-  .stage[data-view='grid'] .side {
-    display: grid;
-  }
-
   .workGrid[data-transcript='open'] {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -879,10 +872,6 @@
 
   .stage {
     padding: 12px;
-  }
-
-  .side {
-    grid-auto-flow: row;
   }
 
   .composerActions {

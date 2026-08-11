@@ -89,6 +89,5 @@ describe('PersonaTiles self-camera', () => {
     const you = screen.getByTestId('persona-tile-you');
     expect(within(you).getByTestId('camera-view')).toBeInTheDocument();
     expect(within(you).getByTestId('wave')).toBeInTheDocument();
-    expect(within(you).getByTestId('mic-level')).toBeInTheDocument();
   });
 });

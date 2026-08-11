@@ -490,6 +490,8 @@
       "body": "Bir mikrofon bağlayıp sayfayı yenileyin veya bu mülakata metin modunda devam edin."
     },
     "camera": {
+      "deviceLabel": "Kamera",
+      "deviceFallback": "Kamera {n}",
       "note": "İsteğe bağlı. Kameranız bu cihazda kalır — görüntü hiçbir zaman kaydedilmez veya bir yere gönderilmez; mülakat sırasında istediğiniz an açıp kapatabilirsiniz.",
       "turnOn": "Kamerayı aç",
       "turnOff": "Kamerayı kapat"
@@ -561,7 +563,9 @@
     "micLevel": "Mikrofon seviyesi",
     "micDevice": "Mikrofon",
     "micDeviceFallback": "Mikrofon {n}",
-    "camera": "Kamera"
+    "camera": "Kamera",
+    "cameraDevice": "Kamera",
+    "cameraDeviceFallback": "Kamera {n}"
   },
   "report": {
     "title": "Raporun",

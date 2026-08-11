@@ -137,3 +137,25 @@ had to click to see themselves. Both fixed; the shape is a call surface now.
   preview, its toggle, a rule, then the microphone check and the privacy note.
 
 `npm test` 51 files / 529 tests pass; typecheck and eslint clean; `web` rebuilt and healthy.
+
+## 2026-08-11 — square tiles, and pre-join as a call lobby (owner review, second pass)
+
+- `room.module.css` — every meeting tile is `aspect-ratio: 1` now. The speaker takes the stage's
+  height and centres in the width it leaves; the side tiles take their column's width and centre
+  in the height; grid view is three equal squares. The previous pass let the speaker's tile fill
+  a 1150×580 cell, which cropped one face into a letterbox.
+- `pre-join` is a lobby, not a form (owner: "make it look exactly like this" — Meet's pre-join):
+  a 16:9 preview card with the candidate's label in the top-left corner and two round device
+  controls floating over its foot, the microphone's readout under it, and the way in — heading
+  plus CTA — in its own column beside it. `--container-max` 480px → 1040px; one column under
+  60rem.
+- The round controls are the one place in this product where an icon carries state, so it is
+  carried twice: a slash through the glyph *and* a `--danger` fill. Inline SVG, two paths, no
+  icon dependency.
+- `mic-check.tsx` is presentational now — it takes the `useMicPermission` result as a prop. The
+  page owns the hook because the mute button sits on the preview, outside the component; that
+  also deleted the report-upwards effect and the local mirror of `state` the page kept.
+- Copy: `preJoin.you` / `ready` / `mute` / `unmute` / `muted`, en + tr.
+
+`npm test` 51 files / 530 tests pass (new: the lobby mutes without closing the gate); typecheck
+and eslint clean; `web` rebuilt and healthy.

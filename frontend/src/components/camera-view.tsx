@@ -54,14 +54,73 @@ export async function cameraStartsOn(): Promise<boolean> {
   }
 }
 
-export function CameraView({ enabled, className }: { enabled: boolean; className?: string }) {
+export function CameraView({
+  enabled,
+  deviceId,
+  className,
+}: {
+  enabled: boolean;
+  /** Which camera, when the candidate picked one. Changing it restarts the capture. */
+  deviceId?: string;
+  className?: string;
+}) {
   // Two components rather than one holding an `off` flag: the capture's whole lifecycle is its
   // mount, so turning the camera off releases the device and turning it back on starts from
-  // `starting` — with one component, a refusal would still be on screen the next time.
-  return enabled ? <Capture className={className} /> : <Frame state="off" className={className} />;
+  // `starting` — with one component, a refusal would still be on screen the next time. Keyed on
+  // the device for the same reason: switching cameras is a new capture, not a mutated one.
+  return enabled ? (
+    <Capture key={deviceId ?? 'default'} deviceId={deviceId} className={className} />
+  ) : (
+    <Frame state="off" className={className} />
+  );
 }
 
-function Capture({ className }: { className?: string }) {
+/** A camera the browser will name once any capture has been granted (labels need a grant). */
+export interface CameraDevice {
+  deviceId: string;
+  label: string;
+}
+
+/**
+ * The cameras this machine has. Enumerated only once `ready` — the lobby passes the microphone's
+ * grant, because `enumerateDevices` returns unlabelled entries before any permission exists and
+ * a picker of "Camera 1, Camera 2" is not a picker. Re-reads on `devicechange`: plugging a
+ * webcam in while the lobby is open is exactly when this list is wrong.
+ */
+export function useCameraDevices(ready: boolean): CameraDevice[] {
+  const [devices, setDevices] = useState<CameraDevice[]>([]);
+
+  useEffect(() => {
+    // Held, not re-read: the element this listener is bound to has to be the same one it is
+    // unbound from, and `navigator.mediaDevices` can be gone by the time cleanup runs.
+    const media = navigator.mediaDevices;
+    if (!ready || !media?.enumerateDevices) return;
+    let live = true;
+    const read = () => {
+      void media
+        .enumerateDevices()
+        .then((all) => {
+          if (!live) return;
+          setDevices(
+            all
+              .filter((device) => device.kind === 'videoinput')
+              .map((device) => ({ deviceId: device.deviceId, label: device.label })),
+          );
+        })
+        .catch(() => undefined);
+    };
+    read();
+    media.addEventListener?.('devicechange', read);
+    return () => {
+      live = false;
+      media.removeEventListener?.('devicechange', read);
+    };
+  }, [ready]);
+
+  return devices;
+}
+
+function Capture({ deviceId, className }: { deviceId?: string; className?: string }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [state, setState] = useState<Exclude<CameraState, 'off'>>('starting');
 
@@ -72,7 +131,10 @@ function Capture({ className }: { className?: string }) {
     // A browser with no `getUserMedia` at all takes the same path as a machine with no camera:
     // one outcome, one sentence, and no state written synchronously from an effect.
     const asked = navigator.mediaDevices?.getUserMedia
-      ? navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+      ? navigator.mediaDevices.getUserMedia({
+          video: deviceId ? { deviceId: { exact: deviceId } } : true,
+          audio: false,
+        })
       : Promise.reject(Object.assign(new Error('no camera API'), { name: 'NotFoundError' }));
 
     asked
@@ -96,7 +158,7 @@ function Capture({ className }: { className?: string }) {
       live = false;
       stream?.getTracks().forEach((track) => track.stop());
     };
-  }, []);
+  }, [deviceId]);
 
   return (
     <Frame state={state} className={className}>

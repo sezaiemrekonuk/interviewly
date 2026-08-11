@@ -193,7 +193,8 @@ describe('interview room, voice mode (W10)', () => {
     const hr = screen.getByTestId('persona-tile-hr');
     expect(hr).toHaveAttribute('data-live', 'true');
     expect(screen.getByTestId('persona-tile-tech')).toHaveAttribute('data-live', 'false');
-    expect(screen.getAllByText(messages.room.live)).toHaveLength(1);
+    // Who has the floor is the tile's own ring now (`data-live`), not a badge on their face.
+    expect(screen.queryByText(messages.room.live)).not.toBeInTheDocument();
 
     // Room mode, not an entry surface: no mascot on this screen.
     expect(screen.queryByTestId('mascot')).not.toBeInTheDocument();

@@ -3,7 +3,7 @@
 import { useTranslations } from 'next-intl';
 
 import { Meter } from '@/components/shell/meter';
-import { Button, Field, Select } from '@/components/ui';
+import { Button } from '@/components/ui';
 import type { UseMicPermission } from '@/lib/use-mic-permission';
 
 import styles from './mic-check.module.css';
@@ -14,17 +14,16 @@ const SPEAKING = 0.02;
 
 export interface MicCheckProps {
   /**
-   * The live capture, owned by the lobby: the mute button sits on the camera preview beside the
-   * camera's, so the page holds the hook and this component reads it. It used to own the hook
-   * and report upwards through an effect, which meant the one control that had to sit outside
-   * it could not exist.
+   * The live capture, owned by the lobby: the mute button sits on the camera preview and the
+   * input picker sits in the row under it, so the page holds the hook and this component is the
+   * readout — level, one sentence, and the two recovery screens.
    */
   mic: UseMicPermission;
 }
 
 export function MicCheck({ mic }: MicCheckProps) {
   const t = useTranslations('preJoin');
-  const { state, level, devices, deviceId, request, select } = mic;
+  const { state, level, deviceId, request } = mic;
 
   if (state === 'unavailable') {
     return (
@@ -55,31 +54,13 @@ export function MicCheck({ mic }: MicCheckProps) {
 
   return (
     <div className={styles.check} data-testid="mic-check">
-      {devices.length > 1 ? (
-        <Field label={t('deviceLabel')}>
-          {(control) => (
-            <Select
-              {...control}
-              value={deviceId ?? ''}
-              onChange={(e) => select(e.target.value)}
-            >
-              {devices.map((device, i) => (
-                <option key={device.deviceId} value={device.deviceId}>
-                  {device.label || t('deviceFallback', { n: i + 1 })}
-                </option>
-              ))}
-            </Select>
-          )}
-        </Field>
-      ) : null}
-
       {/* `Meter`, not a width in a style prop: the CSP is `style-src 'self' 'nonce-…'`, so the
           attribute was dropped in production and this bar rendered at zero width for every real
           user. Decorative because the sentence under it states the same thing in words.
           Not `tone="live"`: `--live` is the in-session signal and DESIGN §2 rule 3 names
           pre-join among the surfaces it may never appear on. This room has not started. */}
-      <div data-testid="mic-level">
-        <Meter value={level} max={1} tone="default" instant decorative tall />
+      <div className={styles.level} data-testid="mic-level">
+        <Meter value={level} max={1} tone="default" instant decorative />
       </div>
 
       <p className={styles.status} aria-live="polite" data-hearing={hearing ? 'yes' : 'no'}>

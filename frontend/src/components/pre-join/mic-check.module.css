@@ -2,10 +2,17 @@
    (`tone="default"`, `instant`) — the width-in-a-style-prop it replaces was dropped by the CSP in
    production and rendered at zero. Authored in px so the token lint sees every value. */
 
+/* One line: the level and the sentence that says what it means. A band across the whole card
+   read as a loading bar, which is the one thing it is not. */
 .check {
   display: flex;
-  flex-direction: column;
-  gap: 16px;
+  gap: 12px;
+  align-items: center;
+}
+
+.level {
+  width: 96px;
+  flex: none;
 }
 
 .status {
