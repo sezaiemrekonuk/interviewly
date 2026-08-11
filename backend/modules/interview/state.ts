@@ -4,8 +4,9 @@ import type { RequestHandler } from 'express';
 import { clock } from '../../src/lib/clock';
 import { prisma } from '../../src/lib/db';
 import { logger } from '../../src/lib/logger';
-import { speechExpiresAt } from '../speech/ceiling';
 import { peekPendingTurn } from '../speech/pending-turn';
+import { type Ceilinged, speechExpiresAt } from '../speech/ceiling';
+import { activeSeconds } from './elapsed';
 
 /** The columns the index walk needs — an `Interview` satisfies it; a test fixture need not. */
 export interface IndexedInterview {
@@ -230,10 +231,8 @@ async function resolveMessages(interviewId: string) {
   }));
 }
 
-export interface TimedInterview {
+export interface TimedInterview extends Ceilinged {
   mode: string;
-  started_at: Date | null;
-  max_duration_seconds: number | null;
 }
 
 /**
@@ -244,15 +243,18 @@ export interface TimedInterview {
  * Text reports `expiresAt: null` rather than a number: the ceiling is enforced only by the two
  * speech routes, both of which refuse `mode !== 'voice'`, so any deadline here would be one
  * nothing applies. A downgraded interview lands in the same branch on its next refetch.
+ *
+ * `elapsedSeconds` is I16's active time and is reported in both modes — it is the room's own
+ * readout, not the ceiling, and a text interview has one too. It is a snapshot, so the client
+ * ticks forward from the instant it received it rather than treating it as still current;
+ * `startedAt` is no longer the anchor for that and remains only as the interview's date.
  */
-export function interviewWindow(interview: TimedInterview) {
-  const expiresAt =
-    interview.mode === 'voice'
-      ? speechExpiresAt(interview.started_at, interview.max_duration_seconds)
-      : null;
+export function interviewWindow(interview: TimedInterview, now: Date = clock.now()) {
+  const expiresAt = interview.mode === 'voice' ? speechExpiresAt(interview, now) : null;
   return {
     startedAt: interview.started_at?.toISOString() ?? null,
     expiresAt: expiresAt?.toISOString() ?? null,
+    elapsedSeconds: Math.floor(activeSeconds(interview, now)),
   };
 }
 

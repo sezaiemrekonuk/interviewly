@@ -4,7 +4,7 @@ import { useTranslations } from 'next-intl';
 
 import { RailBlock, RailFoot, RailMark, RailValue } from '../shell/split-shell';
 import type { InterviewStateResponse } from '../../lib/query';
-import { useNowMs } from '../../lib/use-clock';
+import { useRoomElapsed } from '../../lib/use-room-clock';
 import type { VoiceConnectionStatus } from '../../lib/use-voice-session';
 
 import styles from './room.module.css';
@@ -15,34 +15,31 @@ const clock = (seconds: number) =>
   `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
 
 /**
- * Elapsed since the server's `startedAt` (S09), subtracted from the shared clock rather than
- * accumulated: the clock this replaced counted from arrival, so a reload restarted it and it
- * disagreed with the ceiling the same room counts down to. Zero until the interview has a start.
- */
-function useElapsed(startedAt: string | null): number {
-  const nowMs = useNowMs();
-  const from = startedAt ? Date.parse(startedAt) : Number.NaN;
-  if (!nowMs || Number.isNaN(from)) return 0;
-  return Math.max(0, Math.floor((nowMs - from) / 1000));
-}
-
-/**
  * The context column: state only. Who is in the room is on the stage — repeating the roster
  * here is the crowding this redesign exists to remove.
  */
 export function RoomRail({
   room,
+  roomUpdatedAt,
   voiceStatus,
   onLeave,
 }: {
   room: InterviewStateResponse;
+  /**
+   * When `room` arrived (react-query's `dataUpdatedAt`). I16's elapsed figure is a snapshot, so
+   * the readout needs the instant it was taken as well as the number.
+   */
+  roomUpdatedAt: number;
   /** Voice mode only; text has no connection to report. */
   voiceStatus: VoiceConnectionStatus | null;
   onLeave: () => void;
 }) {
   const t = useTranslations('room');
   const tSetup = useTranslations('setup');
-  const elapsed = useElapsed(room.startedAt);
+  // I16 — time in the room, not time since the interview began. A candidate who steps out at
+  // 03:00 and comes back an hour later sees 03:00, because the server stopped counting when the
+  // heartbeat did.
+  const elapsed = useRoomElapsed(room.elapsedSeconds, roomUpdatedAt);
 
   const total = Math.max(room.targetQuestionCount, 0);
   const index = Math.min(room.currentIndex, total);

@@ -76,7 +76,7 @@ async function guardVoiceSpeech(req: Request): Promise<VoiceInterview> {
 
 /** ADR-S06: nothing is spoken past the ceiling, and reaching it ends the interview. */
 async function enforceSpeechCeiling(interview: VoiceInterview, traceId: string): Promise<void> {
-  if (!isPastSpeechCeiling(interview.started_at, interview.max_duration_seconds)) return;
+  if (!isPastSpeechCeiling(interview)) return;
   // ADR-I32: a losing transition must not replace the caller's error — the session is
   // expired whether or not this request is the one that moved the interview.
   try {

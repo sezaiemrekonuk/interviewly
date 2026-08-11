@@ -79,47 +79,74 @@ describe('deliverCurrentQuestion', () => {
 });
 
 /**
- * S09. The room derives its countdown from these two, so they are the same arithmetic
- * `isPastSpeechCeiling` refuses on — 720 is `VOICE_MAX_ROUND_SECONDS`, the lower of the two
- * configured ceilings.
+ * S09, as I16 left it. The room derives its countdown from these, so they are the same
+ * arithmetic `isPastSpeechCeiling` refuses on — 720 is `VOICE_MAX_ROUND_SECONDS`, the lower of
+ * the two configured ceilings.
+ *
+ * The window is now measured from *active* time, so `now` is passed explicitly and every
+ * expectation is relative to it rather than to `started_at`. A fixture with no banked seconds
+ * and no open stretch is an interview that just began, which is why the first cases still land
+ * on the full ceiling.
  */
 describe('interviewWindow', () => {
   const started_at = new Date('2026-08-06T10:00:00.000Z');
-  const at = (seconds: number) => new Date(started_at.getTime() + seconds * 1000).toISOString();
+  const now = started_at;
+  const fresh = { started_at, elapsed_seconds: 0, last_seen_at: null };
+  const at = (seconds: number) => new Date(now.getTime() + seconds * 1000).toISOString();
 
   it('expires a voice interview at the configured ceiling', () => {
-    expect(interviewWindow({ mode: 'voice', started_at, max_duration_seconds: null })).toEqual({
+    expect(interviewWindow({ ...fresh, mode: 'voice', max_duration_seconds: null }, now)).toEqual({
       startedAt: started_at.toISOString(),
       expiresAt: at(720),
+      elapsedSeconds: 0,
     });
   });
 
   it('reports the chosen duration when it is shorter than the ceiling', () => {
-    expect(interviewWindow({ mode: 'voice', started_at, max_duration_seconds: 300 })).toEqual({
+    expect(interviewWindow({ ...fresh, mode: 'voice', max_duration_seconds: 300 }, now)).toEqual({
       startedAt: started_at.toISOString(),
       expiresAt: at(300),
+      elapsedSeconds: 0,
     });
   });
 
   it('never reports past the ceiling, however long the choice was', () => {
     expect(
-      interviewWindow({ mode: 'voice', started_at, max_duration_seconds: 86_400 }).expiresAt,
+      interviewWindow({ ...fresh, mode: 'voice', max_duration_seconds: 86_400 }, now).expiresAt,
     ).toBe(at(720));
   });
 
   // The ceiling bounds voice only, and a text interview never reaches the routes that enforce
   // it — an expiry here would be a deadline nothing applies.
   it('reports no expiry for a text interview', () => {
-    expect(interviewWindow({ mode: 'text', started_at, max_duration_seconds: 300 })).toEqual({
+    expect(interviewWindow({ ...fresh, mode: 'text', max_duration_seconds: 300 }, now)).toEqual({
       startedAt: started_at.toISOString(),
       expiresAt: null,
+      elapsedSeconds: 0,
     });
   });
 
-  it('reports neither field before the interview started', () => {
+  it('reports no start and no expiry before the interview began', () => {
     expect(
-      interviewWindow({ mode: 'voice', started_at: null, max_duration_seconds: null }),
-    ).toEqual({ startedAt: null, expiresAt: null });
+      interviewWindow(
+        { mode: 'voice', started_at: null, max_duration_seconds: null, elapsed_seconds: 0, last_seen_at: null },
+        now,
+      ),
+    ).toEqual({ startedAt: null, expiresAt: null, elapsedSeconds: 0 });
+  });
+
+  // I16 — the ceiling is spent by time in the room, so banked seconds shorten the window and an
+  // hour spent away does not. Both interviews below started at the same instant; only the banked
+  // figure differs, and only it moves the deadline.
+  it('counts the ceiling down from banked active time, not from the start', () => {
+    const away = new Date(started_at.getTime() + 3_600 * 1000);
+    const window = interviewWindow(
+      { mode: 'voice', started_at, max_duration_seconds: null, elapsed_seconds: 180, last_seen_at: null },
+      away,
+    );
+    expect(window.elapsedSeconds).toBe(180);
+    // 720 - 180 = 540 seconds left, measured from `away` — the hour out of the room cost nothing.
+    expect(window.expiresAt).toBe(new Date(away.getTime() + 540 * 1000).toISOString());
   });
 });
 

@@ -53,7 +53,7 @@ Feature: Speech provider seam — SpeechProvider interface contract
   Scenario: request past voice ceiling ends interview and does not call provider
     Given I am signed in as a speech candidate
     And I have a voice interview in hr_round with current index 1
-    And that interview started 2000 seconds ago
+    And that interview has spent 2000 seconds in the room
     When I GET "/interviews/:id/questions/:index/speech" as that owner
     Then the API response code is "VOICE_SESSION_EXPIRED"
     And the fake speech provider speak call count is 0
@@ -102,7 +102,7 @@ Feature: Speech provider seam — SpeechProvider interface contract
   Scenario: an audio answer past the voice ceiling ends the interview and calls no provider
     Given I am signed in as a speech candidate
     And I have a voice interview in hr_round with current index 1
-    And that interview started 2000 seconds ago
+    And that interview has spent 2000 seconds in the room
     When I POST a "audio/webm" answer recording as that owner
     Then the API response code is "VOICE_SESSION_EXPIRED"
     And the fake speech provider transcribe call count is 0
@@ -204,7 +204,7 @@ Feature: Speech provider seam — SpeechProvider interface contract
   Scenario: the expiry state reports is the one the speech route enforces
     Given I am signed in as a speech candidate
     And I have a voice interview in hr_round with current index 1
-    And that interview started 719 seconds ago
+    And that interview has spent 719 seconds in the room
     When I GET "/interviews/:id/questions/:index/speech" as that owner
     Then the response is "audio/mpeg" bytes
     When I GET the interview state as that owner

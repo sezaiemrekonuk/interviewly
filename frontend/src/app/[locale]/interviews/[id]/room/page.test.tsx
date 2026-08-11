@@ -88,8 +88,11 @@ function roomState(over: Record<string, unknown> = {}) {
     targetQuestionCount: 8,
     endedReason: null,
     language: 'en',
-    // S09: text carries the window too, and the server reports no ceiling for it.
-    startedAt: new Date(Date.now() - 65_500).toISOString(),
+    // S09: text carries the window too, and the server reports no ceiling for it. I16: elapsed
+    // is the server's active-time figure, so `startedAt` no longer feeds the rail — an hour-old
+    // start with 65 s of room time reads 01:05, which is the whole point of the change.
+    startedAt: new Date(Date.now() - 3_600_000).toISOString(),
+    elapsedSeconds: 65,
     expiresAt: null,
     persona: { id: 'p-hr', role: 'hr', name: 'Ada', avatarState: 'idle' },
     personas: PERSONAS,
@@ -193,8 +196,9 @@ describe('interview room, text mode (W06)', () => {
   });
 
   // S09 — the ceiling bounds voice only, so a written interview gets no countdown and no
-  // invented pressure. Elapsed is still the server's, so a reload does not restart it.
-  it('shows no countdown, and an elapsed clock read from the server start', async () => {
+  // invented pressure. I16 — elapsed is the server's active-time figure: this interview started
+  // an hour ago and has 65 s of room time, and 01:05 is what the candidate is owed.
+  it('shows no countdown, and an elapsed clock read from the server active time', async () => {
     stubFetch();
     await renderRoom();
 

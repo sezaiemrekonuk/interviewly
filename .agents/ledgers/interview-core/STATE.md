@@ -1,7 +1,16 @@
 # Interview-core — State
 
-Last updated: 2026-08-04
-Last session ended: **I15 done, uncommitted — the ledger is green (I01–I15).** `REDIS_URL`
+Last updated: 2026-08-11
+Last session ended: **I16 done, uncommitted — the ledger is green (I01–I16).** The room's
+elapsed clock and the speech ceiling both moved off `now - started_at` onto active time: a bank
+(`interviews.elapsed_seconds`) plus one open stretch anchored by `last_seen_at`, advanced by a
+15 s heartbeat and closed by the absence of one. `started_at` keeps its old meaning and is now
+only the interview's date. `speechExpiresAt`/`isPastSpeechCeiling` take the interview row instead
+of `(startedAt, maxDurationSeconds)`, and `expiresAt` can move *later* now — every consumer
+re-derives. 1020 vitest, 111/111 cucumber. **Not this ledger's owner's seat** — see the I16
+devlog's ownership note before building on it.
+
+Previous session: **I15 done, uncommitted.** `REDIS_URL`
 tightened to `.url()`; every other key F03 already declared. Real find: `@prisma/client`
 loads repo-root `.env` on import, so `index.ts` importing `../modules/ai` before `./lib/env`
 let a missing var be backfilled — `./lib/env` is now the first import and must stay first.
@@ -23,10 +32,18 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**None — I01–I15 are all `done`.** This ledger is green. Remaining work for Sezai is the
-frontend ledger (`W01`–`W11`); EXECUTE.md § 4 picks `W01 <- F01, F02` next.
+**None — I01–I16 are all `done`.** This ledger is green.
 
 Live hand-offs still open:
+
+- **I16 changed the meaning of the room clock.** Elapsed and the speech ceiling are active time
+  now; `started_at` is the interview's date and nothing derives remaining time from it. A test
+  that wants an interview out of time sets `elapsed_seconds` — advancing the mocked clock no
+  longer does it. `HEARTBEAT_GRACE_SECONDS` (server) and `ROOM_HEARTBEAT_MS` (client) are a pair
+  and the grace must stay ≥ 2× the interval.
+- **`/admin/stats` duration is still wall clock** (`ended_at - started_at`) and now differs from
+  active duration. Deliberate; `elapsed_seconds` is a column the admin ledger can sum if it wants
+  the other number. **N ledger, flag to Fatih.**
 
 - `storage.signedUrl(key, ttl)` is capped at 300 s and never logged; R03 signs `reports.pdf_key`
   through it rather than building a URL.
@@ -130,6 +147,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | I13 | Rate limits: daily interview cap + interview-start limiter | | done | I03, A01 |
 | I14 | Reliability probes: `/healthz`, `/readyz` | | done | F02, F03 |
 | I15 | Config: extend env schema with this ledger's keys, fail-fast | | done | F03 |
+| I16 | Active elapsed: room clock + speech ceiling on time-in-room, presence heartbeat | | done | I03, I07, S09 |
 
 ## Critical path
 

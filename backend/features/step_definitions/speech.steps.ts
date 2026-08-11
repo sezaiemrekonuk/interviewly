@@ -63,12 +63,17 @@ async function createVoiceInterview(world: AiWorld, mode: 'voice' | 'text' = 'vo
   world.interviewId = (world.lastBody?.interviewId as string | undefined) ?? '';
 
   const interview = await prisma.interview.findUniqueOrThrow({ where: { id: world.interviewId } });
+  const now = new Date();
   await prisma.interview.update({
     where: { id: world.interviewId },
     data: {
       mode,
       state: 'hr_round',
-      started_at: new Date(),
+      started_at: now,
+      // I16 — the room session opens with the interview. Without an anchor `activeMs` is 0 and
+      // `expiresAt` would come back as `now + ceiling` rather than `started_at + ceiling`, which
+      // the AC-12 window scenario asserts to the millisecond.
+      last_seen_at: now,
       current_index: 1,
       hr_question_count: 2,
     },
@@ -148,12 +153,21 @@ Given('another candidate owns a voice interview in hr_round with current index 1
   this.interviewId = otherInterviewId;
 });
 
-Given('that interview started {int} seconds ago', async function (this: AiWorld, seconds: number) {
-  await prisma.interview.update({
-    where: { id: this.interviewId },
-    data: { started_at: new Date(Date.now() - seconds * 1000) },
-  });
-});
+/**
+ * I16 — what spends the ceiling is time in the room, so this banks it directly. The step used to
+ * backdate `started_at`, which no longer moves the ceiling at all: an interview can have started
+ * a week ago and still have its full window if nobody sat in the room. `started_at` is backdated
+ * alongside only so the fixture stays a coherent interview.
+ */
+Given(
+  'that interview has spent {int} seconds in the room',
+  async function (this: AiWorld, seconds: number) {
+    await prisma.interview.update({
+      where: { id: this.interviewId },
+      data: { started_at: new Date(Date.now() - seconds * 1000), elapsed_seconds: seconds },
+    });
+  },
+);
 
 Given('I have a text interview in hr_round with current index 1', async function (this: AiWorld) {
   await createVoiceInterview(this, 'text');

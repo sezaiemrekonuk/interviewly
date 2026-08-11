@@ -85,6 +85,11 @@ const interview = {
   hr_question_count: 2,
   language: 'en',
   started_at: new Date('2026-08-06T10:00:00.000Z'),
+  // I16 — the ceiling reads these, not `started_at`. Out of time means "spent 720 s in the
+  // room", which advancing `m.now` no longer produces.
+  elapsed_seconds: 0,
+  last_seen_at: null,
+  max_duration_seconds: null,
   ended_reason: null,
 };
 
@@ -155,7 +160,7 @@ describe('guardVoiceAnswer', () => {
   });
 
   it('past the ceiling ends the interview and never reaches the body', async () => {
-    m.now.mockReturnValue(new Date('2026-08-06T10:20:01.000Z'));
+    m.activeInterview.mockResolvedValue({ ...interview, elapsed_seconds: 721 });
     const { r } = res({});
     const next = vi.fn();
 
@@ -168,7 +173,7 @@ describe('guardVoiceAnswer', () => {
   });
 
   it('a losing ceiling transition still surfaces VOICE_SESSION_EXPIRED (ADR-I32)', async () => {
-    m.now.mockReturnValue(new Date('2026-08-06T10:20:01.000Z'));
+    m.activeInterview.mockResolvedValue({ ...interview, elapsed_seconds: 721 });
     m.applyTransition.mockRejectedValue(new ApiError('INVALID_STATE_TRANSITION'));
     const { r } = res({});
 
