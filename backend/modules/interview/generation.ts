@@ -71,6 +71,7 @@ export function roundQuestionArgs(
   interview: Interview,
   roundType: RoundType,
   ctx: AiCtx,
+  priorTopics: string[] = [],
 ): GenerateRoundQuestionsArgs {
   return {
     roundType,
@@ -78,8 +79,34 @@ export function roundQuestionArgs(
     jobListing: interview.job_text,
     language: interview.language,
     ...profileVariables(interview),
+    priorTopics,
     ctx,
   };
+}
+
+/**
+ * What the other round already covers, for the prompt's "Topics already used" line.
+ *
+ * `priorTopics` has been a variable on `interview.question.generate` since v1 and nothing ever
+ * bound anything to it — every technical batch in this system was written with "none", blind to
+ * the round the candidate had just sat. That is how the technical interviewer opened by asking
+ * what HR had already asked: the two batches were generated from the same job listing by the
+ * same model with no knowledge of each other, so they converged.
+ *
+ * HR is generated first and from nothing, so this is empty for it by construction rather than
+ * by a special case. ADR-I22 runs the technical batch *during* the HR round, by which point the
+ * whole HR batch is on disk — the topics are all there whether or not they have been asked yet,
+ * and an agenda that avoids a topic HR never reached is the right trade against one that
+ * duplicates a topic HR did.
+ */
+async function priorTopicsFor(interviewId: string, roundType: RoundType): Promise<string[]> {
+  if (roundType === 'hr') return [];
+  const rows = await prisma.question.findMany({
+    where: { round: { interview_id: interviewId, type: 'hr' } },
+    select: { topic: true },
+    orderBy: { order_index: 'asc' },
+  });
+  return [...new Set(rows.map((r) => r.topic))];
 }
 
 /**
@@ -136,7 +163,10 @@ export async function generateRound(
   let batch;
   try {
     const client = opts.client ?? aiClient();
-    batch = await client.generateRoundQuestions(roundQuestionArgs(interview, roundType, ctx));
+    const priorTopics = await priorTopicsFor(interview.id, roundType);
+    batch = await client.generateRoundQuestions(
+      roundQuestionArgs(interview, roundType, ctx, priorTopics),
+    );
 
     if (batch.questions.length !== count) {
       logger.warn(
