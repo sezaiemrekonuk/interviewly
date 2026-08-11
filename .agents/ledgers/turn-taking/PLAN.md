@@ -61,6 +61,7 @@ guarded advance (I06), and the shared Redis connection (`auth/rate-limit.ts`).
 | T02 | The held partial: `pending-turn.ts` over the shared Redis client, atomic take, the two caps |
 | T03 | The turn paths: gate + join + hold in `submitTurnAudio`, `kind: 'silence'`, both ceilings, `pendingTurn` on `/state`, silence hidden from the room |
 | T04 | The room: probe-vs-final stop, restart-before-upload, the 13 s clock, the recovery notice |
+| T05 | Gate accuracy after the first live run: two clocks (ADR-T06) and prompt v2 |
 
 ## What this ledger deliberately does not do
 
@@ -78,7 +79,9 @@ guarded advance (I06), and the shared Redis connection (`auth/rate-limit.ts`).
   Whether the answer is any good is `interview.answer.score`'s job (D03) and whether it needs a
   follow-up is the conductor's (C02).
 - **Tune the numbers.** 2 s and 13 s are guesses, exactly as ADR-S06's 2 s was. They move when
-  someone hears them being wrong, not before.
+  someone hears them being wrong, not before. **13 s moved on 2026-08-11** — the owner ran the
+  room, the gate held three finished answers out of four, and ADR-T06 split the window into 4 s
+  for a held fragment and 13 s for a real silence (`T05`). 2 s is still `L03`'s.
 - **Survive a server restart.** The held partial is a 300 s scratch value. Losing it costs half a
   sentence and the candidate says it again; that is the whole reason it is allowed in Redis at
   all (ADR-T02).

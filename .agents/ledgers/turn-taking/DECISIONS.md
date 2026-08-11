@@ -186,3 +186,32 @@ refreshes must show the same text, and a polling client must not be able to eat 
 The room reads it once into a ref so later refetches cannot rewrite it. The tail of a long
 partial is shown, front elided, because what the candidate needs is the sentence they were in the
 middle of, not the start of a thought they finished minutes ago.
+
+---
+
+## ADR-T06 — 2026-08-11 — Two clocks: 4 s to flush a held fragment, 13 s to break a silence (supersedes ADR-T04's single window)
+
+**Context:** The first live run, measured. Four uploads, three `CONDUCTOR_TURN_HELD` (134, 111
+and 142 characters — ordinary finished answers). ADR-T04 gave the room one window for two
+different situations, and on a wrong hold the 13 s clock is the only exit, so a finished answer
+cost ~16 s of silence. PLAN.md said these numbers move "when someone hears them being wrong";
+the owner heard it on the first try.
+
+**Decision:** The threshold depends on whether the server is already holding a fragment.
+`FLUSH_HELD_MS = 4_000` when it is; `FORCE_SUBMIT_MS = 13_000` when nothing was said. Same
+anchor, same guards, same `POST /turns { kind: 'silence' }` — the room still asserts nothing.
+Paired with prompt `interview.turn.complete` **v2**, which leads with the finished default
+instead of cataloguing what unfinished looks like.
+
+**Why not one shorter window:** 13 s is a thinking budget for a candidate staring at a hard
+question, and it is not what was wrong. Shortening it globally would cut off the people the
+whole ledger exists to protect.
+
+**Why not the prompt alone:** the gate will still be wrong sometimes, and the cost of being
+wrong is what a candidate actually experiences. Cheapen the failure and reduce it.
+
+**Consequences:** ADR-T04's "13 s" and its Consequences hold for the silence branch and were
+true when written; only the held branch is superseded. Two clocks is two chances to break *the
+turn always ends*, which is why T05 is opus-tier and why its tests assert both branches fire
+exactly once. The gate's real grace after a verdict is ~3 s, not 4 — the round trip is inside
+the window.

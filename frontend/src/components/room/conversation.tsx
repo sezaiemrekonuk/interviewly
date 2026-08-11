@@ -14,6 +14,40 @@ export interface ConversationMessage {
 }
 
 /**
+ * ADR-T05 — how much of a long held partial is worth showing. What the candidate needs is the
+ * sentence they were in the middle of, not the start of a thought they finished minutes ago, so
+ * the TAIL survives and the front is elided.
+ */
+const RESUMED_CHARS = 180;
+
+const tail = (text: string) =>
+  text.length <= RESUMED_CHARS ? text : `…${text.slice(-RESUMED_CHARS).trimStart()}`;
+
+/**
+ * T04 / ADR-T05 — what survived a reload, shown once and never updated.
+ *
+ * It lives beside the captions and the control bar, NOT inside `Conversation`: in voice mode
+ * that panel is closed by default and closed means clipped to a pixel, so the one notice a
+ * candidate needs at the one moment they need it was rendered where nobody could see it. Being
+ * outside the conversation's `aria-live` list (AC-13) is a property of where it is mounted, and
+ * out here it holds by construction.
+ */
+export function ResumedNotice({ text }: { text: string | null }) {
+  const t = useTranslations('room');
+  if (!text) return null;
+
+  return (
+    <div className={styles.resumed} data-testid="turn-resumed">
+      <p className={styles.resumedLabel}>{t('voice.resumed.label')}</p>
+      <p className={styles.resumedText} data-testid="turn-resumed-text">
+        {tail(text)}
+      </p>
+      <p className={styles.resumedHint}>{t('voice.resumed.hint')}</p>
+    </div>
+  );
+}
+
+/**
  * C02 — what was actually said, in order.
  *
  * `Transcript` next door renders question/answer pairs and stays exactly as it is: that is what

@@ -525,6 +525,11 @@
       "stop": "Bitir ve gönder",
       "micLost": "Mikrofonun durdu. Sesli devam etmek için yeniden bağlan.",
       "reconnect": "Yeniden bağlan",
+      "resumed": {
+        "label": "Kaldığın yerden devam",
+        "hint": "Devam et — bu kısım kaydedildi."
+      },
+      "stillListening": "Hâlâ dinliyoruz — acele etme.",
       "status": {
         "connecting": "Bağlanıyor",
         "connected": "Canlı",

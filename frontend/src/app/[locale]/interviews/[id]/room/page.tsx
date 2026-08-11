@@ -2,11 +2,11 @@
 
 import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { AnswerComposer } from '../../../../../components/room/answer-composer';
 import { cameraStartsOn, rememberCamera, useCameraDevices } from '../../../../../components/camera-view';
-import { Conversation } from '../../../../../components/room/conversation';
+import { Conversation, ResumedNotice } from '../../../../../components/room/conversation';
 import { PersonaTiles } from '../../../../../components/room/persona-tiles';
 import { QuestionPanel } from '../../../../../components/room/question-panel';
 import { RoomRail } from '../../../../../components/room/room-rail';
@@ -125,6 +125,27 @@ export default function InterviewRoomPage() {
       live = false;
     };
   }, [voiceMode]);
+
+  // ADR-T05 — the half-sentence that survived a reload, read ONCE and frozen at that value. The
+  // notice means "this is what survived", not "this is what the server holds now": a card that
+  // grew with each probe would be the live provisional line the ADR rejected, re-announcing raw
+  // Scribe output the candidate has no way to correct. It goes when the turn is conducted, which
+  // is the one later value of `pendingTurn` worth reacting to. Two latches, each firing at most
+  // once for the life of the room: read it, and later drop it.
+  const [resumed, setResumed] = useState<string | null>(null);
+  const resumedReadRef = useRef(false);
+  const resumedGoneRef = useRef(false);
+  useEffect(() => {
+    if (!room) return;
+    if (!resumedReadRef.current) {
+      resumedReadRef.current = true;
+      setResumed(room.pendingTurn ?? null);
+      return;
+    }
+    if (resumedGoneRef.current || room.pendingTurn !== null) return;
+    resumedGoneRef.current = true;
+    setResumed(null);
+  }, [room]);
 
   // Navigation belongs in an effect: routing during render is what makes a redirect fire twice.
   useEffect(() => {
@@ -424,6 +445,11 @@ export default function InterviewRoomPage() {
                   stage the bar would land on the captions the moment it wrapped. */}
               <div className={styles.footRow}>
                 {captionsOn ? question : null}
+                {/* Beside the captions, where the candidate is already looking. It used to hang
+                    off the conversation panel — which voice mode keeps closed, so the notice
+                    was clipped to a pixel and the reload it exists for looked like a room that
+                    had forgotten the answer. */}
+                <ResumedNotice text={resumed} />
                 {/* C04 — the one thing a voice room gets a keyboard for. It appears only when
                     the interviewer asked for it, so the room is still audio-first. */}
                 {composer}

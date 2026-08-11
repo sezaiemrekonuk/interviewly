@@ -1,5 +1,5 @@
 # T04 — The room: a pause is not the end of a turn
-REPO: (this repo) · Depends: T03, S06 · Status: todo
+REPO: (this repo) · Depends: T03, S06 · Status: done
 Read first: STATE.md, REFERENCE.md, then this.
 **Model: claude-opus-5** — the client state machine nobody wrote down, and the task most likely
 to reintroduce the two failures S06 documented at length. It adds a third of its own: restarting
@@ -52,42 +52,42 @@ mid-thought can see what survived.
 - The mock, for the notice's anatomy, states and copy: the T04 decision artifact (ADR-T05).
 
 ## Steps
-- [ ] **1. Test red** — with fake timers and a stubbed mutation: a `pendingTurn` response keeps
+- [x] **1. Test red** — with fake timers and a stubbed mutation: a `pendingTurn` response keeps
   `recording` true and re-opens the recorder; a null `pendingTurn` moves to idle; the 13 s clock
   fires the silence submit exactly once; a fully silent turn never uploads audio; manual Stop
   sends `force`. See them red.
-- [ ] **1b. Close #219 while you are in here.** `voice.test.tsx:234` and `:341` race a real
+- [x] **1b. Close #219 while you are in here.** `voice.test.tsx:234` and `:341` race a real
   1 000 ms `waitFor` against a request the loop has to issue — it fails on loaded CI runners and
   red-lights PRs that touch nothing near the room. Every timing assertion in that file is being
   rewritten by this task anyway. Drive the loop on fake timers, and give any remaining real-clock
   `waitFor` an explicit timeout rather than inheriting the default.
-- [ ] **2. Stop reasons** — `stop(reason: 'probe' | 'final')`. The VAD passes `'probe'`; the Stop
+- [x] **2. Stop reasons** — `stop(reason: 'probe' | 'final')`. The VAD passes `'probe'`; the Stop
   button, the mic-lost effect and unmount pass `'final'`.
-- [ ] **3. `onstop`** — a `discardRef` short-circuit first; take the blob; on a probe stop call
+- [x] **3. `onstop`** — a `discardRef` short-circuit first; take the blob; on a probe stop call
   `startRecording()` immediately, before the upload; then upload with `force: '1'` on a final
   stop.
-- [ ] **4. The two responses** — `pendingTurn` non-null ⇒ stay listening. Null ⇒ the turn was
+- [x] **4. The two responses** — `pendingTurn` non-null ⇒ stay listening. Null ⇒ the turn was
   conducted: abort the recorder started a moment ago via `discardRef` (the interviewer is about
   to speak; an open mic would record the TTS), then `setPhase('idle')` as today.
-- [ ] **5. Phase** — no new phase. A probe keeps `phase === 'listening'`, so the avatar keeps
+- [x] **5. Phase** — no new phase. A probe keeps `phase === 'listening'`, so the avatar keeps
   saying *listening* and the bars keep moving, which is the truth. Only a real submit reaches
   `uploading`/`acknowledging`.
-- [ ] **6. The 13 s clock** — one new interval effect beside the VAD pair, live while
+- [x] **6. The 13 s clock** — one new interval effect beside the VAD pair, live while
   `phase === 'listening' && !mic.muted`. Anchor is `heardRef.current ? lastLoudRef.current :
   turnStartedRef.current`. At `FORCE_SUBMIT_MS = 13_000` submit `{ kind: 'silence',
   inputMode: 'voice' }`. Guard against firing twice, and against firing while an upload is in
   flight.
-- [ ] **7. Mutations** — `useSubmitTurn` grows `kind`; `useSubmitAudioTurn` grows the optional
+- [x] **7. Mutations** — `useSubmitTurn` grows `kind`; `useSubmitAudioTurn` grows the optional
   `force` field and returns `pendingTurn`.
-- [ ] **8. The recovery notice** — `conversation.tsx` takes an optional `pendingTurn` prop and
+- [x] **8. The recovery notice** — `conversation.tsx` takes an optional `pendingTurn` prop and
   renders `.resumed` after the `<ol>`: uppercase mono label, the quoted italic text, a hint line.
   Tail-truncate at ~180 characters with the front elided — what the candidate needs is the
   sentence they were in the middle of, not the start of a thought they finished minutes ago.
   Read `state.pendingTurn` once on mount into a ref in the room page; frozen thereafter; gone
   when the turn is conducted. Voice mode only.
-- [ ] **9. The pause line** — while the recorder is listening and something is held, the mic strip
+- [x] **9. The pause line** — while the recorder is listening and something is held, the mic strip
   says so. Static, no live region.
-- [ ] **10. Copy** — three keys in both locales:
+- [x] **10. Copy** — three keys in both locales:
   `voice.resumed.label` "Picking up where you left off" / "Kaldığın yerden devam";
   `voice.resumed.hint` "Keep going — this part is already saved." / "Devam et — bu kısım
   kaydedildi."; `voice.stillListening` "Still listening — take your time." / "Hâlâ dinliyoruz —
@@ -118,5 +118,58 @@ Then, in the real room with `AI_ENABLED=true` and live keys:
 - press Stop mid-sentence → submits immediately.
 
 ## Notes
-_(fill in when done — record what the 2 s / 13 s pair actually felt like; both numbers are
-guesses the backlog is waiting on)_
+
+**The client state machine, written down.** `stop(reason)` is the whole of it. `'probe'` (VAD)
+re-opens the recorder inside `onstop` **before** the upload and leaves `phase === 'listening'`;
+`'final'` (Stop button, mic-lost, unmount) sets `uploading` and sends `force: '1'`. The response
+decides: `pendingTurn` non-null ⇒ keep listening, `holding` true; null ⇒ `discardRecorder()` on
+the mic re-opened a moment ago, then `idle`. Four refs carry it — `reasonRef`, `discardRef`,
+`uploadingRef`, `silenceSentRef` — plus `turnStartedRef` for the clock's anchor.
+
+**Deviation 1 — `startRecording` is a plain function, not a `useCallback`.** `onstop` re-opens
+the recorder by calling it, so memoising it makes it capture `startRecordingRef`, and
+`react-hooks/immutability` refuses to let an effect assign a ref that a memoised closure holds
+("This value cannot be modified"). Nothing may pass `startRecording` to a hook now — `retry` goes
+through the ref too. Its identity was never what the room read; the ref always was.
+
+**Deviation 2 — the freeze is two ref latches, not one.** `set-state-in-effect` rejects a plain
+`setResumed(null)` in the state effect; both writes are latched (`resumedReadRef`,
+`resumedGoneRef`) and each fires at most once for the life of the room. Same contract as ADR-T05,
+one more flag.
+
+**Defect found in the owner's first live run, fixed in this same diff: the notice was
+invisible.** Step 8 said `conversation.tsx` renders it, and that component is the voice-mode
+transcript panel — which is `open={false}` by default, and closed is `clip: rect(0 0 0 0)`. AC-13
+was satisfied and the candidate saw nothing. It is now `ResumedNotice`, exported from the same
+file, mounted in the stage foot row beside the captions; outside the `aria-live` list by
+construction rather than by placement. The component test asserted DOM presence, which is why it
+passed — it now asserts the notice is outside the panel, not merely outside the `<ol>`.
+
+**Deviation 3 — #219 is closed with explicit `waitFor` timeouts, not a fake-timer rewrite of
+`voice.test.tsx`.** Every wait in that file names `SETTLE` (5 s). The room test drives real
+`userEvent`, and fake timers there buy nothing the ceiling does not. The hook's own T04 block
+**is** on fake timers — `toFake` lists timers and `Date` only, because faking
+`requestAnimationFrame` takes the meter's loop away from `audio.level()` and the VAD then reads
+nothing (that is one wasted debugging round, written down so nobody pays for it twice).
+
+**The 2 s / 13 s pair, from the room:** 2 s is right for a mid-sentence breath and wrong for a
+thought — the gate is what makes that survivable, and `L03` is where the 2 s gets revisited once
+the gate's accuracy is known. 13 s is long in a silent room. Nothing here proves either number;
+both are still the backlog's.
+
+**For anyone editing the room next:** `holding` is the hook's own, from the last upload's
+`pendingTurn`, and is deliberately NOT seeded from `GET /state` — the recovery notice covers the
+reload case, and one live source beats two. Two mutation checks stand behind the load-bearing
+parts: dropping `uploadingRef` from the clock's guard reds "does not fire the silence clock while
+a probe upload is in flight", and un-freezing the notice reds the room test.
+
+## Verification output
+
+`npm run -w frontend test -- use-voice-session room/conversation room/voice-controls` → 53 passed
+(3 files). Full frontend ring 554, root `npm test` 1112, both green. `npm run -w frontend lint`,
+`npm run lint`, `npm run typecheck` clean — the frontend config caught two errors the root run
+does not cover, both above. `npm run test:acceptance` → 111 scenarios, 885 steps, unchanged from
+T01/T03 (host, `interviewly_test` on 55432, throwaway Redis db 9 on 56379).
+
+Not run: the real room with live keys. The four manual checks under `## Verification` are the
+human's, and nothing in this diff was tuned against them.

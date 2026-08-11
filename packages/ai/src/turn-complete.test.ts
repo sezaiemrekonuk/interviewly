@@ -5,6 +5,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { TIMEOUT_MS } from './AiClient';
+import { loadPromptRegistry } from './registry';
 import { AiError } from './errors';
 import { LiveAiClient } from './live-client';
 import { StubAiClient } from './stub';
@@ -114,5 +115,38 @@ describe('LiveAiClient.turnComplete', () => {
     expect(await new LiveAiClient(d).turnComplete(args('Can you repeat the question?'))).toEqual({
       finished: true,
     });
+  });
+});
+
+/**
+ * ADR-T06 — the revision the room is actually judged by. A v2 that forgot the uuid would not be
+ * a revision at all: it would be a second lineage under the same name, and `llm_calls` would
+ * stop being able to say which prompt any past verdict came from (K9).
+ */
+describe('interview.turn.complete revisions', () => {
+  it('serves v2, on the same lineage and the same model as v1', () => {
+    const registry = loadPromptRegistry();
+    const served = registry.resolve('interview.turn.complete');
+    const first = registry.resolve('interview.turn.complete', 1);
+
+    expect(served.version).toBe(2);
+    expect(served.uuid).toBe(first.uuid);
+    // ADR-T03 still holds: nano, and deterministic.
+    expect(served.model).toBe('gpt-4.1-nano');
+    expect(served.params.temperature).toBe(0);
+  });
+
+  it('leads with the finished default rather than a catalogue of what unfinished looks like', () => {
+    const system = loadPromptRegistry()
+      .resolve('interview.turn.complete')
+      .messages.filter((m) => m.role === 'system')
+      .map((m) => m.content)
+      .join('\n');
+
+    // The rule that was missing in v1, and the reason three finished answers were held.
+    expect(system).toMatch(/Default to FINISHED/);
+    expect(system).toMatch(/missing full stop is NOT a break/i);
+    // A system block with a placeholder in it is rejected by the builder outright.
+    expect(system).not.toMatch(/\{\{/);
   });
 });

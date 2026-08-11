@@ -4,7 +4,13 @@ import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { RoomMessage } from './query';
-import { useVoiceSession, VAD_SILENCE_MS, VAD_THRESHOLD } from './use-voice-session';
+import {
+  FLUSH_HELD_MS,
+  FORCE_SUBMIT_MS,
+  useVoiceSession,
+  VAD_SILENCE_MS,
+  VAD_THRESHOLD,
+} from './use-voice-session';
 import { installAudioMock, type AudioHarness } from '../test/audio-mock';
 import { installMediaDevicesMock } from '../test/media-devices-mock';
 
@@ -30,6 +36,7 @@ const VAD = { silenceMs: 20 };
 
 const SPEECH = (id: string) => `/api/interviews/i1/messages/${id}/speech`;
 const UPLOAD = '/api/interviews/i1/turns/audio';
+const TURNS = '/api/interviews/i1/turns';
 
 interface Call {
   url: string;
@@ -471,5 +478,222 @@ describe('useVoiceSession — failure branches (S06)', () => {
     expect(audio.players[0].paused).toBe(true);
     expect(mics.tracks[0].stop).toHaveBeenCalled();
     expect(audio.objectUrls.revoked).toBe(audio.objectUrls.created);
+  });
+});
+
+/**
+ * T04 — the recorder still stops on silence, the TURN no longer ends there.
+ *
+ * Fake timers throughout, and every wait is an explicit advance: the 13 s clock is not a window
+ * a test can sit through, and a real-clock `waitFor` racing a request the loop has to issue is
+ * what made issue #219 red-light PRs that touched nothing near the room.
+ */
+describe('useVoiceSession — a pause is not the end of the turn (T04)', () => {
+  let audio: AudioHarness;
+  let client: QueryClient;
+
+  beforeEach(() => {
+    // Timers and the clock only. `requestAnimationFrame` is the harness's — faking it too would
+    // take the meter's loop away from `audio.level()`, and the VAD reads nothing but that level.
+    vi.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'],
+    });
+    installMediaDevicesMock();
+    audio = installAudioMock();
+    client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  const json = (body: unknown) =>
+    new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+
+  /** What `POST /turns/audio` answers: the joined text while it is held, null once conducted. */
+  const held = (text: string | null) => () =>
+    json({ state: 'hr_round', currentIndex: 1, pendingTurn: text });
+
+  const tick = async (ms = 0) => {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ms);
+    });
+  };
+
+  /** Greeting spoken, recorder open — the state every turn below starts from. */
+  async function listening(routes: Record<string, () => Response> = {}) {
+    const calls = stubApi(routes);
+    const hook = renderHook(
+      () => useVoiceSession('i1', { enabled: true, messages: MESSAGES, speakable: true, vad: VAD }),
+      { wrapper: wrapper(client) },
+    );
+    await tick();
+    await tick();
+    expect(audio.players).toHaveLength(1);
+    await act(async () => audio.players[0].end());
+    await tick();
+    expect(audio.recorders).toHaveLength(1);
+    return { hook, calls };
+  }
+
+  /** A sentence, then a mid-thought pause long enough for the VAD to stop the recorder. */
+  async function pause() {
+    await act(async () => audio.level(VAD_THRESHOLD + 0.2));
+    await act(async () => audio.level(0));
+    await tick(VAD.silenceMs + 200);
+  }
+
+  it('keeps listening and re-opens the recorder while the server holds the fragment', async () => {
+    const { hook, calls } = await listening({ [UPLOAD]: held('I was going to say') });
+
+    await pause();
+
+    expect(audio.recorders[0].stops).toBe(1);
+    expect(hits(calls, UPLOAD)).toBe(1);
+    // The turn did not end: a second recorder is open and the room still says listening.
+    expect(audio.recorders).toHaveLength(2);
+    expect(audio.recorders[1].state).toBe('recording');
+    expect(hook.result.current.recording).toBe(true);
+    expect(hook.result.current.beat).toBe('listening');
+    expect(hook.result.current.holding).toBe(true);
+  });
+
+  // The failure this ledger exists to fix, moved one second later: with the restart after the
+  // round trip, everything said while the probe is in flight is recorded by nobody.
+  it('re-opens the recorder BEFORE the upload leaves', async () => {
+    let openAtUpload = 0;
+    await listening({
+      [UPLOAD]: () => {
+        openAtUpload = audio.recorders.length;
+        return held('I was going to say')();
+      },
+    });
+
+    await pause();
+
+    expect(openAtUpload).toBe(2);
+  });
+
+  it('ends the turn, and closes the mic it just re-opened, once the server conducted it', async () => {
+    const { hook, calls } = await listening({ [UPLOAD]: held(null) });
+
+    await pause();
+
+    // The interviewer is about to speak; an open mic would record the TTS.
+    expect(audio.recorders).toHaveLength(2);
+    expect(audio.recorders[1].state).toBe('inactive');
+    expect(hook.result.current.recording).toBe(false);
+    expect(hook.result.current.beat).toBe(null);
+    expect(hook.result.current.holding).toBe(false);
+    // ...and the discarded recorder's bytes were never sent.
+    expect(hits(calls, UPLOAD)).toBe(1);
+  });
+
+  it('submits a silence turn after thirteen seconds, uploads no audio, and does it once', async () => {
+    const { calls } = await listening();
+
+    await tick(FORCE_SUBMIT_MS + 200);
+
+    expect(hits(calls, TURNS)).toBe(1);
+    const turn = calls.find((call) => call.url === TURNS)!;
+    expect(JSON.parse(turn.body as string)).toEqual({ kind: 'silence', inputMode: 'voice' });
+    // A turn the candidate never spoke into is not worth an STT charge.
+    expect(hits(calls, UPLOAD)).toBe(0);
+    expect(audio.recorders[0].stops).toBe(1);
+
+    await tick(FORCE_SUBMIT_MS * 2);
+    expect(hits(calls, TURNS)).toBe(1);
+  });
+
+  // The clock measures silence since the last thing heard, so a candidate mid-sentence at the
+  // thirteen-second mark is not cut off — the VAD probe is what ends their pause.
+  it('does not fire the silence clock while a probe upload is in flight', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const { calls } = await listening({
+      [UPLOAD]: () => {
+        // The route the harness sees is synchronous, so the hold goes on the response body.
+        return new Response(
+          new ReadableStream({
+            async start(controller) {
+              await gate;
+              controller.enqueue(
+                new TextEncoder().encode(
+                  JSON.stringify({ state: 'hr_round', currentIndex: 1, pendingTurn: 'half' }),
+                ),
+              );
+              controller.close();
+            },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      },
+    });
+
+    await pause();
+    await tick(FORCE_SUBMIT_MS + 200);
+
+    expect(hits(calls, TURNS)).toBe(0);
+
+    release();
+    await tick();
+  });
+
+  // ADR-T06 — the two clocks. A candidate the server is already holding a fragment for has
+  // spoken, has paused, and has had the gate's verdict; four seconds later the room says so. A
+  // candidate who has said nothing at all is thinking, and thirteen seconds is theirs.
+  it('flushes a held fragment after four seconds, not thirteen', async () => {
+    const { calls } = await listening({ [UPLOAD]: held('I was going to say') });
+
+    await pause();
+    expect(hits(calls, TURNS)).toBe(0);
+
+    await tick(FLUSH_HELD_MS + 200);
+
+    expect(hits(calls, TURNS)).toBe(1);
+    expect(JSON.parse(calls.find((call) => call.url === TURNS)!.body as string)).toEqual({
+      kind: 'silence',
+      inputMode: 'voice',
+    });
+
+    await tick(FORCE_SUBMIT_MS * 2);
+    expect(hits(calls, TURNS)).toBe(1);
+  });
+
+  it('still gives a turn nothing was said into the full thinking window', async () => {
+    const { calls } = await listening();
+
+    await tick(FLUSH_HELD_MS + 200);
+    expect(hits(calls, TURNS)).toBe(0);
+
+    await tick(FORCE_SUBMIT_MS);
+    expect(hits(calls, TURNS)).toBe(1);
+  });
+
+  // Stop is the escape hatch (ADR-S06): it ends the turn whatever the gate would have said.
+  it('forces the turn on a manual stop', async () => {
+    const { hook, calls } = await listening({ [UPLOAD]: held(null) });
+
+    await act(async () => hook.result.current.stop());
+    await tick();
+
+    const forced = calls.find((call) => call.url === UPLOAD)!.body as FormData;
+    expect(forced.get('force')).toBe('1');
+    expect(audio.recorders).toHaveLength(1);
+  });
+
+  it('never forces a probe — the gate is the whole point of one', async () => {
+    const { calls } = await listening({ [UPLOAD]: held('still going') });
+
+    await pause();
+
+    const probe = calls.find((call) => call.url === UPLOAD)!.body as FormData;
+    expect(probe.get('force')).toBe(null);
   });
 });
