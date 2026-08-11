@@ -542,7 +542,9 @@
     "transcriptToggle": "Transcript",
     "leave": "Leave",
     "roleCandidate": "Candidate",
-    "micLevel": "Microphone level"
+    "micLevel": "Microphone level",
+    "micDevice": "Microphone",
+    "micDeviceFallback": "Microphone {n}"
   },
   "report": {
     "title": "Your report",

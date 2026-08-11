@@ -177,6 +177,30 @@ export function VoiceControls({
           {t('transcriptToggle')}
         </button>
 
+        {/* One microphone is not a choice, so the control only exists where there is one to
+            make — the same gate pre-join's picker uses. Labelled by `aria-label` rather than a
+            visible `Field`: the bar is a row of self-describing controls and a stacked label
+            would be the only one in it.
+
+            Disabled mid-answer because `selectDevice` releases the track the `MediaRecorder`
+            is capturing from; the swap would truncate the answer being given. Between turns —
+            and while the mic is lost, which is the case this control exists for — it is live. */}
+        {session.devices.length > 1 ? (
+          <select
+            className={styles.pick}
+            aria-label={t('micDevice')}
+            value={session.deviceId ?? ''}
+            disabled={session.recording}
+            onChange={(event) => session.selectDevice(event.target.value)}
+            data-testid="mic-device"
+          >
+            {session.devices.map((device, index) => (
+              <option key={device.deviceId} value={device.deviceId}>
+                {device.label || t('micDeviceFallback', { n: index + 1 })}
+              </option>
+            ))}
+          </select>
+        ) : null}
       </div>
     </>
   );

@@ -425,6 +425,35 @@
   color: var(--text-muted);
 }
 
+/* The input picker. Sized to sit in the bar rather than reusing `ui`'s `Select`, which is a
+   form control: 16px type and `width: 100%` would make it the widest thing in a 13px row.
+   It carries a border where `.ck` does not — a menu that opens should not read as a toggle. */
+.pick {
+  min-height: 44px;
+  max-width: 180px;
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-input);
+}
+
+.pick:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Mid-answer. `selectDevice` releases the track the recorder is reading. */
+.pick:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+  background: var(--surface-sunken);
+}
+
 /* The one --danger in the room. */
 .ckLeave {
   color: var(--surface);

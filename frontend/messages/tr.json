@@ -542,7 +542,9 @@
     "transcriptToggle": "Döküm",
     "leave": "Ayrıl",
     "roleCandidate": "Aday",
-    "micLevel": "Mikrofon seviyesi"
+    "micLevel": "Mikrofon seviyesi",
+    "micDevice": "Mikrofon",
+    "micDeviceFallback": "Mikrofon {n}"
   },
   "report": {
     "title": "Raporun",

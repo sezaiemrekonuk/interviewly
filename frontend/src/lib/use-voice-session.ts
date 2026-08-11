@@ -20,7 +20,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { apiGetBlob } from '@/lib/api';
 import { queryKeys, useSubmitAudioTurn, ApiError, type RoomMessage } from '@/lib/query';
-import { useMicPermission, type MicPermissionState } from '@/lib/use-mic-permission';
+import {
+  useMicPermission,
+  type MicDevice,
+  type MicPermissionState,
+} from '@/lib/use-mic-permission';
 import { voiceDowngrade } from '@/lib/voice/downgrade';
 
 export type VoiceConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'lost';
@@ -52,6 +56,16 @@ export interface UseVoiceSessionResult {
   error: string | null;
   /** Re-run whichever half failed: the question audio, or the recording. */
   retry: () => void;
+  /** The inputs this machine offers, for the room's picker. Empty until permission lands. */
+  devices: MicDevice[];
+  /** The device backing the live capture, or null before one is granted. */
+  deviceId: string | null;
+  /**
+   * Switch input mid-interview. Re-requests against the chosen device and releases the old
+   * track — which is why the room refuses it while `recording`: the `MediaRecorder` is bound
+   * to the stream being replaced, and swapping under it truncates the answer in progress.
+   */
+  selectDevice: (deviceId: string) => void;
 }
 
 export interface UseVoiceSessionOptions {
@@ -435,5 +449,8 @@ export function useVoiceSession(
     stop,
     error,
     retry,
+    devices: mic.devices,
+    deviceId: mic.deviceId,
+    selectDevice: mic.select,
   };
 }
