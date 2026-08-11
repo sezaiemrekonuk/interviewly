@@ -1,9 +1,29 @@
 # Interviewly — design system and execution principles
 
-Canonical. If a screen and this document disagree, this document is the defect report.
-Sources: `.agents/specs/2026-07-29-ui.md` (the spec), `frontend/styles/tokens.css` (the shipped
-values — this document quotes **shipped**, not spec, values), and the surfaces already built
-under `frontend/src/app` and `frontend/src/components`.
+## 0. What in here is binding
+
+**Canonicity is per section, not blanket.** The 2026-08-06 redesign ("Direction B") replaced the
+visual system this document was written against, and for a while §0 still claimed the document
+won any disagreement with a screen. It does not. Read the table before you file anything.
+
+| Section | Status |
+|---|---|
+| §1 Identity | **Canonical.** Rewritten for Direction B. |
+| §2 Tokens | **Canonical**, and quoted from `styles/tokens.css`. That file is the source; if the two disagree, the file wins and this table is the defect. |
+| §3 Composition | **Canonical for the shell and the rules**; the per-pattern values are described from the shipped modules and may lag them. |
+| §4 Voice and copy | **Canonical.** Untouched by the redesign — see the note in that section. |
+| §5 Per-surface briefs | **Pre-redesign. Not canonical.** Written against the retired gradient/flat system. Kept for the interaction and accessibility intent, which mostly survived; every visual value in them is stale. Read the surface's own CSS module first. |
+| §6 Quality floor | **Canonical.** |
+
+**A discrepancy against §5 is not a defect report.** That inversion produced three issues — #146,
+#136 and #135 — each filed by correct procedure against a section describing deleted code, and
+each closed as obsolete after the code was traced. If a screen disagrees with §5, the screen is
+almost certainly right.
+
+Sources: `frontend/styles/tokens.css` (the shipped values — this document quotes **shipped**, not
+spec, values), `frontend/src/components/shell/` (the one layout), and the surfaces built under
+`frontend/src/app` and `frontend/src/components`. `.agents/specs/2026-07-29-ui.md` is the
+*original* spec and predates the redesign; it is history, not a reference.
 
 Enforced mechanically by `frontend/src/ui-checks/{tokens,contrast,grounds,assets}.test.ts`.
 Passing those tests is the floor, not the standard.
@@ -12,13 +32,23 @@ Passing those tests is the floor, not the standard.
 
 ## 1. Identity
 
-**A warm coach studio.** Interviewly is a calm, warm, face-first practice room: deep navy voice
-on warm cream, never black on white; one unmistakable burnt orange that means *do this now* and
-means nothing else; generous air on the entry path so a nervous user is not crowded; a
-hand-drawn-feeling mascot that appears on entry surfaces only and disappears the moment the
-work starts. Inside the room the design gets out of the way — flat ground, hairline edges,
-near-zero motion, the interviewer's face is the subject. In admin the same family tightens into
-a dense, confident data surface. One family, two densities, no third voice.
+**A working console, split.** Every screen is a fixed context column — the rail, a dark material
+that says where you are and what is true right now — against a working surface that holds
+exactly one subject. The two columns are different *materials*, not a tint and its border,
+because a tint does not read as a split at a squint. The product is learned once and then used
+everywhere: the same shell carries onboarding, the room, the report and the console.
+
+The ink is near-black on an indigo-biased neutral, never pure grey and never pure white. One
+burnt orange means *do this now* and means nothing else. Corners are near-square (2–6px) —
+a track or a tile with a large radius stops reading as one thing. Motion is near-zero,
+especially in the room, where the subject is the conversation.
+
+> **Superseded 2026-08-06.** The previous identity was "a warm coach studio": a lavender→cream→
+> peach gradient on entry routes, flat cream elsewhere, generous air, and a hand-drawn mascot on
+> entry surfaces. All of it is gone. The gradient and its three stops are deleted and two checks
+> keep them deleted (`ui-checks/tokens.test.ts`, `ui-checks/grounds.test.ts`); `components/mascot.tsx`
+> still exists but is **imported by no screen**, only by its own test. Anything describing warm
+> cream, a gradient ground or a mascot is describing the retired system.
 
 **No UI library, no Tailwind.** Three reasons, all binding:
 
@@ -43,44 +73,76 @@ token names. This settles ui spec Open question 1.
 
 ### Colour (shipped)
 
-| Token | Shipped | Spec | Role |
-|---|---|---|---|
-| `--bg` | `#FBF9F6` | same | warm off-white page ground — never pure white |
-| `--surface` | `#FFFFFF` | same | raised surface (cards, panels, tiles, table shell) |
-| `--surface-sunken` | `#F4F2EE` | same | inset: meter tracks, status chips, paused/banner beds |
-| `--text` | `#111436` | same | deep navy body text — never black |
-| `--text-muted` | `#646884` | `#6B6F8D` | secondary text — never neutral grey. **Darkened for AA** |
-| `--primary` | `#C94D00` | `#FF6100` | the single action colour. **Darkened for AA on white label** |
-| `--primary-soft` | `#FFF1E8` | same | primary tint: hovers, informational beds (report early-end) |
-| `--accent` | `#6F76F1` | same | informational only — section keys, chart series. **Never a CTA** |
-| `--live` | `#12873D` | `#16A34A` | **interview room only**: `LIVE` badge + active-speaker ring. **Darkened for AA** |
-| `--success` | `#10B981` | same | success |
-| `--warning` | `#F59E0B` | same | warning |
-| `--danger` | `#C62A20` | `#EF4444` | error / destructive. **Darkened for AA** (13px error copy on `--bg`, `--surface` and `--surface-sunken`) |
-| `--border` | `#E8E4DE` | same | hairline borders (1px, always) |
-| `--grad-lavender` | `#EFE9FF` | same | gradient stop 1 |
-| `--grad-cream` | `#FBF9F6` | same | gradient stop 2 (= `--bg`) |
-| `--grad-peach` | `#FFE8D6` | same | gradient stop 3 |
-| `--gradient-entry` | `linear-gradient(160deg, lavender 0%, cream 52%, peach 100%)` | same | entry page ground |
+Direction B kept every token **name** and re-pointed the values, so the whole app moved onto the
+new palette in one step. A value below that disagrees with `tokens.css` is this table's bug.
 
-Four spec deltas (`--text-muted`, `--primary`, `--live`, `--danger`) exist because the spec literals fail the
-AA floor the same spec sets. Shipped wins; `ui-checks/contrast.test.ts` reads the shipped file, so
-reverting any of them fails CI. Do not "restore" the brighter orange.
+| Token | Shipped | Role |
+|---|---|---|
+| `--bg` | `#F1F2F7` | page ground — a neutral biased toward the indigo, never a pure grey |
+| `--surface` | `#FBFBFD` | the working surface, and cards on it |
+| `--surface-sunken` | `#E7E9F1` | inset: meter tracks, status chips, banner beds |
+| `--text` | `#12131C` | body ink — near-black, never black |
+| `--text-muted` | `#565C71` | secondary text. 4.68:1 on `--stage`, the darkest ground — **the system's floor** |
+| `--primary` | `#B2400A` | the single action colour; white on it is 5.78:1 |
+| `--primary-soft` | `#FBEFE7` | primary tint: hovers, informational beds |
+| `--primary-deep` | `#8F3407` | primary **as text on light**, where the fill tone is too bright |
+| `--accent` | `#4046CC` | informational — section keys, chart series, and the focus ring. **Never a CTA fill** |
+| `--accent-deep` | `#383DB0` | accent as text on light |
+| `--live` | `#0C6F33` | **in-session only**: `LIVE` badge + active-speaker ring; white on it is 6.29:1 |
+| `--success` | `#0E7A3A` | success |
+| `--warning` | `#8A5A00` | warning |
+| `--danger` | `#B52519` | error / destructive. 5.34:1 as 13px copy on the sunken bed |
+| `--border` | `#CBCEDD` | hairline borders (1px, always) |
+| `--stage` | `#D5D8E7` | the interview stage — the ground the participant tiles sit on |
+
+**The rail is a second ink ramp, not a tint of the surface.** It is the context column's own
+material and its text tokens are the only ones legible on it.
+
+| Token | Shipped | Role |
+|---|---|---|
+| `--rail` | `#191B2B` | the context column's ground |
+| `--rail-raised` | `#232640` | the current nav item, and raised beds inside the rail |
+| `--rail-border` | `#343954` | hairlines inside the rail |
+| `--rail-text` | `#F2F3F9` | rail body ink |
+| `--rail-text-muted` | `#A9AECB` | rail secondary |
+| `--rail-text-faint` | `#8A90B4` | rail tertiary — the tightest pair in the system, on `--rail-raised` |
+
+| Token | Shipped | Role |
+|---|---|---|
+| `--series-1` … `--series-6` | `#4046CC` `#B2400A` `#186972` `#63389A` `#0E6E33` `#7A4E00` | chart series; all clear AA as text on `--surface` |
+| `--spec-hatch` | `repeating-linear-gradient(135deg, #DDDFEA 0 5px, #F1F2F7 5px 11px)` | "specified, not yet built" — one neutral convention, never a warning colour |
+
+Every pair in `ui-checks/contrast.test.ts` clears AA 4.5:1, and the tightest is `--text-muted`
+over `--surface-sunken` at 4.68:1. Do not lighten `--text-muted` or deepen `--surface-sunken`
+without re-running it. The values are already darkened against the original spec literals, which
+failed the AA floor that same spec set — do not "restore" a brighter orange.
+
+**The entry gradient is deleted.** `--gradient-entry`, `--grad-lavender`, `--grad-cream` and
+`--grad-peach` no longer exist in `tokens.css`, and two checks keep it that way:
+`ui-checks/tokens.test.ts` fails if any is redeclared, `ui-checks/grounds.test.ts` fails if any
+is referenced from `src/**`. There is no route left that paints a wash.
 
 ### Non-colour (shipped)
 
+**Radius is near-square now.** The old scale (24 / 16 / 12 / 999px) is gone; a track or a tile
+with a large radius stops reading as one thing.
+
 | Token | Value | Use |
 |---|---|---|
-| `--radius-panel` | `24px` | full-width panels: entry panel, question panel, report header |
-| `--radius-card` | `16px` | cards, tiles, transcript turns, table shell |
-| `--radius-input` | `12px` | inputs, textareas, banners |
-| `--radius-button` | `999px` | buttons, pills, badges, meter fills |
-| `--shadow-hairline` | `0 1px 2px rgba(17,20,54,.06)` | everything non-entry; **the only shadow in the room** |
-| `--shadow-soft` | `0 8px 24px -12px rgba(17,20,54,.12)` | entry panels/cards only |
+| `--radius-panel` | `6px` | full-width panels: question panel, report header |
+| `--radius-card` | `3px` | cards, tiles, transcript turns, table shell |
+| `--radius-input` | `2px` | inputs, textareas, banners |
+| `--radius-button` | `2px` | buttons, pills, badges, meter fills — **not** a pill any more |
+| `--shadow-hairline` | `0 1px 2px rgba(18,19,28,.07), 0 10px 26px -14px rgba(18,19,28,.30)` | genuine lift off the working surface |
+| `--shadow-soft` | `0 2px 3px rgba(18,19,28,.05), 0 30px 60px -26px rgba(18,19,28,.42)` | the deeper of the two tiers |
 | `--duration-default` | `200ms` (→ `0ms` under `prefers-reduced-motion`) | every transition |
 | `--easing-default` | `ease-out` | every transition |
+| `--container-max` | `1440px` | the widest any content column gets, on every screen |
 | `--font-heading` | Outfit 500–700, `next/font/local`, `display: swap` | headings, wordmark, numerals-as-display |
 | `--font-body` | Inter 400–600, `next/font/local`, `display: swap` | body, UI, labels, data |
+
+Two shadow tiers, nothing else, and both are used for real lift rather than decoration. The old
+"soft on entry, hairline everywhere else" split died with the entry routes.
 
 Font delta: the spec says `next/font/google`; shipped is `next/font/local` over
 `public/fonts/*.woff2`. Same outcome (self-hosted, no external origin), stricter under CSP.
@@ -90,14 +152,17 @@ Font delta: the spec says `next/font/google`; shipped is `next/font/local` over
 1. **`--primary` is the only CTA colour.** One primary action per surface — the eye must not
    choose. Secondary actions are text buttons in `--text-muted`, or bordered `--surface` buttons.
 2. **`--accent` is never a CTA.** Section keys, chart series, informational emphasis. That is all.
-3. **`--live` is room-only** — the `LIVE` badge and the active-speaker ring on exactly one tile,
-   or none. Never a success state, never a CTA, never on pre-join, report, dashboard or admin.
-4. **Gradient route list is closed** (`src/lib/entry-routes.ts` — import it, never re-decide):
-   `/`, `/register`, `/sign-in`, `/verify-email`, `/forgot-password`, `/reset-password`,
-   `/onboarding`, `/interviews/new`, `/interviews/[id]/pre-join`. Everything else is flat `--bg`.
-   The gradient grounds the **page**; a card on it is `--surface`. Gradient on a card is a defect.
-5. **Shadow follows the surface**, per `SURFACE_SHADOW` in `entry-routes.ts`:
-   entry → `soft`; room, report, dashboard, admin → `hairline`. No third shadow exists.
+3. **`--live` is in-session only** — the `LIVE` badge and the active-speaker ring on exactly one
+   tile, or none. Never a success state, never a CTA, never on report, dashboard or admin.
+4. **There is one ground, and it is the split shell.** No route paints a wash and no route opts
+   into a different page background. `src/lib/entry-routes.ts` — the closed gradient route list
+   and its `SURFACE_SHADOW` map — **was deleted with the rule it encoded**; nothing imports it and
+   nothing should reintroduce a per-route ground decision. The rail is `--rail`, the working
+   surface is `--surface`, a card on it is also `--surface` with a `--border` hairline.
+5. **The rail's ink ramp is not optional.** Text on `--rail` or `--rail-raised` uses
+   `--rail-text{,-muted,-faint}`. `--text` and `--text-muted` are tuned for the light grounds and
+   fail AA on the rail — that is exactly how a `role="alert"` node shipped at 2.57:1 for months
+   (#200), and why `ui-checks/contrast.test.ts` pins all six rail pairs.
 6. **Type scale is exactly `13 / 14 / 16 / 20 / 28 / 40 / 56` px.** 13 = meta/labels/badges,
    14 = secondary + dense data, 16 = body and controls, 20 = section/question, 28 = page title,
    40 = big figure, 56 = landing/onboarding hero only. Inputs are never below 16px (iOS zooms).
@@ -115,20 +180,28 @@ Font delta: the spec says `next/font/google`; shipped is `next/font/local` over
 
 These are the patterns already shipped. Reuse them by shape, not by copy-paste of values.
 
-### 3.1 Entry panel (gradient surfaces)
+### 3.1 The split shell — the one layout
 
 ```
-.ground   min-height 100vh; padding 24px 16px 64px;
-          background: var(--gradient-entry); background-attachment: fixed;
-.panel    max-width 480–640px; margin 0 auto; padding 32px (24px ≤480px);
-          background: var(--surface); border-radius: var(--radius-panel);
-          box-shadow: var(--shadow-soft);
+.shell  display grid; grid-template-columns: var(--rail-width) minmax(0, 1fr);
+        min-height 100vh; background var(--surface)
+.rail   background var(--rail); color var(--rail-text); padding 24px 20px;
+        sticky to the viewport above 60rem, so the account control never falls below the fold
+.work   background var(--surface); flex column; min-width 0
 ```
 
-Reference: `src/app/interviews/new/setup.module.css`, `src/app/(auth)/layout.module.css`.
-Auth cards run narrower (`max-width: 26rem`, `--radius-card`) because a credentials form is a
-short single column; wider forms (setup, pre-join) use `--radius-panel` at 480–640px.
-`background-attachment: fixed` keeps the gradient from re-scaling as content grows.
+Reference: `src/components/shell/split-shell.tsx` and `shell.module.css`. Every screen goes
+through it — onboarding, the room, the report, the console — so the product is learned once.
+
+Rail width is a **variant class**, never an inline style: the CSP is `style-src 'self' 'nonce-…'`,
+so a style attribute is dropped in production and the rail would collapse to zero there.
+`narrow` 212px · `default` 240px · `wide` 340px.
+
+`contain` is opt-in and the room is the only caller: it bounds `.work` to the viewport so the
+room keeps its own internal scroll regions instead of growing the page past a sticky rail.
+
+> **Retired:** the entry panel on `--gradient-entry` with `--shadow-soft`, and the closed list of
+> routes that got it. There are no gradient surfaces.
 
 ### 3.2 Form field stack
 
@@ -157,19 +230,22 @@ becomes a grid, so 390px needs no branch.
 
 Minimum hit target 44×44 including padding. `transition: opacity var(--duration-default) var(--easing-default)` — never a transform bounce.
 
-### 3.4 Content surfaces (flat ground: room, report, dashboard, admin)
+### 3.4 Content surfaces
 
 ```
-.page   min-height 100dvh; background var(--bg); max-width 880px; margin 0 auto;
-        padding 24px 16px 32px (16px 12px ≤480px); display flex; column; gap 16px
 .card   background var(--surface); border 1px var(--border);
         border-radius var(--radius-card); box-shadow var(--shadow-hairline); padding 12–20px
 ```
 
 Reference: `src/components/room/room.module.css`, `src/components/report/report.module.css`.
-880px is the reading/room measure; admin may run to 1120px because a table needs columns.
 Prose blocks (narratives, recovery copy, empty-state explanations) cap at **65–75ch** regardless
 of container width.
+
+> **Retired:** the `.page` wrapper — `min-height 100dvh; background var(--bg); max-width 880px;
+> margin 0 auto` — as the ground for room, report, dashboard and admin. Those screens are built on
+> `SplitShell` (§3.1); the ground is the shell's, and 880px is now one column measure among several
+> rather than *the* pattern. What replaced it is the cap below, which holds for every screen at
+> once instead of being restated per surface.
 
 **Every container is capped at `--container-max` (1440px) and centred.** `shell.module.css`
 does it once, for every screen, on `.workTop` and `.workBody`:
@@ -189,9 +265,14 @@ is not.
 
 ### 3.5 Chrome
 
-Header: wordmark in `--font-heading` 20/600, actions right, `max-width` matching the page measure,
-no shadow, no border unless the page scrolls under it. Footer on entry surfaces only: 14px
-`--text-muted`, centred, links `--primary` 600.
+**Inside the product there is no header.** The rail carries the wordmark, the navigation and the
+account control (`components/shell/app-rail.tsx`); a screen that adds a header of its own is
+duplicating the rail.
+
+`SiteHeader` / `SiteFooter` (`components/chrome/`) survive on the **public** surfaces only — the
+landing page and the legal pages, which are signed-out and have no rail to carry them. Header:
+wordmark in `--font-heading` 20/600, actions right, no shadow, no border unless the page scrolls
+under it. Footer: 14px `--text-muted`, centred, links `--primary` 600.
 
 ### 3.6 Do / don't
 
@@ -204,13 +285,19 @@ no shadow, no border unless the page scrolls under it. Footer on entry surfaces 
 | `box-shadow: var(--shadow-hairline)` in the room | A second shadow layer to fake elevation |
 | `gap` on a flex/grid parent | Margins stacked on children to fake a gap |
 | `font-size: 14px` | `font-size: 0.9375rem` (15px — off scale, invisible to the lint) |
-| Gradient on `.ground` | Gradient on a card, a header, or a button |
+| `--rail-text-muted` on the rail | `--text-muted` on the rail (fails AA — see §2 rule 5) |
+| The shell's ground, unmodified | A gradient, a wash, or a per-route page background |
 | Empty state as a designed block inside the card | A bare `<p>No data</p>` at the top-left of a blank page |
 | `min-width: 0` + `overflow-x: auto` on a wide table | A page body that scrolls sideways at 390px |
 
 ---
 
 ## 4. Voice and copy
+
+**Canonical, and untouched by the redesign.** Direction B changed the visual system, not the
+product's voice; the redesign-era strings follow these rules and were written to them. #112 was
+adjudicated against the filler rule, the *sen* rule and the one-term rule below, and that
+adjudication stands. Unlike §5, a string that disagrees with this section **is** a defect report.
 
 Copy lives in `frontend/messages/{en,tr}.json`. Both files ship every key, always, in the same
 commit. No English fallback rendered to a Turkish user.
@@ -229,9 +316,12 @@ Rules:
 - **Turkish is a native voice, not a translation.** Turkish carries the same warmth with fewer
   words; do not transliterate English syntax. **TR is informal *sen* everywhere** — marketing,
   instructions, states, errors alike. One register, no *siz* mixing; the product talks to one
-  person, not an audience. The single exception is quoted interviewer dialogue
-  (`landing.preview.hrQuestion`, `techQuestion`): a Turkish interviewer says *siz* to a candidate,
-  and that line is the character speaking, not the product.
+  person, not an audience. The single exception is quoted interviewer dialogue — a Turkish
+  interviewer says *siz* to a candidate, and that line is the character speaking, not the product.
+  The redesign renamed those keys and there are now **six**, not two:
+  `landing.demo.roles.{frontend,product,data}.{hr,tech}.question`. (`landing.preview.hrQuestion`
+  and `techQuestion`, cited here until 2026-08-11, have not existed since the redesign — anyone
+  verifying the exception at that path found nothing.)
 - **One term per concept, both languages.** interview → *mülakat* (never *görüşme*), report →
   *rapor*, job listing → *ilan*, round → *tur*, answer → *cevap* (never *yanıt*), HR → *İK*.
 
@@ -247,6 +337,18 @@ to someone sitting next to you; is the Turkish shorter than the English (it usua
 ---
 
 ## 5. Per-surface briefs
+
+> **Pre-redesign. Not canonical — see §0.**
+>
+> These three briefs were written against the retired gradient/flat system and none has been
+> rewritten for Direction B. **Every visual value in them is suspect**: they name a gradient
+> ground, `--shadow-soft` on entry, pill radii, the 880px/1120px `.page` measures and mascot
+> poses, all of which are gone. Where a brief and a screen disagree, the screen is right.
+>
+> They are kept because what mostly survived the redesign is the part underneath the values —
+> which states are designed, what carries meaning for a screen reader, what is never
+> colour-only, what must not move. Read a brief for that, then read the surface's own CSS module
+> for what it looks like.
 
 ### W09 — Pre-join device check (`/interviews/[id]/pre-join`)
 
@@ -315,9 +417,12 @@ mascot, no `--live`. Density tightens: 13/14px type, 8–12px cell padding, hair
 
 ## 6. Quality floor — check before you call a screen done
 
-- [ ] **Contrast AA (≥4.5:1)** on every text/background pair used, including text over each
-      gradient stop individually. `ui-checks/contrast.test.ts` covers the token pairs; any new
-      pairing you invent is on you to verify.
+- [ ] **Contrast AA (≥4.5:1)** on every text/background pair used — and the ground matters:
+      `--rail`, `--rail-raised` and `--stage` each have their own correct ink, and the default
+      text tokens are wrong on all three by construction. `ui-checks/contrast.test.ts` covers the
+      token pairs; any new pairing you invent is on you to verify. Note what that check does
+      *not* do: it asserts the pairs the design intends, never which token an element actually
+      receives after the cascade — the gap #204 is open on.
 - [ ] **`:focus-visible` ring on everything interactive** — buttons, links, inputs, selects, icon
       buttons, table controls. **One recipe, app-wide: `outline: 2px solid var(--accent);
       outline-offset: 2px`.** `--accent` is the informational hue and is the only ring that stays
@@ -345,6 +450,6 @@ mascot, no `--live`. Density tightens: 13/14px type, 8–12px cell padding, hair
       text sibling carrying the meaning.
 - [ ] **Both locales ship**, every key, same commit; nothing renders an untranslated key or an
       English fallback in Turkish.
-- [ ] **Surface rules honoured**: ground from `ENTRY_ROUTES`, shadow from `SURFACE_SHADOW`, one
-      `--primary` per surface, `--accent` never a CTA, `--live` only in the room, mascot never in
-      room / report / admin.
+- [ ] **Surface rules honoured**: the screen is on `SplitShell` and adds no ground of its own;
+      rail text uses the `--rail-text*` ramp; one `--primary` per surface; `--accent` never a CTA
+      fill; `--live` only while a session is live.
