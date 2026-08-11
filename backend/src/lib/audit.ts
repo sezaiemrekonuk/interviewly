@@ -24,7 +24,16 @@ export type AuditAction =
   | 'interview.soft_deleted'
   | 'admin.interviews_read'
   | 'admin.stats_read'
-  | 'auth.password_reset_completed';
+  | 'auth.password_reset_completed'
+  // US-29 — "see when the system defended itself". These three were log lines and nothing
+  // else, so the panel the story asks for had no table to read: `SECURITY_PROMPT_INJECTION_
+  // SUSPECTED` vanished with the container, and budget/time exhaustion left only
+  // `interviews.ended_reason`, which is one value per interview and not a timeline. They are
+  // events about a subject rather than acts by an operator, so the actor is the account the
+  // interview belongs to — the row still answers "whose data was this".
+  | 'security.prompt_injection_suspected'
+  | 'interview.budget_exhausted'
+  | 'interview.time_exhausted';
 
 export interface AuditEntry {
   actorUserId: string;

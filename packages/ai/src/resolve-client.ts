@@ -32,7 +32,9 @@ export function resolveAiClient(
   deps: ChainDeps,
   opts: ResolveOpts = {},
 ): AiClient {
-  const builder = opts.builder ?? createPromptBuilder({ logger: deps.logger });
+  const builder =
+    opts.builder ??
+    createPromptBuilder({ logger: deps.logger, onSecurityEvent: deps.onSecurityEvent });
   if (config.AI_ENABLED) return new LiveAiClient(deps, { builder });
 
   // Stub mode still audits. The interview costs nothing, but "nothing" is a number the
