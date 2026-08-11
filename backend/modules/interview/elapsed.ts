@@ -83,11 +83,14 @@ export function activeSeconds(interview: ActiveTimed, now: Date = clock.now()): 
  */
 export async function bankActiveTime(interview: ActiveTimed & { id: string }): Promise<number> {
   const now = clock.now();
-  const banked = Math.round(openStretchMs(interview, now) / 1000);
+  const stretchMs = openStretchMs(interview, now);
+  const banked = Math.floor(stretchMs / 1000);
+  const remainderMs = stretchMs - banked * 1000;
+  const anchor = new Date(now.getTime() - remainderMs);
 
   const { count } = await prisma.interview.updateMany({
     where: { id: interview.id, last_seen_at: interview.last_seen_at },
-    data: { elapsed_seconds: { increment: banked }, last_seen_at: now },
+    data: { elapsed_seconds: { increment: banked }, last_seen_at: anchor },
   });
 
   if (count === 1) return interview.elapsed_seconds + banked;
