@@ -21,13 +21,13 @@ guess — guessing writes to another person's ledger, and two people implementin
 | Person | Ledgers |
 |---|---|
 | Sezai | foundations `F03`, interview-core (`I01`–`I15`), frontend (`W01`–`W11`) |
-| Ahmet | foundations `F01`, auth (`A01`–`A06`), report (`R01`–`R04`), speech (`S01`–`S10`), turn-taking (`T01`–`T04`) |
+| Ahmet | foundations `F01`, auth (`A01`–`A06`), report (`R01`–`R04`), speech (`S01`–`S10`), turn-taking (`T01`–`T04`), speech-latency (`L01`–`L04`) |
 | Fatih | foundations `F02`, admin (`N01`–`N02`), voice (`V01`–`V05`), adaptive (`D01`–`D03`) |
 
 Task-ID prefixes are unique per ledger — `F` foundations, `A` auth, `I` interview-core,
-`R` report, `N` admin, `V` voice, `D` adaptive, `W` frontend (web), `S` speech, `T` turn-taking —
-so an ID alone tells you whose it is. Foundations is the one per-task split; every other ledger
-belongs wholly to one person.
+`R` report, `N` admin, `V` voice, `D` adaptive, `W` frontend (web), `S` speech, `T` turn-taking,
+`L` speech-latency — so an ID alone tells you whose it is. Foundations is the one per-task split;
+every other ledger belongs wholly to one person.
 
 **speech supersedes voice (2026-08-06).** `V01`–`V05` stay `done` and are not reopened, but the
 architecture under them was reversed by the owner — ElevenLabs is used for voice generation only,
@@ -38,6 +38,10 @@ with no agent and no webhooks. The replacement work is the `S` ledger
 not reopened. What changed is narrower than the speech supersession above: silence still stops
 the recorder, it just no longer ends the turn. The work is the `T` ledger
 (`.agents/ledgers/turn-taking/`, ADR-T01). Start `T` tasks, not new `S` ones.
+
+**turn-taking and speech-latency pull on the same files (2026-08-11).** `T` owns the pause, `L`
+owns the seconds, and `L02`/`L03` name `T03`/`T04` in their `Depends on` for that reason — §4's
+dependency rules already sequence them, so follow the graph rather than the ledger names.
 
 **This table is the only authority on who owns what.** There is deliberately no `Owner`
 column in any `STATE.md`: 50 cells to maintain where three rows already say it is 50 chances
@@ -81,9 +85,10 @@ Apply these in order:
    start anything else.
 2. **Otherwise your task is the first row that is yours, `todo`, and has every ID in its
    `Depends on` at status `done`.** Order: `F` before `A` before `I` before `R` before `N`
-   before `V` before `D` before `S`, then ascending number. (`S` is last because speech is the
-   only ledger with `todo` rows left; the position stops mattering once it has company.) Direct dependencies are enough — a
-   dependency cannot be `done` unless its own dependencies were.
+   before `V` before `D` before `S` before `T` before `L`, then ascending number. (`S` has no
+   `todo` rows left; `T` precedes `L` because `L02` and `L03` depend on `T03` and `T04`, so the
+   tie-break and the dependency graph agree rather than fight.) Direct dependencies are enough —
+   a dependency cannot be `done` unless its own dependencies were.
 3. **Nothing eligible?** Walk your blocked row's dependencies until you reach a not-`done`
    task that is not yours, or one whose status is `blocked`. That is the root blocker — the
    one to chase, not the direct dependency. Print exactly:

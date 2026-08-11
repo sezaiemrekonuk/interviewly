@@ -9,6 +9,13 @@ force ceiling is 13 000, the partial lives in Redis rather than on the client (A
 ADR-C01 directly), the gate is chainless and fails open, and the room's recovery notice is
 frozen-on-mount (ADR-T05, mocked before choosing). `T01` and `T02` are unblocked and independent.
 
+**The gate costs 780 ms, measured (2026-08-11).** `gpt-4.1-nano`, warm median over n=5, min 556,
+max 887 — which confirms ADR-T03's 3 s timeout as a ceiling rather than a target. It is a real
+cost this ledger adds in exchange for not interrupting a candidate mid-thought, and it is paid
+back in `.agents/ledgers/speech-latency/` (`L02` alone returns ~800 ms). The full budget —
+~7.1 s from a candidate's last word to the interviewer's first sound — lives in that ledger's
+REFERENCE.md. Do not re-measure it here.
+
 ## Execution protocol (follow exactly)
 
 Do not start from this file. `.agents/EXECUTE.md` is the prompt, and its § 4 decides which task
@@ -107,9 +114,15 @@ assumed: the held partial is not durable and is not the conversation. ADR-C01 is
 
 ## Backlog (deferred, unnumbered — promote to a task when its trigger fires)
 
-- **Streaming STT.** Would make the gate unnecessary: a live partial transcript carries its own
-  end-of-utterance signal, and the provider does the semantic turn detection. Promote when the
-  discrete loop's cost per pause is measured and someone wants it back.
+- **Streaming STT (#266).** Would make the gate unnecessary: a live partial transcript carries its
+  own end-of-utterance signal, and the provider does the semantic turn detection. ⚠️ It would
+  **obsolete this ledger outright** — the gate, the held partial, the 13 s clock and the recovery
+  notice all stop existing. If it is ever wanted, this work should be **paused, not built and then
+  discarded**. Declined by the owner 2026-08-10; see `speech-latency` ADR-L05.
+- **Latency generally.** Not this ledger's job. `.agents/ledgers/speech-latency/` owns the
+  seconds, including the one number this ledger has a claim on: `VAD_SILENCE_MS`, which `L03`
+  shortens once `T04` has shipped and the gate's accuracy is known. ADR-T01 made that argument;
+  `L03` is where it gets followed through.
 - **Gate accuracy telemetry on Turkish** (spec Open question 1). Log verdicts against fragment
   length now; promote a tuning task only once there is data showing the error rate.
 - **`FORCE_SUBMIT_MS` to config.** 13 s is a guess like the 2 s before it. Promote when a real
