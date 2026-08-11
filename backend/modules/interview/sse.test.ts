@@ -16,12 +16,13 @@ const m = vi.hoisted(() => ({
   queueAdd: vi.fn(),
   loggerError: vi.fn(),
   loggerInfo: vi.fn(),
+  loggerWarn: vi.fn(),
 }));
 
 vi.mock('../auth/rate-limit', () => ({ redis: { publish: m.publish, duplicate: m.duplicate } }));
 vi.mock('../../src/lib/queue', () => ({ REPORT_QUEUE: 'report', reportQueue: { add: m.queueAdd } }));
 vi.mock('../../src/lib/logger', () => ({
-  logger: { error: m.loggerError, info: m.loggerInfo },
+  logger: { error: m.loggerError, info: m.loggerInfo, warn: m.loggerWarn },
 }));
 
 const {
@@ -29,10 +30,18 @@ const {
   eventNameFor,
   HEARTBEAT_FRAME,
   HEARTBEAT_MS,
+  MAX_STREAMS_PER_USER,
   QUESTIONS_READY,
   STATE_CHANGED,
   streamInterviewEvents,
 } = await import('./sse');
+
+/**
+ * The handler runs behind `requireAuth` and `resolveInterview`, so both are always populated
+ * by the time it is reached. The user is what the per-user stream cap (issue #120) keys on.
+ */
+const reqFor = (userId = 'u1', interviewId = 'itv_1') =>
+  ({ interview: { id: interviewId }, user: { id: userId }, traceId: 'trc_1' }) as never;
 
 beforeEach(() => {
   m.duplicate.mockReset();
@@ -40,6 +49,7 @@ beforeEach(() => {
   m.queueAdd.mockReset();
   m.loggerError.mockReset();
   m.loggerInfo.mockReset();
+  m.loggerWarn.mockReset();
 });
 
 afterEach(() => {
@@ -53,6 +63,9 @@ class FakeResponse extends EventEmitter {
   writeHead = vi.fn();
   flushHeaders = vi.fn();
   write = vi.fn();
+  // The refusal path (issue #120) answers as an ordinary JSON response, not an event-stream.
+  status = vi.fn(() => this);
+  json = vi.fn(() => this);
   end = vi.fn(() => {
     this.writableEnded = true;
     this.emit('close');
@@ -124,7 +137,7 @@ describe('streamInterviewEvents', () => {
     const { subscriber } = mockSubscriber(() => subscribed);
     const res = new FakeResponse();
 
-    const pending = streamInterviewEvents({ interview: { id: 'itv_1' } } as never, res as never);
+    const pending = streamInterviewEvents(reqFor(), res as never);
 
     res.destroyed = true;
     res.emit('close');
@@ -140,7 +153,7 @@ describe('streamInterviewEvents', () => {
     const { handlers, subscriber } = mockSubscriber();
     const res = new FakeResponse();
 
-    await streamInterviewEvents({ interview: { id: 'itv_1' } } as never, res as never);
+    await streamInterviewEvents(reqFor(), res as never);
 
     res.destroyed = true;
     handlers.get('message')?.('interview:events:itv_1', '{"to":"tech_round"}');
@@ -158,7 +171,7 @@ describe('streamInterviewEvents', () => {
       mockSubscriber();
       const res = new FakeResponse();
 
-      await streamInterviewEvents({ interview: { id: 'itv_1' } } as never, res as never);
+      await streamInterviewEvents(reqFor(), res as never);
       expect(res.write).not.toHaveBeenCalled();
 
       vi.advanceTimersByTime(30_000);
@@ -176,7 +189,7 @@ describe('streamInterviewEvents', () => {
       mockSubscriber();
       const res = new FakeResponse();
 
-      await streamInterviewEvents({ interview: { id: 'itv_1' } } as never, res as never);
+      await streamInterviewEvents(reqFor(), res as never);
       vi.advanceTimersByTime(HEARTBEAT_MS);
       expect(res.write).toHaveBeenCalledTimes(1);
 
@@ -194,7 +207,7 @@ describe('streamInterviewEvents', () => {
       const { handlers } = mockSubscriber();
       const res = new FakeResponse();
 
-      await streamInterviewEvents({ interview: { id: 'itv_1' } } as never, res as never);
+      await streamInterviewEvents(reqFor(), res as never);
       handlers.get('message')?.('interview:events:itv_1', '{"to":"tech_round"}');
       vi.advanceTimersByTime(HEARTBEAT_MS);
 
@@ -203,6 +216,68 @@ describe('streamInterviewEvents', () => {
         `event: ${STATE_CHANGED}\ndata: {"to":"tech_round"}\n\n`,
       );
       expect(res.write).toHaveBeenNthCalledWith(2, HEARTBEAT_FRAME);
+    });
+  });
+
+  /**
+   * Issue #120. Every open stream holds a Redis connection of its own — the handler's own
+   * `ponytail:` note says so — and nothing capped how many one account could open, so N tabs
+   * was N connections with no ceiling anywhere.
+   *
+   * The assertions are about the connection, not the status code: a 429 that still called
+   * `redis.duplicate()` would have spent exactly what the cap exists to protect.
+   */
+  describe('per-user stream cap', () => {
+    const openStreams = async (count: number, userId = 'u1') => {
+      const responses: FakeResponse[] = [];
+      for (let i = 0; i < count; i++) {
+        const res = new FakeResponse();
+        responses.push(res);
+        await streamInterviewEvents(reqFor(userId), res as never);
+      }
+      return responses;
+    };
+
+    it('refuses the stream past the cap without opening a Redis connection', async () => {
+      mockSubscriber();
+      await openStreams(MAX_STREAMS_PER_USER);
+      expect(m.duplicate).toHaveBeenCalledTimes(MAX_STREAMS_PER_USER);
+
+      const refused = new FakeResponse();
+      await streamInterviewEvents(reqFor(), refused as never);
+
+      expect(m.duplicate).toHaveBeenCalledTimes(MAX_STREAMS_PER_USER);
+      expect(refused.status).toHaveBeenCalledWith(429);
+      expect(refused.json).toHaveBeenCalledWith({ error: { code: 'RATE_LIMITED' } });
+      // Not an event-stream that opens and immediately ends — the client must be able to
+      // read this as a refusal rather than as a room that died.
+      expect(refused.writeHead).not.toHaveBeenCalled();
+      expect(m.loggerWarn).toHaveBeenCalledTimes(1);
+    });
+
+    it('is per user, not global — one account cannot exhaust another', async () => {
+      mockSubscriber();
+      await openStreams(MAX_STREAMS_PER_USER, 'u1');
+
+      const other = new FakeResponse();
+      await streamInterviewEvents(reqFor('u2'), other as never);
+
+      expect(other.writeHead).toHaveBeenCalledTimes(1);
+      expect(m.duplicate).toHaveBeenCalledTimes(MAX_STREAMS_PER_USER + 1);
+    });
+
+    // The failure this would otherwise become: a candidate who closes a room and reopens it
+    // five times is locked out of their own interview until the process restarts.
+    it('returns the slot when a stream closes', async () => {
+      mockSubscriber();
+      const responses = await openStreams(MAX_STREAMS_PER_USER);
+      responses[0].emit('close');
+
+      const reopened = new FakeResponse();
+      await streamInterviewEvents(reqFor(), reopened as never);
+
+      expect(reopened.writeHead).toHaveBeenCalledTimes(1);
+      expect(reopened.status).not.toHaveBeenCalled();
     });
   });
 });

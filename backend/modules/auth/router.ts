@@ -4,7 +4,7 @@ import { requirePublicOrigin } from '../interview/csrf';
 
 import { authCapabilities } from './capabilities';
 import { requireAuth } from './middleware';
-import { loginLimiter, passwordResetLimiter, profilePatchLimiter, registerLimiter } from './rate-limit';
+import { loginLimiter, passwordResetLimiter, profilePatchLimiter, registerLimiter, tokenConfirmLimiter } from './rate-limit';
 import deleteMe from './delete-account';
 import { patchMyLocale } from './locale';
 import login from './login';
@@ -33,15 +33,15 @@ router.get('/capabilities', authCapabilities);
 router.get('/google', startGoogle);
 router.get('/google/callback', googleCallback);
 // Request is authenticated (it resends to *your* address); confirm is not — the link is
-// opened wherever the mail was read. Both limits on the resend are keyed by user, inside
-// the handler, so there is no IP-keyed middleware in this pair.
+// opened wherever the mail was read. The resend's own two limits are keyed by user, inside
+// the handler; `tokenConfirmLimiter` (issue #120) is what bounds guessing at the confirm.
 router.post('/verify-email/request', requireAuth, requestVerification);
-router.post('/verify-email/confirm', confirmVerification);
+router.post('/verify-email/confirm', tokenConfirmLimiter, confirmVerification);
 // Both public: whoever lost the password cannot be signed in, and the confirm link is opened
 // wherever the mail was read. The request limit is keyed by IP (K8.6) — a per-user limiter
 // would leak which addresses have accounts through its own 429.
 router.post('/password-reset/request', passwordResetLimiter, requestPasswordReset);
-router.post('/password-reset/confirm', confirmPasswordReset);
+router.post('/password-reset/confirm', tokenConfirmLimiter, confirmPasswordReset);
 
 export default router;
 

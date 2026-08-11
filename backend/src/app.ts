@@ -18,6 +18,7 @@ import { monthActivity } from '../modules/interview/activity';
 import { listMyInterviews } from '../modules/interview/my-interviews';
 import { listMyQuestions } from '../modules/interview/my-questions';
 import interviewRouter from '../modules/interview/router';
+import { uploadLimiter } from '../modules/interview/rate-limit';
 import { createUpload, uploadMiddleware } from '../modules/interview/uploads';
 import speechRouter from '../modules/speech/router';
 import voiceDowngradeRouter from '../modules/voice/downgrade';
@@ -76,7 +77,9 @@ app.get('/me/interviews/activity', requireAuth, monthActivity);
 app.get('/me/questions', requireAuth, listMyQuestions);
 // The one state-changing route with no router of its own, so its guard is per-route by
 // necessity — first in the chain, so a cross-site request never reaches multer's parser.
-app.post('/uploads', requirePublicOrigin, requireAuth, uploadMiddleware, createUpload);
+// `uploadLimiter` (issue #120) sits after `requireAuth`, which supplies the user it keys on,
+// and before `uploadMiddleware`, so a refused upload never buffers 10 MB either.
+app.post('/uploads', requirePublicOrigin, requireAuth, uploadLimiter, uploadMiddleware, createUpload);
 app.use('/interviews', voiceDowngradeRouter);
 app.use('/interviews', speechRouter);
 app.use('/interviews', interviewRouter);

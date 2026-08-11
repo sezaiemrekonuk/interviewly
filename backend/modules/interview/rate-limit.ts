@@ -40,3 +40,22 @@ export const interviewStartLimiter = keyedLimiter({
   keyOf: byUser,
   bypass: isAdmin,
 });
+
+/**
+ * Issue #120: 20/hour per user on `POST /uploads`, the most expensive endpoint in the system —
+ * 10 MB buffered by multer, magic-byte and page checks, a PDF parse up to 30 pages, a sha256
+ * and an S3 write, all of it authenticated but loopable by anyone who can register.
+ *
+ * Recording the attempt rather than the outcome, unlike `dailyInterviewCap`: the cost here is
+ * paid by parsing the file, so a refused PDF has already spent it and is exactly what needs
+ * counting. `app.ts` mounts this AHEAD of `uploadMiddleware` so a refusal never buffers a body.
+ *
+ * No `isAdmin` bypass. The other two caps protect a product quota an operator legitimately
+ * exceeds; this one protects CPU and storage, which an admin session consumes identically.
+ */
+export const uploadLimiter = keyedLimiter({
+  prefix: 'upload',
+  limit: 20,
+  windowMs: 60 * 60 * 1000,
+  keyOf: byUser,
+});
