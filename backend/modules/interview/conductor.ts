@@ -38,6 +38,7 @@ import { aiClient } from '../ai';
 
 import { promoteNextQuestion } from './adaptive';
 import { recordAnswer } from './answers';
+import { applyAvatarChange } from './avatar';
 import { BudgetExceeded, withBudget, withBudgetOrEnd } from './budget';
 import { ensureTechBatch, seededPersona } from './generation';
 import { trackLanguage } from './language';
@@ -294,6 +295,14 @@ async function runTurn(
       throw new ApiError('BUDGET_EXCEEDED');
     }
     throw err;
+  }
+
+  // `change_avatar`: independent of `action`, and best-effort — a missed expression swap is a
+  // stale tile, never a broken turn, so it must not block or fail the turn it rode in on.
+  if (turn.avatar) {
+    await applyAvatarChange(interview.id, persona.id, turn.avatar).catch((e: unknown) =>
+      logger.error({ err: e, traceId, interviewId: interview.id }, 'AVATAR_CHANGE_FAILED'),
+    );
   }
 
   // A question the candidate has not been asked yet cannot be advanced past, whatever came
@@ -746,6 +755,7 @@ interface ConductorReply {
   question?: string;
   endReason?: string;
   widget?: Widget;
+  avatar?: number;
 }
 
 /**
@@ -853,13 +863,15 @@ async function note(interview: Interview, content: string, traceId: string): Pro
 // Small resolvers.
 // ---------------------------------------------------------------------------
 
-async function personaForRound(interview: Interview): Promise<{ name: string; system_prompt: string }> {
+async function personaForRound(
+  interview: Interview,
+): Promise<{ id: string; name: string; system_prompt: string }> {
   const type = interview.state === 'tech_round' ? 'tech' : 'hr';
   // Resolve by round type through the same resolver generation.ts assigns with, not the round's
   // stored persona_id: an interview seeded before that resolver was fixed carries a stray fixture
   // ("Stub Persona") on its round row. Keying on type keeps the two sites in sync.
   const persona = await seededPersona(type);
-  return { name: persona.name, system_prompt: persona.system_prompt };
+  return { id: persona.id, name: persona.name, system_prompt: persona.system_prompt };
 }
 
 /** What this round still has to cover, so the interviewer can pace rather than sprint. */

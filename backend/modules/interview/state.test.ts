@@ -42,6 +42,9 @@ const peek = vi.fn();
 const take = vi.fn();
 vi.mock('../speech/pending-turn', () => ({ peekPendingTurn: peek, takePendingTurn: take }));
 
+/** The live tile's expression is a Redis read; `avatar.test.ts` owns it. Here it is just a value. */
+vi.mock('./avatar', () => ({ currentAvatar: vi.fn(async () => 2) }));
+
 const { orderTranscript, deliverCurrentQuestion, interviewWindow, resolvePersonas, __testing } =
   await import('./state');
 const { pendingTurnFor, messagesWhere } = __testing;
@@ -313,7 +316,8 @@ describe('resolvePersonas', () => {
     const inTech = await resolvePersonas({ ...interview, state: 'tech_round' });
     const ended = await resolvePersonas({ ...interview, state: 'evaluating' });
 
-    expect(inHr.persona).toMatchObject({ id: 'assigned-hr' });
+    // The live tile carries the expression it is currently showing; the dark one carries none.
+    expect(inHr.persona).toMatchObject({ id: 'assigned-hr', avatar: 2 });
     expect(inTech.persona).toMatchObject({ id: 'seed-persona-tech' });
     expect(ended.persona).toBeNull();
   });

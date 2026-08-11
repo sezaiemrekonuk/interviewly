@@ -6,7 +6,7 @@
    `shell.module.css`. On the shell rather than on the column, so the page title and the content
    it names share an edge. */
 .shell {
-  --container-max: 480px;
+  --container-max: 880px;
 }
 
 .railLead {
@@ -41,6 +41,127 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-hairline);
+}
+
+/* The lobby: what you look and sound like on the left, the way in on the right. Two columns
+   because they are two different questions — "am I ready?" and "shall I go?" — and stacking
+   them put the CTA below the fold on a laptop. */
+/* One card, two columns: what you look and sound like on the left, the way in on the right,
+   with a rule between them. Loose on the page they read as two unrelated screens — which is
+   what the owner saw. */
+.lobby {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 240px;
+  gap: 24px;
+  align-items: center;
+  width: 100%;
+  padding: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-hairline);
+}
+
+.stagePane {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* Both pickers on one line. They collapse to one column only when there is no room for two. */
+.deviceRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+/* The preview is the surface, not a picture on one: its controls sit on it and its label rides
+   in the corner, the same shape the room's tiles have. */
+.preview {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-soft);
+}
+
+.previewMedia {
+  display: block;
+}
+
+.previewName {
+  position: absolute;
+  inset-inline-start: 12px;
+  inset-block-start: 12px;
+  margin: 0;
+  padding: 4px 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--rail-text);
+  background: var(--rail-raised);
+  border-radius: var(--radius-input);
+}
+
+.previewControls {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 12px;
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+/* Round, because a device control is a switch and not a sentence — the one place in this
+   product where an icon carries the state, and it carries it twice: the slash through the
+   glyph and the --danger fill say the same thing. */
+.round {
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  color: var(--rail-text);
+  background: var(--rail-raised);
+  border: 1px solid var(--rail-border);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background-color var(--duration-default) var(--easing-default);
+}
+
+.round[data-off='true'] {
+  color: var(--surface);
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
+.round:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* The way in: the same card, past a rule. Centred against the preview beside it. */
+.joinPane {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-inline-start: 24px;
+  border-inline-start: 1px solid var(--border);
+}
+
+.joinTitle {
+  margin: 0;
+  font-family: var(--font-heading), Georgia, serif;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+}
+
+.cameraNote {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
 }
 
 /* The one authored motion moment: the CTA enabling. */
@@ -91,4 +212,20 @@
 
 .barCta {
   height: 48px;
+}
+
+/* One column below the split shell's own breakpoint: the preview first, the way in under it. */
+@media (max-width: 60rem) {
+  .lobby {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+  }
+
+  /* Stacked, the rule belongs above the way in rather than beside it. */
+  .joinPane {
+    padding-inline-start: 0;
+    padding-block-start: 20px;
+    border-inline-start: 0;
+    border-block-start: 1px solid var(--border);
+  }
 }

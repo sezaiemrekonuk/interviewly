@@ -9,7 +9,13 @@
     "clearFile": "Remove",
     "showPassword": "Show",
     "hidePassword": "Hide",
-    "skipToContent": "Skip to content"
+    "skipToContent": "Skip to content",
+    "camera": {
+      "off": "Camera off",
+      "starting": "Starting your camera…",
+      "blocked": "Camera access is blocked",
+      "unavailable": "No camera found"
+    }
   },
   "chrome": {
     "newInterview": "New interview",
@@ -458,8 +464,13 @@
     "back": "Back to the app"
   },
   "preJoin": {
-    "title": "Microphone check",
-    "subtitle": "Grant the microphone and confirm your input. Nothing is recorded on this screen. In the interview your answer audio is sent to be transcribed and is not kept — only the transcript is stored.",
+    "title": "Camera and microphone check",
+    "subtitle": "Grant the microphone and confirm your input, and try your camera if you want one. Nothing is recorded on this screen. In the interview your answer audio is sent to be transcribed and is not kept — only the transcript is stored, and your camera never leaves this device.",
+    "you": "You",
+    "ready": "Ready to join?",
+    "mute": "Mute microphone",
+    "unmute": "Unmute microphone",
+    "muted": "Your microphone is muted",
     "deviceLabel": "Microphone",
     "deviceFallback": "Microphone {n}",
     "prompt": "Waiting for microphone permission…",
@@ -477,6 +488,13 @@
     "unavailable": {
       "title": "No microphone found",
       "body": "Connect a microphone and reload this page, or continue this interview in text mode."
+    },
+    "camera": {
+      "deviceLabel": "Camera",
+      "deviceFallback": "Camera {n}",
+      "note": "Optional. Your camera stays on this device — the picture is never recorded or sent anywhere, and you can turn it on and off during the interview.",
+      "turnOn": "Turn camera on",
+      "turnOff": "Turn camera off"
     }
   },
   "room": {
@@ -548,7 +566,10 @@
     "roleCandidate": "Candidate",
     "micLevel": "Microphone level",
     "micDevice": "Microphone",
-    "micDeviceFallback": "Microphone {n}"
+    "micDeviceFallback": "Microphone {n}",
+    "camera": "Camera",
+    "cameraDevice": "Camera",
+    "cameraDeviceFallback": "Camera {n}"
   },
   "report": {
     "title": "Your report",

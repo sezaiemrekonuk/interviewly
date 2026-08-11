@@ -1,11 +1,10 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { useEffect } from 'react';
 
 import { Meter } from '@/components/shell/meter';
-import { Button, Field, Select } from '@/components/ui';
-import { useMicPermission, type MicPermissionState } from '@/lib/use-mic-permission';
+import { Button } from '@/components/ui';
+import type { UseMicPermission } from '@/lib/use-mic-permission';
 
 import styles from './mic-check.module.css';
 
@@ -14,20 +13,17 @@ import styles from './mic-check.module.css';
 const SPEAKING = 0.02;
 
 export interface MicCheckProps {
-  onStateChange: (state: MicPermissionState) => void;
+  /**
+   * The live capture, owned by the lobby: the mute button sits on the camera preview and the
+   * input picker sits in the row under it, so the page holds the hook and this component is the
+   * readout — level, one sentence, and the two recovery screens.
+   */
+  mic: UseMicPermission;
 }
 
-export function MicCheck({ onStateChange }: MicCheckProps) {
+export function MicCheck({ mic }: MicCheckProps) {
   const t = useTranslations('preJoin');
-  const { state, level, devices, deviceId, request, select } = useMicPermission();
-
-  useEffect(() => {
-    if (state === 'idle') request();
-  }, [state, request]);
-
-  useEffect(() => {
-    onStateChange(state);
-  }, [state, onStateChange]);
+  const { state, level, deviceId, request } = mic;
 
   if (state === 'unavailable') {
     return (
@@ -54,40 +50,28 @@ export function MicCheck({ onStateChange }: MicCheckProps) {
     );
   }
 
-  const hearing = state === 'granted' && level >= SPEAKING;
+  const hearing = state === 'granted' && !mic.muted && level >= SPEAKING;
 
   return (
     <div className={styles.check} data-testid="mic-check">
-      {devices.length > 1 ? (
-        <Field label={t('deviceLabel')}>
-          {(control) => (
-            <Select
-              {...control}
-              value={deviceId ?? ''}
-              onChange={(e) => select(e.target.value)}
-            >
-              {devices.map((device, i) => (
-                <option key={device.deviceId} value={device.deviceId}>
-                  {device.label || t('deviceFallback', { n: i + 1 })}
-                </option>
-              ))}
-            </Select>
-          )}
-        </Field>
-      ) : null}
-
       {/* `Meter`, not a width in a style prop: the CSP is `style-src 'self' 'nonce-…'`, so the
           attribute was dropped in production and this bar rendered at zero width for every real
           user. Decorative because the sentence under it states the same thing in words.
           Not `tone="live"`: `--live` is the in-session signal and DESIGN §2 rule 3 names
           pre-join among the surfaces it may never appear on. This room has not started. */}
-      <div data-testid="mic-level">
-        <Meter value={level} max={1} tone="default" instant decorative tall />
+      <div className={styles.level} data-testid="mic-level">
+        <Meter value={level} max={1} tone="default" instant decorative />
       </div>
 
       <p className={styles.status} aria-live="polite" data-hearing={hearing ? 'yes' : 'no'}>
         <span className={styles.dot} aria-hidden="true" />
-        {state !== 'granted' ? t('prompt') : hearing ? t('hearYou') : t('quiet')}
+        {state !== 'granted'
+          ? t('prompt')
+          : mic.muted
+            ? t('muted')
+            : hearing
+              ? t('hearYou')
+              : t('quiet')}
       </p>
     </div>
   );

@@ -536,7 +536,7 @@ export interface InterviewStateResponse {
    */
   expiresAt: string | null;
   /** The ACTIVE speaker only — `null` outside a live round. */
-  persona: { id: string; role: string; name: string; avatarState: string } | null;
+  persona: { id: string; role: string; name: string; avatarState: string; avatar: number } | null;
   /** Both rounds' personas, hr then tech: the two tiles, never a second live speaker. */
   personas: RoomPersona[];
   currentQuestion: {

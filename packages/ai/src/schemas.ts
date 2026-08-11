@@ -116,6 +116,14 @@ export const ConductorTurnSchema = z.object({
   endReason: z.enum(['completed', 'cut_short']).optional(),
   /** Required by `show_widget`, ignored otherwise. */
   widget: WidgetSchema.optional(),
+  /**
+   * `change_avatar` — an expression swap for the persona currently speaking, 1..3 (each of
+   * Ada and Turing is seeded with exactly three). Orthogonal to `action`: it may ride on a
+   * `continue` turn as easily as a `next_question` one, because an interviewer's expression
+   * changes independently of the interview advancing. Silently ignored out of range — a wrong
+   * expression is not worth a turn the way a bad `action` is.
+   */
+  avatar: z.number().int().min(1).max(3).optional(),
 });
 
 /**

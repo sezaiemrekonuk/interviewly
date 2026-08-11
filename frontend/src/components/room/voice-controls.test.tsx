@@ -41,6 +41,14 @@ const tree = (expiresAt: string | null) => (
       expiresAt={expiresAt}
       captionsOn
       onToggleCaptions={vi.fn()}
+      cameraOn={false}
+      onToggleCamera={vi.fn()}
+
+      cameras={[]}
+
+      cameraId={null}
+
+      onSelectCamera={vi.fn()}
       transcriptOpen={false}
       onToggleTranscript={vi.fn()}
     />
@@ -141,6 +149,14 @@ describe('VoiceControls failure copy (S10)', () => {
           expiresAt={null}
           captionsOn
           onToggleCaptions={vi.fn()}
+          cameraOn={false}
+          onToggleCamera={vi.fn()}
+
+          cameras={[]}
+
+          cameraId={null}
+
+          onSelectCamera={vi.fn()}
           transcriptOpen={false}
           onToggleTranscript={vi.fn()}
         />
@@ -216,6 +232,14 @@ describe('VoiceControls input picker', () => {
           expiresAt={null}
           captionsOn
           onToggleCaptions={vi.fn()}
+          cameraOn={false}
+          onToggleCamera={vi.fn()}
+
+          cameras={[]}
+
+          cameraId={null}
+
+          onSelectCamera={vi.fn()}
           transcriptOpen={false}
           onToggleTranscript={vi.fn()}
         />
@@ -229,10 +253,12 @@ describe('VoiceControls input picker', () => {
 
   // One microphone is not a choice, and a control that cannot change anything is noise in a
   // bar the candidate reads mid-sentence.
-  it('is not rendered when the machine offers one input', () => {
+  // Offered for a single input too: the control names the microphone the room is using, which
+  // is the question a candidate asks when they cannot be heard.
+  it('is rendered even when the machine offers one input', () => {
     renderWith({});
 
-    expect(screen.queryByTestId('mic-device')).not.toBeInTheDocument();
+    expect(screen.getByTestId('mic-device')).toBeInTheDocument();
   });
 
   it('offers every input, naming the live one', () => {

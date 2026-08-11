@@ -10,6 +10,8 @@ import { activeSeconds } from './elapsed';
 
 import { seededPersona } from './generation';
 
+import { currentAvatar } from './avatar';
+
 /** The columns the index walk needs — an `Interview` satisfies it; a test fixture need not. */
 export interface IndexedInterview {
   id: string;
@@ -151,10 +153,14 @@ export async function resolvePersonas(interview: RosteredInterview) {
   const activeType = state === 'hr_round' ? 'hr' : state === 'tech_round' ? 'tech' : null;
   const active = activeType ? personas.find((p) => p.roundType === activeType) : undefined;
 
+  // `change_avatar`'s current value for the live speaker only — the inactive tile never asks,
+  // so it needs no read.
+  const avatar = active ? await currentAvatar(interview.id, active.id) : 1;
+
   return {
     personas,
     persona: active
-      ? { id: active.id, role: active.role, name: active.name, avatarState: 'idle' as const }
+      ? { id: active.id, role: active.role, name: active.name, avatarState: 'idle' as const, avatar }
       : null,
   };
 }

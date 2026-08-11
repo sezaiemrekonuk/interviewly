@@ -122,9 +122,8 @@
 /* -------------------------------------------------------------------- stage */
 
 .stage {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 240px;
-  grid-template-rows: minmax(0, 1fr) auto;
+  display: flex;
+  flex-direction: column;
   gap: 16px;
   min-height: 0;
   padding: 16px;
@@ -132,30 +131,21 @@
   background: var(--stage);
 }
 
-.stage[data-view='grid'] {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-/* The tiles are grid items of the stage itself — the wrapper exists to name them, not to
-   box them, so it generates no layout of its own. */
+/* One row of equal squares, however many people are in it — the room does not shrink one
+   participant to make another bigger. `auto-fit` wraps them rather than squashing them. */
 .tiles {
-  display: contents;
-}
-
-.side {
-  display: grid;
-  grid-template-rows: 1fr 1fr;
+  display: flex;
   gap: 16px;
-  min-width: 0;
-}
-
-.stage[data-view='grid'] .side {
-  display: contents;
+  flex: 1;
+  flex-wrap: wrap;
+  min-height: 0;
+  align-items: center;
+  align-content: center;
+  justify-content: center;
 }
 
 .footRow {
   display: flex;
-  grid-column: 1 / -1;
   flex-direction: column;
   gap: 16px;
   align-items: center;
@@ -169,16 +159,6 @@
   gap: 8px;
   min-width: 0;
   border-radius: var(--radius-card);
-}
-
-/* Has the floor: the rail's material, lifted onto the light stage. The inversion is the
-   label — nothing else has to say who is speaking. */
-.tileLead {
-  padding: 20px 24px;
-  min-height: 280px;
-  color: var(--rail-text);
-  background: var(--rail);
-  box-shadow: var(--shadow-soft);
 }
 
 .tileSmall {
@@ -195,6 +175,13 @@
   justify-content: space-between;
 }
 
+/* Name and role, between the portrait and the badge. `min-width: 0` so a long persona name
+   shrinks instead of pushing the LIVE badge off the tile. */
+.tileWho {
+  flex: 1;
+  min-width: 0;
+}
+
 .tileName {
   margin: 0;
   font-family: var(--font-heading), Georgia, serif;
@@ -204,19 +191,11 @@
   letter-spacing: -0.015em;
 }
 
-.tileLead .tileName {
-  font-size: 28px;
-}
-
 .tileRole {
   margin: 0;
   margin-top: 4px;
   font-size: 13px;
   color: var(--text-muted);
-}
-
-.tileLead .tileRole {
-  color: var(--rail-text-muted);
 }
 
 /* The live badge: on the rail's raised material, so it reads as part of the speaker's tile
@@ -247,10 +226,109 @@
   background: var(--surface);
 }
 
-/* ---------------------------------------------------------------- presence */
+/* ------------------------------------------------------------- meeting tiles */
 
-/* Neither interviewer has a camera, so the voice is drawn. Delays are per-bar in CSS, not an
-   inline style: `style` attributes are dropped by the CSP in production. */
+/* A tile in a call: the picture IS the tile, and the name, the badge and the voice float on
+   top of it. Everything inside is absolutely placed against this box, which is why it clips —
+   a portrait wider than its frame crops like a camera would rather than letterboxing. */
+.videoTile {
+  position: relative;
+  width: 100%;
+  max-width: 340px;
+  flex: 0 1 340px;
+  max-height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  aspect-ratio: 1;
+  background: var(--rail);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-hairline);
+}
+
+/* Speaker view gives the floor a bigger tile; grid view leaves every tile the same size. */
+.tiles[data-view='speaker'] .videoTile[data-live='true'] {
+  max-width: 520px;
+  flex-basis: 520px;
+}
+
+/* Who is talking, said by the tile itself now that the badge and the waveform are gone from
+   the interviewers' faces. Inset so it reads as the tile's own edge, not a box around it. */
+.videoTile[data-live='true'] {
+  outline: 2px solid var(--live);
+  outline-offset: -2px;
+  box-shadow: var(--shadow-soft);
+}
+
+/* The interviewer's face: the expression `change_avatar` last asked for (additionals
+   ADR-ADD01), which is why it is a photograph and not the 1×1 placeholder the `AvatarState`
+   keys hold. Anything that fails to resolve falls back to the monogram inside `Avatar`, which
+   fills the same box — a tile is never half a picture. */
+.portraitFill,
+.selfCam {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+}
+
+/* Text mode's strip keeps the old shape: a thumbnail beside the name, not a frame. */
+.portraitSm {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: var(--radius-card);
+}
+
+/* Bottom-right, over the picture: who this is, read at a glance and never a header row above
+   the face. Opaque rather than a wash — a translucent plate over a bright photograph is the
+   one place this room's type would drop below AA. */
+.plate {
+  position: absolute;
+  inset-inline-end: 12px;
+  inset-block-end: 12px;
+  max-width: calc(100% - 24px);
+  padding: 8px 12px;
+  text-align: end;
+  background: var(--rail-raised);
+  border-radius: var(--radius-input);
+}
+
+.plateName {
+  margin: 0;
+  overflow: hidden;
+  font-family: var(--font-heading), Georgia, serif;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.015em;
+  color: var(--rail-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plateRole {
+  margin: 0;
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 1.2;
+  color: var(--rail-text-muted);
+}
+
+/* Written as a descendant so it outranks `.wave`'s own height and the one in the narrow-width
+   media query below, whichever order the bundler emits them in. */
+.videoTile .waveFloat {
+  position: absolute;
+  inset-inline-start: 12px;
+  inset-block-end: 12px;
+  height: 32px;
+  margin: 0;
+}
+
+/* The drawn voice: over the picture on a meeting tile, and the whole of a persona's presence
+   in text mode's strip. Delays are per-bar in CSS, not an inline style: `style` attributes are
+   dropped by the CSP in production. */
 .wave {
   display: flex;
   gap: 4px;
@@ -299,10 +377,6 @@
   height: 4px;
   background: var(--border);
   animation: none;
-}
-
-.tileLead .wave.waveOff i {
-  background: var(--rail-border);
 }
 
 .micMeter {
@@ -416,8 +490,22 @@
 }
 
 .ck[aria-pressed='true'] {
-  background: var(--surface-sunken);
+  background: var(--surface);
   border-color: var(--border);
+}
+
+/* Off is the state that has to read at a glance mid-sentence, so it takes the danger tone and
+   the word stays put — the label never becomes "Unmute", which is a second thing to read. */
+.ck[data-off='true'] {
+  color: var(--surface);
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
+.group:has(.ck[data-off='true']) .caret {
+  color: var(--surface);
+  background: var(--danger);
+  border-color: var(--danger);
 }
 
 .ckSub {
@@ -482,6 +570,51 @@
   color: var(--danger);
 }
 
+/* A switch and the caret that says which device it switches, welded into one control. */
+.group {
+  display: inline-flex;
+  align-items: stretch;
+  border-radius: var(--radius-input);
+}
+
+.group .ck {
+  border-start-end-radius: 0;
+  border-end-end-radius: 0;
+}
+
+.caret {
+  position: relative;
+  display: inline-flex;
+  width: 32px;
+  min-height: 44px;
+  align-self: stretch;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-inline-start: 0;
+  border-start-end-radius: var(--radius-input);
+  border-end-end-radius: var(--radius-input);
+  cursor: pointer;
+}
+
+.caret[data-disabled] {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Invisible, not hidden: it is the control — the caret under it is only the picture of one. */
+.caretSelect {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: inherit;
+}
+
 /* A four-bar glyph, not a second meter: the candidate's real level is on their tile. */
 .mini {
   display: flex;
@@ -502,14 +635,6 @@
 
 .liveBadge .mini i {
   background: var(--rail-text);
-}
-
-.ck[data-muted='true'] {
-  color: var(--text-muted);
-}
-
-.ck[data-muted='true'] .mini i {
-  background: var(--text-muted);
 }
 
 /* ------------------------------------------------------- paused / stalled / lost */
@@ -731,29 +856,8 @@
 /* The rail stacks into a bar at this width (shell.module.css), so the stage goes to one
    column and the side tiles sit shoulder to shoulder under the speaker. */
 @media (max-width: 60rem) {
-  .stage {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .stage[data-view='grid'] {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .side {
-    grid-template-rows: none;
-    grid-auto-flow: column;
-  }
-
-  .stage[data-view='grid'] .side {
-    display: grid;
-  }
-
   .workGrid[data-transcript='open'] {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .tileLead {
-    min-height: 200px;
   }
 
   .wave {
@@ -768,10 +872,6 @@
 
   .stage {
     padding: 12px;
-  }
-
-  .side {
-    grid-auto-flow: row;
   }
 
   .composerActions {

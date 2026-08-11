@@ -194,10 +194,37 @@ describe('interview room, voice mode (W10)', () => {
     const hr = screen.getByTestId('persona-tile-hr');
     expect(hr).toHaveAttribute('data-live', 'true');
     expect(screen.getByTestId('persona-tile-tech')).toHaveAttribute('data-live', 'false');
-    expect(screen.getAllByText(messages.room.live)).toHaveLength(1);
+    // Who has the floor is the tile's own ring now (`data-live`), not a badge on their face.
+    expect(screen.queryByText(messages.room.live)).not.toBeInTheDocument();
 
     // Room mode, not an entry surface: no mascot on this screen.
     expect(screen.queryByTestId('mascot')).not.toBeInTheDocument();
+  });
+
+  // The candidate's own tile, the only one in the room that may carry a camera. Off on arrival
+  // and turned on from the control bar (voice spec §3.2) — the picture is bound to a local
+  // `<video>` and never uploaded, so nothing about this reaches the server.
+  it('turns the self-camera on from the control bar, and off again', async () => {
+    stubFetch();
+    await renderRoom();
+
+    const you = screen.getByTestId('persona-tile-you');
+    expect(within(you).queryByTestId('camera-view')).not.toBeInTheDocument();
+
+    const toggle = screen.getByTestId('camera-toggle');
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    await userEvent.click(toggle);
+
+    await waitFor(() =>
+      expect(within(you).getByTestId('camera-view')).toHaveAttribute('data-camera', 'live'),
+    );
+    const camera = mics.tracks.at(-1)!;
+
+    await userEvent.click(toggle);
+
+    expect(within(you).queryByTestId('camera-view')).not.toBeInTheDocument();
+    // Off means the device is released, not that the picture is hidden.
+    expect(camera.stop).toHaveBeenCalled();
   });
 
   // ADR-C04 — the other half of the rule above, and the point of `show_widget`: some answers are

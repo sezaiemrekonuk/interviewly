@@ -40,6 +40,13 @@ export const STATE_CHANGED = 'INTERVIEW_STATE_CHANGED';
  */
 export const QUESTIONS_READY = 'INTERVIEW_QUESTIONS_READY';
 
+/**
+ * Third event: a `change_avatar` tool call landed and changed the live persona's expression
+ * (`avatar.ts`). Same nudge-then-refetch contract as the other two — the payload here is read
+ * only to pick the event name, never by the client (`use-interview-events.ts`).
+ */
+export const AVATAR_CHANGED = 'INTERVIEW_AVATAR_CHANGED';
+
 export interface InterviewStateChanged {
   from: InterviewState;
   to: InterviewState;
@@ -67,7 +74,9 @@ export function eventChannel(interviewId: string): string {
 export function eventNameFor(payload: string): string {
   try {
     const parsed = JSON.parse(payload) as { type?: unknown };
-    return parsed?.type === QUESTIONS_READY ? QUESTIONS_READY : STATE_CHANGED;
+    if (parsed?.type === QUESTIONS_READY) return QUESTIONS_READY;
+    if (parsed?.type === AVATAR_CHANGED) return AVATAR_CHANGED;
+    return STATE_CHANGED;
   } catch {
     return STATE_CHANGED;
   }

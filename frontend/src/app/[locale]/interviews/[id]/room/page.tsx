@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { useEffect, useState, type ReactNode } from 'react';
 
 import { AnswerComposer } from '../../../../../components/room/answer-composer';
+import { cameraStartsOn, rememberCamera, useCameraDevices } from '../../../../../components/camera-view';
 import { Conversation } from '../../../../../components/room/conversation';
 import { PersonaTiles } from '../../../../../components/room/persona-tiles';
 import { QuestionPanel } from '../../../../../components/room/question-panel';
@@ -78,9 +79,16 @@ export default function InterviewRoomPage() {
   // Room chrome, none of it server state: the speaker/grid view, the captions, and whether the
   // transcript panel is out. `null` is "the candidate has not said" — the default differs by
   // mode and `room` is not loaded yet on the first render.
-  const [view, setView] = useState<'speaker' | 'grid'>('speaker');
+  // Grid is the default: a call opens showing everyone in it, and Speaker is the choice to
+  // look at one person.
+  const [view, setView] = useState<'speaker' | 'grid'>('grid');
   const [captionsOn, setCaptionsOn] = useState(true);
   const [transcriptOpen, setTranscriptOpen] = useState<boolean | null>(null);
+  // Starts off and comes on by itself only where the candidate already said yes — the choice
+  // they made on pre-join, or a camera this browser has already granted (`cameraStartsOn`).
+  // Nothing here can raise a permission prompt.
+  const [cameraOn, setCameraOn] = useState(false);
+  const [cameraId, setCameraId] = useState<string | null>(null);
 
   const room = stateQuery.data;
   const pathname = `/interviews/${id}/room`;
@@ -103,7 +111,20 @@ export default function InterviewRoomPage() {
   // dependency inside the hook, and a `.filter()` or a spread here would mint a fresh array on
   // every render — the mic meter re-renders this room ~60x/s, which would tear the speak effect
   // down mid-fetch and, because an id is marked spoken before its fetch, nothing would ever play.
+  // Labels need a grant, and the room already has the microphone's.
+  const cameras = useCameraDevices(voiceMode);
   const voice = useVoiceSession(id, { enabled: voiceMode, messages: room?.messages, speakable });
+
+  useEffect(() => {
+    if (!voiceMode) return;
+    let live = true;
+    void cameraStartsOn().then((on) => {
+      if (live && on) setCameraOn(true);
+    });
+    return () => {
+      live = false;
+    };
+  }, [voiceMode]);
 
   // Navigation belongs in an effect: routing during render is what makes a redirect fire twice.
   useEffect(() => {
@@ -237,15 +258,18 @@ export default function InterviewRoomPage() {
     }
   }
 
-  // No avatar warming in the waiting beat: the tiles draw the speaker as CSS bars, so nothing
-  // here requests an avatar object and every preload hint expired unused (issue 126).
+  // `persona.avatar` is the expression `change_avatar` last set for whoever has the floor
+  // (additionals ADR-ADD01) — the server resolves it for the live speaker only, and the SSE
+  // nudge that follows the tool call is what brings a new one down.
   const tiles = (
     <PersonaTiles
       personas={room.personas}
       activeId={activeId}
       activeState={avatarState}
+      activeExpression={room.persona?.avatar ?? 1}
       layout={voiceMode ? 'stage' : 'strip'}
-      candidate={voiceMode ? { level: voice.micLevel, muted: voice.muted } : null}
+      view={view}
+      candidate={voiceMode ? { level: voice.micLevel, muted: voice.muted, camera: cameraOn, cameraId } : null}
     />
   );
 
@@ -410,6 +434,16 @@ export default function InterviewRoomPage() {
                     expiresAt={room.expiresAt}
                     captionsOn={captionsOn}
                     onToggleCaptions={() => setCaptionsOn((on) => !on)}
+                    cameras={cameras}
+                    cameraId={cameraId}
+                    onSelectCamera={setCameraId}
+                    cameraOn={cameraOn}
+                    onToggleCamera={() =>
+                      setCameraOn((on) => {
+                        rememberCamera(!on);
+                        return !on;
+                      })
+                    }
                     transcriptOpen={showTranscript}
                     onToggleTranscript={() => setTranscriptOpen(!showTranscript)}
                   />

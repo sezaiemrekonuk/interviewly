@@ -1,0 +1,24 @@
+/* The avatar's own look. Sizing is the caller's — a tile decides how big its speaker is —
+ * so this file carries no width or height: it exists because the monogram fallback used to
+ * be a `style` attribute, and `style-src 'self' 'nonce-…'` drops those in production.
+ */
+
+/* Geometry — size, position, radius — belongs to the caller's class, so this file sets none of
+   it: a tile that fills a meeting frame and one that sits beside a name are the same component
+   and would otherwise fight over which stylesheet loaded last. */
+.image {
+  object-fit: cover;
+}
+
+/* A letter on the soft primary ground, never a blank box and never a broken-image glyph
+   (ui §3.6). 28px at 600 clears the AA large-text floor (3:1) on --primary-soft. */
+.fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-heading), Georgia, serif;
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--primary);
+  background: var(--primary-soft);
+}

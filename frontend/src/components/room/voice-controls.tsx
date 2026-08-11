@@ -2,8 +2,8 @@
 
 import { useTranslations } from 'next-intl';
 
-import { MiniBars } from './persona-tiles';
 import { Button } from '../ui';
+import type { CameraDevice } from '../camera-view';
 import type { UseVoiceSessionResult } from '../../lib/use-voice-session';
 import { useErrorMessage } from '../../lib/use-error-message';
 import { useNowMs } from '../../lib/use-clock';
@@ -65,12 +65,64 @@ function TimeRemaining({ expiresAt }: { expiresAt: string | null }) {
   );
 }
 
+/**
+ * The device menu welded to a switch. The `<select>` is a real one — keyboard, screen reader,
+ * the platform's own menu — laid transparently over a caret, because a native select renders
+ * its selected option's text and the microphone's name is longer than the control it belongs
+ * to. The switch says what it does; this says which device it does it with.
+ */
+function Picker({
+  label,
+  value,
+  options,
+  onChange,
+  disabled = false,
+  testId,
+}: {
+  label: string;
+  value: string;
+  options: { value: string; label: string }[];
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  testId: string;
+}) {
+  if (options.length === 0) return null;
+
+  return (
+    <span className={styles.caret} data-disabled={disabled || undefined}>
+      <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true" focusable="false">
+        <path d="M2 4.5 6 8.5 10 4.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      </svg>
+      <select
+        className={styles.caretSelect}
+        aria-label={label}
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+        data-testid={testId}
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </span>
+  );
+}
+
 export interface VoiceControlsProps {
   session: UseVoiceSessionResult;
   /** The server's ceiling (`GET /state`). Null means the server named no deadline. */
   expiresAt: string | null;
   captionsOn: boolean;
   onToggleCaptions: () => void;
+  /** The candidate's own camera — optional, off by default, and never leaves the tab (§3.2). */
+  cameraOn: boolean;
+  onToggleCamera: () => void;
+  cameras: CameraDevice[];
+  cameraId: string | null;
+  onSelectCamera: (deviceId: string) => void;
   transcriptOpen: boolean;
   onToggleTranscript: () => void;
 }
@@ -89,6 +141,11 @@ export function VoiceControls({
   expiresAt,
   captionsOn,
   onToggleCaptions,
+  cameraOn,
+  onToggleCamera,
+  cameras,
+  cameraId,
+  onSelectCamera,
   transcriptOpen,
   onToggleTranscript,
 }: VoiceControlsProps) {
@@ -148,16 +205,57 @@ export function VoiceControls({
           </Button>
         ) : null}
 
-        <button
-          type="button"
-          className={styles.ck}
-          onClick={() => session.toggleMute()}
-          data-muted={session.muted}
-          aria-pressed={session.muted}
-        >
-          {session.muted ? t('voice.unmute') : t('voice.mute')}
-          <MiniBars />
-        </button>
+        {/* Mute and Camera are one control each: the switch, and the caret that says which
+            device it switches. Together, and before the captions — the two things a candidate
+            reaches for mid-sentence sit at the same end of the bar every time.
+
+            The picker is disabled mid-answer: `selectDevice` releases the track the
+            `MediaRecorder` is reading, and the swap would truncate the answer being given. */}
+        <div className={styles.group}>
+          <button
+            type="button"
+            className={styles.ck}
+            onClick={() => session.toggleMute()}
+            data-off={session.muted}
+            aria-pressed={session.muted}
+          >
+            {t('voice.mute')}
+          </button>
+          <Picker
+            label={t('micDevice')}
+            value={session.deviceId ?? session.devices[0]?.deviceId ?? ''}
+            disabled={session.recording}
+            onChange={session.selectDevice}
+            options={session.devices.map((device, index) => ({
+              value: device.deviceId,
+              label: device.label || t('micDeviceFallback', { n: index + 1 }),
+            }))}
+            testId="mic-device"
+          />
+        </div>
+
+        <div className={styles.group}>
+          <button
+            type="button"
+            className={styles.ck}
+            onClick={onToggleCamera}
+            data-off={!cameraOn}
+            aria-pressed={cameraOn}
+            data-testid="camera-toggle"
+          >
+            {t('camera')}
+          </button>
+          <Picker
+            label={t('cameraDevice')}
+            value={cameraId ?? cameras[0]?.deviceId ?? ''}
+            onChange={onSelectCamera}
+            options={cameras.map((device, index) => ({
+              value: device.deviceId,
+              label: device.label || t('cameraDeviceFallback', { n: index + 1 }),
+            }))}
+            testId="camera-device"
+          />
+        </div>
 
         <button
           type="button"
@@ -178,31 +276,6 @@ export function VoiceControls({
         >
           {t('transcriptToggle')}
         </button>
-
-        {/* One microphone is not a choice, so the control only exists where there is one to
-            make — the same gate pre-join's picker uses. Labelled by `aria-label` rather than a
-            visible `Field`: the bar is a row of self-describing controls and a stacked label
-            would be the only one in it.
-
-            Disabled mid-answer because `selectDevice` releases the track the `MediaRecorder`
-            is capturing from; the swap would truncate the answer being given. Between turns —
-            and while the mic is lost, which is the case this control exists for — it is live. */}
-        {session.devices.length > 1 ? (
-          <select
-            className={styles.pick}
-            aria-label={t('micDevice')}
-value={session.deviceId ?? session.devices[0]?.deviceId ?? ''}
-            disabled={session.recording}
-            onChange={(event) => session.selectDevice(event.target.value)}
-            data-testid="mic-device"
-          >
-            {session.devices.map((device, index) => (
-              <option key={device.deviceId} value={device.deviceId}>
-                {device.label || t('micDeviceFallback', { n: index + 1 })}
-              </option>
-            ))}
-          </select>
-        ) : null}
       </div>
     </>
   );
