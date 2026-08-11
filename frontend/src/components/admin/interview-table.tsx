@@ -2,17 +2,20 @@
 
 import { useFormatter, useTranslations } from 'next-intl';
 
+import { Link } from '../../i18n/navigation';
 import type { AdminInterviewRow } from '../../lib/query';
 
-import styles from './interview-table.module.css';
+import styles from './table.module.css';
 
 /**
- * `interviews.budget_usd` defaults to 0.50 in the schema and `BUDGET_USD_TEXT` can move it
- * per deployment, but `/admin/interviews` does not project it — so the default is what the
- * console can honestly compare against.
- * ponytail: constant; read the row's own ceiling once the endpoint returns `budgetUsd`.
+ * The row's own ceiling, now that `/admin/interviews` projects `budgetUsd`. This was a
+ * hardcoded 0.50 against every row, which read the deployment's default rather than the
+ * interview's — an interview created before `BUDGET_USD_TEXT` moved was measured against the
+ * new ceiling and flagged at the wrong number.
  */
-const CEILING_MICRO = 500_000;
+export function atCeiling(row: AdminInterviewRow): boolean {
+  return microUsd(row.costUsd) >= microUsd(row.budgetUsd);
+}
 
 /** Six-decimal string → integer micro-dollars, so a page of costs sums without float drift. */
 export function microUsd(costUsd: string): number {
@@ -61,9 +64,6 @@ export function InterviewTable({
         <h2 className={styles.heading} id="admin-interviews-heading">
           {t('interviews.heading')}
         </h2>
-        {/* The projection carries a raw `userId` cuid and nothing else — no email, no name,
-            and no endpoint to resolve it. Printing the cuid would look like an answer. */}
-        <p className={styles.note}>{t('interviews.noUserJoin')}</p>
       </div>
 
       {items.length === 0 ? (
@@ -77,6 +77,7 @@ export function InterviewTable({
             <thead>
               <tr>
                 <th scope="col">{t('interviews.col.id')}</th>
+                <th scope="col">{t('interviews.col.user')}</th>
                 <th scope="col">{t('interviews.col.occupation')}</th>
                 <th scope="col">{t('interviews.col.state')}</th>
                 <th scope="col" className={styles.num}>
@@ -86,20 +87,28 @@ export function InterviewTable({
                   {t('interviews.col.cost')}
                 </th>
                 <th scope="col">{t('interviews.col.flags')}</th>
+                <th scope="col">
+                  <span className={styles.srOnly}>{t('interviews.open')}</span>
+                </th>
               </tr>
             </thead>
             <tbody>
               {items.map((row) => {
                 const unpriced = isUnpriced(row);
-                const atCeiling = microUsd(row.costUsd) >= CEILING_MICRO;
+                const ceiling = atCeiling(row);
                 return (
                   <tr
                     key={row.id}
                     data-testid="admin-interview-row"
-                    data-budget={atCeiling ? 'ceiling' : undefined}
+                    data-budget={ceiling ? 'ceiling' : undefined}
                   >
                     <td className={`${styles.id} tabular`} title={row.id}>
                       {row.id}
+                    </td>
+                    {/* The account, resolved. The row carried a bare cuid until
+                        `/admin/interviews` learned to join it. */}
+                    <td className={styles.occupation} title={row.userId}>
+                      {row.userEmail}
                     </td>
                     <td className={styles.occupation}>
                       {row.occupation ?? t('interviews.noOccupation')}
@@ -125,9 +134,20 @@ export function InterviewTable({
                       {row.deleted && (
                         <span className={styles.deletedPill}>{t('interviews.deletedPill')}</span>
                       )}
-                      {atCeiling && (
+                      {ceiling && (
                         <span className={styles.ceilingPill}>{t('interviews.ceilingPill')}</span>
                       )}
+                    </td>
+                    <td>
+                      {/* US-26's "open one" — the drill-down the spec asked for and the row
+                          never had. Labelled with the id so a screen reader hears which. */}
+                      <Link
+                        className={styles.open}
+                        href={`/admin/interviews/${row.id}`}
+                        aria-label={t('interviews.openRow', { id: row.id })}
+                      >
+                        {t('interviews.open')}
+                      </Link>
                     </td>
                   </tr>
                 );
