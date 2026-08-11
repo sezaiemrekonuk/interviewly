@@ -4,6 +4,7 @@ import { useFormatter, useTranslations } from 'next-intl';
 
 import type { AdminUserRow } from '../../lib/query';
 
+import { SortHeader } from './sort-header';
 import styles from './table.module.css';
 
 export function UserTable({
@@ -12,12 +13,16 @@ export function UserTable({
   isFetchingNextPage,
   onLoadMore,
   onFilterByUser,
+  sort,
+  onSort,
 }: {
   items: AdminUserRow[];
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
   onLoadMore: () => void;
   onFilterByUser?: (userId: string) => void;
+  sort: { field: string; dir: 'asc' | 'desc' };
+  onSort: (field: string) => void;
 }) {
   const t = useTranslations('admin');
   const format = useFormatter();
@@ -40,13 +45,32 @@ export function UserTable({
             <caption className={styles.caption}>{t('users.caption')}</caption>
             <thead>
               <tr>
-                <th scope="col">{t('users.col.email')}</th>
-                <th scope="col">{t('users.col.role')}</th>
-                <th scope="col" className={styles.num}>
-                  {t('users.col.interviews')}
-                </th>
+                <SortHeader
+                  field="email"
+                  label={t('users.col.email')}
+                  sort={sort}
+                  onSort={onSort}
+                />
+                <SortHeader
+                  field="role"
+                  label={t('users.col.role')}
+                  sort={sort}
+                  onSort={onSort}
+                />
+                <SortHeader
+                  field="interviews"
+                  label={t('users.col.interviews')}
+                  sort={sort}
+                  onSort={onSort}
+                  numeric
+                />
                 <th scope="col">{t('users.col.status')}</th>
-                <th scope="col">{t('users.col.created')}</th>
+                <SortHeader
+                  field="created"
+                  label={t('users.col.created')}
+                  sort={sort}
+                  onSort={onSort}
+                />
               </tr>
             </thead>
             <tbody>

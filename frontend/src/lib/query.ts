@@ -85,6 +85,29 @@ export function createQueryClient(): QueryClient {
   });
 }
 
+/**
+ * What every admin list echoes back alongside its rows.
+ *
+ * `query.ignored` is the important half: a term the backend could not understand is NOT
+ * applied, and a console that dropped it silently would show an unnarrowed list to an operator
+ * who believes they narrowed it.
+ */
+export interface AdminListMeta {
+  /**
+   * `fields` is the backend's own whitelist, carrying each field's kind and — for an enum —
+   * its exact values. The console builds its filter controls from this rather than from a
+   * local copy, so a dropdown can never offer an option the server would refuse.
+   */
+  query: { applied: string[]; ignored: string[]; fields: AdminFilterField[] };
+  sort: { field: string; dir: 'asc' | 'desc'; sortable: string[] };
+}
+
+export interface AdminFilterField {
+  name: string;
+  kind: 'text' | 'exact' | 'enum' | 'number' | 'decimal' | 'date' | 'presence' | 'computed';
+  values?: string[];
+}
+
 /** `GET /admin/interviews` row (N01 audit projection — bypasses `userInterviews`, deleted included). */
 export interface AdminInterviewRow {
   id: string;
@@ -113,7 +136,7 @@ export type AdminFilters<K extends string> = { [key in K]?: string } & Record<
   string,
   string | undefined
 >;
-export interface AdminInterviewsPage {
+export interface AdminInterviewsPage extends AdminListMeta {
   items: AdminInterviewRow[];
   nextCursor: string | null;
 }
@@ -237,7 +260,7 @@ export function useAdminInterview(
 }
 
 /** `GET /admin/llm-calls`. `facets` is the vocabulary the provider/model filters offer. */
-export interface AdminCallsPage {
+export interface AdminCallsPage extends AdminListMeta {
   items: AdminCallRow[];
   facets: { provider: string; model: string; count: number }[];
   nextCursor: string | null;
@@ -274,7 +297,7 @@ export interface AdminUserRow {
   createdAt: string;
 }
 
-export interface AdminUsersPage {
+export interface AdminUsersPage extends AdminListMeta {
   items: AdminUserRow[];
   nextCursor: string | null;
 }
@@ -304,7 +327,7 @@ export interface AdminSessionRow {
   createdAt: string;
 }
 
-export interface AdminSessionsPage {
+export interface AdminSessionsPage extends AdminListMeta {
   items: AdminSessionRow[];
   nextCursor: string | null;
 }
@@ -331,7 +354,7 @@ export interface AdminAuditRow extends AdminEventRow {
   subjectId: string | null;
 }
 
-export interface AdminAuditPage {
+export interface AdminAuditPage extends AdminListMeta {
   items: AdminAuditRow[];
   actions: { action: string; count: number }[];
   nextCursor: string | null;

@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { AuditTable } from '../../../components/admin/audit-table';
 import { CallTable } from '../../../components/admin/call-table';
 import { CostPanel } from '../../../components/admin/cost-panel';
-import { FilterBar, type FilterControl } from '../../../components/admin/filter-bar';
+import { FilterBuilder } from '../../../components/admin/filter-builder';
 import { InterviewTable } from '../../../components/admin/interview-table';
 import { QueuePanel } from '../../../components/admin/queue-panel';
 import { SessionTable } from '../../../components/admin/session-table';
@@ -16,6 +16,7 @@ import { RailFoot, RailMark, SplitShell, WorkBody, WorkTop } from '../../../comp
 import { Link } from '../../../i18n/navigation';
 import { DEFAULT_LANDING_PATH } from '../../../lib/auth-redirect';
 import {
+  type AdminListMeta,
   useAdminAudit,
   useAdminInterviews,
   useAdminLlmCalls,
@@ -47,20 +48,25 @@ const SECTIONS = [
 
 type SectionId = (typeof SECTIONS)[number];
 
-/** The nine `InterviewState` values, in the order the state machine walks them. */
-const INTERVIEW_STATES = [
-  'created',
-  'profiling',
-  'hr_round',
-  'tech_round',
-  'paused',
-  'evaluating',
-  'completed',
-  'abandoned',
-  'failed',
-];
-
 type Filters = Record<string, string | undefined>;
+
+/**
+ * Which filter bag a section reads and writes.
+ *
+ * Overview, Interviews and Costs are three views of ONE list, so they share one bag: narrowing
+ * on Overview and switching to Costs must keep the narrowing, and a bag each would have let a
+ * section write a filter that the query it renders never reads.
+ */
+const FILTER_BAG: Record<SectionId, SectionId> = {
+  overview: 'interviews',
+  interviews: 'interviews',
+  costs: 'interviews',
+  modelCalls: 'modelCalls',
+  sessions: 'sessions',
+  users: 'users',
+  queue: 'queue',
+  audit: 'audit',
+};
 
 /** Two figures and the table at their final row height, so nothing jumps when data lands. */
 function TableSkeleton({ label }: { label: string }) {
@@ -90,7 +96,8 @@ export default function AdminPage() {
   // One filter bag per section. Shared state would carry `state=completed` from the interview
   // list into the audit trail, where it means nothing and silently empties the table.
   const [filters, setFilters] = useState<Record<string, Filters>>({});
-  const active = filters[section] ?? {};
+  const bagKey = FILTER_BAG[section];
+  const active = filters[bagKey] ?? {};
 
   const isAdmin = !authLoading && user !== null && user.role === 'admin';
   // Enabled per section: eight endpoints fired on every load would make opening the console
@@ -130,103 +137,67 @@ export default function AdminPage() {
 
   const items = interviews.data?.pages.flatMap((page) => page.items) ?? [];
   const callRows = calls.data?.pages.flatMap((page) => page.items) ?? [];
-  const facets = calls.data?.pages[0]?.facets ?? [];
   const auditRows = audit.data?.pages.flatMap((page) => page.items) ?? [];
-  const auditActions = audit.data?.pages[0]?.actions ?? [];
 
-  const setFilter = (next: Filters) => setFilters((all) => ({ ...all, [section]: next }));
+  const setFilter = (next: Filters) => setFilters((all) => ({ ...all, [bagKey]: next }));
 
-  /** Jumps to another section carrying one filter — "this account's interviews", and back. */
-  const openWith = (target: SectionId, next: Filters) => {
-    setFilters((all) => ({ ...all, [target]: next }));
-    setSection(target);
-  };
+  // The first page of whichever list is on screen. Every list echoes the same envelope, so the
+  // search box and the headers read their vocabulary from the server rather than from a copy
+  // of the whitelist that would drift the first time a field is renamed.
+  const meta: AdminListMeta | undefined = {
+    overview: interviews.data?.pages[0],
+    interviews: interviews.data?.pages[0],
+    costs: interviews.data?.pages[0],
+    modelCalls: calls.data?.pages[0],
+    sessions: sessions.data?.pages[0],
+    users: users.data?.pages[0],
+    queue: undefined,
+    audit: audit.data?.pages[0],
+  }[section];
 
-  // `option` labels come from the data, never from a hardcoded list that would drift: the
-  // clusters are whatever `/admin/stats` grouped, the providers whatever calls were made.
-  const controls: Partial<Record<SectionId, FilterControl[]>> = {
-    interviews: [
-      {
-        kind: 'select',
-        name: 'occupationCluster',
-        label: t('filters.cluster'),
-        options: (stats.data?.perOccupation ?? []).map((entry) => ({
-          value: entry.cluster,
-          label: entry.label,
-        })),
-      },
-      {
-        kind: 'select',
-        name: 'state',
-        label: t('filters.state'),
-        options: INTERVIEW_STATES.map((state) => ({
-          value: state,
-          label: t.has(`state.${state}` as Parameters<typeof t.has>[0])
-            ? t(`state.${state}` as Parameters<typeof t>[0])
-            : state,
-        })),
-      },
-      { kind: 'text', name: 'userId', label: t('filters.user') },
-    ],
-    modelCalls: [
-      {
-        kind: 'select',
-        name: 'provider',
-        label: t('filters.provider'),
-        options: [...new Set(facets.map((facet) => facet.provider))].map((provider) => ({
-          value: provider,
-          label: provider,
-        })),
-      },
-      {
-        kind: 'select',
-        name: 'model',
-        label: t('filters.model'),
-        options: [...new Set(facets.map((facet) => facet.model))].map((model) => ({
-          value: model,
-          label: model,
-        })),
-      },
-      { kind: 'text', name: 'interviewId', label: t('filters.interview') },
-    ],
-    users: [
-      {
-        kind: 'select',
-        name: 'role',
-        label: t('filters.role'),
-        options: [
-          { value: 'admin', label: t('users.role.admin') },
-          { value: 'user', label: t('users.role.user') },
-        ],
-      },
-      { kind: 'text', name: 'q', label: t('filters.search') },
-    ],
-    sessions: [
-      { kind: 'text', name: 'userId', label: t('filters.user') },
-      { kind: 'toggle', name: 'active', label: t('filters.activeOnly') },
-    ],
-    audit: [
-      {
-        kind: 'select',
-        name: 'action',
-        label: t('filters.action'),
-        options: auditActions.map((entry) => ({
-          value: entry.action,
-          label: t.has(
-            `audit.action.${entry.action.replaceAll('.', '_')}` as Parameters<typeof t.has>[0],
-          )
-            ? t(`audit.action.${entry.action.replaceAll('.', '_')}` as Parameters<typeof t>[0])
-            : entry.action,
-        })),
-      },
-      { kind: 'text', name: 'actorUserId', label: t('filters.user') },
-      { kind: 'text', name: 'subjectId', label: t('filters.interview') },
-    ],
+  /**
+   * The local bag wins over the echo while a re-sort is in flight, so a clicked header flips
+   * immediately instead of waiting a round trip to look like it did anything. Before the first
+   * click there is nothing local, and the server's default is the truth.
+   */
+  const activeSort = active.sort
+    ? { field: active.sort, dir: active.dir === 'asc' ? ('asc' as const) : ('desc' as const) }
+    : { field: meta?.sort?.field ?? '', dir: meta?.sort?.dir ?? ('desc' as const) };
+
+  /**
+   * Same column flips the direction; a different column starts at descending — newest, biggest,
+   * most expensive first is what an operator means by "sort by this".
+   *
+   * The cursor is not cleared by hand: the sort lives in the query key, so a new order is a new
+   * cache entry that starts at page one. The backend refuses a cursor minted under a different
+   * order anyway, which is the belt to this bracers.
+   */
+  const onSort = (field: string) =>
+    setFilter({
+      ...active,
+      sort: field,
+      dir: field === activeSort.field && activeSort.dir === 'desc' ? 'asc' : 'desc',
+    });
+
+  const onSearch = (q: string) => setFilter({ ...active, q: q || undefined });
+
+  /**
+   * "Show me this account's interviews", from a row in the accounts table.
+   *
+   * Written as a query term rather than a separate parameter so it lands as a visible, removable
+   * chip — a jump that filtered the next screen invisibly is how an operator ends up reading a
+   * narrowed list without knowing it is narrowed.
+   */
+  const openInterviewsFor = (userId: string) => {
+    setFilters((all) => ({ ...all, interviews: { q: `user:${userId}` } }));
+    setSection('interviews');
   };
 
   const table = (
     <InterviewTable
       items={items}
+      sort={activeSort}
+      onSort={onSort}
       hasNextPage={Boolean(interviews.hasNextPage)}
       isFetchingNextPage={interviews.isFetchingNextPage}
       onLoadMore={() => interviews.fetchNextPage()}
@@ -270,6 +241,8 @@ export default function AdminPage() {
         return (
           <CallTable
             items={callRows}
+            sort={activeSort}
+            onSort={onSort}
             showInterview
             hasNextPage={Boolean(calls.hasNextPage)}
             isFetchingNextPage={calls.isFetchingNextPage}
@@ -280,6 +253,8 @@ export default function AdminPage() {
         return (
           <SessionTable
             items={sessions.data?.pages.flatMap((page) => page.items) ?? []}
+            sort={activeSort}
+            onSort={onSort}
             hasNextPage={Boolean(sessions.hasNextPage)}
             isFetchingNextPage={sessions.isFetchingNextPage}
             onLoadMore={() => sessions.fetchNextPage()}
@@ -289,10 +264,12 @@ export default function AdminPage() {
         return (
           <UserTable
             items={users.data?.pages.flatMap((page) => page.items) ?? []}
+            sort={activeSort}
+            onSort={onSort}
             hasNextPage={Boolean(users.hasNextPage)}
             isFetchingNextPage={users.isFetchingNextPage}
             onLoadMore={() => users.fetchNextPage()}
-            onFilterByUser={(userId) => openWith('interviews', { userId })}
+            onFilterByUser={openInterviewsFor}
           />
         );
       case 'queue':
@@ -301,6 +278,8 @@ export default function AdminPage() {
         return (
           <AuditTable
             items={auditRows}
+            sort={activeSort}
+            onSort={onSort}
             hasNextPage={Boolean(audit.hasNextPage)}
             isFetchingNextPage={audit.isFetchingNextPage}
             onLoadMore={() => audit.fetchNextPage()}
@@ -364,8 +343,28 @@ export default function AdminPage() {
       <WorkBody className={styles.body}>
         {/* Above the data, not in the header strip: three selects and a search box need the
             work column's width, and a filter that wraps into the title row reads as chrome. */}
-        {controls[section] ? (
-          <FilterBar controls={controls[section]} value={active} onChange={setFilter} />
+        {/* One control for every field this table has. The hand-written dropdowns it replaces
+            covered three facets out of fifteen and had to be extended by hand for each new one;
+            this is built from the envelope, so a field added on the server appears here with
+            no client change at all.
+
+            The queue is the one section without it: no list, no cursor, no order, and a filter
+            over five counters would be furniture.
+
+            Optional-chained through `query` as well as `meta` — an older api container answers
+            these lists without the envelope, and crashing over a filter control would take the
+            whole surface down. */}
+        {meta ? (
+          <FilterBuilder
+            value={active.q ?? ''}
+            onChange={onSearch}
+            fields={meta.query?.fields ?? []}
+          />
+        ) : null}
+        {(meta?.query?.ignored?.length ?? 0) > 0 ? (
+          <p className={styles.ignored} role="status" data-testid="admin-search-ignored">
+            {t('filter.ignored', { terms: (meta?.query?.ignored ?? []).join(', ') })}
+          </p>
         ) : null}
         {body()}
       </WorkBody>

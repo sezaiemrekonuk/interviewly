@@ -4,6 +4,7 @@ import { useFormatter, useTranslations } from 'next-intl';
 
 import type { AdminCallRow } from '../../lib/query';
 
+import { SortHeader } from './sort-header';
 import styles from './table.module.css';
 
 /** A uuid at full width would own the column; eight characters identify it and `title` holds the rest. */
@@ -15,12 +16,16 @@ export function CallTable({
   isFetchingNextPage,
   onLoadMore,
   showInterview = false,
+  sort,
+  onSort,
 }: {
   items: AdminCallRow[];
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
   onLoadMore: () => void;
   showInterview?: boolean;
+  sort: { field: string; dir: 'asc' | 'desc' };
+  onSort: (field: string) => void;
 }) {
   const t = useTranslations('admin');
   const format = useFormatter();
@@ -51,23 +56,51 @@ export function CallTable({
             <caption className={styles.caption}>{t('calls.caption')}</caption>
             <thead>
               <tr>
-                <th scope="col">{t('calls.col.when')}</th>
+                <SortHeader
+                  field="created"
+                  label={t('calls.col.when')}
+                  sort={sort}
+                  onSort={onSort}
+                />
                 {showInterview && <th scope="col">{t('calls.col.interview')}</th>}
-                <th scope="col">{t('calls.col.provider')}</th>
-                <th scope="col">{t('calls.col.model')}</th>
-                <th scope="col">{t('calls.col.prompt')}</th>
+                <SortHeader
+                  field="provider"
+                  label={t('calls.col.provider')}
+                  sort={sort}
+                  onSort={onSort}
+                />
+                <SortHeader
+                  field="model"
+                  label={t('calls.col.model')}
+                  sort={sort}
+                  onSort={onSort}
+                />
+                <SortHeader
+                  field="version"
+                  label={t('calls.col.prompt')}
+                  sort={sort}
+                  onSort={onSort}
+                />
                 <th scope="col" className={styles.num}>
                   {t('calls.col.units')}
                 </th>
                 <th scope="col" className={styles.num}>
                   {t('calls.col.tokens')}
                 </th>
-                <th scope="col" className={styles.num}>
-                  {t('calls.col.cost')}
-                </th>
-                <th scope="col" className={styles.num}>
-                  {t('calls.col.latency')}
-                </th>
+                <SortHeader
+                  field="cost"
+                  label={t('calls.col.cost')}
+                  sort={sort}
+                  onSort={onSort}
+                  numeric
+                />
+                <SortHeader
+                  field="latency"
+                  label={t('calls.col.latency')}
+                  sort={sort}
+                  onSort={onSort}
+                  numeric
+                />
               </tr>
             </thead>
             <tbody>

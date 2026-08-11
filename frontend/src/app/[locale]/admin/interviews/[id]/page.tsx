@@ -2,6 +2,7 @@
 
 import { useFormatter, useTranslations } from 'next-intl';
 import { useParams } from 'next/navigation';
+import { useState } from 'react';
 
 import {
   RailFoot,
@@ -10,11 +11,15 @@ import {
   WorkBody,
   WorkTop,
 } from '../../../../../components/shell/split-shell';
+import { FilterBuilder } from '../../../../../components/admin/filter-builder';
+import { SortHeader } from '../../../../../components/admin/sort-header';
 import table from '../../../../../components/admin/table.module.css';
 import { Link } from '../../../../../i18n/navigation';
 import { DEFAULT_LANDING_PATH } from '../../../../../lib/auth-redirect';
 import type { AdminCallRow, AdminEventRow, AdminInterviewDetail } from '../../../../../lib/query';
 import { useAdminInterview } from '../../../../../lib/query';
+import type { RowSpec } from '../../../../../lib/row-query';
+import { fieldDescriptors, filterRows, sortRows } from '../../../../../lib/row-query';
 import { useErrorMessage } from '../../../../../lib/use-error-message';
 import { useRequireAuth } from '../../../../../lib/use-require-auth';
 
@@ -23,6 +28,62 @@ import styles from './detail.module.css';
 
 /** A uuid at full width owns its column; eight characters identify it, `title` holds the rest. */
 const UUID_HEAD = 8;
+
+type Sort = { field: string; dir: 'asc' | 'desc' };
+
+/**
+ * Both tables here arrive whole inside `GET /admin/interviews/:id` — 500 calls and 200 events at
+ * most — so the search is a predicate over the array, not a round trip.
+ *
+ * The field names are the ones `backend/modules/admin/specs.ts` already teaches on the list
+ * sections: an operator who learned `cost>0.10` on the model calls must not learn a second word
+ * for the same thing one click deeper.
+ */
+const CALL_SPEC: RowSpec<AdminCallRow> = {
+  fields: {
+    id: { get: (row) => row.id, kind: 'text' },
+    provider: { get: (row) => row.provider, kind: 'text' },
+    model: { get: (row) => row.model, kind: 'text' },
+    prompt: { get: (row) => row.promptUuid, kind: 'text' },
+    version: { get: (row) => row.promptVersion, kind: 'number' },
+    attempt: { get: (row) => row.attemptNo, kind: 'number' },
+    unit: { get: (row) => row.unitKind, kind: 'text' },
+    // A six-decimal string on the wire (K11). `number` is what makes `cost>0.01` money rather
+    // than a lexicographic comparison of two strings.
+    cost: { get: (row) => row.costUsd, kind: 'number' },
+    latency: { get: (row) => row.latencyMs, kind: 'number' },
+    trace: { get: (row) => row.traceId, kind: 'text' },
+    created: { get: (row) => row.createdAt, kind: 'date' },
+    fellback: { get: (row) => row.fellBackFrom, kind: 'text' },
+  },
+  freeText: ['id', 'provider', 'model', 'prompt', 'trace'],
+  sortable: ['created', 'cost', 'latency', 'provider', 'model', 'version'],
+  defaultSort: 'created',
+};
+
+const EVENT_SPEC: RowSpec<AdminEventRow> = {
+  fields: {
+    id: { get: (row) => row.id, kind: 'text' },
+    action: { get: (row) => row.action, kind: 'text' },
+    // The audit list spends `actor` on the actor's email, which this payload does not carry;
+    // the id is the only actor here, so it takes the short name.
+    actor: { get: (row) => row.actorUserId, kind: 'text' },
+    trace: { get: (row) => row.traceId, kind: 'text' },
+    created: { get: (row) => row.createdAt, kind: 'date' },
+  },
+  freeText: ['action', 'trace'],
+  sortable: ['created', 'action'],
+  defaultSort: 'created',
+};
+
+/**
+ * Same column flips the direction; a different column starts at descending — newest, biggest,
+ * most expensive first is what an operator means by "sort by this". The rule `/admin` uses.
+ */
+const flip = (sort: Sort, field: string): Sort => ({
+  field,
+  dir: field === sort.field && sort.dir === 'desc' ? 'asc' : 'desc',
+});
 
 /**
  * `metadata` is an unknown JSON blob. Only the scalar entries are readable as `key: value`,
@@ -55,6 +116,11 @@ export default function AdminInterviewDetailPage() {
   const t = useTranslations('admin');
   const format = useFormatter();
   const errorMessage = useErrorMessage();
+
+  const [callQuery, setCallQuery] = useState('');
+  const [callSort, setCallSort] = useState<Sort>({ field: CALL_SPEC.defaultSort, dir: 'desc' });
+  const [eventQuery, setEventQuery] = useState('');
+  const [eventSort, setEventSort] = useState<Sort>({ field: EVENT_SPEC.defaultSort, dir: 'desc' });
 
   const isAdmin = !authLoading && user !== null && user.role === 'admin';
   const detail = useAdminInterview(id, isAdmin);
@@ -220,42 +286,87 @@ export default function AdminInterviewDetailPage() {
     );
   }
 
-  function calls(rows: AdminCallRow[], truncated: boolean) {
+  function calls(all: AdminCallRow[], truncated: boolean) {
+    const found = filterRows(all, callQuery, CALL_SPEC);
+    const rows = sortRows(found.rows, callSort.field, callSort.dir, CALL_SPEC);
+
     return (
       <section className={table.card} aria-labelledby="admin-detail-calls-heading">
         <div className={table.head}>
           <h2 className={table.heading} id="admin-detail-calls-heading">
             {t('detail.callsTitle')}
           </h2>
+          {/* The cap is a fact about the response, so it counts what arrived — narrowing the
+              view does not un-truncate it. */}
           {truncated ? (
-            <p className={table.note}>{t('detail.callsTruncated', { count: rows.length })}</p>
+            <p className={table.note}>{t('detail.callsTruncated', { count: all.length })}</p>
+          ) : null}
+          {/* Hidden when nothing was recorded: a box that can only ever return the same empty
+              table is chrome. */}
+          {all.length > 0 ? (
+            <FilterBuilder
+              value={callQuery}
+              onChange={setCallQuery}
+              fields={fieldDescriptors(CALL_SPEC)}
+            />
           ) : null}
         </div>
 
         {rows.length === 0 ? (
-          <p className={table.empty}>{t('detail.callsEmpty')}</p>
+          // Two different facts: nothing was recorded, versus the search matched none of what
+          // was. `stats.empty` ("No data yet") is the closest existing key for the second — a
+          // dedicated `detail.noMatch` would say it better if anyone adds one.
+          <p className={table.empty}>{t(all.length === 0 ? 'detail.callsEmpty' : 'stats.empty')}</p>
         ) : (
           <div className={table.scroller}>
             <table className={table.table}>
               <caption className={table.caption}>{t('calls.caption')}</caption>
               <thead>
                 <tr>
-                  <th scope="col">{t('calls.col.when')}</th>
-                  <th scope="col">{t('calls.col.provider')}</th>
-                  <th scope="col">{t('calls.col.model')}</th>
-                  <th scope="col">{t('calls.col.prompt')}</th>
+                  <SortHeader
+                    field="created"
+                    label={t('calls.col.when')}
+                    sort={callSort}
+                    onSort={(field) => setCallSort((sort) => flip(sort, field))}
+                  />
+                  <SortHeader
+                    field="provider"
+                    label={t('calls.col.provider')}
+                    sort={callSort}
+                    onSort={(field) => setCallSort((sort) => flip(sort, field))}
+                  />
+                  <SortHeader
+                    field="model"
+                    label={t('calls.col.model')}
+                    sort={callSort}
+                    onSort={(field) => setCallSort((sort) => flip(sort, field))}
+                  />
+                  <SortHeader
+                    field="version"
+                    label={t('calls.col.prompt')}
+                    sort={callSort}
+                    onSort={(field) => setCallSort((sort) => flip(sort, field))}
+                  />
                   <th scope="col" className={table.num}>
                     {t('calls.col.units')}
                   </th>
                   <th scope="col" className={table.num}>
                     {t('calls.col.tokens')}
                   </th>
-                  <th scope="col" className={table.num}>
-                    {t('calls.col.cost')}
-                  </th>
-                  <th scope="col" className={table.num}>
-                    {t('calls.col.latency')}
-                  </th>
+                  <SortHeader
+                    field="cost"
+                    label={t('calls.col.cost')}
+                    sort={callSort}
+                    onSort={(field) => setCallSort((sort) => flip(sort, field))}
+                    numeric
+                  />
+                  <SortHeader
+                    field="latency"
+                    label={t('calls.col.latency')}
+                    sort={callSort}
+                    onSort={(field) => setCallSort((sort) => flip(sort, field))}
+                    numeric
+                  />
                 </tr>
               </thead>
               <tbody>
@@ -312,7 +423,10 @@ export default function AdminInterviewDetailPage() {
     );
   }
 
-  function events(rows: AdminEventRow[]) {
+  function events(all: AdminEventRow[]) {
+    const found = filterRows(all, eventQuery, EVENT_SPEC);
+    const rows = sortRows(found.rows, eventSort.field, eventSort.dir, EVENT_SPEC);
+
     return (
       <section className={table.card} aria-labelledby="admin-detail-events-heading">
         <div className={table.head}>
@@ -320,18 +434,37 @@ export default function AdminInterviewDetailPage() {
             {t('detail.eventsTitle')}
           </h2>
           <p className={table.note}>{t('detail.eventsNote')}</p>
+          {all.length > 0 ? (
+            <FilterBuilder
+              value={eventQuery}
+              onChange={setEventQuery}
+              fields={fieldDescriptors(EVENT_SPEC)}
+            />
+          ) : null}
         </div>
 
         {rows.length === 0 ? (
-          <p className={table.empty}>{t('detail.eventsEmpty')}</p>
+          // "Nothing was recorded" and "the search matched nothing" are different facts; see
+          // the note on the calls table above.
+          <p className={table.empty}>{t(all.length === 0 ? 'detail.eventsEmpty' : 'stats.empty')}</p>
         ) : (
           <div className={table.scroller}>
             <table className={table.table}>
               <caption className={table.caption}>{t('audit.caption')}</caption>
               <thead>
                 <tr>
-                  <th scope="col">{t('audit.col.when')}</th>
-                  <th scope="col">{t('audit.col.action')}</th>
+                  <SortHeader
+                    field="created"
+                    label={t('audit.col.when')}
+                    sort={eventSort}
+                    onSort={(field) => setEventSort((sort) => flip(sort, field))}
+                  />
+                  <SortHeader
+                    field="action"
+                    label={t('audit.col.action')}
+                    sort={eventSort}
+                    onSort={(field) => setEventSort((sort) => flip(sort, field))}
+                  />
                   <th scope="col">{t('audit.col.trace')}</th>
                 </tr>
               </thead>

@@ -4,6 +4,7 @@ import { useFormatter, useTranslations } from 'next-intl';
 
 import type { AdminSessionRow } from '../../lib/query';
 
+import { SortHeader } from './sort-header';
 import styles from './table.module.css';
 
 export function SessionTable({
@@ -11,11 +12,15 @@ export function SessionTable({
   hasNextPage,
   isFetchingNextPage,
   onLoadMore,
+  sort,
+  onSort,
 }: {
   items: AdminSessionRow[];
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
   onLoadMore: () => void;
+  sort: { field: string; dir: 'asc' | 'desc' };
+  onSort: (field: string) => void;
 }) {
   const t = useTranslations('admin');
   const format = useFormatter();
@@ -39,10 +44,25 @@ export function SessionTable({
             <caption className={styles.caption}>{t('sessions.caption')}</caption>
             <thead>
               <tr>
-                <th scope="col">{t('sessions.col.user')}</th>
+                <SortHeader
+                  field="email"
+                  label={t('sessions.col.user')}
+                  sort={sort}
+                  onSort={onSort}
+                />
                 <th scope="col">{t('sessions.col.status')}</th>
-                <th scope="col">{t('sessions.col.created')}</th>
-                <th scope="col">{t('sessions.col.expires')}</th>
+                <SortHeader
+                  field="created"
+                  label={t('sessions.col.created')}
+                  sort={sort}
+                  onSort={onSort}
+                />
+                <SortHeader
+                  field="expires"
+                  label={t('sessions.col.expires')}
+                  sort={sort}
+                  onSort={onSort}
+                />
               </tr>
             </thead>
             <tbody>

@@ -169,6 +169,27 @@ interface Call {
   method: string;
 }
 
+/**
+ * The search/sort envelope every admin list echoes. Spread into each stubbed response so the
+ * fixtures answer what the endpoints answer.
+ */
+const META = {
+  query: {
+    applied: [],
+    ignored: [],
+    // Descriptors, not bare names: the builder renders a typed control per kind, and an enum
+    // arrives carrying the exact values the server will accept.
+    fields: [
+      { name: 'id', kind: 'exact' },
+      { name: 'account', kind: 'text' },
+      { name: 'state', kind: 'enum', values: ['completed', 'abandoned', 'failed'] },
+      { name: 'cost', kind: 'decimal' },
+      { name: 'created', kind: 'date' },
+    ],
+  },
+  sort: { field: 'created', dir: 'desc', sortable: ['created', 'cost', 'state'] },
+};
+
 function json(status: number, body: unknown) {
   return new Response(status === 204 ? null : JSON.stringify(body), {
     status,
@@ -182,7 +203,9 @@ function json(status: number, body: unknown) {
  */
 function stubFetch({
   user = ADMIN,
-  first = { items: [row()], nextCursor: null as string | null },
+  // `Partial<typeof META>` on top of the page, so a case that wants to assert the ignored-term
+  // warning can override just `query` without restating the whole envelope.
+  first = { items: [row()], nextCursor: null as string | null } as Record<string, unknown>,
   pages = {} as Record<string, unknown>,
   stats = STATS as unknown,
   adminStatus = 200,
@@ -198,15 +221,30 @@ function stubFetch({
       if (adminStatus !== 200) return json(adminStatus, { error: { code: 'FORBIDDEN' } });
       if (url.startsWith('/api/admin/interviews')) {
         const cursor = new URL(url, 'http://x').searchParams.get('cursor');
-        return json(200, cursor ? (pages[cursor] ?? { items: [], nextCursor: null }) : first);
+        return json(200, {
+          ...META,
+          ...(cursor ? (pages[cursor] ?? { items: [], nextCursor: null }) : first),
+        });
       }
       if (url === '/api/admin/stats') return json(200, stats);
       if (url.startsWith('/api/admin/llm-calls'))
-        return json(200, { items: [CALL], facets: [{ provider: 'openai', model: 'gpt-4.1-mini', count: 42 }], nextCursor: null });
-      if (url.startsWith('/api/admin/users')) return json(200, { items: [USER_ROW], nextCursor: null });
-      if (url.startsWith('/api/admin/sessions')) return json(200, { items: [SESSION_ROW], nextCursor: null });
+        return json(200, {
+          ...META,
+          items: [CALL],
+          facets: [{ provider: 'openai', model: 'gpt-4.1-mini', count: 42 }],
+          nextCursor: null,
+        });
+      if (url.startsWith('/api/admin/users'))
+        return json(200, { ...META, items: [USER_ROW], nextCursor: null });
+      if (url.startsWith('/api/admin/sessions'))
+        return json(200, { ...META, items: [SESSION_ROW], nextCursor: null });
       if (url.startsWith('/api/admin/audit'))
-        return json(200, { items: [AUDIT_ROW], actions: [{ action: AUDIT_ROW.action, count: 1 }], nextCursor: null });
+        return json(200, {
+          ...META,
+          items: [AUDIT_ROW],
+          actions: [{ action: AUDIT_ROW.action, count: 1 }],
+          nextCursor: null,
+        });
       if (url === '/api/admin/queue') return json(200, QUEUE);
       return json(404, { error: { code: 'NOT_FOUND' } });
     }),
@@ -411,23 +449,66 @@ describe('admin list + stats (W11)', () => {
     expect(calls.some((c) => c.url === '/api/admin/queue')).toBe(true);
   });
 
-  it('narrows the interview list through the backend, not in the browser', async () => {
+  it('builds a filter by picking a field and a value, never by typing syntax', async () => {
     const calls = stubFetch({});
     await renderAdmin();
     await screen.findAllByTestId('admin-interview-row');
 
     await act(async () => {
-      await userEvent.click(screen.getByTestId('admin-nav-interviews'));
+      await userEvent.click(screen.getByTestId('admin-filter-add'));
     });
     await act(async () => {
-      await userEvent.selectOptions(screen.getByTestId('admin-filter-state'), 'completed');
+      await userEvent.selectOptions(screen.getByTestId('admin-filter-field'), 'state');
+    });
+    // `state` is an enum, so its value control is a list of what the server accepts — the
+    // operator cannot pick a value that would come back ignored.
+    await act(async () => {
+      await userEvent.selectOptions(screen.getByTestId('admin-filter-value'), 'completed');
+    });
+    await act(async () => {
+      await userEvent.click(screen.getByTestId('admin-filter-apply'));
     });
 
     await waitFor(() =>
       expect(
-        calls.some((c) => c.url.startsWith('/api/admin/interviews?') && c.url.includes('state=completed')),
+        calls.some(
+          (c) =>
+            c.url.startsWith('/api/admin/interviews?') &&
+            decodeURIComponent(c.url).includes('state:completed'),
+        ),
       ).toBe(true),
     );
+    // And it reads back as a sentence, not as the term it compiled to.
+    expect(screen.getByTestId('admin-filter-chip')).toHaveTextContent(messages.admin.field.state);
+  });
+
+  it('removes a filter from its chip without disturbing the search words', async () => {
+    const calls = stubFetch({});
+    await renderAdmin();
+    await screen.findAllByTestId('admin-interview-row');
+
+    await act(async () => {
+      await userEvent.type(screen.getByTestId('admin-search'), 'ada');
+    });
+    await act(async () => {
+      await userEvent.click(screen.getByTestId('admin-filter-add'));
+    });
+    await act(async () => {
+      await userEvent.selectOptions(screen.getByTestId('admin-filter-field'), 'state');
+      await userEvent.selectOptions(screen.getByTestId('admin-filter-value'), 'completed');
+      await userEvent.click(screen.getByTestId('admin-filter-apply'));
+    });
+    await act(async () => {
+      await userEvent.click(screen.getByTestId('admin-filter-remove'));
+    });
+
+    // The chip is gone and the word survived — one query string holds both, so dropping one
+    // half must not take the other with it.
+    await waitFor(() => expect(screen.queryByTestId('admin-filter-chip')).not.toBeInTheDocument());
+    expect(screen.getByTestId('admin-search')).toHaveValue('ada');
+    const last = calls.filter((c) => c.url.startsWith('/api/admin/interviews')).at(-1)!.url;
+    expect(decodeURIComponent(last)).toContain('q=ada');
+    expect(decodeURIComponent(last)).not.toContain('state:completed');
   });
 
   it('surfaces a recorded prompt-injection suspicion in the audit trail (US-29)', async () => {
@@ -458,6 +539,80 @@ describe('admin list + stats (W11)', () => {
     expect(queue.getByText(messages.admin.queue.waiting).nextSibling).toHaveTextContent('2');
     const dead = await screen.findAllByTestId('admin-deadletter-row');
     expect(within(dead[0]).getByText('AI_PROVIDER_UNAVAILABLE')).toBeInTheDocument();
+  });
+
+  it('sends a typed word to the backend rather than filtering in the browser', async () => {
+    const calls = stubFetch({});
+    await renderAdmin();
+    await screen.findAllByTestId('admin-interview-row');
+
+    await act(async () => {
+      await userEvent.type(screen.getByTestId('admin-search'), 'ada');
+    });
+
+    // Debounced, so the assertion waits for the settled value rather than one request per key.
+    await waitFor(() =>
+      expect(
+        calls.some((c) => c.url.includes('/api/admin/interviews?') && c.url.includes('q=ada')),
+      ).toBe(true),
+    );
+    // A client-side filter over one loaded page would answer a different question — the page
+    // in hand, not the platform — so the request is the assertion.
+    expect(calls.filter((c) => c.url.startsWith('/api/admin/interviews')).length).toBeGreaterThan(1);
+  });
+
+  it('warns about a term the backend could not understand instead of dropping it', async () => {
+    // The dangerous failure: a mistyped field vanishes and an unnarrowed list reads as narrowed.
+    stubFetch({
+      first: {
+        items: [row()],
+        nextCursor: null,
+        query: { applied: [], ignored: ['nonsense:x'], fields: ['state'] },
+      },
+    });
+    await renderAdmin();
+
+    expect(await screen.findByTestId('admin-search-ignored')).toHaveTextContent('nonsense:x');
+  });
+
+  it('re-sorts through the backend, and flips direction on a second click', async () => {
+    const calls = stubFetch({});
+    await renderAdmin();
+    await screen.findAllByTestId('admin-interview-row');
+
+    await act(async () => {
+      await userEvent.click(screen.getByTestId('admin-sort-cost'));
+    });
+    await waitFor(() =>
+      expect(calls.some((c) => c.url.includes('sort=cost') && c.url.includes('dir=desc'))).toBe(
+        true,
+      ),
+    );
+
+    await act(async () => {
+      await userEvent.click(screen.getByTestId('admin-sort-cost'));
+    });
+    await waitFor(() =>
+      expect(calls.some((c) => c.url.includes('sort=cost') && c.url.includes('dir=asc'))).toBe(true),
+    );
+  });
+
+  it('keeps each section\'s search to itself', async () => {
+    // One shared query string would carry `state:completed` into the audit trail, where it
+    // means nothing and silently empties the table.
+    stubFetch({});
+    await renderAdmin();
+    await screen.findAllByTestId('admin-interview-row');
+
+    await act(async () => {
+      await userEvent.type(screen.getByTestId('admin-search'), 'ada');
+    });
+    await act(async () => {
+      await userEvent.click(screen.getByTestId('admin-nav-audit'));
+    });
+
+    await screen.findAllByTestId('admin-audit-row');
+    expect(screen.getByTestId('admin-search')).toHaveValue('');
   });
 
   it('a non-admin sees the not-authorized card and no table, and asks for no admin data', async () => {

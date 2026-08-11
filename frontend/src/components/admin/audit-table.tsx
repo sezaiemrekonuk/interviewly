@@ -5,6 +5,7 @@ import { useFormatter, useTranslations } from 'next-intl';
 import { Link } from '../../i18n/navigation';
 import type { AdminAuditRow } from '../../lib/query';
 
+import { SortHeader } from './sort-header';
 import styles from './table.module.css';
 
 /**
@@ -16,11 +17,15 @@ export function AuditTable({
   hasNextPage,
   isFetchingNextPage,
   onLoadMore,
+  sort,
+  onSort,
 }: {
   items: AdminAuditRow[];
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
   onLoadMore: () => void;
+  sort: { field: string; dir: 'asc' | 'desc' };
+  onSort: (field: string) => void;
 }) {
   const t = useTranslations('admin');
   const format = useFormatter();
@@ -52,9 +57,24 @@ export function AuditTable({
             <caption className={styles.caption}>{t('audit.caption')}</caption>
             <thead>
               <tr>
-                <th scope="col">{t('audit.col.when')}</th>
-                <th scope="col">{t('audit.col.action')}</th>
-                <th scope="col">{t('audit.col.actor')}</th>
+                <SortHeader
+                  field="created"
+                  label={t('audit.col.when')}
+                  sort={sort}
+                  onSort={onSort}
+                />
+                <SortHeader
+                  field="action"
+                  label={t('audit.col.action')}
+                  sort={sort}
+                  onSort={onSort}
+                />
+                <SortHeader
+                  field="actor"
+                  label={t('audit.col.actor')}
+                  sort={sort}
+                  onSort={onSort}
+                />
                 <th scope="col">{t('audit.col.subject')}</th>
                 <th scope="col">{t('audit.col.trace')}</th>
               </tr>

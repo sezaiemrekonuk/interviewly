@@ -5,6 +5,7 @@ import { useFormatter, useTranslations } from 'next-intl';
 import { Link } from '../../i18n/navigation';
 import type { AdminInterviewRow } from '../../lib/query';
 
+import { SortHeader } from './sort-header';
 import styles from './table.module.css';
 
 /**
@@ -42,11 +43,15 @@ export function InterviewTable({
   hasNextPage,
   isFetchingNextPage,
   onLoadMore,
+  sort,
+  onSort,
 }: {
   items: AdminInterviewRow[];
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
   onLoadMore: () => void;
+  sort: { field: string; dir: 'asc' | 'desc' };
+  onSort: (field: string) => void;
 }) {
   const t = useTranslations('admin');
   const format = useFormatter();
@@ -77,15 +82,34 @@ export function InterviewTable({
             <thead>
               <tr>
                 <th scope="col">{t('interviews.col.id')}</th>
-                <th scope="col">{t('interviews.col.user')}</th>
-                <th scope="col">{t('interviews.col.occupation')}</th>
-                <th scope="col">{t('interviews.col.state')}</th>
+                <SortHeader
+                  field="account"
+                  label={t('interviews.col.user')}
+                  sort={sort}
+                  onSort={onSort}
+                />
+                <SortHeader
+                  field="occupation"
+                  label={t('interviews.col.occupation')}
+                  sort={sort}
+                  onSort={onSort}
+                />
+                <SortHeader
+                  field="state"
+                  label={t('interviews.col.state')}
+                  sort={sort}
+                  onSort={onSort}
+                />
                 <th scope="col" className={styles.num}>
                   {t('interviews.col.tokens')}
                 </th>
-                <th scope="col" className={styles.num}>
-                  {t('interviews.col.cost')}
-                </th>
+                <SortHeader
+                  field="cost"
+                  label={t('interviews.col.cost')}
+                  sort={sort}
+                  onSort={onSort}
+                  numeric
+                />
                 <th scope="col">{t('interviews.col.flags')}</th>
                 <th scope="col">
                   <span className={styles.srOnly}>{t('interviews.open')}</span>

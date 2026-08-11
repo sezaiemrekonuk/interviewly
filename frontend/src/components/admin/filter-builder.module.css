@@ -1,0 +1,172 @@
+/* The console's filter builder. Sibling of `filter-bar.module.css` and deliberately the same
+ * card: one hairline box, compact eyebrow labels, controls from ui/ carrying the house border,
+ * focus ring and 44px target. This file only lays them out.
+ *
+ * Admin density (DESIGN §5, W11): 13/14px type, no fill of its own beyond --surface, and no
+ * --primary — this surface spends its one primary slot elsewhere, never on Apply.
+ */
+
+.builder {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+}
+
+/* The query is the whole sentence, so it takes the row it has — unlike a builder control,
+   which is capped because it holds one word. */
+.search {
+  min-width: 0;
+}
+
+/* The filter bar's eyebrow, verbatim: two bars stacked with different label sizes reads as
+   two unrelated components. */
+.eyebrow {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.applied {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+}
+
+/* The sentence read by an operator scanning the page, not a control: no border, no bed. */
+.none {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.chips {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Sunken rather than bordered: the chips belong to the card they sit in, and a second border
+   inside a card reads as a second card. */
+.chip {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  padding: 0 4px 0 8px;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--surface-sunken);
+  border-radius: var(--radius-button);
+}
+
+.chipText {
+  padding: 4px 0;
+  line-height: 1.4;
+}
+
+/* 24px and not 44px: a 44px target on every chip would make a row of five filters taller than
+   the table header. The chip is 13px meta beside dense data, and the same size as the table's
+   own inline controls (`.open`, the sort headings). */
+.remove {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--text-muted);
+  cursor: pointer;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-button);
+  transition: color var(--duration-default) var(--easing-default);
+}
+
+.remove:hover {
+  color: var(--text);
+}
+
+.remove:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* Secondary, deliberately: this surface's one --primary slot is not spent on Add filter or on
+   Apply. Every button in this card is the same button. */
+.button {
+  min-height: 44px;
+  padding: 0 16px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--text);
+  cursor: pointer;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-button);
+  transition: background-color var(--duration-default) var(--easing-default);
+}
+
+.button:hover:not(:disabled) {
+  background: var(--surface-sunken);
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Disabled and still visible: Apply is what the row is for, and hiding it until the value is
+   typed would leave the row looking like it has nothing to do. */
+.button:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Sunken bed so the row reads as belonging to the button that opened it, rather than as a
+   fourth thing stacked in the card. */
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 16px;
+  padding: 12px 16px;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-card);
+}
+
+/* Grows into the row it has, and drops to one per line under ~380px without a breakpoint.
+   Capped so a lone select does not stretch across a 1440px console. */
+.control {
+  flex: 1 1 180px;
+  min-width: 0;
+  max-width: 320px;
+}
+
+.rowActions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+  align-items: center;
+}
