@@ -23,6 +23,12 @@
     "backend/src",
     "backend/prisma",
     "backend/features",
+    // Not all of backend/modules: its unit tests carry loose mock typings that pass at runtime,
+    // because vitest transpiles without checking, and cleaning them up is its own job. The
+    // INTEGRATION files are here because nothing else can catch them — they are excluded from
+    // `npm test`, so a wrong Prisma fixture in one stays invisible until the CI acceptance job
+    // runs it. That is exactly how issue 196's test first shipped, missing a required column.
+    "backend/modules/**/*.integration.test.ts",
     "frontend/src",
     "packages/*/src",
     "worker/src"

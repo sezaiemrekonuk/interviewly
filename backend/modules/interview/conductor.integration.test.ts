@@ -168,6 +168,10 @@ function fakeConductor(...script: (ConductorTurn | Error)[]): AiClient {
       return next instanceof Error ? Promise.reject(next) : Promise.resolve(next);
     },
     scoreAnswer: unavailable,
+    // T01's completeness gate. It belongs to the STT path, not the conductor's, so it rejects
+    // with the rest — this mock had simply not been updated when the seam was added, and
+    // nothing noticed because integration tests were outside the typechecker's include.
+    turnComplete: unavailable,
     generateCandidates: unavailable,
     generateRoundQuestions: unavailable,
     generateReport: unavailable,

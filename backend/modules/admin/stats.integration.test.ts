@@ -61,14 +61,14 @@ async function seedInterview(scores: Record<string, number>): Promise<void> {
     data: { interview_id: interview.id, type: 'hr', persona_id: personaId },
   });
 
+  // The narrative (`overall_score`, `summary`, `strengths`) lives in the optional `payload`
+  // json; the ranking reads none of it, so the row carries only what the schema requires.
   const report = await prisma.report.create({
     data: {
       interview_id: interview.id,
       status: 'ready',
-      overall_score: 50,
-      summary: 'fixture',
-      strengths: [],
-      improvements: [],
+      prompt_uuid: randomUUID(),
+      prompt_version: 1,
     },
   });
 
