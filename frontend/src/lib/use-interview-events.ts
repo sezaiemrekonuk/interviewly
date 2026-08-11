@@ -7,12 +7,12 @@ import { API_BASE } from './api';
 import { queryKeys } from './query';
 
 /**
- * The backend's named events (`sse.ts`). Both mean the same thing here — ask again — but they
- * are two events because the state change lands *before* the questions exist: `POST /profile`
- * claims `profiling → hr_round` and only then calls the model, so a room that refetched on the
- * transition alone sits on the waiting panel until the candidate reloads.
+ * The backend's named events (`sse.ts`). All three mean the same thing here — ask again —
+ * `INTERVIEW_AVATAR_CHANGED` (`change_avatar` tool, `avatar.ts`) is a third for the same reason
+ * the other two are separate: it fires without a state transition, on an ordinary `continue`
+ * turn, so folding it into `INTERVIEW_STATE_CHANGED` would mean nothing else ever fires it.
  */
-const EVENTS = ['INTERVIEW_STATE_CHANGED', 'INTERVIEW_QUESTIONS_READY'] as const;
+const EVENTS = ['INTERVIEW_STATE_CHANGED', 'INTERVIEW_QUESTIONS_READY', 'INTERVIEW_AVATAR_CHANGED'] as const;
 
 /**
  * K11 — nudge, then refetch. The event body says *that* something changed, never *what*:
