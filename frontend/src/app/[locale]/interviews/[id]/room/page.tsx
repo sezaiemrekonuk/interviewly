@@ -73,6 +73,9 @@ export default function InterviewRoomPage() {
   const [view, setView] = useState<'speaker' | 'grid'>('speaker');
   const [captionsOn, setCaptionsOn] = useState(true);
   const [transcriptOpen, setTranscriptOpen] = useState<boolean | null>(null);
+  // Off by default, and not remembered from pre-join: the camera is optional and local-only
+  // (voice spec §3.2), so it is never on because a previous screen said so.
+  const [cameraOn, setCameraOn] = useState(false);
 
   const room = stateQuery.data;
   const pathname = `/interviews/${id}/room`;
@@ -224,15 +227,17 @@ export default function InterviewRoomPage() {
     }
   }
 
-  // No avatar warming in the waiting beat: the tiles draw the speaker as CSS bars, so nothing
-  // here requests an avatar object and every preload hint expired unused (issue 126).
+  // `persona.avatar` is the expression `change_avatar` last set for whoever has the floor
+  // (additionals ADR-ADD01) — the server resolves it for the live speaker only, and the SSE
+  // nudge that follows the tool call is what brings a new one down.
   const tiles = (
     <PersonaTiles
       personas={room.personas}
       activeId={activeId}
       activeState={avatarState}
+      activeExpression={room.persona?.avatar ?? 1}
       layout={voiceMode ? 'stage' : 'strip'}
-      candidate={voiceMode ? { level: voice.micLevel, muted: voice.muted } : null}
+      candidate={voiceMode ? { level: voice.micLevel, muted: voice.muted, camera: cameraOn } : null}
     />
   );
 
@@ -382,6 +387,8 @@ export default function InterviewRoomPage() {
                     expiresAt={room.expiresAt}
                     captionsOn={captionsOn}
                     onToggleCaptions={() => setCaptionsOn((on) => !on)}
+                    cameraOn={cameraOn}
+                    onToggleCamera={() => setCameraOn((on) => !on)}
                     transcriptOpen={showTranscript}
                     onToggleTranscript={() => setTranscriptOpen(!showTranscript)}
                   />

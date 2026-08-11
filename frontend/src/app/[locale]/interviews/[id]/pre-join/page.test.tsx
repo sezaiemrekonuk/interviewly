@@ -171,6 +171,25 @@ describe('pre-join (W09)', () => {
     expect(screen.queryByTestId('mic-check')).not.toBeInTheDocument();
   });
 
+  // The camera is optional and never a gate: it is asked for when the candidate asks for it,
+  // and a screen that never gets a click must not have touched it.
+  it('previews the camera only once the candidate turns it on', async () => {
+    stubFetch('voice');
+    const getUserMedia = stubMic('grant');
+    await renderPreJoin();
+
+    await screen.findByTestId('camera-check');
+    expect(screen.getByTestId('camera-view')).toHaveAttribute('data-camera', 'off');
+    expect(getUserMedia.mock.calls.some(([c]) => (c as MediaStreamConstraints)?.video)).toBe(false);
+
+    await userEvent.click(screen.getByRole('button', { name: messages.preJoin.camera.turnOn }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('camera-view')).toHaveAttribute('data-camera', 'live'),
+    );
+    expect(getUserMedia).toHaveBeenCalledWith({ video: true, audio: false });
+  });
+
   it('leaving the screen stops the media track', async () => {
     stubFetch('voice');
     const t = track();

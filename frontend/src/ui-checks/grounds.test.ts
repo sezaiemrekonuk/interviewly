@@ -47,11 +47,7 @@ describe('CSP: no inline style attributes', () => {
   // dev, which is exactly how three meters (room progress, pre-join mic level, profile
   // completeness) shipped rendering at zero width. Dynamic sizing goes through
   // components/shell/meter.tsx or a class variant.
-  const KNOWN_DEAD = new Set([
-    // Imported by nothing since AvatarPreload went (issue 126) — the room draws its speaker
-    // as CSS bars now. Slated for deletion — see the redesign notes.
-    'components/avatar.tsx',
-  ]);
+  const KNOWN_DEAD = new Set<string>([]);
 
   /**
    * Next metadata images (issue 93). These are rendered by satori on the server into a PNG and

@@ -1,6 +1,7 @@
-// W09 — the mic-only permission gate behind pre-join. Audio-only on purpose: pre-join never
-// previews a camera (task §Security boundaries), and no audio leaves the tab — the realtime
-// session is V02/W10.
+// W09 — the permission gate behind pre-join, microphone half. Audio-only on purpose: the
+// camera is optional, gates nothing, and owns its own stream in `components/camera-view.tsx`,
+// so nothing here should ever ask for video. No audio leaves the tab — the realtime session
+// is V02/W10.
 // ponytail: the AnalyserNode/RMS loop is not shared with the voice ledger's device check yet;
 // extract a `micLevel` helper if a third caller shows up.
 import { useCallback, useEffect, useRef, useState } from 'react';

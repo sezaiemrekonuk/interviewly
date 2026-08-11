@@ -195,6 +195,13 @@
   justify-content: space-between;
 }
 
+/* Name and role, between the portrait and the badge. `min-width: 0` so a long persona name
+   shrinks instead of pushing the LIVE badge off the tile. */
+.tileWho {
+  flex: 1;
+  min-width: 0;
+}
+
 .tileName {
   margin: 0;
   font-family: var(--font-heading), Georgia, serif;
@@ -248,6 +255,42 @@
 }
 
 /* ---------------------------------------------------------------- presence */
+
+/* The interviewer's face: the expression `change_avatar` last asked for (additionals
+   ADR-ADD01), which is why it is a photograph and not the 1×1 placeholder the `AvatarState`
+   keys hold. Anything that fails to resolve falls back to the monogram inside `Avatar`. */
+.portrait {
+  width: 176px;
+  height: 176px;
+  box-shadow: var(--shadow-hairline);
+}
+
+.portraitSm {
+  width: 40px;
+  height: 40px;
+  flex: none;
+}
+
+/* Face over voice, centred in whatever the speaker's tile leaves between its head and its
+   foot — the auto margins that used to live on `.wave` belong to the pair now. */
+.presence {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: center;
+  margin: auto 0;
+  min-height: 0;
+}
+
+.presence .wave {
+  height: 72px;
+  margin: 0;
+}
+
+/* The candidate's own camera, in the tile the drawn voice would otherwise fill. */
+.selfCam {
+  margin-top: 4px;
+}
 
 /* Neither interviewer has a camera, so the voice is drawn. Delays are per-bar in CSS, not an
    inline style: `style` attributes are dropped by the CSP in production. */

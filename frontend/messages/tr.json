@@ -9,7 +9,13 @@
     "clearFile": "Kaldır",
     "showPassword": "Göster",
     "hidePassword": "Gizle",
-    "skipToContent": "İçeriğe geç"
+    "skipToContent": "İçeriğe geç",
+    "camera": {
+      "off": "Kamera kapalı",
+      "starting": "Kameranız açılıyor…",
+      "blocked": "Kamera erişimi engellendi",
+      "unavailable": "Kamera bulunamadı"
+    }
   },
   "chrome": {
     "newInterview": "Yeni mülakat",
@@ -458,8 +464,8 @@
     "back": "Uygulamaya dön"
   },
   "preJoin": {
-    "title": "Mikrofon kontrolü",
-    "subtitle": "Mikrofona izin verin ve girişinizi doğrulayın. Bu ekranda hiçbir kayıt alınmaz. Mülakat sırasında yanıt sesiniz yazıya dökülmek üzere gönderilir ve saklanmaz — yalnızca metni saklanır.",
+    "title": "Kamera ve mikrofon kontrolü",
+    "subtitle": "Mikrofona izin verin ve girişinizi doğrulayın; isterseniz kameranızı da deneyin. Bu ekranda hiçbir kayıt alınmaz. Mülakat sırasında yanıt sesiniz yazıya dökülmek üzere gönderilir ve saklanmaz — yalnızca metni saklanır, kameranız ise bu cihazdan hiç çıkmaz.",
     "deviceLabel": "Mikrofon",
     "deviceFallback": "Mikrofon {n}",
     "prompt": "Mikrofon izni bekleniyor…",
@@ -477,6 +483,12 @@
     "unavailable": {
       "title": "Mikrofon bulunamadı",
       "body": "Bir mikrofon bağlayıp sayfayı yenileyin veya bu mülakata metin modunda devam edin."
+    },
+    "camera": {
+      "title": "Kamera",
+      "note": "İsteğe bağlı. Kameranız bu cihazda kalır — görüntü hiçbir zaman kaydedilmez veya bir yere gönderilmez; mülakat sırasında istediğiniz an açıp kapatabilirsiniz.",
+      "turnOn": "Kamerayı aç",
+      "turnOff": "Kamerayı kapat"
     }
   },
   "room": {
@@ -544,7 +556,8 @@
     "roleCandidate": "Aday",
     "micLevel": "Mikrofon seviyesi",
     "micDevice": "Mikrofon",
-    "micDeviceFallback": "Mikrofon {n}"
+    "micDeviceFallback": "Mikrofon {n}",
+    "camera": "Kamera"
   },
   "report": {
     "title": "Raporun",

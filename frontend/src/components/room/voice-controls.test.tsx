@@ -41,6 +41,8 @@ const tree = (expiresAt: string | null) => (
       expiresAt={expiresAt}
       captionsOn
       onToggleCaptions={vi.fn()}
+      cameraOn={false}
+      onToggleCamera={vi.fn()}
       transcriptOpen={false}
       onToggleTranscript={vi.fn()}
     />
@@ -141,6 +143,8 @@ describe('VoiceControls failure copy (S10)', () => {
           expiresAt={null}
           captionsOn
           onToggleCaptions={vi.fn()}
+          cameraOn={false}
+          onToggleCamera={vi.fn()}
           transcriptOpen={false}
           onToggleTranscript={vi.fn()}
         />
@@ -216,6 +220,8 @@ describe('VoiceControls input picker', () => {
           expiresAt={null}
           captionsOn
           onToggleCaptions={vi.fn()}
+          cameraOn={false}
+          onToggleCamera={vi.fn()}
           transcriptOpen={false}
           onToggleTranscript={vi.fn()}
         />

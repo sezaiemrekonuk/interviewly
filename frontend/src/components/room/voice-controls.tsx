@@ -69,6 +69,9 @@ export interface VoiceControlsProps {
   expiresAt: string | null;
   captionsOn: boolean;
   onToggleCaptions: () => void;
+  /** The candidate's own camera — optional, off by default, and never leaves the tab (§3.2). */
+  cameraOn: boolean;
+  onToggleCamera: () => void;
   transcriptOpen: boolean;
   onToggleTranscript: () => void;
 }
@@ -87,6 +90,8 @@ export function VoiceControls({
   expiresAt,
   captionsOn,
   onToggleCaptions,
+  cameraOn,
+  onToggleCamera,
   transcriptOpen,
   onToggleTranscript,
 }: VoiceControlsProps) {
@@ -165,6 +170,20 @@ export function VoiceControls({
         >
           {t('captions')}
           <span className={styles.ckSub}>{captionsOn ? t('stateOn') : t('stateOff')}</span>
+        </button>
+
+        {/* On or off in words beside the label, like captions and unlike a crossed-out icon:
+            whether a camera is running is exactly the state that must not sit behind an icon a
+            candidate has to guess at (DESIGN §5). */}
+        <button
+          type="button"
+          className={styles.ck}
+          onClick={onToggleCamera}
+          aria-pressed={cameraOn}
+          data-testid="camera-toggle"
+        >
+          {t('camera')}
+          <span className={styles.ckSub}>{cameraOn ? t('stateOn') : t('stateOff')}</span>
         </button>
 
         <button

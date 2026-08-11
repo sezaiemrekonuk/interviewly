@@ -4,6 +4,7 @@ import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { CameraView } from '@/components/camera-view';
 import { MicCheck } from '@/components/pre-join/mic-check';
 import { RailMark, SplitShell, WorkBody, WorkTop } from '@/components/shell/split-shell';
 import { Button } from '@/components/ui';
@@ -27,6 +28,9 @@ export default function PreJoinPage() {
   const ready = !authLoading && Boolean(user);
   const stateQuery = useInterviewState(ready ? id : null);
   const [mic, setMic] = useState<MicPermissionState>('idle');
+  // Off until asked for: the camera is optional and the prompt is the candidate's to trigger
+  // (voice spec §3.2). It never gates entry either — only the microphone does.
+  const [cameraOn, setCameraOn] = useState(false);
   const [downgrade, setDowngrade] = useState<'idle' | 'done' | { code: string }>('idle');
   const downgrading = useRef(false);
 
@@ -98,6 +102,21 @@ export default function PreJoinPage() {
       <section className={styles.pane} data-testid="pre-join">
         <div className={styles.panel}>
           <MicCheck onStateChange={onStateChange} />
+        </div>
+
+        {/* The camera check. Second, and never a gate: the interview is audio, so a candidate
+            with no camera — or no wish to be on one — enters exactly as they always did. */}
+        <div className={`${styles.panel} ${styles.camera}`} data-testid="camera-check">
+          <p className={styles.cameraTitle}>{t('camera.title')}</p>
+          <CameraView enabled={cameraOn} />
+          <Button
+            variant="secondary"
+            aria-pressed={cameraOn}
+            onClick={() => setCameraOn((on) => !on)}
+          >
+            {cameraOn ? t('camera.turnOff') : t('camera.turnOn')}
+          </Button>
+          <p className={styles.cameraNote}>{t('camera.note')}</p>
         </div>
 
         <div>

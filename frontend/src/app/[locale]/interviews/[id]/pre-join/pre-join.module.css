@@ -43,6 +43,29 @@
   box-shadow: var(--shadow-hairline);
 }
 
+/* The camera panel: preview, the one control that owns it, then the sentence about where the
+   picture goes — which is nowhere. */
+.camera {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.cameraTitle {
+  margin: 0;
+  font-family: var(--font-heading), Georgia, serif;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.cameraNote {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
 /* The one authored motion moment: the CTA enabling. */
 .cta {
   width: 100%;

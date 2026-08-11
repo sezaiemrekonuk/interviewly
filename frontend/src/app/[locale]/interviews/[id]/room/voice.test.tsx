@@ -199,6 +199,32 @@ describe('interview room, voice mode (W10)', () => {
     expect(screen.queryByTestId('mascot')).not.toBeInTheDocument();
   });
 
+  // The candidate's own tile, the only one in the room that may carry a camera. Off on arrival
+  // and turned on from the control bar (voice spec §3.2) — the picture is bound to a local
+  // `<video>` and never uploaded, so nothing about this reaches the server.
+  it('turns the self-camera on from the control bar, and off again', async () => {
+    stubFetch();
+    await renderRoom();
+
+    const you = screen.getByTestId('persona-tile-you');
+    expect(within(you).queryByTestId('camera-view')).not.toBeInTheDocument();
+
+    const toggle = screen.getByTestId('camera-toggle');
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    await userEvent.click(toggle);
+
+    await waitFor(() =>
+      expect(within(you).getByTestId('camera-view')).toHaveAttribute('data-camera', 'live'),
+    );
+    const camera = mics.tracks.at(-1)!;
+
+    await userEvent.click(toggle);
+
+    expect(within(you).queryByTestId('camera-view')).not.toBeInTheDocument();
+    // Off means the device is released, not that the picture is hidden.
+    expect(camera.stop).toHaveBeenCalled();
+  });
+
   // ADR-C04 — the other half of the rule above, and the point of `show_widget`: some answers are
   // a list, a snippet or a precise value, and dictating those is worse than typing them. Voice
   // mode had no way to type at all, so a widget the interviewer put on screen was unanswerable.

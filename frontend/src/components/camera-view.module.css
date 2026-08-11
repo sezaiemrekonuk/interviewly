@@ -1,0 +1,36 @@
+/* The self-view. One component, two surfaces (pre-join's check and the room's own tile), so
+ * the box takes its width from the caller and only fixes its own ratio.
+ */
+
+.frame {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: var(--rail);
+  border-radius: var(--radius-card);
+}
+
+.video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* A self-view is a mirror: anything held up to the camera reads backwards otherwise, and
+     every other meeting surface the candidate has used does the same. */
+  transform: scaleX(-1);
+}
+
+/* Sits over the frame rather than under it: the box keeps its shape whether or not there is a
+   picture in it, so turning the camera on and off does not move the tile below. */
+.hint {
+  position: absolute;
+  margin: 0;
+  padding: 0 16px;
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: center;
+  color: var(--rail-text-muted);
+}
