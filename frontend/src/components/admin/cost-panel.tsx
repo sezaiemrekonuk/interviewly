@@ -4,7 +4,6 @@ import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
 import {
-  COST_RANGES,
   type AdminInterviewRow,
   type AdminStatsResponse,
   type CostRange,
@@ -13,19 +12,15 @@ import {
 import { useErrorMessage } from '../../lib/use-error-message';
 import { Meter } from '../shell/meter';
 
+import { ChartPanel } from './charts/chart-panel';
 import chartStyles from './charts/charts.module.css';
-import { ModelDelta } from './charts/model-delta';
-import { ModelMix } from './charts/model-mix';
-import { ModelShare } from './charts/model-share';
 import { ModelTable } from './charts/model-table';
-import { SpendHeatmap } from './charts/spend-heatmap';
-import { PerInterviewTrend, SpendTrend } from './charts/trend-lines';
 import { isUnpriced, microUsd } from './interview-table';
 import styles from './panels.module.css';
 
 const usd = (micro: number) => (micro / 1_000_000).toFixed(6);
 
-const SKELETONS = ['trend', 'perDay', 'mix', 'delta', 'share', 'table', 'heat'];
+const SKELETONS = ['chart', 'table'];
 
 /**
  * Costs.
@@ -89,22 +84,6 @@ export function CostPanel({
         {t('costs.heading')}
       </h2>
 
-      <div className={chartStyles.range} role="group" aria-label={t('costs.range')}>
-        <span className={chartStyles.rangeLabel}>{t('costs.range')}</span>
-        {COST_RANGES.map((option) => (
-          <button
-            className={chartStyles.rangeButton}
-            key={option}
-            type="button"
-            aria-pressed={option === days}
-            data-testid={`admin-cost-range-${option}`}
-            onClick={() => setDays(option)}
-          >
-            {t('costs.rangeOption', { days: option })}
-          </button>
-        ))}
-      </div>
-
       <div className={styles.figures}>
         <div className={styles.card} data-testid="admin-platform-spend">
           <span className={styles.eyebrow}>{t('costs.platformTotal')}</span>
@@ -148,13 +127,8 @@ export function CostPanel({
 
       {data ? (
         <>
-          <SpendTrend data={data} />
-          <PerInterviewTrend data={data} />
-          <ModelMix data={data} />
-          <ModelDelta data={data} />
-          <ModelShare data={data} />
+          <ChartPanel data={data} days={days} onDaysChange={setDays} />
           <ModelTable data={data} />
-          <SpendHeatmap data={data} />
         </>
       ) : costs.error ? null : (
         SKELETONS.map((id) => (
