@@ -139,9 +139,15 @@ const COSTS = {
       calls: 42,
       tokens: 84210,
       averageLatencyMs: 950,
-      daily: ['0.400000', '0.500000', '0.334560'],
+      daily: {
+        costUsd: ['0.400000', '0.500000', '0.334560'],
+        calls: [16, 18, 8],
+        tokens: [32000, 36000, 16210],
+        latencyMs: [900, 950, 1000],
+      },
     },
   ],
+  truncated: 0,
   hourly: [{ dow: 1, hour: 14, costUsd: '1.234560' }],
 };
 
