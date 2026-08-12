@@ -222,12 +222,17 @@ async function runTurn(
     throw new ApiError('INVALID_STATE_TRANSITION');
   }
 
-  const question = await currentQuestionRow(interview);
+  const [question, history, persona, topics] = await Promise.all([
+    currentQuestionRow(interview),
+    loadConversation(interview.id),
+    personaForRound(interview),
+    remainingTopics(interview),
+  ]);
+
   // No row to be on. A round whose batch never landed is `resume.ts`'s repair, not a turn's —
   // conducting into an empty round would ask the candidate to answer nothing.
   if (!question) throw new ApiError('INVALID_STATE_TRANSITION');
 
-  const history = await loadConversation(interview.id);
   const asked = history.some((m) => m.role === 'assistant' && m.question_id === question.id);
 
   // The opening turn is a repair as much as a greeting: `startHrRound` fires it best-effort,
@@ -304,13 +309,13 @@ async function runTurn(
   ).length;
   const turnsLeftOnQuestion = Math.max(0, config.CONDUCTOR_MAX_TURNS_PER_QUESTION - turnsOnQuestion);
 
-  const persona = await personaForRound(interview);
   let turn: ConductorReply;
   try {
     turn = await askConductor(interview, question, history, {
       ...opts,
       ctx,
       persona,
+      remainingTopics: topics,
       turnsLeftOnQuestion,
       mayHandOver: mayHandOver(interview),
       mayEnd: mayEnd(interview, turnsOnQuestion),
@@ -728,6 +733,7 @@ async function endInterview(
 interface AskOpts extends ConductOpts {
   ctx: AiCtx;
   persona: { name: string; system_prompt: string };
+  remainingTopics: string[];
   turnsLeftOnQuestion: number;
   mayHandOver: boolean;
   mayEnd: boolean;
@@ -741,9 +747,6 @@ async function askConductor(
 ): Promise<ConductorReply> {
   const client = opts.client ?? aiClient();
   const roundType = interview.state === 'tech_round' ? 'tech' : 'hr';
-  // Resolved before the budget lock is taken: `withBudget` holds a `pg_advisory_xact_lock` for
-  // the whole callback, and a query issued inside it would sit on the interview's own lock.
-  const topics = await remainingTopics(interview);
 
   try {
     return await withBudget(interview.id, () =>
@@ -756,7 +759,7 @@ async function askConductor(
         language: interview.language,
         currentQuestion: question.text,
         currentIntent: question.intent,
-        remainingTopics: topics,
+        remainingTopics: opts.remainingTopics,
         conversation: trimHistory(history),
         turnsLeftOnQuestion: opts.turnsLeftOnQuestion,
         mayHandOver: opts.mayHandOver,

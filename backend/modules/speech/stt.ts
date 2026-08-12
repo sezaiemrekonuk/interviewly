@@ -27,6 +27,7 @@ import { BudgetExceeded, withBudget } from "../interview/budget";
 import { conductTurn, turnInputSchema } from "../interview/conductor";
 import { applyTransition } from "../interview/machine";
 import { currentQuestionRow } from "../interview/state";
+import { downgradeToText } from "../voice/downgrade";
 
 import { meterStt } from "./metering";
 import {
@@ -201,11 +202,21 @@ async function transcribeRecording(
 ): Promise<{ transcript: string; seconds: number }> {
   try {
     return await withBudget(interview.id, async () => {
+      const startedAt = Date.now();
       const result = await speechProvider.transcribe(file.buffer, {
         mime: file.mimetype,
         language: interview.language,
       });
-      await meterStt(interview.id, result.seconds, traceId);
+      await meterStt(
+        interview.id,
+        result.seconds,
+        {
+          provider: result.provider,
+          model: result.model,
+          latencyMs: Date.now() - startedAt,
+        },
+        traceId,
+      );
       return result;
     });
   } catch (err) {
@@ -224,6 +235,10 @@ async function transcribeRecording(
         );
       }
       throw new ApiError("BUDGET_EXCEEDED");
+    }
+    if (err instanceof ApiError && err.code === "VOICE_UNAVAILABLE") {
+      await downgradeToText(interview, { traceId });
+      throw new ApiError("VOICE_UNAVAILABLE");
     }
     throw err;
   }

@@ -23,6 +23,7 @@ export interface UseMicPermission {
   /** The device backing the live stream, once one is granted. */
   deviceId: string | null;
   request: (deviceId?: string) => void;
+  release: () => void;
   /** Switch input: re-requests against the chosen device and releases the old track. */
   select: (deviceId: string) => void;
   muted: boolean;
@@ -181,5 +182,5 @@ export function useMicPermission(): UseMicPermission {
     };
   }, [release]);
 
-  return { state, level, stream, devices, deviceId, request, select, muted, toggleMute };
+  return { state, level, stream, devices, deviceId, request, release, select, muted, toggleMute };
 }

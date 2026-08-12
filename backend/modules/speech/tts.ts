@@ -128,12 +128,18 @@ export async function synthesise(
     const raced = await readCachedAudio(spec.key);
     if (raced) return { audio: raced, characters: null, cached: true };
 
+    const startedAt = Date.now();
     const result = await speechProvider.speak(spec.text, {
       voiceId,
       language: interview.language,
       ctx: { interviewId: interview.id, traceId: spec.traceId },
     });
-    await meterTts(interview.id, result.characters, spec.traceId);
+    await meterTts(
+      interview.id,
+      result.characters,
+      { provider: result.provider, model: result.model, latencyMs: Date.now() - startedAt },
+      spec.traceId,
+    );
     // Already billed: a store that fails must not turn paid-for bytes into a 500 the
     // candidate retries, because the retry buys them a second time. Serve them and log.
     try {

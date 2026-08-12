@@ -10,6 +10,7 @@ const m = vi.hoisted(() => ({
   take: vi.fn(),
   hold: vi.fn(),
   turnComplete: vi.fn(),
+  downgrade: vi.fn(),
   withBudget: vi.fn(),
   prewarm: vi.fn(),
   loggerInfo: vi.fn(),
@@ -29,7 +30,7 @@ vi.mock('../../src/lib/db', () => ({
 vi.mock('../interview/state', () => ({ currentQuestionRow: m.currentQuestion }));
 vi.mock('../interview/machine', () => ({ applyTransition: m.applyTransition }));
 vi.mock('../../src/lib/storage', () => ({ storage: { get: vi.fn(), put: vi.fn() } }));
-vi.mock('../voice/downgrade', () => ({ downgradeToText: vi.fn() }));
+vi.mock('../voice/downgrade', () => ({ downgradeToText: m.downgrade }));
 vi.mock('./SpeechProvider', () => ({ speechProvider: { transcribe: m.transcribe } }));
 vi.mock('../../src/lib/logger', () => ({
   logger: { info: m.loggerInfo, warn: m.loggerWarn, error: m.loggerError, debug: vi.fn() },
@@ -138,6 +139,7 @@ beforeEach(() => {
   m.take.mockResolvedValue(null);
   m.hold.mockResolvedValue(undefined);
   m.turnComplete.mockResolvedValue({ finished: true });
+  m.downgrade.mockResolvedValue(true);
   m.withBudget.mockImplementation((_id: string, fn: () => Promise<unknown>) => fn());
   m.applyTransition.mockImplementation(async (row: { ended_reason: string | null }, _to, ctx: { endedReason?: string }) => {
     row.ended_reason = ctx.endedReason ?? null;
@@ -498,6 +500,64 @@ describe('submitTurnAudio — the completeness gate (T03)', () => {
       questionId: 'q-1',
       probes: 1,
     });
+  });
+});
+
+describe('a fatal transcription failure downgrades the interview', () => {
+  beforeEach(() => {
+    m.transcribe.mockRejectedValue(new ApiError('VOICE_UNAVAILABLE'));
+  });
+
+  it('downgrades to text and still surfaces the 503 from the answer route', async () => {
+    const { r } = res();
+
+    await expect(submitAnswerAudio(req(), r, (() => undefined) as never)).rejects.toMatchObject({
+      code: 'VOICE_UNAVAILABLE',
+    });
+
+    expect(m.downgrade).toHaveBeenCalledOnce();
+    expect(m.downgrade.mock.calls[0]?.[0]).toMatchObject({ id: 'itv-1' });
+    expect(m.downgrade.mock.calls[0]?.[1]).toEqual({ traceId: 'trace-1' });
+    expect(m.advance).not.toHaveBeenCalled();
+  });
+
+  it('downgrades to text and still surfaces the 503 from the turn route', async () => {
+    const { r } = res();
+
+    await expect(
+      submitTurnAudio(req({ body: {} }), r, (() => undefined) as never),
+    ).rejects.toMatchObject({ code: 'VOICE_UNAVAILABLE' });
+
+    expect(m.downgrade).toHaveBeenCalledOnce();
+    expect(m.downgrade.mock.calls[0]?.[1]).toEqual({ traceId: 'trace-1' });
+    expect(m.conduct).not.toHaveBeenCalled();
+  });
+
+  it('finishes the downgrade before the failure reaches the caller', async () => {
+    let written = false;
+    m.downgrade.mockImplementation(async () => {
+      await Promise.resolve();
+      written = true;
+      return true;
+    });
+    const { r } = res();
+
+    await expect(submitAnswerAudio(req(), r, (() => undefined) as never)).rejects.toMatchObject({
+      code: 'VOICE_UNAVAILABLE',
+    });
+
+    expect(written).toBe(true);
+  });
+
+  it('leaves the interview in voice when the failure is not a speech outage', async () => {
+    m.transcribe.mockRejectedValue(new ApiError('SPEECH_TRANSCRIPTION_FAILED'));
+    const { r } = res();
+
+    await expect(submitAnswerAudio(req(), r, (() => undefined) as never)).rejects.toMatchObject({
+      code: 'SPEECH_TRANSCRIPTION_FAILED',
+    });
+
+    expect(m.downgrade).not.toHaveBeenCalled();
   });
 });
 

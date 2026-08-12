@@ -402,6 +402,32 @@ describe('interview room, voice mode (W10)', () => {
     expect(screen.queryByTestId('time-remaining')).not.toBeInTheDocument();
   });
 
+  it('shows why voice stopped once the interview downgrades to text mid-run', async () => {
+    const calls = stubFetch({
+      states: [voiceState(), voiceState({ mode: 'text', expiresAt: null })],
+    });
+    await renderRoom();
+
+    expect(screen.getByTestId('voice-controls')).toBeInTheDocument();
+
+    const before = stateCalls(calls);
+    await act(async () => {
+      MockEventSource.instances[0]?.emit('INTERVIEW_STATE_CHANGED', '{}');
+    });
+    await waitFor(() => expect(stateCalls(calls)).toBeGreaterThan(before), SETTLE);
+
+    const notice = await screen.findByTestId('voice-downgraded', undefined, SETTLE);
+    expect(notice).toHaveTextContent(messages.errors.VOICE_UNAVAILABLE);
+    expect(screen.queryByTestId('voice-controls')).not.toBeInTheDocument();
+    expect(screen.getByTestId('conversation').contains(notice)).toBe(false);
+
+    await act(async () => {
+      MockEventSource.instances[0]?.emit('INTERVIEW_STATE_CHANGED', '{}');
+    });
+    await waitFor(() => expect(stateCalls(calls)).toBeGreaterThan(before + 1), SETTLE);
+    expect(screen.getAllByTestId('voice-downgraded')).toHaveLength(1);
+  });
+
   it('lights the tile the round names, not the one the payload happens to carry', async () => {
     stubFetch({ states: [voiceState({ state: 'tech_round', persona: null })] });
     await renderRoom();

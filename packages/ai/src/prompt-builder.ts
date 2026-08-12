@@ -14,6 +14,7 @@
  *   6. injection scan   — logs SECURITY_PROMPT_INJECTION_SUSPECTED, never blocks
  * Step 7 (output validation) belongs to the caller, against the method's Zod schema.
  */
+import { createHash } from 'node:crypto';
 import { AI_CHAT_DEBUG_EVENT, logAiCall } from './ai-debug';
 import { AiError, noopLogger, type AiLogger } from './errors';
 import { loadInjectionPatterns, type InjectionPattern } from './config';
@@ -26,6 +27,8 @@ const NULL_MARKERS: Record<string, string> = {
   candidateProfile: 'no profile provided',
   candidateCv: 'no cv provided',
 };
+
+const SERVER_OWNED_FIELDS = new Set(['allowedActions']);
 
 const DOB_KEYS = new Set(['dateOfBirth', 'date_of_birth']);
 const PLACEHOLDER = /\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g;
@@ -114,8 +117,7 @@ export class PromptBuilder {
       model: template.model,
       promptUuid: template.uuid,
       promptVersion: template.version,
-      promptYaml: template.source,
-      messages,
+      messages: messages.map((m) => ({ role: m.role, content: redactForLog(m.content) })),
     });
 
     return {
@@ -222,6 +224,7 @@ export class PromptBuilder {
     ctx: AiCtx,
   ): void {
     for (const { field, value } of boundValues) {
+      if (SERVER_OWNED_FIELDS.has(field)) continue;
       for (const pattern of this.patterns) {
         if (!pattern.regex.test(value)) continue;
         // Logged, never blocked (§7.1.5): the Zod output schema is the real barrier, and a
@@ -244,6 +247,11 @@ export class PromptBuilder {
       }
     }
   }
+}
+
+function redactForLog(content: string): string {
+  const sha256 = createHash('sha256').update(content).digest('hex').slice(0, 12);
+  return `redacted:len=${content.length}:sha256=${sha256}`;
 }
 
 /** The system message must be usable verbatim, so it may carry no placeholder at all. */

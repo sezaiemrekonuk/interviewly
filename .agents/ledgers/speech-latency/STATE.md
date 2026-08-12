@@ -1,7 +1,14 @@
 # Speech-latency — State
 
 Last updated: 2026-08-12
-Last session ended: **`L02` implemented and green, but not finished (Ahmet, 2026-08-12,
+Last session ended: **`L03`'s constant moved 2 000 → 1 000 and the room it was measured in turned
+out to be broken (Sezai, 2026-08-12, opus-5).** The capture bug came first — the room was recording
+the interviewer's own TTS into the candidate's next upload — and every gate verdict this ledger has
+ever quoted was taken through it. `L03` is `in_progress`: steps 1-4 done, the measurement and the
+listen are the owner's. Two other latency items landed with it and are outside this ledger's tasks:
+the conductor's four per-turn reads now issue together, and the model price table is loaded once per
+process instead of once per LLM call. See ADR-ADD18.
+Before it: **`L02` implemented and green, but not finished (Ahmet, 2026-08-12,
 opus-5).** All six steps' code is in the working tree and every gate passes, including the two
 `spokenIds` integration tests (which `npm test` excludes — run them with `test:integration`
 against the host-published ports). What is missing is step 6: the room timing needs a microphone,
@@ -56,10 +63,16 @@ commit** → re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**`L02`**, and it is `in_progress` rather than `todo`: the code is written and green, and what is
-left is the measurement — five hand-timed turns in the room with `AI_ENABLED=true`, before and
-after, medians into the task's `## Notes`. That is the owner's, not a fresh session's, because it
-needs a microphone. **Do not start another task on top of it** (EXECUTE § 4 rule 1).
+**`L02` and `L03`, both `in_progress`, both owing the same thing and nothing else: a microphone.**
+Their code is written and green. What is left is five hand-timed turns in the room with
+`AI_ENABLED=true`, before and after, medians into each task's `## Notes` — and for `L03`, speaking
+to it, which is the step that can veto the change. That is the owner's, not a fresh session's.
+**Do not start another task on top of them** (EXECUTE § 4 rule 1).
+
+**Read `L03`'s `## Notes` before trusting any gate telemetry taken before 2026-08-12.** The room
+those verdicts came from was recording the interviewer as well as the candidate — an orphaned
+`MediaRecorder` mixing TTS into the next turn's upload — so the gate was judging contaminated
+audio. Fixed; the numbers it produced were not re-taken.
 
 After it: **`L04`** — the conductor's real-prompt TTFT, blocked on nothing (`C02` done). **`L03`
 is unblocked too**, now that `T04` is done and `L01` has shipped; it was waiting on both. L01 is
@@ -73,7 +86,7 @@ done: turbo_v2_5, ~700 ms off the clock, and it is what pays turn-taking's gate 
 | L01 | The TTS model: measure, listen, then swap or reject | | done | S02 |
 | L04 | The conductor's real prompt: production-sized TTFT, then prefix caching or not | | todo | C02 |
 | L02 | Assistant ids on the turn response, synthesis begun when the row is written | | in_progress | T03, S02 |
-| L03 | Shorten `VAD_SILENCE_MS` behind the gate | | todo | T04, L01 |
+| L03 | Shorten `VAD_SILENCE_MS` behind the gate | | in_progress | T04, L01 |
 
 ## Dependency graph
 

@@ -1,15 +1,32 @@
 import { AI_VOICE_DEBUG_EVENT, logAiCall } from '@interviewly/ai';
 
-import type { SpeechCtx, SpeechProvider } from './SpeechProvider';
+import type { SpeechCallReport, SpeechCtx, SpeechProvider } from './SpeechProvider';
 import { ApiError } from '../../src/lib/api-error';
 import { logger } from '../../src/lib/logger';
 
+const PROVIDER = 'elevenlabs';
 const TIMEOUT_MS = 5_000;
 const MAX_ATTEMPTS = 3;
+const RETRYABLE_STATUSES = new Set([429]);
+const MIN_BILLED_SECONDS = 1;
 
 interface ScribeResponse {
   text: string;
   words?: Array<{ end: number }>;
+}
+
+function isRetryableStatus(status: number): boolean {
+  return status >= 500 || RETRYABLE_STATUSES.has(status);
+}
+
+async function readErrorDetail(res: Response): Promise<string> {
+  const body = await res.text().catch(() => '');
+  try {
+    const parsed = JSON.parse(body) as { detail?: { status?: string } };
+    return parsed.detail?.status ?? body.slice(0, 200);
+  } catch {
+    return body.slice(0, 200);
+  }
 }
 
 async function callWithTimeout(
@@ -35,7 +52,7 @@ export class ElevenLabsSpeech implements SpeechProvider {
   async speak(
     text: string,
     opts: { voiceId: string; language: string; ctx: SpeechCtx },
-  ): Promise<{ audio: Buffer; mime: string; characters: number }> {
+  ): Promise<SpeechCallReport & { audio: Buffer; mime: string; characters: number }> {
     if (!this.apiKey) throw new ApiError('VOICE_UNAVAILABLE');
 
     logAiCall(logger, {
@@ -61,10 +78,18 @@ export class ElevenLabsSpeech implements SpeechProvider {
         );
         if (res.ok) {
           const audio = Buffer.from(await res.arrayBuffer());
-          return { audio, mime: 'audio/mpeg', characters: text.length };
+          return {
+            provider: PROVIDER,
+            model: this.ttsModel,
+            audio,
+            mime: 'audio/mpeg',
+            characters: [...text].length,
+          };
         }
-        logger.warn({ status: res.status, reason: res.statusText }, 'SPEECH_TTS_FAILED');
+        const detail = await readErrorDetail(res);
+        logger.warn({ status: res.status, reason: res.statusText, detail }, 'SPEECH_TTS_FAILED');
         lastErr = new Error(`ElevenLabs TTS ${res.status} ${res.statusText}`);
+        if (!isRetryableStatus(res.status)) break;
       } catch (err) {
         lastErr = err;
       }
@@ -76,7 +101,7 @@ export class ElevenLabsSpeech implements SpeechProvider {
   async transcribe(
     audio: Buffer,
     opts: { mime: string; language: string },
-  ): Promise<{ transcript: string; seconds: number }> {
+  ): Promise<SpeechCallReport & { transcript: string; seconds: number }> {
     if (!this.apiKey) throw new ApiError('VOICE_UNAVAILABLE');
 
     let lastErr: unknown;
@@ -97,11 +122,24 @@ export class ElevenLabsSpeech implements SpeechProvider {
         if (res.ok) {
           const data = (await res.json()) as ScribeResponse;
           const transcript = data.text ?? '';
-          const seconds = data.words?.at(-1)?.end ?? 0;
-          return { transcript, seconds };
+          const measuredSeconds = data.words?.at(-1)?.end;
+          if (measuredSeconds === undefined) {
+            logger.warn(
+              { bytes: audio.length, billedSeconds: MIN_BILLED_SECONDS },
+              'SPEECH_STT_NO_TIMINGS',
+            );
+          }
+          return {
+            provider: PROVIDER,
+            model: this.sttModel,
+            transcript,
+            seconds: measuredSeconds ?? MIN_BILLED_SECONDS,
+          };
         }
-        logger.warn({ status: res.status, reason: res.statusText }, 'SPEECH_STT_FAILED');
+        const detail = await readErrorDetail(res);
+        logger.warn({ status: res.status, reason: res.statusText, detail }, 'SPEECH_STT_FAILED');
         lastErr = new Error(`ElevenLabs STT ${res.status} ${res.statusText}`);
+        if (!isRetryableStatus(res.status)) break;
       } catch (err) {
         lastErr = err;
       }

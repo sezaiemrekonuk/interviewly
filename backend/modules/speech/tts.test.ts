@@ -233,6 +233,27 @@ describe('serveQuestionSpeech', () => {
       code: 'VOICE_SESSION_EXPIRED',
     });
   });
+
+  it('a fatal speech error downgrades to text before the 503 reaches the caller', async () => {
+    m.storageGet.mockRejectedValue(new Error('miss'));
+    m.speak.mockRejectedValue(new ApiError('VOICE_UNAVAILABLE'));
+    let written = false;
+    m.downgrade.mockImplementation(async () => {
+      await Promise.resolve();
+      written = true;
+      return true;
+    });
+    const { r } = res();
+
+    await expect(serveQuestionSpeech(req(), r, (() => undefined) as never)).rejects.toMatchObject({
+      code: 'VOICE_UNAVAILABLE',
+    });
+
+    expect(m.downgrade).toHaveBeenCalledOnce();
+    expect(m.downgrade.mock.calls[0]?.[0]).toMatchObject({ id: 'itv-1' });
+    expect(m.downgrade.mock.calls[0]?.[1]).toEqual({ traceId: 'trace-1' });
+    expect(written).toBe(true);
+  });
 });
 
 /** C06 — the lines that are not questions: the welcome, clarifications, handover, goodbye. */

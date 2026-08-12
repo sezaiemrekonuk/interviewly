@@ -967,7 +967,7 @@
       },
       "promptVersion": "v{version}",
       "attempt": "{n}. deneme",
-      "fellBack": "{provider} sonrası",
+      "fellBack": "{model} sonrası",
       "latency": "{ms} ms",
       "unit": {
         "token": "token",

@@ -1,9 +1,8 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { AiError, noopLogger, type AiLogger } from './errors';
 import { MAX_BLOCK_CHARS, PromptBuilder, createPromptBuilder } from './prompt-builder';
-import { PROMPTS_DIR, PromptRegistry, loadPromptRegistry } from './registry';
+import { PromptRegistry, loadPromptRegistry } from './registry';
 import { loadInjectionPatterns } from './config';
 import { PROMPT_NAMES, candidateVars, reportVars } from './prompt-vars';
 import { CandidateBatchSchema } from './schemas';
@@ -116,40 +115,42 @@ describe('PromptBuilder', () => {
     }
   });
 
-  it('emits AI_PROMPT_BUILDER_DEBUG per message with the prompt fullname and interview id', () => {
+  it('emits AI_PROMPT_BUILDER_DEBUG per message with the prompt fullname and interview id, content redacted', () => {
+    const cvMarker = 'CONFIDENTIAL_CV_MARKER: Ada Lovelace, first programmer.';
     const { logger, events } = capturing();
     const built = new PromptBuilder(loadPromptRegistry(), loadInjectionPatterns(), logger).build({
       promptName: 'interview.question.generate',
-      vars: baseVars(),
+      vars: baseVars({ candidateCv: cvMarker }),
       ctx,
     });
     const debug = events.filter((e) => e.event === 'AI_PROMPT_BUILDER_DEBUG');
     expect(debug).toHaveLength(built.messages.length);
-    expect(debug.map((e) => e.fields.content)).toEqual(built.messages.map((m) => m.content));
-    for (const line of debug) {
+    for (const [index, line] of debug.entries()) {
+      const raw = built.messages[index].content;
+      const sha256 = createHash('sha256').update(raw).digest('hex').slice(0, 12);
+      expect(line.fields.content).not.toBe(raw);
+      expect(line.fields.content).not.toContain(cvMarker);
+      expect(line.fields.content).toBe(`redacted:len=${raw.length}:sha256=${sha256}`);
       expect(line.fields.promptName).toBe('interview.question.generate');
       expect(line.fields.interviewId).toBe(ctx.interviewId);
       expect(line.fields.traceId).toBe(ctx.traceId);
       expect(line.fields.promptUuid).toBe(built.promptUuid);
       expect(line.fields.promptVersion).toBe(built.promptVersion);
-      expect(line.fields.promptMessages).toEqual(built.messages);
     }
+    const promptMessagesJson = JSON.stringify(debug.flatMap((e) => e.fields.promptMessages));
+    expect(promptMessagesJson).not.toContain(cvMarker);
   });
 
-  it('attaches the whole prompt yaml, verbatim, to every debug line', () => {
+  it('drops the full prompt yaml from the debug line — promptName and promptVersion already identify it', () => {
     const { logger, events } = capturing();
     new PromptBuilder(loadPromptRegistry(), loadInjectionPatterns(), logger).build({
       promptName: 'interview.title.generate',
       vars: { language: 'en', jobListing: 'Backend engineer.' },
       ctx,
     });
-    const onDisk = readFileSync(
-      join(PROMPTS_DIR, 'interview.title.generate.prompt.yaml'),
-      'utf8',
-    );
     const debug = events.filter((e) => e.event === 'AI_PROMPT_BUILDER_DEBUG');
     expect(debug).toHaveLength(2);
-    for (const line of debug) expect(line.fields.promptYaml).toBe(onDisk);
+    for (const line of debug) expect(line.fields.promptYaml).toBeUndefined();
   });
 
   it('names every prompt file on the fly, never from a static table', () => {

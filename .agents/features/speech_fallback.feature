@@ -22,6 +22,23 @@ Feature: The interview survives a speech outage
     And the response error code is "INVALID_STATE_TRANSITION"
     And the interview mode is still "text"
 
+  # The same outage on the other route — the candidate's own recording, not the interviewer's
+  # line. Without the downgrade here the upload 503s and the room is stranded in voice mode:
+  # it tells the candidate to carry on in text and gives them no composer to do it with.
+  @speech-fallback @AC-7
+  Scenario: A fatal transcription error downgrades the interview to text
+    Given I am in an interview in voice mode on question 3
+    And I answered questions 1 and 2 by voice
+    When the fake speech provider fails the next transcription
+    Then the interview mode becomes "text"
+    And the answers for questions 1 and 2 are preserved with input_mode "voice"
+    And the interview currentIndex is 3
+    And a "VOICE_DOWNGRADED_TO_TEXT" event is emitted with the interviewId
+    When I submit an answer for question 3
+    Then the response status is 200
+    And the stored answer for question 3 has input_mode "text"
+    And the interview mode is still "text"
+
   # S07 — the other trigger for the same one-directional downgrade: the candidate has no
   # microphone, and the room was never reached. Nothing was spoken, so nothing was billed.
   @speech-fallback @AC-10

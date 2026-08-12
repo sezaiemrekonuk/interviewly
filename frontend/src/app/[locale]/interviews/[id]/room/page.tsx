@@ -187,6 +187,20 @@ export default function InterviewRoomPage() {
     setResumed(null);
   }, [room]);
 
+  const wasVoiceRef = useRef(false);
+  const voiceDowngradedRef = useRef(false);
+  const [voiceDowngraded, setVoiceDowngraded] = useState(false);
+  useEffect(() => {
+    if (voiceMode) {
+      wasVoiceRef.current = true;
+      return;
+    }
+    if (wasVoiceRef.current && !voiceDowngradedRef.current) {
+      voiceDowngradedRef.current = true;
+      setVoiceDowngraded(true);
+    }
+  }, [voiceMode]);
+
   // Navigation belongs in an effect: routing during render is what makes a redirect fire twice.
   useEffect(() => {
     if (queryErrorCode) routeForError(queryErrorCode, router, { pathname });
@@ -528,6 +542,13 @@ export default function InterviewRoomPage() {
                 speakerName={speaker ?? undefined}
                 personas={room.personas}
               />
+              {voiceDowngraded ? (
+                <div className={styles.notice} data-testid="voice-downgraded">
+                  <p className={styles.noticeText} aria-live="polite">
+                    {errorMessage('VOICE_UNAVAILABLE')}
+                  </p>
+                </div>
+              ) : null}
               {/* The waiting beat survives C02. A live round with no question is a real state —
                   the batch is still generating — and the conversation alone would leave the
                   last thing said on screen with no sign anything is coming, which reads as a

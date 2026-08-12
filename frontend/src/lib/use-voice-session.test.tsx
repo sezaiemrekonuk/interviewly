@@ -45,7 +45,7 @@ interface Call {
   body: unknown;
 }
 
-function stubApi(routes: Record<string, () => Response> = {}) {
+function stubApi(routes: Record<string, () => Response | Promise<Response>> = {}) {
   const calls: Call[] = [];
 
   vi.stubGlobal(
@@ -389,8 +389,8 @@ describe('useVoiceSession — the turn loop (C02)', () => {
     expect(hits(calls, SPEECH('m1'))).toBe(0);
   });
 
-  it('keeps the spec default of a two-second silence window', () => {
-    expect(VAD_SILENCE_MS).toBe(2_000);
+  it('probes after one second of silence, the window L03 shortened', () => {
+    expect(VAD_SILENCE_MS).toBe(1_000);
   });
 
   // ADR-T08 — a tripwire, not an obstacle. Both windows are numbers the owner has now moved
@@ -436,6 +436,40 @@ describe('useVoiceSession — failure branches (S06)', () => {
     expect(audio.players).toHaveLength(1);
     expect(audio.recorders).toHaveLength(0);
     expect(hook.result.current.beat).toBe(null);
+  });
+
+  it('surfaces a refused downgrade instead of leaving the room silently idle', async () => {
+    const calls = stubApi({
+      '/api/interviews/i1/voice/downgrade': jsonError(403, 'FORBIDDEN'),
+    });
+    const hook = mount();
+    await waitFor(() => expect(audio.players).toHaveLength(1));
+
+    await act(async () => audio.players[0].fail());
+
+    await waitFor(() => expect(hits(calls, '/api/interviews/i1/voice/downgrade')).toBe(1));
+    await waitFor(() => expect(hook.result.current.error).toBe('FORBIDDEN'));
+    expect(hook.result.current.beat).toBe(null);
+  });
+
+  it('releases the microphone once the room is no longer in voice mode', async () => {
+    stubApi();
+    const hook = renderHook(
+      (props: { enabled: boolean }) =>
+        useVoiceSession('i1', {
+          enabled: props.enabled,
+          messages: MESSAGES,
+          speakable: true,
+          vad: VAD,
+        }),
+      { wrapper: wrapper(client), initialProps: { enabled: true } },
+    );
+    await waitFor(() => expect(mics.tracks).toHaveLength(1));
+
+    await act(async () => hook.rerender({ enabled: false }));
+
+    expect(mics.tracks[0].stop).toHaveBeenCalled();
+    expect(mics.tracks).toHaveLength(1);
   });
 
   it('reports the ceiling refusal as its own code and lets the refetch end the room', async () => {
@@ -953,5 +987,87 @@ describe('useVoiceSession — speech the page takes with it (T07)', () => {
       'audio',
     ) as File).text();
     expect(uploaded).toContain('Z');
+  });
+});
+
+describe('useVoiceSession — the mic is shut while the interviewer speaks', () => {
+  let audio: AudioHarness;
+  let client: QueryClient;
+
+  beforeEach(() => {
+    vi.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'],
+    });
+    installMediaDevicesMock();
+    audio = installAudioMock();
+    client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  const tick = async (ms = 0) => {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ms);
+    });
+  };
+
+  async function replyDuringProbe() {
+    const calls = stubApi({ [UPLOAD]: () => new Promise<Response>(() => {}) });
+    const hook = renderHook(
+      (props: { messages: RoomMessage[] }) =>
+        useVoiceSession('i1', {
+          enabled: true,
+          messages: props.messages,
+          speakable: true,
+          vad: VAD,
+        }),
+      { wrapper: wrapper(client), initialProps: { messages: MESSAGES } },
+    );
+    await tick();
+    await tick();
+    await act(async () => audio.players[0].end());
+    await tick();
+    expect(audio.recorders).toHaveLength(1);
+
+    await act(async () => audio.level(VAD_THRESHOLD + 0.2));
+    await act(async () => audio.level(0));
+    await tick(VAD.silenceMs + 200);
+    expect(audio.recorders).toHaveLength(2);
+
+    hook.rerender({ messages: [msg('m1', 'assistant'), msg('u1', 'user'), msg('m2', 'assistant')] });
+    await tick();
+    await tick();
+    return { hook, calls };
+  }
+
+  it('closes the recorder before a single frame of the reply is played', async () => {
+    await replyDuringProbe();
+
+    expect(audio.players).toHaveLength(2);
+    expect(audio.recorders[1].state).toBe('inactive');
+  });
+
+  it('never lets an orphaned recorder push its bytes into the next turn', async () => {
+    const { hook, calls } = await replyDuringProbe();
+
+    audio.recorders[1].chunk(2_000, 'Z');
+
+    await act(async () => audio.players[1].end());
+    await tick();
+    const answering = audio.recorders.length - 1;
+    expect(audio.recorders[answering].state).toBe('recording');
+    audio.recorders[answering].chunk(2_000, 'C');
+    audio.recorders[1].chunk(2_000, 'Z');
+
+    await act(async () => hook.result.current.stop());
+    await tick();
+
+    const uploads = calls.filter((call) => call.url === UPLOAD);
+    const sent = await ((uploads[uploads.length - 1].body as FormData).get('audio') as File).text();
+    expect(sent).toContain('C');
+    expect(sent).not.toContain('Z');
   });
 });

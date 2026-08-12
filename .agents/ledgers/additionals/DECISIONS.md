@@ -1027,3 +1027,153 @@ was going to compare against, and the deviations from its ADRs are named below.
 - **Repeats, warm-up sweeps and confidence intervals.** One run per cell, 12 seconds each, 3
   seconds of discarded warm-up. The variance is not characterised, and the report says so rather
   than implying a precision the method does not have.
+
+## ADR-ADD18 — a fatal speech failure downgrades, wherever it happens
+
+**Ask:** the owner's ElevenLabs credits ran out mid-interview. The room said *"it's continuing in
+text — carry on below"* and then continued in voice, with no composer to type into and no retry
+button. The promise was rendered; nothing behind it was true.
+
+**What was actually wrong.** `tts.ts:188` had the contract right: an `ApiError('VOICE_UNAVAILABLE')`
+from the provider calls `downgradeToText` before it re-throws. `stt.ts` never did — its catch
+handled `BudgetExceeded` and let everything else fall through a bare `throw err`. It did not even
+import the helper. So a credit failure on the **question** downgraded the interview and a credit
+failure on the **answer** did not, and which one a candidate hit depended on nothing but timing.
+The spec has said since 2026-08-06 that the rule applies "on every TTS and STT call"
+(`specs/2026-08-06-speech.md:95`); half of it had simply never been wired.
+
+Two tests had been set up for this fix and never finished: `stt.test.ts:32` and
+`metering.test.ts:39` both mock `../voice/downgrade` inside a module tree that never imported it,
+and `tts.test.ts` mocked the helper without ever asserting it was called. Dead mock config is what
+a missing assertion looks like from the outside.
+
+**Shape chosen:**
+
+- **One guard in `transcribeRecording`, not one per route.** `speechProvider.transcribe` has
+  exactly one caller and that caller has exactly two (`submitAnswerAudio`, `submitTurnAudio`), so
+  the shared function is where the guard belongs. Same helper, same `(interview, { traceId })`
+  signature, same awaited-then-rethrow as `tts.ts` — not a second downgrade path.
+- **Awaited, never floated.** The mode column has to be durable *before the first byte of the 503
+  leaves the server*, because the client's reaction to that 503 is a `GET /state`. Float the
+  downgrade and the refetch reads `mode: 'voice'`, which is the entire reported symptom. A test
+  asserts the flag has flipped by the time the rejection is observed; it fails against a floated
+  call.
+- **The candidate still gets the 503.** The downgrade changes what the *next* request will do; it
+  does not pretend this one succeeded.
+- **Provider refusals are not retried.** Both ElevenLabs loops retried any non-`ok` response three
+  times without reading the status, so an exhausted quota — permanent by definition — cost six
+  doomed calls per turn and six round trips of latency before failing. Retry is now 5xx and 429
+  only, and the parsed `detail.status` goes in the warn line, because "out of credits" and
+  "ElevenLabs is down" were previously the same log entry.
+- **The reason survives the mode flip.** The "continuing in text" copy lived inside `VoiceControls`,
+  which is mounted only while `mode === 'voice'` — so the downgrade unmounted its own explanation.
+  It is now latched in the room and rendered in the text branch, once, outside the conversation's
+  `aria-live` list (same rule ADR-T05 set for the recovery notice).
+- **The mic is released when the room stops being a voice room.** `active` going false only ever
+  skipped work; nothing closed the stream. A downgraded room left the track live, the
+  `AudioContext` open and the recording indicator lit, with the mute button unmounted.
+- **The downgrade publishes `INTERVIEW_STATE_CHANGED`.** Only the request that triggered it used to
+  learn about it. Guarded on `updateMany`'s count so a repeat downgrade publishes nothing, and
+  wrapped so a Redis outage cannot turn a successful downgrade into a 500.
+
+**Rejected:** giving credit exhaustion its own error code. The room's whole vocabulary for "voice
+is over" is `VOICE_UNAVAILABLE`, the acceptance suite keys on it, and a candidate does not need to
+know whose budget ran out.
+
+## ADR-ADD19 — the room may only record when the interviewer is not speaking
+
+**Ask:** "ensure we capture and send to ElevenLabs only when the interviewer ends his turn. It
+captured the speeches while interviewer speaks."
+
+**What was wrong.** Two things, and the second is why it reached ElevenLabs.
+
+A probe deliberately leaves the mic open across its round trip — T04 put it there so speech during
+the upload is not lost. The reply that *ends* that round trip is played out of the room's own
+speakers, and nothing in the loop closed the recorder before playing it.
+
+Worse: the speak effect ends by calling `startRecording()`, which overwrote `recorderRef` without
+stopping the recorder already in it. That orphan was never stopped, and `ondataavailable` resolves
+`chunksRef.current` at **delivery** time — so its chunks, containing the interviewer's synthesised
+voice, landed in whatever turn happened to be open when they arrived. Scribe then transcribed the
+interviewer back as the candidate's answer, and the conductor replied to it.
+
+**Shape chosen:** `recorderRef` identity is the whole rule. A `dataavailable` or an `onstop` from a
+recorder the ref no longer points at is dropped, `startRecording` closes any recorder still open
+before opening one, and the speak effect discards the recorder the moment it has a line to play.
+The old single `discardRef` boolean is deleted: one flag cannot say *which* recorder is being
+thrown away, and the moment two exist it answers for the wrong one.
+
+**What it is worth.** Correctness first — a transcript with the interviewer in it is a wrong answer
+scored against the candidate. Cost second and unquantified: ElevenLabs bills STT per audio-minute
+and those bytes were billed, and every contaminated transcript bought a gate call and a conductor
+turn answering the interviewer's own words.
+
+**Consequence for the ledgers:** every gate-accuracy figure quoted by `turn-taking` and
+`speech-latency` before 2026-08-12 was measured through this. Recorded in `L03`'s `## Notes` and in
+`speech-latency/STATE.md` rather than silently re-used.
+
+## ADR-ADD20 — a usage row records what the call actually was
+
+**Ask:** "elevenlabs says v0 in admin panel and other parameters are buggy/bad too… it also has no
+tokens, no latency etc."
+
+**What the console was actually showing.** Rows read straight out of `llm_calls`, so every defect
+below is a stored one unless marked otherwise.
+
+| column | ElevenLabs row said | truth |
+|---|---|---|
+| `model` | `tts` / `stt` | a role label, not a model — `eleven_turbo_v2_5` / `scribe_v1` |
+| `latency_ms` | `0` | the slowest call in the product, ~430 ms TTS / ~1 650 ms STT |
+| `prompt_uuid` / `prompt_version` | `''` / `0` → rendered `v0` | correct as stored, wrong on screen |
+| `provider` | `elevenlabs` even from the fake | whatever provider actually served it |
+| tokens | NULL | correct — speech volume lives in `units`/`unit_kind` |
+| `cost_usd` | real | correct, and genuinely charged against `spent_usd` |
+
+**The one that mattered most was not the one reported.** `latency_ms` was the literal `0` in
+`metering.ts`, so `stats.ts` reported ElevenLabs' average latency as zero and `costs.ts` sank its
+whole daily latency series to zero. A third of all provider calls were invisible in the only place
+anyone looks for slow ones — while a separate ledger was spending sessions hunting ~7 s of
+end-to-end latency.
+
+**Shape chosen: the provider reports what it did.** `SpeechCallReport { provider, model }` is
+returned by `speak`/`transcribe`, so the row records the provider and model that actually served
+the call. The caller times it, because the retry loop lives *inside* the driver and a caller-side
+stopwatch therefore spans every attempt — and because a provider-reported duration would force the
+fake to invent one, which is the defect this fixes.
+
+- **The price key and the model column are now different things, structurally.** They were the same
+  string, which is why nobody noticed the column was wrong: `prices.lookup(provider, 'tts')` is
+  keyed on the *kind*, and the kind was being stored as the model. `SPEECH_KIND` is now the only
+  thing that reaches the price table and the provider's report is the only thing that reaches the
+  `model` column. Renaming one can no longer silently zero the other.
+- **The fake bills nothing and says so.** It reported `elevenlabs` and was priced at live rates, so
+  any database that had run the acceptance ring or a stub-mode session carried invented ElevenLabs
+  spend. It now reports `fake`, finds no price, logs `PRICE_MISSING` and bills 0 — the same
+  precedent the AI path already set for stub calls.
+- **…but a test double may still stand in for a priced provider, and says so at the binding.** The
+  ring's S04 scenarios exist to prove that a provider call bills `spent_usd`, and an honest fake
+  bills nothing, which would have quietly gutted the acceptance criterion into a tautology. The
+  fake now takes the identity it is standing in for as a constructor argument, and the `@speech`
+  hook passes the configured ElevenLabs models. The impersonation is declared in the test that
+  wants it rather than baked into the product.
+- **STT with no word timings bills a one-second floor** (`MIN_BILLED_SECONDS`), logged. It was
+  billing zero on silence — free STT the provider still charged for. A floor, deliberately not an
+  estimate: the driver never learns the clip's real duration, and a number derived from byte count
+  would look like a measurement while being a guess.
+- **TTS characters are counted as code points**, not UTF-16 code units, so an emoji no longer
+  counts double.
+- **The `v0` badge is a render fix in two files.** `prompt_uuid: ''` is a correct encoding of "no
+  prompt was compiled" against NOT NULL columns; the pill was simply drawn unconditionally. Fixing
+  the render repairs every existing row with no migration.
+- **"After {provider}" now names a model**, because `fell_back_from` holds a model id. That badge
+  had been mislabelled since it was written.
+
+**No backfill.** `model` is not recoverable — the existing rows straddle L01's
+`eleven_multilingual_v2` → `eleven_turbo_v2_5` swap with nothing recording which row used which, and
+a guess written into a cost ledger is worse than a gap. `latency_ms` was never captured. The
+consequence to live with: the console's model filter will offer both `tts` and the real ids until
+the old rows age out.
+
+**Left alone, deliberately:** `attempt_no` is still 1 for speech even when the driver retried
+internally, while the LLM path writes one row per attempt. Making the two agree is a data decision
+about what a "call" is, not a bug fix. `SpeechCallReport` is now the cheap place to add it.

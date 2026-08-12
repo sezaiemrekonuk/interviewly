@@ -46,7 +46,7 @@ export type VoiceBeat = 'listening' | 'speaking' | 'acknowledging' | null;
  * whether the utterance was finished. So it is short on purpose: it costs a round trip when the
  * candidate is mid-thought, and a long one is latency on every answer they did finish.
  */
-export const VAD_SILENCE_MS = 2_000;
+export const VAD_SILENCE_MS = 1_000;
 
 /**
  * The CEILING on what counts as speech, not the test for it (ADR-T07). 0.05 RMS is a loud voice
@@ -225,7 +225,7 @@ export function useVoiceSession(
   const [error, setError] = useState<string | null>(null);
   const [holding, setHolding] = useState(false);
 
-  const { request: requestMic } = mic;
+  const { request: requestMic, release: releaseMic } = mic;
   const active = enabled && Boolean(interviewId);
 
   const liveRef = useRef(true);
@@ -264,10 +264,6 @@ export function useVoiceSession(
   const turnStartedRef = useRef(0);
   // Why the recorder stopped, read once in `onstop`.
   const reasonRef = useRef<StopReason>('final');
-  // Set on the recorder the room is about to throw away: the one re-opened for a probe whose
-  // answer came back conducted, and the one the silence clock closes. Its bytes are dropped
-  // rather than uploaded — the interviewer is about to speak, and an open mic records the TTS.
-  const discardRef = useRef(false);
   // An upload is in flight. The silent-turn clock must not fire underneath one: a probe keeps the phase
   // on 'listening', so nothing else would stop it.
   const uploadingRef = useRef(false);
@@ -305,9 +301,17 @@ export function useVoiceSession(
     messagesRef.current = messages;
   }, [messages]);
 
+  const openedRef = useRef(false);
   useEffect(() => {
-    if (active) requestMic();
-  }, [active, requestMic]);
+    if (active) {
+      openedRef.current = true;
+      requestMic();
+      return;
+    }
+    if (!openedRef.current) return;
+    openedRef.current = false;
+    releaseMic();
+  }, [active, requestMic, releaseMic]);
 
   // Re-asking for the mic is the whole retry now — there is no connection to re-establish.
   const reconnect = useCallback(() => requestMic(), [requestMic]);
@@ -346,7 +350,6 @@ export function useVoiceSession(
   const discardRecorder = useCallback(() => {
     const open = recorderRef.current;
     if (!open) return;
-    discardRef.current = true;
     recorderRef.current = null;
     if (open.state !== 'inactive') open.stop();
   }, []);
@@ -360,10 +363,10 @@ export function useVoiceSession(
       return;
     }
 
+    discardRecorder();
     heardRef.current = false;
     floorRef.current = threshold;
     chunksRef.current = [];
-    discardRef.current = false;
     silenceSentRef.current = false;
     flushedRef.current = false;
     turnStartedRef.current = Date.now();
@@ -371,16 +374,12 @@ export function useVoiceSession(
     recorderRef.current = recorder;
 
     recorder.ondataavailable = (event: BlobEvent) => {
+      if (recorderRef.current !== recorder) return;
       if (event.data?.size) chunksRef.current.push(event.data);
     };
     recorder.onstop = () => {
+      if (recorderRef.current !== recorder) return;
       recorderRef.current = null;
-      // A recorder the room already replaced or closed. Its bytes were never a turn.
-      if (discardRef.current) {
-        discardRef.current = false;
-        chunksRef.current = [];
-        return;
-      }
       // Unmounted mid-turn: the bytes are dropped rather than uploaded into a room nobody is in.
       if (!liveRef.current) return;
       const audio = new Blob(chunksRef.current, { type: recorder.mimeType });
@@ -493,6 +492,8 @@ export function useVoiceSession(
     );
     if (pending.length === 0) return;
 
+    discardRecorder();
+
     let cancelled = false;
     setError(null);
     setPhase('speaking');
@@ -541,7 +542,15 @@ export function useVoiceSession(
           if (!liveRef.current) return resolve(false);
           releasePlayer();
           setPhase('idle');
-          void voiceDowngrade(String(interviewId)).finally(refetchState);
+          void voiceDowngrade(String(interviewId))
+            .then((result) => {
+              if (result.ok || !liveRef.current) return;
+              failedAtRef.current = 'speak';
+              failedMessageRef.current = messageId;
+              setError(result.code ?? 'UNKNOWN');
+              setPhase('failed');
+            })
+            .finally(refetchState);
           resolve(false);
         };
         player.addEventListener('error', downgrade);
@@ -569,7 +578,17 @@ export function useVoiceSession(
       releasePlayer();
     };
     // `attempt` re-runs a failed line; `assistantIds` re-runs when the server writes a new one.
-  }, [active, speakable, interviewId, mic.state, assistantIds, attempt, refetchState, releasePlayer]);
+  }, [
+    active,
+    speakable,
+    interviewId,
+    mic.state,
+    assistantIds,
+    attempt,
+    refetchState,
+    releasePlayer,
+    discardRecorder,
+  ]);
 
   // VAD (ADR-S06): the candidate ends the turn, the server ends the interview.
   //

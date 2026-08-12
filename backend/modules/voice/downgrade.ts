@@ -11,6 +11,7 @@ import type { Interview } from '@prisma/client';
 
 import { requireAuth } from '../auth/middleware';
 import { requirePublicOrigin } from '../interview/csrf';
+import { publishStateChanged } from '../interview/sse';
 import { ApiError } from '../../src/lib/api-error';
 import { activeInterview, prisma } from '../../src/lib/db';
 import { logger } from '../../src/lib/logger';
@@ -38,6 +39,20 @@ export async function downgradeToText(
   interview.mode = 'text';
 
   logger.info({ traceId: ctx.traceId, interviewId: interview.id }, 'VOICE_DOWNGRADED_TO_TEXT');
+
+  try {
+    await publishStateChanged({
+      from: interview.state,
+      to: interview.state,
+      interviewId: interview.id,
+    });
+  } catch (err) {
+    logger.error(
+      { err, traceId: ctx.traceId, interviewId: interview.id },
+      'INTERVIEW_EVENT_PUBLISH_FAILED',
+    );
+  }
+
   return true;
 }
 

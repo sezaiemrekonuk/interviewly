@@ -130,12 +130,18 @@ export function CallTable({
                     <td>{row.provider}</td>
                     <td className={styles.occupation}>{row.model}</td>
                     <td className={styles.flags}>
-                      <span className="tabular" title={row.promptUuid}>
-                        {row.promptUuid.slice(0, UUID_HEAD)}
-                      </span>
-                      <span className={styles.pill}>
-                        {t('calls.promptVersion', { version: row.promptVersion })}
-                      </span>
+                      {row.promptUuid === '' ? (
+                        <span className="tabular">—</span>
+                      ) : (
+                        <>
+                          <span className="tabular" title={row.promptUuid}>
+                            {row.promptUuid.slice(0, UUID_HEAD)}
+                          </span>
+                          <span className={styles.pill}>
+                            {t('calls.promptVersion', { version: row.promptVersion })}
+                          </span>
+                        </>
+                      )}
                       {row.attemptNo > 1 && (
                         <span className={styles.pill}>
                           {t('calls.attempt', { n: row.attemptNo })}
@@ -143,7 +149,7 @@ export function CallTable({
                       )}
                       {row.fellBackFrom && (
                         <span className={styles.pill}>
-                          {t('calls.fellBack', { provider: row.fellBackFrom })}
+                          {t('calls.fellBack', { model: row.fellBackFrom })}
                         </span>
                       )}
                     </td>
