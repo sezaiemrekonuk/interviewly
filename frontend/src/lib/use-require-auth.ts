@@ -53,7 +53,7 @@ export function useRequireAuth(): RequireAuthState {
       if (result.code === 'UNAUTHENTICATED') {
         // `replace`, not `push`: the protected URL never becomes a back-button target for
         // a visitor who was not allowed to see it.
-        router.replace(signInPathFor(pathname));
+        router.replace(signInPathFor(pathname, window.location.search));
         return;
       }
 
