@@ -923,75 +923,32 @@ making, because it is the only comment in this tree whose absence loses a *rule*
 who does not read it edits a shipped version in place and rewrites what `llm_calls.prompt_version`
 claims about the past.
 
+
 ## ADR-ADD16 — the adaptive path was never alive, and two provider bugs are why
 
-**Ask (owner):** run an end-to-end text interview and prove adaptive questioning works, with
-evidence. It did not work. Fixing what the evidence found is this ADR.
+**Ask (owner):** prove adaptive questioning works end to end. It did not. This is the fix.
 
-**What was actually true.** `promoteNextQuestion` scored every answer and promoted nothing, on
-every interview, since D03 landed. Three ledger entries (AGENTS.md, ADR-ADD13, ADR-ADD15) record
-the symptom — "`answers.scores` is usually `null`", "returns early when a question has no
-pre-generated candidates, which is every interview" — as a fact of the system rather than as a
-bug. Issue #148 had already moved D02 *inside* the hook so the pool was produced on the turn that
-promotes it, so the gate should have been reachable. It was reachable. The generation behind it
-failed on every call, on both providers, for two unrelated reasons:
+`promoteNextQuestion` scored every answer and promoted nothing, always. Not a dead gate — the
+pool behind it failed on both providers, for two unrelated reasons:
 
-- **OpenAI cannot emit a top-level JSON array.** `openaiTransport` sends
-  `response_format: {type:'json_object'}` on every prompt — deliberately, so the provider enforces
-  what the prompts already ask for. `interview.question.candidates` v1 and v2 asked for
-  `[{…},{…},{…}]`, and `live-client.ts` validated against a bare `z.array(CandidateSchema)`. JSON
-  mode makes that shape unreachable: the model returns one object, `safeParse` rejects it,
-  `AI_OUTPUT_INVALID`. Reproduced live against `gpt-4.1-mini` — a single candidate object, never
-  an array. It is the only prompt in the tree with an array-rooted schema, which is why this was
-  one dead feature and not eight.
-- **The Gemini fallback tier spends its whole budget on thinking.** `geminiTransport` passes the
-  prompt's `max_tokens` as `maxOutputTokens`, and `gemini-2.5-flash` charges thinking tokens
-  against it. Measured on the candidates prompt: `thoughtsTokenCount: 765` of 800,
-  `candidatesTokenCount: 20`, `finishReason: MAX_TOKENS` — truncated JSON, `AI_OUTPUT_INVALID`
-  again. This is **not** a candidates bug. Every prompt in the tree is below or near that
-  overhead: `interview.turn.complete` has 30 tokens, `listing.validate` and `title.generate` 120,
-  `conduct.turn` 500, `answer.score` 600. Tier-2 has been decorative since the model was switched
-  to a thinking one — a chain that logs `AI_ALL_PROVIDERS_FAILED` after paying for two calls.
+- **OpenAI cannot emit a top-level array.** `response_format: json_object` is sent on every
+  prompt; `interview.question.candidates` v1/v2 asked for `[{…}]` and validated against a bare
+  `z.array`. Unreachable shape. The only array-rooted schema in the tree.
+- **The gemini fallback spends its budget thinking.** `gemini-2.5-flash` charges thinking against
+  `maxOutputTokens`: 765 of 800 measured, `finishReason: MAX_TOKENS`. Tier-2 has been decorative
+  for every prompt in the tree, not just this one — `turn.complete` has 30 tokens, `score` 600.
 
-**Shape chosen:**
+**Shape chosen:** `thinkingConfig: { thinkingBudget: 0 }` fixes the tier in one line rather than
+raising eight `max_tokens`, and matches tier-1, which is non-thinking throughout. Candidates v3
+(same uuid, K9) returns `{"candidates":[…]}` like `QuestionBatchSchema` already does, so the
+outlier is gone rather than special-cased; the seam still returns `Candidate[]`. v3 also binds
+`<job_listing>`, which ADR-ADD15 assigned to whoever woke this path up. The transports get their
+first request-body tests: every existing chain test injects a mock, so both bugs lived in the two
+functions the suite never called.
 
-- **`thinkingConfig: { thinkingBudget: 0 }` on the gemini request, one line, and it fixes the
-  tier rather than the prompt.** Raising `max_tokens` per prompt would buy the same JSON eight
-  times over and still leave the budget unbounded — thinking is not billed as output but it does
-  consume the ceiling. Zero is also parity: every tier-1 model in this tree is a non-thinking
-  `gpt-4.1-*`, so the fallback now answers the same question the same way. Verified live:
-  `finishReason: STOP`, 138 output tokens, three valid candidates.
-- **`interview.question.candidates` v3, with an object reply contract.** Same uuid, `version: 3`,
-  v1 and v2 untouched (K9). `{"candidates":[…]}` is the shape `QuestionBatchSchema` already uses
-  for the same reason, so the outlier is gone rather than special-cased. New
-  `CandidateBatchSchema` in `schemas.ts`; `generateCandidates` unwraps `.candidates` and its seam
-  signature stays `Promise<Candidate[]>`, so `candidate-prep.ts`, `adaptive.ts` and the stub did
-  not move.
-- **The listing is bound into the candidates prompt, because ADR-ADD15 assigned it to whoever
-  woke this path up.** That sentence was written on the assumption the path would stay dead; it
-  is now live, and a re-anchored batch would otherwise be overwritten by a listing-blind
-  promotion. `jobListing` joins `GenerateCandidatesArgs`, `candidateVars` and the injection
-  boundary; `prepareNextCandidates` reads `interview.job_text`, which `adaptive.ts` already
-  holds. All three candidates must test something the listing names — the three differ in
-  difficulty, not in subject.
-- **The transports get their first request-body tests.** Nothing in the repo asserted what either
-  transport actually sends: `providers.test.ts` builds every chain test on injected mock
-  transports, so both bugs lived in the two functions the suite never called. Two tests now pin
-  `thinkingBudget: 0` and `response_format: {type:'json_object'}`, and two in
-  `prompt-builder.test.ts` pin the object contract and the listing anchor on the shipped prompt.
+**Verified:** six-question text interview on an image from this branch — 5/5 promotions, every
+difficulty matching `selectNextQuestion` including the floor clamp, no provider fell back.
+`npm test` 1400, `@adaptive-questions` 7 scenarios, typecheck and lint clean.
 
-**Verified end to end, not just in the suite.** A six-question text interview driven through
-`POST /turns` against an image built from this branch, answered from scripted quality bands.
-Five promotions, five pools of three (`easy`/`medium`/`hard`), zero
-`CANDIDATE_PREGENERATION_FAILED`, all five candidate calls `attempt_no: 1` with no
-`fell_back_from`. Every difficulty matches `selectNextQuestion` exactly, including the floor
-clamp: `medium`→(10)→`easy`→(75)→`medium`→(20)→`easy`→(10)→`easy`→(65)→`medium`, with
-`chosen_reason` `score_low`/`score_high` tracking each score across the 40/60 cuts. Suites:
-`npm test` 127 files / 1400 tests; `test:acceptance --tags @adaptive-questions` 7 scenarios /
-53 steps; both selftests; `typecheck` and `lint` exit 0.
-
-**Known, not fixed:** the conductor writes its own wording over the promoted row's `text` after
-the promotion (`conductor.ts` — "the conductor's wording wins"), while `topic` and `difficulty`
-stay the promoted candidate's. So a promoted row can carry a topic label that no longer describes
-its text. That is audit and admin surface only (K4), it predates this branch, and deciding which
-of the two should win is a conductor decision, not a provider fix.
+**Known, not fixed:** the conductor overwrites the promoted row's `text` and leaves its `topic`,
+so a label can stop describing its question. Audit surface, predates this branch, conductor's call.
