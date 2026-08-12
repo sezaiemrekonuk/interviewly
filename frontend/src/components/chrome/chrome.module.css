@@ -28,6 +28,35 @@
   box-shadow: var(--shadow-hairline);
 }
 
+.headerOnDark {
+  background: var(--rail);
+  border-block-end-color: var(--rail-border);
+}
+
+.headerOnDark .wordmark {
+  color: var(--rail-text);
+}
+
+.headerOnDark .navLink {
+  color: var(--rail-text-muted);
+}
+
+.headerOnDark .navLink:hover {
+  color: var(--rail-text);
+  background: var(--rail-raised);
+}
+
+.headerOnDark .navCta {
+  color: var(--text);
+  background: var(--surface);
+  border-color: var(--surface);
+}
+
+.headerOnDark .navCta:hover {
+  background: var(--surface-sunken);
+  border-color: var(--surface-sunken);
+}
+
 .headerInner {
   display: flex;
   flex-wrap: wrap;
@@ -164,6 +193,10 @@
   .footer {
     padding: 0 16px;
     margin-top: 48px;
+  }
+
+  .navSection {
+    display: none;
   }
 }
 

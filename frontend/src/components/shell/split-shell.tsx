@@ -44,9 +44,9 @@ export function SplitShell({
 /**
  * The wordmark. The glyph is drawn from currentColor — no asset, no second request.
  *
- * `href`, when given, makes it a way back to the marketing home — `/` redirects a signed-in
- * visitor straight back to their briefing (`home-switch.tsx`), so every rail can point here
- * without knowing whether the visitor underneath it is signed in.
+ * `href`, when given, makes it a way back to the marketing home. `/` is public for everyone
+ * and never redirects, so every rail can point here without knowing whether the visitor
+ * underneath it is signed in.
  */
 export function RailMark({ label = 'Interviewly', href }: { label?: string; href?: string }) {
   const mark = (
