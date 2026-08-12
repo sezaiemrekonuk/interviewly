@@ -86,11 +86,12 @@ export const schema = z.object({
   // candidate hit `withBudgetOrEnd` mid-sentence and the interview ended on them — a ceiling
   // that used to be unreachable in practice became the normal way an interview finished.
   BUDGET_USD_TEXT:             emptyAsUnset(z.coerce.number().default(1.50)),
-  // C02 — the hard drift ceiling. How many times the candidate may speak to one question
-  // before the server stops asking the conductor's permission and advances itself. This is
-  // the backstop for an interviewer that has decided to explore forever; it is deliberately
-  // generous, because reaching it reads to the candidate as being cut off mid-thought.
-  CONDUCTOR_MAX_TURNS_PER_QUESTION: emptyAsUnset(z.coerce.number().int().positive().default(4)),
+  // C02 — the hard drift ceiling, in candidate utterances against one question. `mayProbe`
+  // spends the last one on closing the question rather than on another probe, so at 3 the
+  // candidate answers, gets at most one follow-up, and the round moves on. It was 4, which
+  // bought three follow-ups per question and put a six-question interview well over its
+  // twenty minutes.
+  CONDUCTOR_MAX_TURNS_PER_QUESTION: emptyAsUnset(z.coerce.number().int().positive().default(3)),
   // The whole-interview backstop, in utterances. `budget_usd` is the real ceiling; this one
   // exists because a provider that answers cheaply and wrongly can burn a long time without
   // ever tripping a dollar limit.

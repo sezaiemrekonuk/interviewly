@@ -18,8 +18,8 @@
  *   2. `handover` is refused before the HR round has met its floor.
  *   3. `end_interview` is refused on the opening exchange, so a single bad first impression
  *      cannot end a paid interview.
- *   4. Past `CONDUCTOR_MAX_TURNS_PER_QUESTION` the server advances without asking, and says
- *      so in the transcript.
+ *   4. Once `mayProbe` says `CONDUCTOR_MAX_TURNS_PER_QUESTION` is spent the server advances
+ *      without asking, and says so in the transcript.
  *   5. Past `CONDUCTOR_MAX_TURNS` the interview ends, whatever anyone thinks.
  *
  * K2 still holds: `interviews.state` is only ever written by `applyTransition`, and the
@@ -27,7 +27,7 @@
  */
 import type { AiClient, AiCtx, Widget } from '@interviewly/ai';
 import type { ChatRole, ConductorAction, InputMode, Interview, InterviewState } from '@prisma/client';
-import { WidgetSchema, loadInjectionPatterns } from '@interviewly/ai';
+import { WidgetSchema, loadInjectionPatterns, mayProbe } from '@interviewly/ai';
 import { z } from 'zod';
 
 import { ApiError } from '../../src/lib/api-error';
@@ -446,7 +446,7 @@ function clampAction(
   // still wants more. It does not get more. The forced advance is written into the transcript
   // as a system row so the interview reads honestly afterwards — an interviewer that was
   // overridden should not look like one that chose to move on.
-  if (opts.turnsLeftOnQuestion <= 0 && action !== 'next_question' && action !== 'handover' && action !== 'end_interview') {
+  if (!mayProbe(opts.turnsLeftOnQuestion) && action !== 'next_question' && action !== 'handover' && action !== 'end_interview') {
     logger.warn(
       { traceId: opts.traceId, interviewId: interview.id, requested: action },
       'AI_AGENT_DRIFTED_FOR_NEXT',

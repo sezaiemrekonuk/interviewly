@@ -48,7 +48,7 @@ describe('SIGNED_URL_TTL', () => {
     ['BUDGET_USD_TEXT', 1.5],
     ['MAX_INTERVIEWS_PER_USER_PER_DAY', 5],
     ['SESSION_TTL_DAYS', 7],
-    ['CONDUCTOR_MAX_TURNS_PER_QUESTION', 4],
+    ['CONDUCTOR_MAX_TURNS_PER_QUESTION', 3],
     ['CONDUCTOR_MAX_TURNS', 80],
   ])('%s keeps its default when set to empty rather than collapsing to 0', async (key, fallback) => {
     const { config } = await withEnv({ [key]: '' }, () => import('./env'));
