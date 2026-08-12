@@ -760,3 +760,93 @@ candidate's CV, because `reportVars` had never been given the vacancy.
 Left open, deliberately and now the only one: `interview.question.candidates` is anchored to
 neither the listing nor the CV and overwrites question rows, but the path is dead today
 (`promoteNextQuestion` returns early for every interview). ADR-ADD15 says who owns it.
+
+## 2026-08-12 — the stack measured at 1, 2 and 4 api replicas
+
+Scaling, latency and performance, run locally against `docker compose --scale api=N`. Decisions
+and their reasons are ADR-ADD16; this is what changed, what was run, and what came back.
+
+**Made scalable**
+
+- `Caddyfile` — `reverse_proxy api:4000` became `reverse_proxy { dynamic a { name api; port 4000;
+  refresh 5s } lb_policy round_robin }`, same for `web:3000` and the webhook block. A named
+  upstream resolves once into a keep-alive pool, so a second replica sat idle; a dynamic upstream
+  set re-reads the A record every 5s and spreads per request. Measured 25.0 % / 25.0 % / 25.0 % /
+  25.0 % across four replicas (max spread across every run: 1.0 percentage point, at 2 replicas).
+- `compose.scale.yaml` — new overlay. Publishes db and cache (the harness reads
+  `pg_stat_database` and `INFO clients`), leaves `api` unpublished so `--scale api=N` can start a
+  second one at all, and forces `AI_ENABLED=false`, `LOG_TRANSPORT=stdout` and
+  `connection_limit=${SCALE_DB_POOL:-10}` on the database URL.
+- `backend/src/lib/profiler.ts` + `backend/modules/admin/perf.ts` — new. Per-route-pattern
+  latency rings (4096 samples), status classes, event-loop delay, CPU and RSS per window;
+  `X-Instance` (8 hex of sha256 of the hostname) on every response; `GET /admin/perf` and
+  `POST /admin/perf/reset` on the admin router. `backend/src/app.ts` mounts the middleware first,
+  ahead of the body parser. Four unit tests in `profiler.test.ts`.
+- `loadtest/` — new. `lib.mjs` (scenarios, closed-loop generator, percentiles, docker/psql/redis
+  readers), `scale.mjs` (the run), `report.mjs` (JSON to PDF via the `pdfkit` the worker already
+  depends on), `README.md`, and `results/` with the two runs below.
+
+**The run** — 6 scenarios x {8, 64} connections x {1, 2, 4} replicas, 12 s measured after 3 s of
+discarded warm-up, 36 cells, on Docker Desktop 29.4.0 with 8 CPUs and 7.75 GiB. Every cell's
+evidence is in `loadtest/results/compose-scale.json`; `loadtest/report.pdf` is rendered from it
+and quotes nothing else.
+
+Throughput at 64 connections, 1 replica to 4:
+
+| scenario | 1x | 2x | 4x | factor |
+|---|---|---|---|---|
+| `healthz` | 6400 | 5974 | 7462 | 1.17 |
+| `readyz` | 4698 | 3685 | 4437 | 0.94 |
+| `me` | 1129 | 1247 | 1518 | 1.34 |
+| `me/interviews` | 400 | 535 | 524 | 1.31 |
+| `interviews/:id/state` | 144 | 248 | 324 | 2.24 |
+| `web-home` (control) | 128 | 128 | 117 | 0.92 |
+
+**What the numbers say, and the observation behind each**
+
+- **The heavier the endpoint, the better it scales.** `interviews/:id/state` — the only scenario
+  whose one-replica p95 was already over half a second — is the one that gained 2.24x. Its
+  event-loop delay p99 fell from 91.55 ms at one replica to 32.01 ms at four: the queue moved off
+  a single loop, which is exactly what a replica is for.
+- **The cheap endpoints are bound by something that is not the api.** At one replica serving
+  `healthz` at 6400 rps, the api container drew 112 % CPU and the *edge* drew 125 %; server-side
+  p95 was 0.19 ms while the client saw 16.32 ms. 16.1 of those 16.3 ms are outside the API
+  process. Scaling api cannot move a number the api does not own.
+- **The host is the ceiling, and it is reached at one replica.** A single api container measured
+  572.7 % CPU during `me/interviews` and 572.5 % during `interviews/:id/state` on an 8-core VM
+  (Prisma's query engine is not on the JS thread). Four replicas therefore share the same eight
+  cores that one replica had already half-filled — which is why the factors land between 1.2 and
+  2.2 rather than near 4.
+- **The control behaved as a control.** `web-home` never touches the api: 128 → 128 → 117 rps,
+  api CPU 0.3 % → 5.9 %. Scaling api did not move it, which is the evidence that the other
+  movements are attributable to the replicas rather than to the day.
+- **The pinned pool is what made 4 replicas legal.** Postgres connections went 12 → 22 → 42,
+  exactly the base plus 10 per api process. Prisma's default here would be 17 per process
+  (`2 x 8 + 1`): four api replicas plus the worker would ask for 85 against `max_connections =
+  100` before a single interview ran. Redis clients tracked 9 → 11 → 15.
+- **Nothing fell over.** 36 cells, 0 transport failures, every response 2xx.
+
+**Repeatability, because one run per cell is not a measurement of variance**
+`loadtest/results/compose-repeatability.json` re-ran two cells three times at one replica:
+`healthz` c=64 gave 6004.8, 3784.3 and 6112.1 rps (a 38 % spread, one outlier where the host was
+busy), `interviews/:id/state` gave 168.7, 150.3 and 159.9 rps (±6 %). Read the table above with
+that in mind: the 2.24x on `interview-state` is far outside that noise, the 1.17x on `healthz`
+is not.
+
+**Two harness defects found by running it**
+
+- `POST /admin/perf/reset` reached "3 of 4 replicas" and aborted a 4-replica pass. The round robin
+  is per request and the load traffic advances it, so N x 4 probes can miss a replica by chance
+  (~4 % at N=4). Now N x 12 + 8 probes, and the run still refuses to proceed if one is unreached —
+  the check was right, the budget was not.
+- That abort lost 24 completed cells, because the JSON was only written at the end. `scale.mjs`
+  now writes the file after every cell.
+
+**Not measured here, and deliberately:** live SSE rooms and the per-stream `redis.duplicate()`
+ceiling (`sse.ts:180`) — the `platform` ledger's P03/P04 own that scenario; any write path, all of
+which are rate-limited by design; and the profiler's own overhead, which is inside every number
+above rather than isolated from it.
+
+**Verified:** `npm test` 128 files / 1400 tests; `npm run typecheck` and `npm run lint` exit 0;
+`caddy validate` on the new Caddyfile; the edge reached 1, 2 and 4 distinct instances at the three
+scale steps, recorded per step in the results file.
