@@ -212,3 +212,388 @@ directly, not a security bug but looks bad".
 - **The report page still does not know its own occupation.** `GET /interviews/:id` returns
   `{interviewId, state, report}`, and the PDF gets the role from the worker's own query. Threading
   it into the screen is a change to that endpoint, which nothing on the screen asked for.
+
+## ADR-ADD05 — the landing page as the room, and a cast that reacts
+
+**Ask (owner, 2026-08-12):** the homepage read as "AI slop" — half professional, half enjoyable,
+and boring enough that a visitor left fast. Revise it completely, with illustrated Open Peeps-
+style avatars and real motion rather than a slide or a component swap, without drifting from the
+design language.
+
+**Shape chosen:**
+
+- **The page is the room, not a page about one.** The retired arrangement was a tall hero band, a
+  boxed `<DemoInterview>` under it, and six documentary bands. The demo was the strongest thing
+  on the surface and it was in a box, three-quarters of a viewport below the fold. Now the first
+  viewport *is* the dark act: `--rail` full-bleed, headline and the page's single `--primary` on
+  the left, the job listing as a lit `--surface` sheet under them, and the two interviewers in
+  `--stage` tiles down the right. Nothing is illustrated *about* the product; the product is what
+  is on screen.
+- **The right-hand tile column is the split shell rotated.** DESIGN §1 is "a working console,
+  split": a dark context column carrying what is true right now, against a working surface holding
+  one subject. That is exactly what Ada and Turing are on this page, so the column is `position:
+  sticky` and rides the whole exchange. This is the shell's own grammar, not a new layout.
+- **Two grounds, no wash.** The night (`--rail`) and the document (`--bg`) are the shell's two
+  shipped materials, alternating down the page. §2 rule 4 forbids a route painting a *wash* or
+  opting into a different page background; it does not forbid the rail's own material appearing
+  full-bleed, which `room` and `pre-join` already do. No gradient was added and none is needed —
+  the "lamp" is a `clip-path` wipe, not a light source painted in colour.
+- **The cast is drawn, not fetched.** `components/home/peeps.tsx` is one inline SVG per character
+  with a shared bust and six moods, every stroke `currentColor` and every fill a token. It costs
+  no request, no `<link rel=preload as=image>` and no hex — which is what keeps the §8.1 anonymous
+  JS/asset budget and the token lint intact, and why the seeded persona *photographs* were not
+  used here. Those are photographs of real people and belong in the room, where a candidate has
+  consented to be in a session, not on a marketing page.
+- **The mood is the round's own state, never decoration.** `moodFor()` derives it: asking while
+  the question types, listening while the answer list is up, then `pleased` or `unconvinced`
+  against the same 60 the copy already implies. An interviewer who reacted on a timer would be
+  the "AI slop" the ask named. Colour never carries it either — the tile prints "Has the floor" /
+  "Waiting" / "Round done" in words, per §6.
+- **One authored motion moment, and it is the handover.** The lamp comes up once on mount (a
+  `clip-path` wipe across the listing sheet, the two tiles rising behind it), and thereafter the
+  only authored motion is the round changing hands: a hairline seam sweeps the exchange, the tile
+  that lost the floor dims, the one that gained it lights, and both faces change. Every duration
+  is `calc(var(--duration-default) * n)`, so `prefers-reduced-motion` zeroes the whole page from
+  the one token rather than from six media queries.
+- **The state machine was kept, the staging was replaced.** `useTyped`, `useSettled`, the
+  render-phase reset that stops a new question painting at the previous one's length, the
+  post-mount shuffle that avoids a hydration tear (issue 418), the `visibility: hidden` sizing
+  span that stops the 217px shift (issue 237), the focus move to the result (WCAG 2.4.3) and the
+  announce-once `role="status"` are all carried over verbatim from `demo-interview.tsx`. A
+  rewrite that re-derived them would have re-earned every one of those bugs.
+- **The three-step band became a drawn flow.** Numbered nodes sitting on hairlines that draw
+  themselves on scroll (`animation-timeline: view()`, the precedent this page already set),
+  rather than three same-size cards of heading-plus-text.
+- **The header takes the rail's material on this route only** (`<SiteHeader onDark />`). The bar
+  sits in flow above a `--rail` first viewport; left on `--bg` it was a light strip pinned over
+  the night, and a light-to-dark flip on scroll would be worse than either. `/privacy` and
+  `/terms` are unchanged. The landing's five section anchors are hidden below 48rem, where they
+  wrapped the header into a 320px stack that covered the headline.
+
+**Skipped, deliberately:**
+
+- **No third character.** The desk is seen from the candidate's chair, so "you" has no portrait —
+  which is also why exactly two exist.
+- **No per-role listing provenance.** Drawing a line from the phrase in the listing to the question
+  it produced is the strongest version of "written from your listing", and it needs three more
+  authored passages per role in two locales. The flow band claims it; the demo proves it.
+- **No new message key, and no copy rewritten.** Every string on the page was already in
+  `messages/{en,tr}.json` and already good. `landing.howItWorks` and `landing.demo.title` are now
+  unreferenced and were left in both files rather than deleted in a visual change.
+- **The report's "out of five" still disagrees with the demo's "82 / 100".** Pre-existing: the
+  anatomy copy and `SCORE_MAX` have always said different things. Not this ADR's to fix, and
+  fixing it in a redesign would bury a copy decision inside a layout diff.
+
+**Known, not fixed:** the focus ring is `--accent` on `--rail` at 2.1:1, under the 3:1 WCAG floor
+for a non-text indicator. That is the app-wide recipe (`app-rail.module.css` and DESIGN §3.6), so
+every rail surface shares it; inventing a second ring on the landing alone would be worse than the
+defect. It wants one token decision across the app.
+
+## ADR-ADD06 — the front door is public, and the doors in route by session
+
+**Ask (owner, 2026-08-12):** every visitor can reach `/`, with no auth check. The navbar does not
+change for a signed-in visitor — but pressing sign in or try now takes them straight to the app.
+And an authenticated user must not be able to open register or sign-in.
+
+**Shape chosen:**
+
+- **The redirect off `/` is deleted, not weakened.** `components/home/home-switch.tsx` probed
+  `/me` and `router.replace(firstRunPath(user))`, so a customer could not read the FAQ, re-check
+  what the report contains, or send someone the demo without being thrown into the dashboard.
+  With the redirect gone the component was `({children}) => <>{children}</>`, so it went too.
+- **The guard moved to the three pages that are genuinely anonymous-only.**
+  `components/auth/anonymous-only.tsx` is the same probe-and-replace shape, inverted, on
+  `/sign-in`, `/register` and `/forgot-password`. Not a `(auth)/layout.tsx`: that group also holds
+  `/verify-email`, which *requires* a session (`useRequireAuth`), `/verify-email/[token]`, which
+  is public on purpose because the link is opened wherever the mail was read, and
+  `/reset-password/[token]`, which a signed-in user clicking their own reset link has to reach.
+  A layout guard would have broken all three.
+- **`firstRunPath(user)`, not `DEFAULT_LANDING_PATH`** — K8.7 and issue 80. A signed-in visitor
+  who never finished onboarding belongs at `/onboarding/1`, and sending every session to one
+  landing path is what let a Google user skip onboarding entirely. `/sign-in?returnPath=…` is
+  honoured through `safeReturnPath`, matching what the sign-in success handler already does.
+- **It fails open.** Children render immediately and the guard renders `null` beside them. The
+  alternative — withholding the form until `/me` answers — costs a layout shift on the anonymous
+  path, which is nearly every render of these three routes, and makes the sign-in page permanently
+  unreachable when the API is down, to the one visitor who most needs it. A signed-in visitor
+  seeing a live sign-in form for one frame is the cheaper failure; nothing on these three screens
+  is destructive.
+- **Not middleware.** `use-require-auth.ts` already argues this and the argument holds inverted:
+  the session cookie is opaque and `httpOnly`, so middleware can only see that a cookie *exists*.
+  Here that is worse than on a protected route — a stale or revoked cookie would lock a user out
+  of `/sign-in`, the page they need to recover.
+- **The header renders one thing for everyone.** Both actions, both labels, always; only the
+  destination changes once the probe answers. That retired the tri-state of issue 95 — it existed
+  because the labels differed by session and a header that flashed the wrong doorway was worse
+  than one that arrived late. With identical labels there is no wrong doorway to flash, so the
+  links paint immediately with their signed-out hrefs and re-point when `/me` lands. The guard is
+  the backstop for anyone who types the URL.
+
+**Skipped, deliberately:**
+
+- **`nav.today` was not deleted.** It looked like an orphan and is not — `shell/app-rail.tsx` and
+  `report/report-rail.tsx` both still render it.
+- **No loading state on the guard.** It needs a message key in both locales for a frame that the
+  overwhelming majority of visitors never see, and it reintroduces the layout shift the fail-open
+  decision exists to avoid.
+
+## ADR-ADD07 — the Google callback lands inside the app, not on the front door
+
+**Ask (owner, 2026-08-12):** after signing in or registering, land on the dashboard, not the home
+page.
+
+**What was actually broken:** only the Google path. Password sign-in and register both already
+call `router.replace(firstRunPath(user))` at the point the session is issued. The OAuth callback
+is a server 302 and passed no such call site — it redirected to `${PUBLIC_ORIGIN}/`, because for
+issue 80 the *landing page* carried the K8.7 bounce (`home-switch.tsx`). ADR-ADD06 made `/`
+public and deleted that bounce, so the same 302 left a Google user reading marketing copy.
+A regression of ADR-ADD06, not a pre-existing defect.
+
+**Shape chosen:**
+
+- **`res.redirect(302, `${config.PUBLIC_ORIGIN}/dashboard`)`.** The destination is inside the app,
+  where it always should have been; `/` was only ever chosen because it was the one route that
+  applied the first-run rule.
+- **The onboarding half of K8.7 moved to `/dashboard`.** That is the arrival no sign-in call site
+  can cover, so the check belongs at the destination: `!user.onboardingCompletedAt` →
+  `router.replace('/onboarding/1')`, and the page renders `null` until it resolves so the
+  briefing never paints for a frame behind the redirect. Issue 80 stays closed — a Google account
+  that has never onboarded still cannot reach the signed-in home.
+- **Only the onboarding half.** Calling `firstRunPath` here would send a fully-onboarded account
+  with zero interviews to `/interviews/new` and make `/dashboard` unreachable for them. The
+  "where do I land" rule and the "may I be here" rule are different questions and only the second
+  belongs on the page.
+- **The rule was not put in `useRequireAuth`.** That was tried first and it is the tempting
+  version — one home, every protected surface at once. It also silently changes what `/settings`,
+  `/profile`, `/interviews` and the room do for a half-onboarded account, which is a product
+  decision nobody asked for, and it broke 38 tests by doing it. The reported bug is one arrival;
+  the fix is at that arrival. If the wider gate is wanted it should be its own change, with the
+  exemptions (`/onboarding`, `/verify-email` — a candidate who cannot confirm their address must
+  not be told to fill in a profile instead) decided deliberately rather than as a side effect.
+
+**Also fixed:** the `/me` fixtures in `dashboard/page.test.tsx` omitted `onboardingCompletedAt`
+and `interviewCount` entirely, so they did not match the payload the endpoint actually returns.
+That is why the wider gate looked like it broke twenty unrelated tests.
+
+## ADR-ADD08 — the console's cost charts, and how many colours the palette actually has
+
+**Ask (owner, 2026-08-12):** a line chart, a stacked area chart, a bar chart, a table with
+sparklines, a heatmap and a pie chart on the admin console, "for proper cost tracking, trend
+tracking, tracking model shares to the total cost"; the shapes and their parameters ours to pick.
+
+**Shape chosen:**
+
+- **A new endpoint, not a wider `/admin/stats`.** Three of the six forms are time series and
+  `/admin/stats` has no notion of a date — it answers one all-time question per figure. A window
+  parameter on it would also change the meaning of every existing field for every existing
+  caller. `GET /admin/costs?days=7|30|90` is separate, whitelisted, and fetched only when the
+  Costs section is open. It carries `adminStatsLimiter` because it is the same class of read as
+  the endpoint that limiter was written for (issue 85).
+- **One graphic, one claim — which is why the line chart is not daily spend twice.** The stacked
+  area is daily spend split by model, so its top edge *is* daily total spend; a line of the same
+  figure beside it is the same fact drawn twice. The owner asked for both panels, so the second
+  line is **cost per interview**: spend ÷ interviews started that day. That is the only figure in
+  the set that separates price from volume — a total that rises because forty more people
+  interviewed is not a cost problem, and no other graphic here can tell the two apart.
+- **The bar chart is the range against the range before it.** Every other "spend by model" view
+  is one value per model, which DESIGN §W11 already answers with a `Meter`. Two values per
+  category is the one comparison a `Meter` cannot make, and "which model is growing" is the
+  question the flat figures could never answer.
+- **Three series, then Other — because the palette measurably holds three.** The registry ships
+  `--series-1…6` and they were chosen to clear AA *as text on `--surface`*, which is a different
+  test from telling two adjacent fills apart. Run through a CVD/ΔE check they fail as a
+  categorical set: `--series-5`↔`--series-6` sit at ΔE 4.2 for deuteranopia and 14.2 for normal
+  vision, below the 15 floor at which full-colour readers stop separating a pair; every subset of
+  four or more fails on some pair. `--series-1/2/3` is the only subset that clears both the
+  colourblind and the normal-vision floors (12.9 and 18.7). So the charts colour the top three
+  models by spend and fold the rest into one bucket. The **table lists every model** with exact
+  figures, so nothing is hidden by the fold — only uncoloured.
+- **Other is `--surface-sunken` with a `--border` hairline, not a fourth hue and not
+  `--text-muted`.** The obvious neutral collides with `--series-3` at ΔE 0.3 deutan — the two
+  would be the same swatch to a deuteranope. The sunken fill separates by lightness and by
+  outline instead of by hue, which is the same treatment `.day[data-tier='0']` already uses on
+  the dashboard for "the empty ground". The previous-range bars take it for the same reason: a
+  reference is not a series, and a hue spent on one is a hue the models no longer have.
+- **Colour follows the model, not its rank.** `charts/series.ts` is the single place a model
+  becomes a slot, so a model keeps its colour across the area, the bars, the donut, the table
+  swatch and its sparkline — and changing the range does not repaint a model that survived the
+  change. That shared identity is also why the legend is not repeated under every graphic.
+- **The heatmap is the dashboard's practice grid, reused.** A 7 × 24 CSS grid of `data-tier`
+  cells over the existing `activityTier` and its `color-mix` ramp off `--accent`. Not an SVG:
+  the existing component already solved this exact problem, and a second tiering function is a
+  second answer to "which step is this" that can drift from the first.
+- **One sparkline scale, shared by every row.** A per-row maximum draws a model that spent
+  $0.001 and one that spent $10 with the same silhouette, which is a lie about the comparison
+  the column exists to support. The regression test makes two models 100× apart and asserts their
+  `points` differ — under the per-row bug they are byte-identical.
+- **The model table is the accessible rendering, and it is the only one.** Every SVG here is
+  `aria-hidden` under a `<figure>` whose `<figcaption>` states the claim in words and numbers;
+  the table carries every figure the area, the bars and the donut draw. Announcing them a fourth
+  time is the noise ADR-ADD04 already refused. The heatmap is the exception that proves it: a
+  colour ramp has no textual twin, so its caption names the peak bucket and its value.
+- **Fixed-size SVG inside its own `overflow-x: auto`, never a scaled `viewBox`.** Scaling a
+  viewBox scales the 13px type with it — the chart is either unreadable at 390px or oversized at
+  1120px. This is the `.trendScroll` pattern the report chart already established, and it is what
+  keeps the page body from ever scrolling sideways.
+- **Still no chart library.** `recharts` remains installed and unimported (ADR-ADD04, ADR-W09).
+  Every value here is a geometry or presentation attribute — `points`, `d`, `stroke-dasharray`,
+  `stroke-dashoffset`, `transform`, `fill-opacity` — because the production CSP is
+  `style-src 'self' 'nonce-…'` and drops the style attribute every chart library positions with.
+- **The per-model `Meter` list is deleted, not kept beside the table.** The table is a strict
+  superset of it: the same cost and latency, plus share, tokens and a trend. Two lists of the
+  same numbers is how a surface starts disagreeing with itself.
+- **An index on `llm_calls(created_at)`.** Every query here filters on a bare date range, and the
+  existing `[interview_id, created_at]` cannot serve one. It is a genuine second btree insert on
+  the table written by every provider call — the cost is real and taken deliberately, where the
+  redundant prefix index that ADR rejected bought nothing.
+
+**Skipped, deliberately:**
+
+- **No per-cluster spend from the server.** The occupation breakdown is still summed from the
+  loaded rows and still says so. Joining `llm_calls` → `interviews` → cluster is a fifth
+  aggregation for a panel nobody asked about in this round.
+- **No hover, tooltip or crosshair layer.** Every figure these charts draw is already printed as
+  text in the table below them, so a tooltip would be a fourth copy of a number the reader can
+  already read — and it would need a positioned element, which is the CSP problem again.
+- **No all-time range.** An unbounded scan is precisely what `stats.ts` refused when it declined
+  the `take:` cap, and 90 days is the ceiling that keeps this endpoint's cost bounded.
+- **No CSV or export.** The console is a reading surface; an export is a different feature with
+  its own audit question.
+- **`--series-4/5/6` stay in the registry, unused by these charts.** They are still valid ink for
+  a surface that needs one or two of them in isolation — the report chart uses 1 and 3. What the
+  measurement rules out is treating all six as a categorical set, not the tokens themselves.
+- **No `ADMIN AUDIT` grep markers in `costs.ts`.** Every query in it deliberately counts
+  soft-deleted interviews, which the convention in `modules/admin` marks with a comment (ADR-N01).
+  This work was done under a standing no-comments instruction, so the marker is recorded here
+  instead. `grep -rn "ADMIN AUDIT" modules/admin` no longer returns every such read; restoring
+  the four one-line markers is the fix if that convention is to hold.
+
+## ADR-ADD09 — one panel instead of seven cards, and the filter's real scope
+
+**Ask (owner, 2026-08-12):** carry the filter into the container of the table it belongs to, "in
+the same container top-down"; and on Costs, compress the title, the chart and the range into one
+container behind a dropdown that picks between charts — or between chart types for the same data,
+"available, applicable ones".
+
+**Shape chosen:**
+
+- **The filter moved because it was claiming scope it never had.** It floated on `--bg` above
+  whatever the section rendered, which on Costs put it above six graphics fed by `/admin/costs` —
+  an endpoint that does not read the filter bag at all. A control positioned over a region reads
+  as scoping that region. Inside the `.head` of the table it filters, it can only claim the rows
+  underneath it, which is exactly what it does. The layout ask and the correctness fix are the
+  same edit.
+- **One optional prop, not five layouts.** The five tables were already the identical
+  `.card > .head > .scroller > table` shell, so `filter?: ReactNode` rendered at the end of `.head`
+  covers all of them. The drill-down had been doing this by hand since it was written; it now
+  takes the same wrapper, so the two surfaces space it the same way instead of by coincidence.
+- **On Costs the filter is now at the bottom, and that is correct.** It sits with the interview
+  list, which is the only thing on that surface it narrows. A filter high on the page that
+  silently governs one card near the bottom is the failure the whole filter-builder exists to
+  avoid (§W11 "Chips").
+- **Six questions, one panel.** Seven stacked cards was 4400px of scrolling to reach a heatmap,
+  and any given operator wants one of them. A `Chart` select picks the question and a `Drawn as`
+  select picks the form, sharing the strip with the range control.
+- **The type list is per-question, so the control cannot lie.** A form is offered only where it
+  answers the same question: a part-to-whole gets a donut or bars, never a line; a time series
+  gets a line, an area or columns, never a donut. Where one form is honest — this range against
+  the last, when the money lands — the second select is **absent**, not a select with a single
+  option. A control with one choice is furniture that looks live.
+- **The type is remembered per question.** Switching away and back returns the drawing the
+  operator left it on. Resetting to the default is a second decision they did not make.
+- **The model table never goes behind the dropdown.** Every drawing here is an `aria-hidden` SVG
+  whose text counterpart is that table (ADR-ADD08). If the table were a seventh view, choosing
+  any chart would leave the surface with a graphic and no accessible form of it. It stays below
+  the panel, always rendered.
+- **One plot shell.** `trend-lines`, `model-mix` and `model-delta` each carried their own copy of
+  the gutter, gridlines, ticks, axes and date labels. That is now `charts/plot.tsx`, and a chart
+  *type* is only the marks drawn inside it — which is why three new forms (area, columns, stacked
+  columns, one line per model) cost roughly one file rather than four. `area` needed no new
+  geometry at all: `stackBands` with a single series already returns that polygon.
+- **The residual series is dashed when it is a line.** As a fill it is `--surface-sunken` with a
+  hairline (ADR-ADD08). A line has no fill to be pale, so it takes `--text-muted` — which is
+  ΔE 0.3 from `--series-3` under deuteranopia — plus a dash pattern. The dash is the separation;
+  the colour is not doing that work.
+- **The multi-line form scales to the tallest series, the stacked forms to the stacked total.**
+  Same data, two different axes, because "how big is this model" and "how big is everything" are
+  different questions. A test asserts the line form reaches higher in the plot than the stacked
+  one for identical input, so the axes cannot silently be unified.
+- **One empty-state line, owned by the panel.** The note used to live in each chart card, so
+  deleting six cards deleted it for three of the six views — they drew a flat zero line under a
+  caption that confidently read "0.000000 a day on average" and never said nothing was spent.
+  The panel now decides emptiness per view and the `figcaption` carries the sentence, and the
+  test asserts exactly one occurrence, so it can neither vanish again nor be printed twice.
+
+**Skipped, deliberately:**
+
+- **No URL or storage persistence for the chosen view.** Add it when someone needs to link a
+  colleague to a specific chart; until then it is state nobody asked to survive a reload.
+- **No hover or tooltip layer.** Unchanged from ADR-ADD08: the table below prints every figure,
+  and a tooltip needs a positioned element the CSP would drop.
+- **The plot is still a fixed-width SVG in its own scroller.** It grew to 880 × 220 now that it
+  owns the card alone, but it does not measure its container. Scaling a `viewBox` scales the 13px
+  type with it, and measuring means a resize observer for a chart that already fits every desktop
+  width the console supports.
+- **No second panel for side-by-side comparison.** It was offered and declined; two half-width
+  panels would each scroll a fixed-width chart, which is worse than switching between them.
+
+## ADR-ADD10 — comparing named series, and what a palette of three can honestly draw
+
+**Ask (owner, 2026-08-12):** the charts have nothing to compare in line or area form — "I want to
+compare elevenlabs and openai or their models etc. we should build up a dynamic selectable way."
+
+**Shape chosen:**
+
+- **The fold was in the wrong layer, and that was the actual bug.** ADR-ADD08 had the endpoint
+  return the top three models plus an `Other` row. That is a *presentation* decision, and making it
+  server-side meant no client could undo it: of the five `(provider, model)` pairs the platform
+  calls, two were absent from the payload entirely. No picker could have offered them. So
+  `/admin/costs` now returns every model, ranked, and `charts/fold.ts` rebuilds three-plus-Other at
+  render time. The model table stopped hiding two models as a side effect — that was a real gap
+  nobody had filed yet.
+- **A hard cap, and it says so.** 24 models, with `truncated` counting what was dropped. The fold
+  it replaces was lossless-but-invisible; a cap is lossy, so it is announced. Silent truncation
+  reads as "that is everything", which is the failure `stats.ts` names in its own header.
+- **A model that stopped being used still appears.** It is seeded with zeroed current figures and
+  its real previous-window spend. Dropping it would hide precisely the change an operator opened
+  the comparison to find.
+- **Four daily arrays, no new query.** `costUsd`, `calls`, `tokens`, `latencyMs` per model per day.
+  Query 1 already computed all four per `(day, provider, model)` and threw three away. Latency by
+  provider is a genuinely different question this data always answered and nothing on the console
+  surfaced.
+- **Compare is its own view, and it never stacks.** Filtering a *stacked* chart makes its silhouette
+  a lie about total spend — the figure card above it would contradict the chart below. So
+  `Spend by model over time` keeps showing everything, and the subset comparison is unstacked and
+  separate. Two questions, two views.
+- **Six slots: three hues, then the same three dashed.** The palette clears exactly three
+  categorical hues (ADR-ADD08). Slots 4–6 reuse them with a dashed stroke, so the 1↔4 pair has a
+  colour ΔE of **zero** and is separated entirely by a non-colour channel. That is only honest
+  because the picker chip *is* the legend: each chip carries a 16×2 swatch showing its colour and
+  its stroke pattern next to the name it belongs to, so identity is never colour-alone and never
+  needs a second lookup. Six is the ceiling and the seventh chip is `disabled` with a line saying
+  why — a control that silently ignores a click is worse than one that refuses.
+- **Provider rollup is client-side and exact.** Every model row carries its provider, so grouping
+  is a sum over `microUsd` integer micro-dollars — no float, no extra query, no second endpoint
+  shape to keep in step. Latency rolls up weighted by calls; averaging the averages would let one
+  rare slow model outvote ninety fast ones.
+- **One measure at a time.** Spend, calls, tokens, average latency — switched, never combined,
+  because two measures on one chart is a second y-axis. The axis formatter follows the measure.
+- **"Not reported" is said out loud.** Under Tokens a per-second voice model draws a flat zero
+  because it stores no token count. A note names those series. An operator reading that line as
+  "costs nothing" is the exact misreading the note exists to prevent, and it is the same duty of
+  care `unpricedNote` already discharges for a zero cost on an unpriced model.
+- **Nothing selected is not "nothing spent".** Unticking every series says the chart is waiting
+  for one, not that the range is empty. Two different facts never share a sentence here.
+
+**Skipped, deliberately:**
+
+- **No small multiples past six.** It was the scalable answer and it was declined for a platform
+  with five models; a grid of tiny charts is a second rendering mode to build and maintain for a
+  case that does not exist yet. Revisit if the provider list grows.
+- **No persistence of the picked series.** Same reasoning as the view picker in ADR-ADD09: add it
+  when someone needs to send a colleague a link to one comparison.
+- **Filled areas still muddy past three.** Six translucent overlapping areas is unreadable; the
+  lines on top stay legible, so `area` is honest at two or three series and degrades gracefully
+  rather than being forbidden. Named here rather than guarded in code.
+- **`--series-4/5/6` are still unused as hues.** Nothing measured has changed since ADR-ADD08.
+  The dashed variants are how the chart gets past three, not a quiet re-admission of those tokens.

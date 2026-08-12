@@ -5,6 +5,7 @@ import { adminStatsLimiter } from '../auth/rate-limit';
 import { requirePublicOrigin } from '../interview/csrf';
 
 import { listAuditLog } from './audit-log';
+import { getAdminCosts } from './costs';
 import { getAdminInterview } from './interview-detail';
 import { listAllInterviews } from './interviews';
 import { listLlmCalls } from './llm-calls';
@@ -41,6 +42,7 @@ router.post('/interviews/:id/report/requeue', requeueReport);
 // admin endpoints are cheap, and a shared budget would let a dashboard refresh lock an
 // operator out of the requeue that fixes a stuck report.
 router.get('/stats', adminStatsLimiter, getAdminStats);
+router.get('/costs', adminStatsLimiter, getAdminCosts);
 
 // The console's remaining sections. Every one of them is a bounded, cursor-paged read of a
 // table that was already being written, so none carries the stats limiter: what made `/stats`

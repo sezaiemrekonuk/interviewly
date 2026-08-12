@@ -257,3 +257,319 @@ ADR-ADD04. Eight items in one pass; what changed and where.
 
 `npm test` 121 files / 1253 tests pass (new: three on the chart's geometry, two on the added
 sorts); typecheck and eslint clean.
+
+## 2026-08-12 — the landing is the room now, and the front door is public
+
+Two asks from the owner, one branch. The homepage read as slop and bored people off the page;
+and `/` redirected anyone with a session, so a customer could never see it. See DECISIONS.md
+ADR-ADD05 and ADR-ADD06.
+
+**The cast**
+
+- `frontend/src/components/home/peeps.tsx` + `peeps.module.css` — new. `<Peep name="ada"|"turing"
+  mood={…} />`, inline SVG, six moods (idle / listening / asking / marking / pleased /
+  unconvinced) over a shared bust. Ada is long hair and a hoop; Turing is round glasses and
+  headphones. Every stroke is `currentColor`, every fill a token, so nothing here trips the hex
+  scan and nothing requests an object. Blink is CSS, offset per character, and gated on
+  `prefers-reduced-motion: no-preference`.
+
+**The dark act**
+
+- `frontend/src/components/home/handover.tsx` + `handover.module.css` — new, and the whole first
+  screen: headline, the page's one `--primary`, the listing sheet with the role chips on it, the
+  sticky two-tile cast column, the exchange, and the assembled sample report. Replaces
+  `demo-interview.tsx` + `landing.module.css`, both deleted. The state machine, the typing hook,
+  the settle-from-zero meters, the post-mount shuffle, the sizing span and the focus move all
+  came across unchanged; the staging, the cast and the motion are new.
+- `frontend/src/app/[locale]/page.tsx` + `page.module.css` — rewritten. The page is now the dark
+  act, then five quiet light bands, then a dark closing bookend with both characters. The
+  three-step band became a flow diagram whose hairlines draw on scroll; the languages band has
+  Turing asking the same question between the two quotes.
+- `frontend/src/components/chrome/{header.tsx,chrome.module.css}` — `SiteHeader` takes `onDark`,
+  which gives the bar the rail's material. Set on the landing only. The five section anchors get
+  `.navSection` and are hidden below 48rem, where they wrapped the header into a 320px stack over
+  the headline.
+
+**The front door**
+
+- `frontend/src/components/home/home-switch.tsx` — deleted. Its only job was the redirect off `/`.
+- `frontend/src/components/auth/anonymous-only.tsx` + test — new. The inverse guard, on
+  `/sign-in`, `/register` and `/forgot-password` only. `safeReturnPath` then `firstRunPath`,
+  `router.replace`, fails open, carries its own `<Suspense>` so the pages stay prerenderable.
+- `frontend/src/components/chrome/header-nav.tsx` — both actions for everyone, same labels; only
+  the href changes once `probeSession()` answers. The issue-95 tri-state is gone with the reason
+  for it.
+- `frontend/src/test/fetch.ts` — the shared `stubFetch` answers `/api/me` 401 and `formCalls`
+  excludes it, which is the root fix for the auth page tests now that a guard mounts in them.
+- Stale doc comments in `lib/auth-redirect.ts`, `shell/split-shell.tsx` and `home/demo-content.ts`
+  corrected — all three described the redirect or the deleted demo file.
+
+**Verified**
+
+- `npm test` — 122 files / 1259 tests pass.
+- `npm run typecheck` — clean. `eslint` on every touched file — clean.
+- `next build` — succeeds, all 21 routes.
+- In a browser at 1440 and at 390, English and Turkish: the lamp-up, the mark landing with Ada's
+  face changing on it, the handover to Turing, the drawn flow hairlines, and the closing bookend.
+
+**Also added:** `PRODUCT.md` at the repo root. `AGENTS.md` has cited it since 2026-08-07 as the
+holder of product truth and what the marketing page may claim; it had never actually been
+written, and a redesign that decides what the landing page says is the wrong moment to still be
+guessing. Facts only, plus an explicit list of what must never be fabricated (customers, logos,
+benchmarks, prices, outcomes).
+
+**Not done:** the report anatomy still says "out of five" while the demo prints "82 / 100" —
+pre-existing, and a copy decision that should not be buried in a layout diff. The `--accent`
+focus ring is 2.1:1 on the rail, under the 3:1 floor for a non-text indicator; that is the
+app-wide recipe and wants one token decision rather than a second ring on this page.
+
+## 2026-08-12 — the Google callback lands on the dashboard
+
+Follow-up to the same day's entry, and a regression it caused. `/` stopped redirecting, but the
+Google OAuth callback still 302'd there — so a Google sign-in ended on the marketing page. See
+DECISIONS.md ADR-ADD07.
+
+- `backend/modules/auth/google.ts` — the success redirect is `${PUBLIC_ORIGIN}/dashboard`.
+- `backend/modules/auth/google-callback.test.ts` — the issue-80 test pinned the old destination
+  by name; it pins the new one, and that the public landing is never the target again.
+- `frontend/src/app/[locale]/dashboard/page.tsx` — the onboarding half of K8.7 at the
+  destination: an account with no `onboardingCompletedAt` is replaced to `/onboarding/1` and the
+  page renders `null` meanwhile. Not `firstRunPath`, which would bounce a zero-interview account
+  to `/interviews/new` and make this page unreachable for them.
+- `frontend/src/app/[locale]/dashboard/page.test.tsx` — the `/me` fixture carries
+  `onboardingCompletedAt` and `interviewCount` now (it matched no real payload before), plus one
+  case for the new bounce.
+
+Password sign-in and register were already correct — both call `firstRunPath(user)` where the
+session is issued — and are untouched.
+
+**Verified:** `npm test` 122 files / 1260 tests pass; typecheck and eslint clean. In a browser
+against a stubbed `/me`: an account with `onboardingCompletedAt: null` opening `/dashboard` lands
+on `/tr/onboarding/1` (locale carried), and an onboarded one stays on `/tr/dashboard` with the
+rail drawn.
+
+## 2026-08-12 — cost analytics on the console: six chart forms over one time-bucketed read
+
+The Costs section was three cards of all-time totals. `/admin/stats` had no notion of a date, so
+nothing on the surface could answer "is this rising", "is the mix shifting" or "when does the
+money land". See `DECISIONS.md` ADR-ADD08 for the reasoning; this is what changed and where.
+
+**Backend**
+
+- `backend/modules/admin/costs.ts` — new. `GET /admin/costs?days=7|30|90`. Four `Promise.all`
+  aggregations over the window: `(day, provider, model)` on `llm_calls`, `day` on `interviews`,
+  `(isodow, hour)` on `llm_calls`, and `(provider, model)` over the preceding window of equal
+  length. Daily and platform totals are folded from the first query rather than queried again,
+  so `totals.costUsd`, `sum(daily.costUsd)` and `sum(models[].costUsd)` are the same figure by
+  construction. Exports `resolveDays`, `dayKeys`, `foldModels` and `MODEL_SERIES_LIMIT = 3`.
+- `backend/modules/admin/costs.test.ts` — new. 15 unit tests on the pure helpers: the `days`
+  whitelist and every rejection path, `dayKeys` across month and leap-day boundaries, and
+  `foldModels` for dense zero-fill, top-N selection, the deterministic tie-break, the Other
+  fold including a previous-window-only model, and the latency divide-by-zero guard.
+- `backend/modules/admin/router.ts` — `GET /costs` under `adminStatsLimiter`, the same limiter
+  and for the same reason as `/stats`.
+- `backend/src/lib/audit.ts` — `admin.costs_read` added to the `AuditAction` union. An aggregate
+  over every user's spend is still a read of their data (issue 86).
+- `backend/prisma/schema.prisma` + `migrations/20260812120000_llm_calls_created_at_idx/` —
+  `@@index([created_at])` on `llm_calls`. Not a prefix of the existing
+  `[interview_id, created_at]`, so it is a genuine second btree insert on the hottest write
+  path in the schema; every query above filters on a bare date range and would otherwise scan.
+
+**Frontend**
+
+- `components/admin/charts/geometry.ts` + `geometry.test.ts` — new. Pure SVG geometry:
+  `niceMax`, `tickValues`, `labelledIndexes`, `bands`, `stackBands`, `donutSlices`. 20 tests,
+  including that a stacked total overflowing its axis clamps rather than drawing above the plot,
+  and that the donut's slices consume exactly one circumference.
+- `components/admin/charts/series.ts` — new. The one place a model is mapped to a colour slot,
+  a key, a label and its share, so the same model wears the same slot in the area, the bars,
+  the donut, the table swatch and its sparkline.
+- `components/admin/charts/charts.module.css` — new. Every colour the charts use, because a
+  chart under `style-src 'self' 'nonce-…'` can carry geometry in attributes but never a fill.
+- `components/admin/charts/trend-lines.tsx` — new. `SpendTrend` (daily total) and
+  `PerInterviewTrend` (daily spend ÷ interviews started), both with a dashed mean the caption
+  also states, and a dot on the last point only.
+- `components/admin/charts/model-mix.tsx` — new. Stacked area, daily spend by model.
+- `components/admin/charts/model-delta.tsx` — new. Grouped columns, each model over the range
+  against the same span immediately before it. The previous bar is `--surface-sunken`, never a
+  fourth hue.
+- `components/admin/charts/model-share.tsx` — new. Donut over `stroke-dasharray`, model share
+  of range spend.
+- `components/admin/charts/model-table.tsx` — new. The exact figures, and therefore the
+  accessible rendering of the three charts above it. One sparkline scale shared by every row.
+- `components/admin/charts/spend-heatmap.tsx` — new. 7 × 24 UTC grid of `data-tier` cells,
+  reusing the dashboard's `activityTier` and its `color-mix` ramp rather than a second one.
+- `components/admin/charts/cost-charts.test.tsx` — new. 19 render tests: money printed
+  verbatim, the Other row labelled rather than blank, the shared sparkline scale (the fixture's
+  two models are 100× apart and byte-identical under a per-row max), every SVG `aria-hidden`
+  with a captioned figure, a zeroed surface for each of the seven, the heatmap's deterministic
+  peak, and the range control's single pressed state.
+- `components/admin/cost-panel.tsx` — the range control, three figure cards (platform total,
+  range spend with its delta, cost per interview) and the seven graphics. The per-model `Meter`
+  list is gone; the per-occupation one stays, still labelled loaded-rows-only.
+- `lib/query.ts` — `AdminCostsResponse`, `AdminCostModel`, `COST_RANGES`, `useAdminCosts`.
+- `messages/{en,tr}.json` — 47 keys added under `admin.costs`; the four orphaned by the deleted
+  `Meter` list were removed.
+- `DESIGN.md` §W11 — a **Cost charts** block. "Bars, not charts" now points at it rather than
+  reading as a blanket ban.
+- `app/[locale]/admin/page.test.tsx` — a `/admin/costs` fixture in `stubFetch`; the assertion
+  that named the deleted `admin-by-model` testid now checks the model is named in more than one
+  graphic, which is the series-identity claim.
+
+**Verified**
+
+- `npm test` — 124 files / 1307 tests pass. `npm run typecheck` clean. eslint clean on every
+  touched file.
+- Read in the browser against the seeded stack at three ranges. Three defects found and fixed
+  there rather than in review: the legend's `flex: 1 1 220px` was a 220px *height* in a column
+  flex card (a dead band under two charts), the per-bar delta copy was a sentence that
+  overlapped its neighbours, and the delta legend's swatch claimed the selected range was blue
+  when the bars are one hue per model.
+
+**Not done here (see ADR-ADD08 "Skipped"):** no per-cluster spend from the server, no hover or
+tooltip layer, no CSV export, and the `--series-4/5/6` tokens stay in the registry unused by
+these charts.
+
+## 2026-08-12 — the filter moved into its table, and the cost charts became one panel
+
+Two owner asks in one pass. The filter floated on `--bg` above whatever the section rendered,
+and the Costs section had grown to seven stacked chart cards and 4400px. See `DECISIONS.md`
+ADR-ADD09; this is what changed and where.
+
+**The filter, into the container of the table it filters**
+
+- `components/admin/{interview,call,session,user,audit}-table.tsx` — each gained an optional
+  `filter?: ReactNode`, rendered as the last child of the `.head` it already had. Nothing else
+  about the five shells changed; they were already identical, which is what made this one prop
+  rather than five layouts.
+- `components/admin/table.module.css` — one rule, `.filter`, a 12px flex column. No hairline
+  above it: `.builder` carries its own border, and a rule 12px from that one is two lines.
+- `app/[locale]/admin/page.tsx` — builds the node once behind the `meta ?` guard it already had
+  and hands it to the section's table. The queue gets none, because it has no list.
+- `app/[locale]/admin/interviews/[id]/page.tsx` — the drill-down had been rendering
+  `FilterBuilder` inside `table.head` all along, flush against the heading. Both call sites now
+  take the same `.filter` wrapper, so the console and the drill-down space it identically.
+
+**The cost charts, into one panel**
+
+- `components/admin/charts/plot.tsx` — new. The shared time-series shell (gutter, gridlines,
+  ticks, axes, date labels) plus the marks that draw inside it: `LineMarks`, `AreaMarks`,
+  `ColumnMarks`, `StackedAreaMarks`, `StackedColumnMarks`, `MultiLineMarks`. The plot grew to
+  880 × 220 now that it owns the card alone.
+- `components/admin/charts/chart-panel.tsx` — new. The card: a `Chart` select over six views, a
+  `Drawn as` select over that view's applicable forms (absent when there is one), the range
+  buttons, the body, and the `figcaption`. Holds the per-view type choice, so leaving a view and
+  returning does not reset the drawing.
+- `components/admin/charts/model-columns.tsx` — new, absorbing `model-delta.tsx`. `compare`
+  true is the this-range-against-last grouped chart; false is one bar per model, which is the
+  share view's second form.
+- `components/admin/charts/model-legend.tsx` — new. The swatch/label/share list the mix and
+  share views both drew.
+- `components/admin/charts/{model-share,spend-heatmap}.tsx` — bodies now, without their own
+  card, title or caption. `spend-heatmap` also exports `heatGrid()` and `pad()` so the panel can
+  build the peak sentence without rendering the grid.
+- **Deleted:** `trend-lines.tsx`, `model-mix.tsx`, `model-delta.tsx`. Their chrome is `plot.tsx`
+  and their marks are its exports.
+- `components/admin/cost-panel.tsx` — the range control moved into the panel's control strip;
+  the seven graphics became `<ChartPanel>` + the always-on `<ModelTable>`. Two loading
+  skeletons, not seven.
+- `components/admin/charts/charts.module.css` — `.controls`, `.control`, `.controlLabel` for the
+  strip; `.areaFill`, `.column`, `.seriesLine` and `.stroke1/2/3/Other` for the new forms.
+  `.strokeOther` is dashed on purpose: as a line, the residual series has only `--text-muted`
+  available, which is ΔE 0.3 from `--series-3` under deuteranopia, so the dash is what separates
+  it. `.legend` lost the `flex: 1 1 220px` that was a 220px *height* in a column flex card.
+- `components/admin/charts/series.ts` — `STROKE_CLASS` and `ARC_CLASS` alongside the fill map,
+  so the four places a model becomes a colour all read from one file.
+- `messages/{en,tr}.json` — 12 keys (`view`, `type`, ten `type*` labels). `mixCaption` and
+  `modelsNote` were rewritten: both described a layout that no longer exists, and `mixCaption`
+  said "the bands are stacked" under a drawing that can now be lines.
+- `DESIGN.md` §W11 — the `Filters` row said "above the data", which is no longer where they are;
+  the Cost charts block described seven stacked graphics. Five new rows carry the panel's rules.
+- `charts/cost-charts.test.tsx` — rewritten to 22 cases against the panel, driving both selects.
+
+**Verified**
+
+- `npm test` — 124 files / 1310 tests. `npm run typecheck` clean. eslint clean.
+- Read in the browser against the seeded stack, every view and every drawing. The Costs section
+  went from 4451px to 2345px. Three things were fixed there rather than in review: the
+  `mixCaption` wording above, the plot leaving a third of the card empty, and — the real one —
+  **the empty-state line had gone missing on three views.** It used to live inside each deleted
+  chart card; the panel now owns it, and the test asserts `toBe(1)` per view so it can neither
+  vanish again nor be printed twice.
+
+**Not done here (see ADR-ADD09 "Skipped"):** no URL or storage persistence for the chosen view,
+no hover layer, and the plot is still a fixed-width SVG rather than a measured one.
+
+## 2026-08-12 — comparing series: the endpoint stopped folding, and the charts learned six slots
+
+The console could draw spend by model, but never *two named things against each other*. Worse,
+`/admin/costs` folded everything past the top three into one `Other` row before the response left
+the server, so `google:gemini-2.5-flash` and `openai:gpt-4.1-nano` — two of the five models the
+platform actually calls — were unreachable by any chart or table. See `DECISIONS.md` ADR-ADD10.
+
+**Backend**
+
+- `backend/modules/admin/costs.ts` — `foldModels` → `rankModels`, returning `{ models, truncated }`.
+  Every `(provider, model)` in the window comes back, ranked by cost with the same deterministic
+  tie-break; there is no `Other` row and `provider`/`model` are never null. `MODEL_SERIES_LIMIT = 3`
+  → `MODEL_CAP = 24`, a hard cap rather than a fold point, with `truncated` reporting exactly how
+  many were dropped. A model that spent only in the *previous* window is seeded with zeroed current
+  figures so it still appears — a model that just stopped being used is the fact an operator is
+  looking for, not one to drop.
+- Each model's `daily` went from `string[]` to `{ costUsd, calls, tokens, latencyMs }`, all dense
+  and index-aligned to `buckets`. Every one of those already came out of query 1; the accumulator
+  now carries all four instead of discarding three. **No new query, no schema change, no new index.**
+- `backend/modules/admin/costs.test.ts` — `rankModels` covered in 9 cases (16 in the file):
+  no fold, no nulls, the tie-break, the previous-window-only model, dense zero-filled arrays,
+  daily latency rounding and its divide-by-zero guard, the cap and its count, and the money
+  invariant asserted three ways.
+
+**Frontend**
+
+- `components/admin/charts/fold.ts` + `fold.test.ts` — new, and the reason the server could stop
+  deciding. `foldTop()` rebuilds the three-plus-Other view at render time; `byProvider()` rolls
+  models up into providers. 14 tests: every sum goes through `microUsd` integer micro-dollars,
+  the platform total survives both operations exactly, daily series add index by index, and
+  latency is weighted by calls rather than averaging averages.
+- `components/admin/charts/series.ts` — `seriesStyle(index)` gives slots 0–2 the three hues solid
+  and 3–5 the same three dashed. `FILL_CLASS` joins the stroke and arc maps.
+- `components/admin/charts/series-picker.tsx` — new. Toggle chips, six-cap, disabled past it.
+  Each chip carries a 16×2 line swatch in its own colour and stroke, so the picker **is** the
+  legend rather than needing one beside it.
+- `components/admin/charts/plot.tsx` — `Plot` takes a `format` prop (it hardcoded four-decimal
+  dollars, and calls/tokens/latency are not money). `MultiLineMarks` takes `SeriesStyle[]` and an
+  optional `filled`, which is the area form.
+- `components/admin/charts/chart-panel.tsx` — the `compare` view, its `By` and `Measure` selects,
+  and the folding that used to happen on the server. Switching dimension resets the selection;
+  nothing is stored in an effect.
+- `components/admin/charts/{model-legend,model-share,model-columns}.tsx` — take `models` and the
+  figure they need rather than the whole response, since the panel now decides what they see.
+- `components/admin/charts/model-table.tsx` — reads `daily.costUsd`, and now lists **every** model.
+- `messages/{en,tr}.json` — 15 keys. `tokenlessNote` is the one that matters.
+- `DESIGN.md` §W11 — the palette rule split into filled marks (three, then Other) and stroked
+  marks (three, then dashed), plus five new rows for the compare view.
+- `lib/query.ts` — `AdminCostDaily`, `truncated`.
+
+**Verified**
+
+- `npm test` — 126 files / 1358 tests. `npm run typecheck` clean. eslint clean.
+- Read in the browser against the seeded stack across both dimensions and all four measures.
+  Confirmed the two previously-hidden models are now selectable and draw.
+- **One real defect found there and fixed:** `.scroller` carries `overflow-x: auto`, which
+  zeroes a flex item's automatic minimum size, so the nested flex columns of the shell compressed
+  it to 106px and clipped a 260px plot. It only became visible once the picker and its note added
+  enough content to the card. `flex: none` on `.scroller` — the plot is sized by its own SVG and
+  should never have been a shrink target. Also gave the selected chip the sunken bed the range
+  buttons already use; border colour alone was too quiet a "this one is drawn".
+
+  Two more the test pass caught before merge: the unfolded table was still asking `seriesToken`
+  for a colour past the third row and getting `sOther` back — the same grey the legend uses to
+  *mean* "the remaining models", so two named models were being labelled as the residual. Rows
+  past the third now carry no swatch at all; absence is unambiguous where a grey box was not.
+  And `truncatedNote` only rendered under the compare view, while the **table** is the surface
+  that claims to be the whole ranked list and prints the platform total in its footer — with a
+  real capped response its rows and its total would not have reconciled, and nothing nearby
+  would have said why.
+
+**Not done here (see ADR-ADD10 "Skipped"):** no small multiples past six series, no persistence of
+the picked series, and overlapping filled areas still muddy past three.

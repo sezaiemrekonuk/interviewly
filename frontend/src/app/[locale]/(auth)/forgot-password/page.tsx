@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
+import { AnonymousOnly } from '../../../../components/auth/anonymous-only';
 import { AuthShell } from '../../../../components/auth/auth-shell';
 import styles from '../../../../components/auth/auth.module.css';
 import { Button, Field, Input } from '../../../../components/ui';
@@ -23,7 +24,7 @@ type Values = z.infer<typeof schema>;
  * unknown address alike. So there is one success state and one copy, and no branch here
  * could reintroduce the enumeration the endpoint spent its design closing.
  */
-export default function ForgotPasswordPage() {
+function ForgotPassword() {
   const t = useTranslations('auth');
   const messageFor = useErrorMessage();
 
@@ -88,5 +89,13 @@ export default function ForgotPasswordPage() {
         </Link>
       </p>
     </AuthShell>
+  );
+}
+
+export default function ForgotPasswordPage() {
+  return (
+    <AnonymousOnly>
+      <ForgotPassword />
+    </AnonymousOnly>
   );
 }

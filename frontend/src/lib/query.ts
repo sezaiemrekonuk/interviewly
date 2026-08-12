@@ -34,6 +34,7 @@ export const queryKeys = {
     ['admin', 'interviews', filters] as const,
   adminInterview: (id: string) => ['admin', 'interviews', id] as const,
   adminStats: (filters: Record<string, unknown> = {}) => ['admin', 'stats', filters] as const,
+  adminCosts: (days: number) => ['admin', 'costs', { days }] as const,
   adminLlmCalls: (filters: Record<string, unknown> = {}) =>
     ['admin', 'llm-calls', filters] as const,
   adminUsers: (filters: Record<string, unknown> = {}) => ['admin', 'users', filters] as const,
@@ -185,6 +186,52 @@ export function useAdminStats(enabled = true): UseQueryResult<AdminStatsResponse
   return useQuery({
     queryKey: queryKeys.adminStats(),
     queryFn: () => fetchJson<AdminStatsResponse>('/admin/stats'),
+    enabled,
+  });
+}
+
+export interface AdminCostDaily {
+  costUsd: string[];
+  calls: number[];
+  tokens: number[];
+  latencyMs: number[];
+}
+
+export interface AdminCostModel {
+  provider: string | null;
+  model: string | null;
+  costUsd: string;
+  previousCostUsd: string;
+  calls: number;
+  tokens: number;
+  averageLatencyMs: number;
+  daily: AdminCostDaily;
+}
+
+export interface AdminCostsResponse {
+  days: number;
+  from: string;
+  to: string;
+  buckets: string[];
+  daily: { costUsd: string[]; interviews: number[] };
+  totals: { costUsd: string; calls: number; tokens: number; interviews: number };
+  previous: { costUsd: string };
+  models: AdminCostModel[];
+  truncated: number;
+  hourly: { dow: number; hour: number; costUsd: string }[];
+}
+
+export const COST_RANGES = [7, 30, 90] as const;
+
+export type CostRange = (typeof COST_RANGES)[number];
+
+export function useAdminCosts(
+  enabled: boolean,
+  days: CostRange,
+): UseQueryResult<AdminCostsResponse, ApiError> {
+  return useQuery({
+    queryKey: queryKeys.adminCosts(days),
+    queryFn: () => fetchJson<AdminCostsResponse>(`/admin/costs?days=${days}`),
     enabled,
   });
 }

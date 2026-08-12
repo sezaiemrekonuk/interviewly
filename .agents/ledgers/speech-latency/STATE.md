@@ -13,8 +13,21 @@ the exception and gains ~1.1 s on each of its two lines: its closing line is now
 `say()`, inside `handover`, because that is the one path where a second conductor call still runs
 between the row being written and the response being sent.
 
-Before this session: **Ledger opened (Ahmet, 2026-08-11, opus-5). No code written yet.** The room
-takes ~7.1 s from a candidate's last word to the interviewer's first sound, measured against live
+**`L01` landed on master while this was being written, and it changes L02's arithmetic.** TTS is
+now `eleven_turbo_v2_5` at ~430 ms, not `eleven_multilingual_v2` at ~1 130. L02's round-trip
+saving is unaffected — it is the round trips, not the synthesis, that were removed — but every
+figure that was *bounded by the length of a synthesis* is now bounded by 430 ms instead. The
+task's `## Notes` carry both numbers; read them there rather than re-deriving them.
+
+Before this session: **L01 done (Ahmet, 2026-08-12, opus — owner OK'd opus for a sonnet-tier
+task). TTS swapped `eleven_multilingual_v2` → `eleven_turbo_v2_5`** in `.env`/`.env.example` after
+the owner heard all 6 samples and judged them indistinguishable. TTS stage ~1130 → ~430 ms (warm
+median, live key), end-to-end baseline ~7100 → ~6400 ms. The identical-bytes anomaly did not
+reproduce (6/6 distinct hashes) — it was a spike-time artefact. No cache purge (voices
+indistinguishable, so no seam). No app code touched. Tests/lint/typecheck green.
+
+Before that: **Ledger opened (Ahmet, 2026-08-11, opus-5). No code written yet.** The room took
+~7.1 s from a candidate's last word to the interviewer's first sound, measured against live
 providers rather than estimated (REFERENCE.md carries the table and the method). The spec
 (`.agents/specs/2026-08-11-speech-latency.md`), PLAN, five ADRs and four task files are in place;
 the ownership row is in `.agents/EXECUTE.md`.
@@ -25,7 +38,9 @@ the swap is the owner's ear to decide, not a benchmark's (ADR-L03); and `VAD_SIL
 single largest line in the whole budget — can only shorten behind turn-taking's gate (ADR-L04).
 Streaming is #266 and stays out (ADR-L05).
 
-`L01` and `L04` are unblocked and independent of everything. `L02` and `L03` wait on turn-taking.
+`L01` is done, `L02` is `in_progress` and owes only its measurement, and `L03`/`L04` are both
+unblocked — turn-taking went green through `T08` on 2026-08-12, so nothing here waits on it any
+more.
 
 ## Execution protocol (follow exactly)
 
@@ -46,25 +61,27 @@ left is the measurement — five hand-timed turns in the room with `AI_ENABLED=t
 after, medians into the task's `## Notes`. That is the owner's, not a fresh session's, because it
 needs a microphone. **Do not start another task on top of it** (EXECUTE § 4 rule 1).
 
-After it: **`L01`** — the biggest cheap win, blocked on nothing, and it needs a human's ears
-rather than a green test. `L04` is equally unblocked if you would rather measure than listen, and
-L02's own `## Notes` now says the ordinary turn still owes ~480 ms that only L01 can pay.
+After it: **`L04`** — the conductor's real-prompt TTFT, blocked on nothing (`C02` done). **`L03`
+is unblocked too**, now that `T04` is done and `L01` has shipped; it was waiting on both. L01 is
+done: turbo_v2_5, ~700 ms off the clock, and it is what pays turn-taking's gate back — L02 buys
+~300 ms of the 780, not the whole of it, for the reason its `## Notes` set out.
 
 ## Ledger
 
 | ID | Title | Repo | Status | Depends on |
 |----|-------|------|--------|------------|
-| L01 | The TTS model: measure, listen, then swap or reject | | todo | S02 |
+| L01 | The TTS model: measure, listen, then swap or reject | | done | S02 |
 | L04 | The conductor's real prompt: production-sized TTFT, then prefix caching or not | | todo | C02 |
 | L02 | Assistant ids on the turn response, synthesis begun when the row is written | | in_progress | T03, S02 |
 | L03 | Shorten `VAD_SILENCE_MS` behind the gate | | todo | T04, L01 |
 
 ## Dependency graph
 
-`L01 ∥ L04` today. `L02` after turn-taking `T03`; `L03` after turn-taking `T04`.
+Nothing is blocked today. `L02` waited on turn-taking `T03` and `L03` on `T04`; both are done, and
+`L01` — `L03`'s other dependency — has shipped.
 
-Rows are listed in the order they can actually be started, not by number — `L02` and `L03` are
-numbered for the sequence they were designed in, but both wait on another ledger.
+Rows are listed in the order they could actually be started, not by number — `L02` and `L03` are
+numbered for the sequence they were designed in, and each spent its wait on another ledger.
 
 **`L03` depends on `L01`** so the two latency changes land separately and each keeps its own
 measured before/after. Shipping a model swap and a window change together makes both

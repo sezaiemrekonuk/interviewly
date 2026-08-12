@@ -122,21 +122,28 @@ The session gates ran green (below), but the `## Verification` room timing — `
 answer a question, hand-time last word → first audio, ×5 — needs a microphone and a pair of ears.
 It has not been run. **Owner action, before this is called finished.**
 
-What the change is worth structurally, against REFERENCE.md's baseline table:
+What the change is worth structurally. **`L01` landed on master mid-branch and moved the number
+this is measured against**: TTS is `eleven_turbo_v2_5` at ~430 ms now, not `multilingual_v2` at
+~1 130. Both columns are given, because which one applies depends on whether you are reading this
+before or after that merge — and because the *shape* of the saving differs between them.
 
-| | before | after | why |
-|---|---|---|---|
-| ordinary turn (one line) | refetch + `GET speech` **~300 ms**, *then* TTS ~1 130 ms starts | TTS starts at `res.json`; the room's GET arrives ~100 ms later, misses, and waits on the lock the prewarm already holds | **~300 ms** |
-| handover, line 1 (the closing line) | its TTS starts after the response, which is after `openRound`'s ~1 180 ms second conductor call | prewarmed at `say()`, so it is synthesised *during* that call and is cached before the response is even sent | **~1 100 ms** |
-| handover, line 2 (the greeting) | its GET is issued only after line 1 has finished *playing*, so its ~1 130 ms of TTS is dead air between them | prewarmed off the response; synthesised while line 1 plays | **~1 100 ms on the gap** |
+| | before | after | with multilingual (~1 130 ms TTS) | with turbo (~430 ms TTS) |
+|---|---|---|---|---|
+| ordinary turn (one line) | refetch + `GET speech` **~300 ms**, *then* TTS starts | TTS starts at `res.json`; the room's GET arrives ~100 ms later, misses, and waits on the lock the prewarm already holds | **~300 ms** | **~300 ms** |
+| handover, line 1 (the closing line) | its TTS starts after the response, which is after `openRound`'s ~1 180 ms second conductor call | prewarmed at `say()`, so it is synthesised *during* that call and is cached before the response is even sent | **~1 100 ms** | **~430 ms** |
+| handover, line 2 (the greeting) | its GET is issued only after line 1 has finished *playing*, so its whole synthesis is dead air between them | prewarmed off the response; synthesised while line 1 plays | **~1 100 ms on the gap** | **~430 ms on the gap** |
+
+The ordinary turn's ~300 ms is the one figure L01 does not touch: it is the round trips that were
+removed, not the synthesis. The other two rows are bounded by *how long a synthesis takes*, so a
+faster model shrinks what overlapping it can save. Faster TTS and eager TTS are not additive on
+those rows, and reading them as additive is the easy mistake here.
 
 **So the ordinary turn does not get its 780 ms back from this task alone, and the DoD's escape
 clause is being used deliberately.** The reason is arithmetic, not a defect: TTS was never
 *started* by the two round trips, only *delayed* by them, so removing them buys their ~300 ms and
-no more. The remaining payback has to come from `L01` (the model swap: 1 024 → 313 ms measured, a
-~700 ms line on its own) and `L03`. Do not revert this on the 780 ms clause — 300 ms of it is
-real, the handover case is much bigger, and both are prerequisites for L01 being worth its ear
-test.
+no more. `L01` is where the gate is actually paid back and it has now shipped — ~700 ms off the
+clock, end-to-end baseline ~7 100 → ~6 400 ms. Do not revert this on the 780 ms clause: its
+300 ms is real, it is orthogonal to L01's, and the handover rows are worth more than either.
 
 **Where the rest of it was, and what was done about it.** `nextQuestion` calls `say()` last, so
 firing the prewarm after the response costs that path nothing — step 4's placement is right for

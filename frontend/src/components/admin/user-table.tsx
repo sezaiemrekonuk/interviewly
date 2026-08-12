@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 
 import type { AdminUserRow } from '../../lib/query';
@@ -15,6 +16,7 @@ export function UserTable({
   onFilterByUser,
   sort,
   onSort,
+  filter,
 }: {
   items: AdminUserRow[];
   hasNextPage: boolean;
@@ -23,6 +25,7 @@ export function UserTable({
   onFilterByUser?: (userId: string) => void;
   sort: { field: string; dir: 'asc' | 'desc' };
   onSort: (field: string) => void;
+  filter?: ReactNode;
 }) {
   const t = useTranslations('admin');
   const format = useFormatter();
@@ -33,6 +36,7 @@ export function UserTable({
         <h2 className={styles.heading} id="admin-users-heading">
           {t('users.heading')}
         </h2>
+        {filter ? <div className={styles.filter}>{filter}</div> : null}
       </div>
 
       {items.length === 0 ? (

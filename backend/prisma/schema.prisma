@@ -552,5 +552,6 @@ model LlmCall {
   /// index rather than two: this table is written on every provider call, and a redundant
   /// prefix index charges the hottest insert path in the schema for nothing.
   @@index([interview_id, created_at])
+  @@index([created_at])
   @@map("llm_calls")
 }
