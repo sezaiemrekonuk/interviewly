@@ -264,10 +264,6 @@ export function useVoiceSession(
   const turnStartedRef = useRef(0);
   // Why the recorder stopped, read once in `onstop`.
   const reasonRef = useRef<StopReason>('final');
-  // Set on the recorder the room is about to throw away: the one re-opened for a probe whose
-  // answer came back conducted, and the one the silence clock closes. Its bytes are dropped
-  // rather than uploaded — the interviewer is about to speak, and an open mic records the TTS.
-  const discardRef = useRef(false);
   // An upload is in flight. The silent-turn clock must not fire underneath one: a probe keeps the phase
   // on 'listening', so nothing else would stop it.
   const uploadingRef = useRef(false);
@@ -346,7 +342,6 @@ export function useVoiceSession(
   const discardRecorder = useCallback(() => {
     const open = recorderRef.current;
     if (!open) return;
-    discardRef.current = true;
     recorderRef.current = null;
     if (open.state !== 'inactive') open.stop();
   }, []);
@@ -360,10 +355,10 @@ export function useVoiceSession(
       return;
     }
 
+    discardRecorder();
     heardRef.current = false;
     floorRef.current = threshold;
     chunksRef.current = [];
-    discardRef.current = false;
     silenceSentRef.current = false;
     flushedRef.current = false;
     turnStartedRef.current = Date.now();
@@ -371,16 +366,12 @@ export function useVoiceSession(
     recorderRef.current = recorder;
 
     recorder.ondataavailable = (event: BlobEvent) => {
+      if (recorderRef.current !== recorder) return;
       if (event.data?.size) chunksRef.current.push(event.data);
     };
     recorder.onstop = () => {
+      if (recorderRef.current !== recorder) return;
       recorderRef.current = null;
-      // A recorder the room already replaced or closed. Its bytes were never a turn.
-      if (discardRef.current) {
-        discardRef.current = false;
-        chunksRef.current = [];
-        return;
-      }
       // Unmounted mid-turn: the bytes are dropped rather than uploaded into a room nobody is in.
       if (!liveRef.current) return;
       const audio = new Blob(chunksRef.current, { type: recorder.mimeType });
@@ -493,6 +484,8 @@ export function useVoiceSession(
     );
     if (pending.length === 0) return;
 
+    discardRecorder();
+
     let cancelled = false;
     setError(null);
     setPhase('speaking');
@@ -569,7 +562,17 @@ export function useVoiceSession(
       releasePlayer();
     };
     // `attempt` re-runs a failed line; `assistantIds` re-runs when the server writes a new one.
-  }, [active, speakable, interviewId, mic.state, assistantIds, attempt, refetchState, releasePlayer]);
+  }, [
+    active,
+    speakable,
+    interviewId,
+    mic.state,
+    assistantIds,
+    attempt,
+    refetchState,
+    releasePlayer,
+    discardRecorder,
+  ]);
 
   // VAD (ADR-S06): the candidate ends the turn, the server ends the interview.
   //

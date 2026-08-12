@@ -45,7 +45,7 @@ interface Call {
   body: unknown;
 }
 
-function stubApi(routes: Record<string, () => Response> = {}) {
+function stubApi(routes: Record<string, () => Response | Promise<Response>> = {}) {
   const calls: Call[] = [];
 
   vi.stubGlobal(
@@ -953,5 +953,87 @@ describe('useVoiceSession — speech the page takes with it (T07)', () => {
       'audio',
     ) as File).text();
     expect(uploaded).toContain('Z');
+  });
+});
+
+describe('useVoiceSession — the mic is shut while the interviewer speaks', () => {
+  let audio: AudioHarness;
+  let client: QueryClient;
+
+  beforeEach(() => {
+    vi.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'],
+    });
+    installMediaDevicesMock();
+    audio = installAudioMock();
+    client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  const tick = async (ms = 0) => {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ms);
+    });
+  };
+
+  async function replyDuringProbe() {
+    const calls = stubApi({ [UPLOAD]: () => new Promise<Response>(() => {}) });
+    const hook = renderHook(
+      (props: { messages: RoomMessage[] }) =>
+        useVoiceSession('i1', {
+          enabled: true,
+          messages: props.messages,
+          speakable: true,
+          vad: VAD,
+        }),
+      { wrapper: wrapper(client), initialProps: { messages: MESSAGES } },
+    );
+    await tick();
+    await tick();
+    await act(async () => audio.players[0].end());
+    await tick();
+    expect(audio.recorders).toHaveLength(1);
+
+    await act(async () => audio.level(VAD_THRESHOLD + 0.2));
+    await act(async () => audio.level(0));
+    await tick(VAD.silenceMs + 200);
+    expect(audio.recorders).toHaveLength(2);
+
+    hook.rerender({ messages: [msg('m1', 'assistant'), msg('u1', 'user'), msg('m2', 'assistant')] });
+    await tick();
+    await tick();
+    return { hook, calls };
+  }
+
+  it('closes the recorder before a single frame of the reply is played', async () => {
+    await replyDuringProbe();
+
+    expect(audio.players).toHaveLength(2);
+    expect(audio.recorders[1].state).toBe('inactive');
+  });
+
+  it('never lets an orphaned recorder push its bytes into the next turn', async () => {
+    const { hook, calls } = await replyDuringProbe();
+
+    audio.recorders[1].chunk(2_000, 'Z');
+
+    await act(async () => audio.players[1].end());
+    await tick();
+    const answering = audio.recorders.length - 1;
+    expect(audio.recorders[answering].state).toBe('recording');
+    audio.recorders[answering].chunk(2_000, 'C');
+    audio.recorders[1].chunk(2_000, 'Z');
+
+    await act(async () => hook.result.current.stop());
+    await tick();
+
+    const uploads = calls.filter((call) => call.url === UPLOAD);
+    const sent = await ((uploads[uploads.length - 1].body as FormData).get('audio') as File).text();
+    expect(sent).toContain('C');
+    expect(sent).not.toContain('Z');
   });
 });
