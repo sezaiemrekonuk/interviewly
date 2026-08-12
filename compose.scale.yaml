@@ -1,0 +1,22 @@
+name: interviewly
+services:
+  db:
+    ports: ["5432:5432"]
+  cache:
+    ports: ["6380:6379"]
+
+  api:
+    environment:
+      AI_ENABLED: "false"
+      LOG_TRANSPORT: stdout
+      DATABASE_URL: ${DATABASE_URL}?connection_limit=${SCALE_DB_POOL:-10}
+
+  worker:
+    environment:
+      AI_ENABLED: "false"
+      LOG_TRANSPORT: stdout
+      DATABASE_URL: ${DATABASE_URL}?connection_limit=${SCALE_DB_POOL:-10}
+
+  migrate:
+    environment:
+      DATABASE_URL: ${DATABASE_URL}?connection_limit=${SCALE_DB_POOL:-10}

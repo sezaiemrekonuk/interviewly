@@ -20,12 +20,25 @@ http://localhost {
     handle_path /api/* {
         # SSE lives at /api/interviews/:id/events, so the no-buffering guarantee belongs
         # here. It used to sit on a `/events/*` block, which no request ever matched.
-        reverse_proxy api:4000 {
+        reverse_proxy {
+            dynamic a {
+                name api
+                port 4000
+                refresh 5s
+            }
+            lb_policy round_robin
             flush_interval -1
         }
     }
     handle /webhooks/* {
-        reverse_proxy api:4000
+        reverse_proxy {
+            dynamic a {
+                name api
+                port 4000
+                refresh 5s
+            }
+            lb_policy round_robin
+        }
     }
     # S3 puts the bucket in the path, so `/assets/mascot/x.webp` has to reach the bucket as
     # `/interviewly/mascot/x.webp`. Proxying the URL unchanged made MinIO read "assets" as the
@@ -45,7 +58,14 @@ http://localhost {
     @negotiated not path /_next/static/* /_next/image*
     handle {
         header @negotiated +Vary "Cookie, Accept-Language"
-        reverse_proxy web:3000
+        reverse_proxy {
+            dynamic a {
+                name web
+                port 3000
+                refresh 5s
+            }
+            lb_policy round_robin
+        }
     }
 
     # CSP is set per-request by frontend/src/middleware.ts (needs a per-request nonce

@@ -7,6 +7,7 @@ import { ApiError, httpStatusFor } from './lib/api-error';
 import { config } from './lib/env';
 import { logger } from './lib/logger';
 import { liveness, readiness } from './lib/probes';
+import { profiler } from './lib/profiler';
 import { runWithRequestContext } from './lib/request-context';
 
 import adminRouter from '../modules/admin/router';
@@ -40,6 +41,7 @@ const trustProxyNum = Number(rawTrustProxy);
 const trustProxyValue = rawTrustProxy === 'false' ? false : isNaN(trustProxyNum) ? rawTrustProxy : trustProxyNum;
 app.set('trust proxy', trustProxyValue);
 
+app.use(profiler);
 app.use(express.json());
 app.use(cookieParser());
 app.use((req, _res, next) => {

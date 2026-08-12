@@ -952,3 +952,78 @@ difficulty matching `selectNextQuestion` including the floor clamp, no provider 
 
 **Known, not fixed:** the conductor overwrites the promoted row's `text` and leaves its `topic`,
 so a label can stop describing its question. Audit surface, predates this branch, conductor's call.
+
+## ADR-ADD17 — the stack is measured where it is deployed: `--scale api=N` behind the same edge
+
+**Ask:** make the system ready for a scaling test, then run one — instance multiplicity, latency
+(with a profiler, to be implemented) and performance — proving every number, with scripts that
+re-run it, JSON that holds the evidence and a PDF built from that JSON.
+
+There is already a `platform` ledger (P01–P09, all `todo`) planning Fly.io, `kind`, an HPA and a
+k6 harness. Nothing here consumes it or closes it; this is the local, free, same-machine subset it
+was going to compare against, and the deviations from its ADRs are named below.
+
+**Shape chosen:**
+
+- **`docker compose up --scale api=N`, not a second orchestrator.** The four images, the edge and
+  the two stores are already the deployment; scaling one service inside it changes one number and
+  nothing else. Fly and Kubernetes cost money and a cluster to debug, and neither answers "does a
+  second replica carry more traffic" any better than a second container does.
+- **Caddy resolves its upstreams, rather than naming one.** `reverse_proxy api:4000` dials a
+  hostname whose A record Docker rotates, but a keep-alive pool pins the connection it got — two
+  replicas, one of them idle. `dynamic a { name api; port 4000; refresh 5s }` with
+  `lb_policy round_robin` makes the upstream set the DNS answer, re-read every 5s, so a replica
+  added or removed mid-run is picked up without touching the edge. This is the single change that
+  turns N containers into N serving replicas, and the harness refuses to run if the edge cannot
+  reach every one of them.
+- **A third compose overlay, not an edit to the two that exist.** `compose.dev.yaml` publishes
+  `127.0.0.1:4000:4000` for `api`, which is exactly what makes a second replica fail to start —
+  so the scale run cannot use it. `compose.scale.yaml` publishes what a *measurement* needs
+  (Postgres, Redis, for `pg_stat_database` and `INFO clients`), pins the Prisma pool, and forces
+  `AI_ENABLED=false` and `LOG_TRANSPORT=stdout`. The production file is untouched.
+- **The connection pool is pinned, and that is a finding rather than tuning.** Prisma's default is
+  `2 × cores + 1` — 17 on this host — *per process*. Four api replicas plus the worker plus the
+  migrate job is over Postgres' `max_connections = 100` before a single interview is served. The
+  overlay sets `connection_limit=10` (`SCALE_DB_POOL`) so the run measures the application rather
+  than a connection storm, and the number is printed in the report so the ceiling is visible.
+- **The profiler is in the process, not a scrape target.** Prometheus would be a dependency, a
+  port, a compose service and a query language to answer three questions that Node already
+  answers: `process.hrtime.bigint()` around a request, `perf_hooks.monitorEventLoopDelay()` for
+  the queue behind it, `process.cpuUsage()` for what it cost. `backend/src/lib/profiler.ts` keeps
+  a bounded ring of 4096 samples per route pattern — never per concrete path, or one interview id
+  would be its own row — and computes percentiles when asked instead of on every request.
+- **`X-Instance` is a hash, not the hostname.** Attribution needs the replicas to be *distinct*,
+  not *named*; the first 8 hex of `sha256(hostname())` is stable for the life of the container and
+  tells a client nothing about the host. It is what makes the fan-out claim a count rather than an
+  assertion.
+- **The snapshot is an admin route, not an open port.** `GET /admin/perf` and
+  `POST /admin/perf/reset` sit behind `requireAuth, requireAdmin` like every other operator read.
+  Each replica answers for itself, so the harness calls through the edge until it has seen every
+  instance id — which the round-robin above makes deterministic — rather than reaching into
+  containers with `docker exec`.
+- **The generator is Node, not k6 (deviates from ADR-P03).** k6 is not installed on this machine
+  and would be a binary to install before the scripts run; the artefact the ask names is JSON,
+  which is what a Node script produces natively. The generator is ~90 lines of `fetch` in a closed
+  loop and reports its own CPU utilisation, so a run where the generator was the ceiling is
+  visible in the same file as the run.
+- **The PDF reads the JSON and nothing else.** `report.mjs` takes a results file and renders the
+  tables and charts from its fields; a figure with no field prints `—`. Re-running the report on
+  an old file reproduces that report exactly.
+
+**Skipped, deliberately:**
+
+- **The live-interview scenario, and with it the SSE ceiling.** Every open stream holds its own
+  `redis.duplicate()` (`sse.ts:180`) and `MAX_STREAMS_PER_USER` is per process, so the scenario
+  needs a population of users, which needs registration, which is capped at 3/hour/IP by design.
+  Seeding users straight into Postgres would measure a path no candidate takes. P03/P04 own that
+  scenario and own the ceiling; this ledger measures the ordinary request path and says so.
+- **Write paths under load.** Every state-changing route is rate-limited per user or per IP — that
+  is the product working. A load test that disabled those limits would be measuring a build nobody
+  ships. `POST /auth/login` is measured once, as the run's own sign-in.
+- **Per-request database timing.** It would mean wrapping the shared `prisma` client in
+  `$extends` and re-typing every call site for a number Postgres already keeps:
+  `pg_stat_database`'s `xact_commit` and `tup_returned` are read before and after every run and
+  the deltas are in the JSON.
+- **Repeats, warm-up sweeps and confidence intervals.** One run per cell, 12 seconds each, 3
+  seconds of discarded warm-up. The variance is not characterised, and the report says so rather
+  than implying a precision the method does not have.

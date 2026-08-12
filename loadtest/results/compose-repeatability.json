@@ -1,0 +1,1332 @@
+{
+  "schema": "interviewly-loadtest/1",
+  "startedAt": "2026-08-12T17:25:20.182Z",
+  "finishedAt": "2026-08-12T17:27:28.481Z",
+  "gitSha": "a0a167632cdb90d50956d00fd43975538125775f",
+  "target": "docker-compose",
+  "baseUrl": "http://localhost",
+  "host": {
+    "platform": "darwin",
+    "release": "25.5.0",
+    "arch": "arm64",
+    "hostCpus": 8,
+    "hostMemBytes": 17179869184,
+    "node": "25.9.0",
+    "docker": {
+      "ncpu": 8,
+      "memTotalBytes": 8321994752,
+      "serverVersion": "29.4.0",
+      "operatingSystem": "Docker Desktop"
+    }
+  },
+  "config": {
+    "replicaCounts": [
+      1,
+      1,
+      1
+    ],
+    "connectionCounts": [
+      64
+    ],
+    "scenarioNames": [
+      "healthz",
+      "interview-state"
+    ],
+    "durationMs": 12000,
+    "warmupMs": 3000,
+    "composeFiles": [
+      "compose.yaml",
+      "compose.scale.yaml"
+    ],
+    "aiEnabled": false,
+    "logTransport": "stdout",
+    "dbPoolPerProcess": 10,
+    "generator": "node fetch, closed loop, one in-flight request per connection",
+    "interviewId": "cmsqcavkv0001n001h4jtx9pc"
+  },
+  "scaleSteps": [
+    {
+      "replicas": 1,
+      "containerIds": [
+        "fde51f88e4e55780d07cc5dafedb62a23a227f32350dacee23026ffe9e008d08"
+      ],
+      "instancesReachedThroughEdge": [
+        "c2f71fa0"
+      ],
+      "at": "2026-08-12T17:25:32.656Z"
+    },
+    {
+      "replicas": 1,
+      "containerIds": [
+        "fde51f88e4e55780d07cc5dafedb62a23a227f32350dacee23026ffe9e008d08"
+      ],
+      "instancesReachedThroughEdge": [
+        "c2f71fa0"
+      ],
+      "at": "2026-08-12T17:26:15.020Z"
+    },
+    {
+      "replicas": 1,
+      "containerIds": [
+        "fde51f88e4e55780d07cc5dafedb62a23a227f32350dacee23026ffe9e008d08"
+      ],
+      "instancesReachedThroughEdge": [
+        "c2f71fa0"
+      ],
+      "at": "2026-08-12T17:26:57.532Z"
+    }
+  ],
+  "runs": [
+    {
+      "replicas": 1,
+      "scenario": "healthz",
+      "url": "http://localhost/api/healthz",
+      "method": "GET",
+      "connections": 64,
+      "startedAt": "2026-08-12T17:25:36.103Z",
+      "elapsedMs": 11563.175874999999,
+      "requests": {
+        "total": 69434,
+        "ok": 69434,
+        "failures": 0,
+        "statuses": {
+          "2xx": 69434
+        }
+      },
+      "throughputRps": 6004.751700622214,
+      "bytesPerSecond": 66052.26870684436,
+      "clientLatency": {
+        "samples": 69434,
+        "meanMs": 10.662786658366336,
+        "minMs": 0.45287500000267755,
+        "p50Ms": 8.653791000000638,
+        "p75Ms": 11.452499999999418,
+        "p90Ms": 15.43658399999913,
+        "p95Ms": 19.386625000002823,
+        "p99Ms": 40.89349999999831,
+        "maxMs": 293.92537500000253
+      },
+      "generator": {
+        "cpuUserMs": 5707.177,
+        "cpuSystemMs": 1197.032,
+        "coreUtilisationPct": 59.70858762882909
+      },
+      "instanceDistribution": {
+        "c2f71fa0": 69434
+      },
+      "server": {
+        "instances": [
+          {
+            "instance": "c2f71fa0",
+            "windowMs": 12232.635464,
+            "routes": {
+              "POST /admin/perf/reset": {
+                "count": 1,
+                "sampled": 1,
+                "meanMs": 43.830417,
+                "minMs": 43.830417,
+                "p50Ms": 43.830417,
+                "p75Ms": 43.830417,
+                "p90Ms": 43.830417,
+                "p95Ms": 43.830417,
+                "p99Ms": 43.830417,
+                "maxMs": 43.830417,
+                "errors": 0,
+                "statuses": {
+                  "2xx": 1
+                },
+                "rps": 0.08174853268070867
+              },
+              "GET /healthz": {
+                "count": 70914,
+                "sampled": 4096,
+                "meanMs": 0.11956235930845716,
+                "minMs": 0.052708,
+                "p50Ms": 0.082958,
+                "p75Ms": 0.107958,
+                "p90Ms": 0.147834,
+                "p95Ms": 0.198333,
+                "p99Ms": 0.3055,
+                "maxMs": 13.995708,
+                "errors": 0,
+                "statuses": {
+                  "2xx": 70914
+                },
+                "rps": 5797.115446519775
+              }
+            },
+            "eventLoopDelayMs": {
+              "meanMs": 14.75281252173913,
+              "p50Ms": 14.155775,
+              "p90Ms": 18.923519,
+              "p99Ms": 33.816575,
+              "maxMs": 88.801279
+            },
+            "cpu": {
+              "userMs": 12170.881,
+              "systemMs": 1217.325,
+              "coreUtilisationPct": 109.446619572706
+            },
+            "memory": {
+              "rssBytes": 257740800,
+              "heapUsedBytes": 62496304,
+              "heapTotalBytes": 94908416,
+              "externalBytes": 3085582
+            }
+          }
+        ]
+      },
+      "resources": {
+        "docker": [
+          {
+            "name": "interviewly-worker-1",
+            "cpuPct": 0,
+            "memUsage": "51.16MiB / 7.75GiB",
+            "memPct": 0.64,
+            "netIO": "312kB / 797kB"
+          },
+          {
+            "name": "interviewly-api-1",
+            "cpuPct": 114.06,
+            "memUsage": "186.8MiB / 7.75GiB",
+            "memPct": 2.35,
+            "netIO": "4.14GB / 1.41GB"
+          },
+          {
+            "name": "interviewly-bucket-1",
+            "cpuPct": 0,
+            "memUsage": "90.94MiB / 7.75GiB",
+            "memPct": 1.15,
+            "netIO": "44.6kB / 10.8kB"
+          },
+          {
+            "name": "interviewly-mail-1",
+            "cpuPct": 0,
+            "memUsage": "7.805MiB / 7.75GiB",
+            "memPct": 0.1,
+            "netIO": "11.2kB / 126B"
+          },
+          {
+            "name": "interviewly-web-1",
+            "cpuPct": 0,
+            "memUsage": "64.39MiB / 7.75GiB",
+            "memPct": 0.81,
+            "netIO": "19.8MB / 655MB"
+          },
+          {
+            "name": "interviewly-kibana-1",
+            "cpuPct": 3.17,
+            "memUsage": "595MiB / 7.75GiB",
+            "memPct": 7.5,
+            "netIO": "15.3MB / 92.2MB"
+          },
+          {
+            "name": "interviewly-elasticsearch-1",
+            "cpuPct": 0.72,
+            "memUsage": "1.047GiB / 7.75GiB",
+            "memPct": 13.51,
+            "netIO": "88.1MB / 14.8MB"
+          },
+          {
+            "name": "interviewly-db-1",
+            "cpuPct": 0,
+            "memUsage": "65.3MiB / 7.75GiB",
+            "memPct": 0.82,
+            "netIO": "418MB / 5.63GB"
+          },
+          {
+            "name": "interviewly-cache-1",
+            "cpuPct": 0.48,
+            "memUsage": "13.66MiB / 7.75GiB",
+            "memPct": 0.17,
+            "netIO": "75.5MB / 58.7MB"
+          },
+          {
+            "name": "interviewly-edge-1",
+            "cpuPct": 126.17,
+            "memUsage": "35.12MiB / 7.75GiB",
+            "memPct": 0.44,
+            "netIO": "3.09GB / 3.4GB"
+          }
+        ],
+        "redisClients": 9,
+        "db": {
+          "numbackends": 12,
+          "xactCommit": 2197404,
+          "tupReturned": 62444965,
+          "blksHit": 12856587,
+          "connections": 12
+        }
+      },
+      "postgres": {
+        "before": {
+          "numbackends": 12,
+          "xactCommit": 2197397,
+          "tupReturned": 62443527,
+          "blksHit": 12855859,
+          "connections": 12
+        },
+        "after": {
+          "numbackends": 12,
+          "xactCommit": 2197410,
+          "tupReturned": 62445414,
+          "blksHit": 12857246,
+          "connections": 12
+        },
+        "xactCommitDelta": 13,
+        "tupReturnedDelta": 1887
+      }
+    },
+    {
+      "replicas": 1,
+      "scenario": "interview-state",
+      "url": "http://localhost/api/interviews/cmsqcavkv0001n001h4jtx9pc/state",
+      "method": "GET",
+      "connections": 64,
+      "startedAt": "2026-08-12T17:25:51.376Z",
+      "elapsedMs": 11799.382083,
+      "requests": {
+        "total": 1991,
+        "ok": 1991,
+        "failures": 0,
+        "statuses": {
+          "2xx": 1991
+        }
+      },
+      "throughputRps": 168.73764964934392,
+      "bytesPerSecond": 3359904.079817736,
+      "clientLatency": {
+        "samples": 1991,
+        "meanMs": 383.01231423556004,
+        "minMs": 269.8294999999998,
+        "p50Ms": 380.20474999999715,
+        "p75Ms": 410.7219580000019,
+        "p90Ms": 443.7764580000003,
+        "p95Ms": 478.7560000000012,
+        "p99Ms": 507.5481669999972,
+        "maxMs": 528.0277920000008
+      },
+      "generator": {
+        "cpuUserMs": 1033.565,
+        "cpuSystemMs": 123.497,
+        "coreUtilisationPct": 9.806123675468065
+      },
+      "instanceDistribution": {
+        "c2f71fa0": 1991
+      },
+      "server": {
+        "instances": [
+          {
+            "instance": "c2f71fa0",
+            "windowMs": 12440.791589,
+            "routes": {
+              "POST /admin/perf/reset": {
+                "count": 1,
+                "sampled": 1,
+                "meanMs": 67.322167,
+                "minMs": 67.322167,
+                "p50Ms": 67.322167,
+                "p75Ms": 67.322167,
+                "p90Ms": 67.322167,
+                "p95Ms": 67.322167,
+                "p99Ms": 67.322167,
+                "maxMs": 67.322167,
+                "errors": 0,
+                "statuses": {
+                  "2xx": 1
+                },
+                "rps": 0.08038073725824553
+              },
+              "GET /interviews/:id/state": {
+                "count": 2028,
+                "sampled": 2028,
+                "meanMs": 358.95427170019684,
+                "minMs": 222.977709,
+                "p50Ms": 354.05625,
+                "p75Ms": 383.984334,
+                "p90Ms": 419.573583,
+                "p95Ms": 448.532417,
+                "p99Ms": 482.485416,
+                "maxMs": 514.249458,
+                "errors": 0,
+                "statuses": {
+                  "2xx": 2028
+                },
+                "rps": 163.01213515972194
+              },
+              "GET /healthz": {
+                "count": 2,
+                "sampled": 2,
+                "meanMs": 0.197687,
+                "minMs": 0.176541,
+                "p50Ms": 0.176541,
+                "p75Ms": 0.218833,
+                "p90Ms": 0.218833,
+                "p95Ms": 0.218833,
+                "p99Ms": 0.218833,
+                "maxMs": 0.218833,
+                "errors": 0,
+                "statuses": {
+                  "2xx": 2
+                },
+                "rps": 0.16076147451649106
+              }
+            },
+            "eventLoopDelayMs": {
+              "meanMs": 23.847037788867564,
+              "p50Ms": 19.693567,
+              "p90Ms": 41.746431,
+              "p99Ms": 66.813951,
+              "maxMs": 120.455167
+            },
+            "cpu": {
+              "userMs": 29144.187,
+              "systemMs": 34095.673,
+              "coreUtilisationPct": 508.3266570908232
+            },
+            "memory": {
+              "rssBytes": 267624448,
+              "heapUsedBytes": 51119648,
+              "heapTotalBytes": 115879936,
+              "externalBytes": 3372612
+            }
+          }
+        ]
+      },
+      "resources": {
+        "docker": [
+          {
+            "name": "interviewly-worker-1",
+            "cpuPct": 0.05,
+            "memUsage": "51.15MiB / 7.75GiB",
+            "memPct": 0.64,
+            "netIO": "314kB / 805kB"
+          },
+          {
+            "name": "interviewly-api-1",
+            "cpuPct": 574.62,
+            "memUsage": "196.5MiB / 7.75GiB",
+            "memPct": 2.48,
+            "netIO": "4.22GB / 1.46GB"
+          },
+          {
+            "name": "interviewly-bucket-1",
+            "cpuPct": 0,
+            "memUsage": "90.94MiB / 7.75GiB",
+            "memPct": 1.15,
+            "netIO": "44.6kB / 10.8kB"
+          },
+          {
+            "name": "interviewly-mail-1",
+            "cpuPct": 0,
+            "memUsage": "7.812MiB / 7.75GiB",
+            "memPct": 0.1,
+            "netIO": "11.2kB / 126B"
+          },
+          {
+            "name": "interviewly-web-1",
+            "cpuPct": 0,
+            "memUsage": "65.13MiB / 7.75GiB",
+            "memPct": 0.82,
+            "netIO": "19.8MB / 655MB"
+          },
+          {
+            "name": "interviewly-kibana-1",
+            "cpuPct": 2.32,
+            "memUsage": "595MiB / 7.75GiB",
+            "memPct": 7.5,
+            "netIO": "15.3MB / 92.3MB"
+          },
+          {
+            "name": "interviewly-elasticsearch-1",
+            "cpuPct": 0.34,
+            "memUsage": "1.047GiB / 7.75GiB",
+            "memPct": 13.51,
+            "netIO": "88.2MB / 14.8MB"
+          },
+          {
+            "name": "interviewly-db-1",
+            "cpuPct": 33.8,
+            "memUsage": "64.8MiB / 7.75GiB",
+            "memPct": 0.82,
+            "netIO": "424MB / 5.7GB"
+          },
+          {
+            "name": "interviewly-cache-1",
+            "cpuPct": 0.63,
+            "memUsage": "13.66MiB / 7.75GiB",
+            "memPct": 0.17,
+            "netIO": "75.7MB / 58.9MB"
+          },
+          {
+            "name": "interviewly-edge-1",
+            "cpuPct": 7.65,
+            "memUsage": "32.53MiB / 7.75GiB",
+            "memPct": 0.41,
+            "netIO": "3.15GB / 3.46GB"
+          }
+        ],
+        "redisClients": 9,
+        "db": {
+          "numbackends": 12,
+          "xactCommit": 2228294,
+          "tupReturned": 63455559,
+          "blksHit": 13055873,
+          "connections": 12
+        }
+      },
+      "postgres": {
+        "before": {
+          "numbackends": 12,
+          "xactCommit": 2205642,
+          "tupReturned": 62718043,
+          "blksHit": 12916661,
+          "connections": 12
+        },
+        "after": {
+          "numbackends": 12,
+          "xactCommit": 2239479,
+          "tupReturned": 63818500,
+          "blksHit": 13124312,
+          "connections": 12
+        },
+        "xactCommitDelta": 33837,
+        "tupReturnedDelta": 1100457
+      }
+    },
+    {
+      "replicas": 1,
+      "scenario": "healthz",
+      "url": "http://localhost/api/healthz",
+      "method": "GET",
+      "connections": 64,
+      "startedAt": "2026-08-12T17:26:18.720Z",
+      "elapsedMs": 11308.648541999995,
+      "requests": {
+        "total": 42795,
+        "ok": 42795,
+        "failures": 0,
+        "statuses": {
+          "2xx": 42795
+        }
+      },
+      "throughputRps": 3784.2718200199256,
+      "bytesPerSecond": 41626.99002021918,
+      "clientLatency": {
+        "samples": 42795,
+        "meanMs": 16.942481230213765,
+        "minMs": 0.7504590000025928,
+        "p50Ms": 11.658791000001656,
+        "p75Ms": 17.78912500000297,
+        "p90Ms": 28.898416999996698,
+        "p95Ms": 41.3913329999923,
+        "p99Ms": 94.57062499999302,
+        "maxMs": 418.3587499999994
+      },
+      "generator": {
+        "cpuUserMs": 5051.805,
+        "cpuSystemMs": 1042.941,
+        "coreUtilisationPct": 53.89455669582699
+      },
+      "instanceDistribution": {
+        "c2f71fa0": 42795
+      },
+      "server": {
+        "instances": [
+          {
+            "instance": "c2f71fa0",
+            "windowMs": 12184.173839,
+            "routes": {
+              "POST /admin/perf/reset": {
+                "count": 1,
+                "sampled": 1,
+                "meanMs": 85.337792,
+                "minMs": 85.337792,
+                "p50Ms": 85.337792,
+                "p75Ms": 85.337792,
+                "p90Ms": 85.337792,
+                "p95Ms": 85.337792,
+                "p99Ms": 85.337792,
+                "maxMs": 85.337792,
+                "errors": 0,
+                "statuses": {
+                  "2xx": 1
+                },
+                "rps": 0.08207368125355585
+              },
+              "GET /healthz": {
+                "count": 44370,
+                "sampled": 4096,
+                "meanMs": 0.1894632264593179,
+                "minMs": 0.054416,
+                "p50Ms": 0.091292,
+                "p75Ms": 0.124958,
+                "p90Ms": 0.188958,
+                "p95Ms": 0.266042,
+                "p99Ms": 0.491958,
+                "maxMs": 49.077958,
+                "errors": 0,
+                "statuses": {
+                  "2xx": 44370
+                },
+                "rps": 3641.6092372202734
+              }
+            },
+            "eventLoopDelayMs": {
+              "meanMs": 18.647971479326188,
+              "p50Ms": 15.187967,
+              "p90Ms": 29.343743,
+              "p99Ms": 78.708735,
+              "maxMs": 162.267135
+            },
+            "cpu": {
+              "userMs": 12617.54,
+              "systemMs": 1458.515,
+              "coreUtilisationPct": 115.52736513775213
+            },
+            "memory": {
+              "rssBytes": 257167360,
+              "heapUsedBytes": 54020800,
+              "heapTotalBytes": 112996352,
+              "externalBytes": 3077390
+            }
+          }
+        ]
+      },
+      "resources": {
+        "docker": [
+          {
+            "name": "interviewly-worker-1",
+            "cpuPct": 0,
+            "memUsage": "51.16MiB / 7.75GiB",
+            "memPct": 0.64,
+            "netIO": "318kB / 817kB"
+          },
+          {
+            "name": "interviewly-api-1",
+            "cpuPct": 198.14,
+            "memUsage": "186.1MiB / 7.75GiB",
+            "memPct": 2.34,
+            "netIO": "4.26GB / 1.49GB"
+          },
+          {
+            "name": "interviewly-bucket-1",
+            "cpuPct": 0.45,
+            "memUsage": "90.89MiB / 7.75GiB",
+            "memPct": 1.15,
+            "netIO": "45.4kB / 10.8kB"
+          },
+          {
+            "name": "interviewly-mail-1",
+            "cpuPct": 0,
+            "memUsage": "7.828MiB / 7.75GiB",
+            "memPct": 0.1,
+            "netIO": "12kB / 126B"
+          },
+          {
+            "name": "interviewly-web-1",
+            "cpuPct": 0,
+            "memUsage": "66MiB / 7.75GiB",
+            "memPct": 0.83,
+            "netIO": "19.8MB / 655MB"
+          },
+          {
+            "name": "interviewly-kibana-1",
+            "cpuPct": 4.91,
+            "memUsage": "595MiB / 7.75GiB",
+            "memPct": 7.5,
+            "netIO": "15.4MB / 92.6MB"
+          },
+          {
+            "name": "interviewly-elasticsearch-1",
+            "cpuPct": 5.72,
+            "memUsage": "1.047GiB / 7.75GiB",
+            "memPct": 13.52,
+            "netIO": "88.4MB / 14.8MB"
+          },
+          {
+            "name": "interviewly-db-1",
+            "cpuPct": 16.33,
+            "memUsage": "64.29MiB / 7.75GiB",
+            "memPct": 0.81,
+            "netIO": "427MB / 5.73GB"
+          },
+          {
+            "name": "interviewly-cache-1",
+            "cpuPct": 1.14,
+            "memUsage": "13.66MiB / 7.75GiB",
+            "memPct": 0.17,
+            "netIO": "75.8MB / 58.9MB"
+          },
+          {
+            "name": "interviewly-edge-1",
+            "cpuPct": 94.45,
+            "memUsage": "35.19MiB / 7.75GiB",
+            "memPct": 0.44,
+            "netIO": "3.19GB / 3.51GB"
+          }
+        ],
+        "redisClients": 9,
+        "db": {
+          "numbackends": 12,
+          "xactCommit": 2240099,
+          "tupReturned": 63836764,
+          "blksHit": 13130542,
+          "connections": 12
+        }
+      },
+      "postgres": {
+        "before": {
+          "numbackends": 12,
+          "xactCommit": 2240093,
+          "tupReturned": 63836380,
+          "blksHit": 13129856,
+          "connections": 12
+        },
+        "after": {
+          "numbackends": 12,
+          "xactCommit": 2240104,
+          "tupReturned": 63837198,
+          "blksHit": 13131170,
+          "connections": 12
+        },
+        "xactCommitDelta": 11,
+        "tupReturnedDelta": 818
+      }
+    },
+    {
+      "replicas": 1,
+      "scenario": "interview-state",
+      "url": "http://localhost/api/interviews/cmsqcavkv0001n001h4jtx9pc/state",
+      "method": "GET",
+      "connections": 64,
+      "startedAt": "2026-08-12T17:26:33.936Z",
+      "elapsedMs": 11603.392875000005,
+      "requests": {
+        "total": 1744,
+        "ok": 1744,
+        "failures": 0,
+        "statuses": {
+          "2xx": 1744
+        }
+      },
+      "throughputRps": 150.30086620246402,
+      "bytesPerSecond": 2992790.8478234634,
+      "clientLatency": {
+        "samples": 1744,
+        "meanMs": 429.7817630263768,
+        "minMs": 280.3182500000112,
+        "p50Ms": 415.8394580000022,
+        "p75Ms": 476.7006660000043,
+        "p90Ms": 551.1906670000026,
+        "p95Ms": 606.0601660000102,
+        "p99Ms": 696.6087080000143,
+        "maxMs": 699.1853339999943
+      },
+      "generator": {
+        "cpuUserMs": 965.386,
+        "cpuSystemMs": 133.165,
+        "coreUtilisationPct": 9.467498100205448
+      },
+      "instanceDistribution": {
+        "c2f71fa0": 1744
+      },
+      "server": {
+        "instances": [
+          {
+            "instance": "c2f71fa0",
+            "windowMs": 12446.985964,
+            "routes": {
+              "POST /admin/perf/reset": {
+                "count": 1,
+                "sampled": 1,
+                "meanMs": 63.653958,
+                "minMs": 63.653958,
+                "p50Ms": 63.653958,
+                "p75Ms": 63.653958,
+                "p90Ms": 63.653958,
+                "p95Ms": 63.653958,
+                "p99Ms": 63.653958,
+                "maxMs": 63.653958,
+                "errors": 0,
+                "statuses": {
+                  "2xx": 1
+                },
+                "rps": 0.08034073492910385
+              },
+              "GET /interviews/:id/state": {
+                "count": 1811,
+                "sampled": 1811,
+                "meanMs": 396.135771314743,
+                "minMs": 247.507333,
+                "p50Ms": 384.971209,
+                "p75Ms": 440.117167,
+                "p90Ms": 490.058458,
+                "p95Ms": 565.794042,
+                "p99Ms": 590.283751,
+                "maxMs": 670.962625,
+                "errors": 0,
+                "statuses": {
+                  "2xx": 1811
+                },
+                "rps": 145.49707095660705
+              },
+              "GET /healthz": {
+                "count": 1,
+                "sampled": 1,
+                "meanMs": 0.3645,
+                "minMs": 0.3645,
+                "p50Ms": 0.3645,
+                "p75Ms": 0.3645,
+                "p90Ms": 0.3645,
+                "p95Ms": 0.3645,
+                "p99Ms": 0.3645,
+                "maxMs": 0.3645,
+                "errors": 0,
+                "statuses": {
+                  "2xx": 1
+                },
+                "rps": 0.08034073492910385
+              }
+            },
+            "eventLoopDelayMs": {
+              "meanMs": 29.468604056872035,
+              "p50Ms": 25.083903,
+              "p90Ms": 53.182463,
+              "p99Ms": 98.435071,
+              "maxMs": 135.266303
+            },
+            "cpu": {
+              "userMs": 26910.815,
+              "systemMs": 31816.116,
+              "coreUtilisationPct": 471.8164796670771
+            },
+            "memory": {
+              "rssBytes": 265613312,
+              "heapUsedBytes": 75494808,
+              "heapTotalBytes": 126627840,
+              "externalBytes": 3412446
+            }
+          }
+        ]
+      },
+      "resources": {
+        "docker": [
+          {
+            "name": "interviewly-worker-1",
+            "cpuPct": 2.32,
+            "memUsage": "51.16MiB / 7.75GiB",
+            "memPct": 0.64,
+            "netIO": "320kB / 825kB"
+          },
+          {
+            "name": "interviewly-api-1",
+            "cpuPct": 547.96,
+            "memUsage": "194.2MiB / 7.75GiB",
+            "memPct": 2.45,
+            "netIO": "4.32GB / 1.53GB"
+          },
+          {
+            "name": "interviewly-bucket-1",
+            "cpuPct": 1.63,
+            "memUsage": "90.89MiB / 7.75GiB",
+            "memPct": 1.15,
+            "netIO": "45.5kB / 10.8kB"
+          },
+          {
+            "name": "interviewly-mail-1",
+            "cpuPct": 2.18,
+            "memUsage": "7.836MiB / 7.75GiB",
+            "memPct": 0.1,
+            "netIO": "12.1kB / 126B"
+          },
+          {
+            "name": "interviewly-web-1",
+            "cpuPct": 0,
+            "memUsage": "66.98MiB / 7.75GiB",
+            "memPct": 0.84,
+            "netIO": "19.8MB / 655MB"
+          },
+          {
+            "name": "interviewly-kibana-1",
+            "cpuPct": 4.31,
+            "memUsage": "595MiB / 7.75GiB",
+            "memPct": 7.5,
+            "netIO": "15.4MB / 92.7MB"
+          },
+          {
+            "name": "interviewly-elasticsearch-1",
+            "cpuPct": 2.14,
+            "memUsage": "1.048GiB / 7.75GiB",
+            "memPct": 13.53,
+            "netIO": "88.5MB / 14.8MB"
+          },
+          {
+            "name": "interviewly-db-1",
+            "cpuPct": 37.6,
+            "memUsage": "64.81MiB / 7.75GiB",
+            "memPct": 0.82,
+            "netIO": "432MB / 5.78GB"
+          },
+          {
+            "name": "interviewly-cache-1",
+            "cpuPct": 2.27,
+            "memUsage": "13.66MiB / 7.75GiB",
+            "memPct": 0.17,
+            "netIO": "76.1MB / 59MB"
+          },
+          {
+            "name": "interviewly-edge-1",
+            "cpuPct": 6.47,
+            "memUsage": "32.3MiB / 7.75GiB",
+            "memPct": 0.41,
+            "netIO": "3.23GB / 3.55GB"
+          }
+        ],
+        "redisClients": 9,
+        "db": {
+          "numbackends": 13,
+          "xactCommit": 2264463,
+          "tupReturned": 64630887,
+          "blksHit": 13279624,
+          "connections": 12
+        }
+      },
+      "postgres": {
+        "before": {
+          "numbackends": 12,
+          "xactCommit": 2248156,
+          "tupReturned": 64100265,
+          "blksHit": 13179994,
+          "connections": 12
+        },
+        "after": {
+          "numbackends": 12,
+          "xactCommit": 2278260,
+          "tupReturned": 65080734,
+          "blksHit": 13365116,
+          "connections": 12
+        },
+        "xactCommitDelta": 30104,
+        "tupReturnedDelta": 980469
+      }
+    },
+    {
+      "replicas": 1,
+      "scenario": "healthz",
+      "url": "http://localhost/api/healthz",
+      "method": "GET",
+      "connections": 64,
+      "startedAt": "2026-08-12T17:27:00.951Z",
+      "elapsedMs": 11589.258375000005,
+      "requests": {
+        "total": 70835,
+        "ok": 70835,
+        "failures": 0,
+        "statuses": {
+          "2xx": 70835
+        }
+      },
+      "throughputRps": 6112.125358496029,
+      "bytesPerSecond": 67233.37894345631,
+      "clientLatency": {
+        "samples": 70835,
+        "meanMs": 10.487410355318689,
+        "minMs": 0.6282090000022436,
+        "p50Ms": 8.834416999990935,
+        "p75Ms": 11.26600000000326,
+        "p90Ms": 14.616125000000466,
+        "p95Ms": 18.17895899999712,
+        "p99Ms": 34.988291999994544,
+        "maxMs": 316.38508400000865
+      },
+      "generator": {
+        "cpuUserMs": 6116.412,
+        "cpuSystemMs": 1198.792,
+        "coreUtilisationPct": 63.12055321659007
+      },
+      "instanceDistribution": {
+        "c2f71fa0": 70835
+      },
+      "server": {
+        "instances": [
+          {
+            "instance": "c2f71fa0",
+            "windowMs": 12310.999714,
+            "routes": {
+              "POST /admin/perf/reset": {
+                "count": 1,
+                "sampled": 1,
+                "meanMs": 43.694,
+                "minMs": 43.694,
+                "p50Ms": 43.694,
+                "p75Ms": 43.694,
+                "p90Ms": 43.694,
+                "p95Ms": 43.694,
+                "p99Ms": 43.694,
+                "maxMs": 43.694,
+                "errors": 0,
+                "statuses": {
+                  "2xx": 1
+                },
+                "rps": 0.08122817181636399
+              },
+              "GET /healthz": {
+                "count": 72489,
+                "sampled": 4096,
+                "meanMs": 0.11703643479700274,
+                "minMs": 0.053917,
+                "p50Ms": 0.087708,
+                "p75Ms": 0.117292,
+                "p90Ms": 0.17,
+                "p95Ms": 0.223875,
+                "p99Ms": 0.401708,
+                "maxMs": 14.400459,
+                "errors": 0,
+                "statuses": {
+                  "2xx": 72489
+                },
+                "rps": 5888.148946796409
+              }
+            },
+            "eventLoopDelayMs": {
+              "meanMs": 14.310228539534883,
+              "p50Ms": 13.959167,
+              "p90Ms": 18.857983,
+              "p99Ms": 26.001407,
+              "maxMs": 38.928383
+            },
+            "cpu": {
+              "userMs": 13501.199,
+              "systemMs": 1343.29,
+              "coreUtilisationPct": 120.57907030181254
+            },
+            "memory": {
+              "rssBytes": 185663488,
+              "heapUsedBytes": 37002784,
+              "heapTotalBytes": 71577600,
+              "externalBytes": 3077390
+            }
+          }
+        ]
+      },
+      "resources": {
+        "docker": [
+          {
+            "name": "interviewly-worker-1",
+            "cpuPct": 0.01,
+            "memUsage": "51.16MiB / 7.75GiB",
+            "memPct": 0.64,
+            "netIO": "325kB / 837kB"
+          },
+          {
+            "name": "interviewly-api-1",
+            "cpuPct": 127.56,
+            "memUsage": "115.6MiB / 7.75GiB",
+            "memPct": 1.46,
+            "netIO": "4.37GB / 1.58GB"
+          },
+          {
+            "name": "interviewly-bucket-1",
+            "cpuPct": 0.08,
+            "memUsage": "90.89MiB / 7.75GiB",
+            "memPct": 1.15,
+            "netIO": "46.4kB / 10.8kB"
+          },
+          {
+            "name": "interviewly-mail-1",
+            "cpuPct": 0,
+            "memUsage": "7.844MiB / 7.75GiB",
+            "memPct": 0.1,
+            "netIO": "13kB / 126B"
+          },
+          {
+            "name": "interviewly-web-1",
+            "cpuPct": 12.66,
+            "memUsage": "68.76MiB / 7.75GiB",
+            "memPct": 0.87,
+            "netIO": "19.8MB / 655MB"
+          },
+          {
+            "name": "interviewly-kibana-1",
+            "cpuPct": 3.37,
+            "memUsage": "595MiB / 7.75GiB",
+            "memPct": 7.5,
+            "netIO": "15.4MB / 92.9MB"
+          },
+          {
+            "name": "interviewly-elasticsearch-1",
+            "cpuPct": 1.36,
+            "memUsage": "1.058GiB / 7.75GiB",
+            "memPct": 13.64,
+            "netIO": "88.8MB / 14.9MB"
+          },
+          {
+            "name": "interviewly-db-1",
+            "cpuPct": 0,
+            "memUsage": "64.14MiB / 7.75GiB",
+            "memPct": 0.81,
+            "netIO": "435MB / 5.81GB"
+          },
+          {
+            "name": "interviewly-cache-1",
+            "cpuPct": 0.36,
+            "memUsage": "13.66MiB / 7.75GiB",
+            "memPct": 0.17,
+            "netIO": "76.2MB / 59MB"
+          },
+          {
+            "name": "interviewly-edge-1",
+            "cpuPct": 122.1,
+            "memUsage": "36.14MiB / 7.75GiB",
+            "memPct": 0.46,
+            "netIO": "3.29GB / 3.62GB"
+          }
+        ],
+        "redisClients": 9,
+        "db": {
+          "numbackends": 12,
+          "xactCommit": 2278948,
+          "tupReturned": 65101025,
+          "blksHit": 13371869,
+          "connections": 12
+        }
+      },
+      "postgres": {
+        "before": {
+          "numbackends": 12,
+          "xactCommit": 2278942,
+          "tupReturned": 65100641,
+          "blksHit": 13371183,
+          "connections": 12
+        },
+        "after": {
+          "numbackends": 12,
+          "xactCommit": 2278954,
+          "tupReturned": 65101474,
+          "blksHit": 13372528,
+          "connections": 12
+        },
+        "xactCommitDelta": 12,
+        "tupReturnedDelta": 833
+      }
+    },
+    {
+      "replicas": 1,
+      "scenario": "interview-state",
+      "url": "http://localhost/api/interviews/cmsqcavkv0001n001h4jtx9pc/state",
+      "method": "GET",
+      "connections": 64,
+      "startedAt": "2026-08-12T17:27:16.321Z",
+      "elapsedMs": 11842.316875000004,
+      "requests": {
+        "total": 1894,
+        "ok": 1894,
+        "failures": 0,
+        "statuses": {
+          "2xx": 1894
+        }
+      },
+      "throughputRps": 159.9349198296131,
+      "bytesPerSecond": 3184624.123647256,
+      "clientLatency": {
+        "samples": 1894,
+        "meanMs": 404.6602525491024,
+        "minMs": 268.89283300000534,
+        "p50Ms": 393.0158749999973,
+        "p75Ms": 430.96091599999636,
+        "p90Ms": 480.48758400000224,
+        "p95Ms": 520.3967499999999,
+        "p99Ms": 584.1260000000038,
+        "maxMs": 626.7720839999965
+      },
+      "generator": {
+        "cpuUserMs": 1024.08,
+        "cpuSystemMs": 122.581,
+        "coreUtilisationPct": 9.682742085889334
+      },
+      "instanceDistribution": {
+        "c2f71fa0": 1894
+      },
+      "server": {
+        "instances": [
+          {
+            "instance": "c2f71fa0",
+            "windowMs": 12493.273423,
+            "routes": {
+              "POST /admin/perf/reset": {
+                "count": 1,
+                "sampled": 1,
+                "meanMs": 45.869291,
+                "minMs": 45.869291,
+                "p50Ms": 45.869291,
+                "p75Ms": 45.869291,
+                "p90Ms": 45.869291,
+                "p95Ms": 45.869291,
+                "p99Ms": 45.869291,
+                "maxMs": 45.869291,
+                "errors": 0,
+                "statuses": {
+                  "2xx": 1
+                },
+                "rps": 0.08004307327165426
+              },
+              "GET /interviews/:id/state": {
+                "count": 1933,
+                "sampled": 1933,
+                "meanMs": 374.0330140429393,
+                "minMs": 227.278251,
+                "p50Ms": 366.842166,
+                "p75Ms": 399.190042,
+                "p90Ms": 447.472626,
+                "p95Ms": 477.167584,
+                "p99Ms": 535.241292,
+                "maxMs": 543.752584,
+                "errors": 0,
+                "statuses": {
+                  "2xx": 1933
+                },
+                "rps": 154.7232606341077
+              },
+              "GET /healthz": {
+                "count": 1,
+                "sampled": 1,
+                "meanMs": 0.252959,
+                "minMs": 0.252959,
+                "p50Ms": 0.252959,
+                "p75Ms": 0.252959,
+                "p90Ms": 0.252959,
+                "p95Ms": 0.252959,
+                "p99Ms": 0.252959,
+                "maxMs": 0.252959,
+                "errors": 0,
+                "statuses": {
+                  "2xx": 1
+                },
+                "rps": 0.08004307327165426
+              }
+            },
+            "eventLoopDelayMs": {
+              "meanMs": 26.49154527388535,
+              "p50Ms": 23.134207,
+              "p90Ms": 45.907967,
+              "p99Ms": 77.004799,
+              "maxMs": 90.767359
+            },
+            "cpu": {
+              "userMs": 29780.296,
+              "systemMs": 33072.088,
+              "coreUtilisationPct": 503.0897977810151
+            },
+            "memory": {
+              "rssBytes": 186363904,
+              "heapUsedBytes": 40176816,
+              "heapTotalBytes": 76558336,
+              "externalBytes": 4189209
+            }
+          }
+        ]
+      },
+      "resources": {
+        "docker": [
+          {
+            "name": "interviewly-worker-1",
+            "cpuPct": 0,
+            "memUsage": "51.15MiB / 7.75GiB",
+            "memPct": 0.64,
+            "netIO": "326kB / 843kB"
+          },
+          {
+            "name": "interviewly-api-1",
+            "cpuPct": 567.34,
+            "memUsage": "118.8MiB / 7.75GiB",
+            "memPct": 1.5,
+            "netIO": "4.44GB / 1.62GB"
+          },
+          {
+            "name": "interviewly-bucket-1",
+            "cpuPct": 0.07,
+            "memUsage": "90.92MiB / 7.75GiB",
+            "memPct": 1.15,
+            "netIO": "46.5kB / 10.8kB"
+          },
+          {
+            "name": "interviewly-mail-1",
+            "cpuPct": 0,
+            "memUsage": "7.852MiB / 7.75GiB",
+            "memPct": 0.1,
+            "netIO": "13.1kB / 126B"
+          },
+          {
+            "name": "interviewly-web-1",
+            "cpuPct": 0,
+            "memUsage": "69.11MiB / 7.75GiB",
+            "memPct": 0.87,
+            "netIO": "19.8MB / 655MB"
+          },
+          {
+            "name": "interviewly-kibana-1",
+            "cpuPct": 5.89,
+            "memUsage": "595MiB / 7.75GiB",
+            "memPct": 7.5,
+            "netIO": "15.4MB / 93MB"
+          },
+          {
+            "name": "interviewly-elasticsearch-1",
+            "cpuPct": 0.5,
+            "memUsage": "1.063GiB / 7.75GiB",
+            "memPct": 13.72,
+            "netIO": "88.9MB / 14.9MB"
+          },
+          {
+            "name": "interviewly-db-1",
+            "cpuPct": 33.02,
+            "memUsage": "64.18MiB / 7.75GiB",
+            "memPct": 0.81,
+            "netIO": "441MB / 5.88GB"
+          },
+          {
+            "name": "interviewly-cache-1",
+            "cpuPct": 0.7,
+            "memUsage": "13.66MiB / 7.75GiB",
+            "memPct": 0.17,
+            "netIO": "76.4MB / 59.1MB"
+          },
+          {
+            "name": "interviewly-edge-1",
+            "cpuPct": 10.02,
+            "memUsage": "33.02MiB / 7.75GiB",
+            "memPct": 0.42,
+            "netIO": "3.35GB / 3.68GB"
+          }
+        ],
+        "redisClients": 9,
+        "db": {
+          "numbackends": 12,
+          "xactCommit": 2309239,
+          "tupReturned": 66087038,
+          "blksHit": 13556529,
+          "connections": 12
+        }
+      },
+      "postgres": {
+        "before": {
+          "numbackends": 12,
+          "xactCommit": 2286958,
+          "tupReturned": 65362908,
+          "blksHit": 13420912,
+          "connections": 12
+        },
+        "after": {
+          "numbackends": 12,
+          "xactCommit": 2319241,
+          "tupReturned": 66411372,
+          "blksHit": 13617885,
+          "connections": 12
+        },
+        "xactCommitDelta": 32283,
+        "tupReturnedDelta": 1048464
+      }
+    }
+  ]
+}
