@@ -6,10 +6,25 @@ import { logger } from '../../src/lib/logger';
 
 const TIMEOUT_MS = 5_000;
 const MAX_ATTEMPTS = 3;
+const RETRYABLE_STATUSES = new Set([429]);
 
 interface ScribeResponse {
   text: string;
   words?: Array<{ end: number }>;
+}
+
+function isRetryableStatus(status: number): boolean {
+  return status >= 500 || RETRYABLE_STATUSES.has(status);
+}
+
+async function readErrorDetail(res: Response): Promise<string> {
+  const body = await res.text().catch(() => '');
+  try {
+    const parsed = JSON.parse(body) as { detail?: { status?: string } };
+    return parsed.detail?.status ?? body.slice(0, 200);
+  } catch {
+    return body.slice(0, 200);
+  }
 }
 
 async function callWithTimeout(
@@ -63,8 +78,10 @@ export class ElevenLabsSpeech implements SpeechProvider {
           const audio = Buffer.from(await res.arrayBuffer());
           return { audio, mime: 'audio/mpeg', characters: text.length };
         }
-        logger.warn({ status: res.status, reason: res.statusText }, 'SPEECH_TTS_FAILED');
+        const detail = await readErrorDetail(res);
+        logger.warn({ status: res.status, reason: res.statusText, detail }, 'SPEECH_TTS_FAILED');
         lastErr = new Error(`ElevenLabs TTS ${res.status} ${res.statusText}`);
+        if (!isRetryableStatus(res.status)) break;
       } catch (err) {
         lastErr = err;
       }
@@ -100,8 +117,10 @@ export class ElevenLabsSpeech implements SpeechProvider {
           const seconds = data.words?.at(-1)?.end ?? 0;
           return { transcript, seconds };
         }
-        logger.warn({ status: res.status, reason: res.statusText }, 'SPEECH_STT_FAILED');
+        const detail = await readErrorDetail(res);
+        logger.warn({ status: res.status, reason: res.statusText, detail }, 'SPEECH_STT_FAILED');
         lastErr = new Error(`ElevenLabs STT ${res.status} ${res.statusText}`);
+        if (!isRetryableStatus(res.status)) break;
       } catch (err) {
         lastErr = err;
       }

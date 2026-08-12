@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const m = vi.hoisted(() => ({ loggerInfo: vi.fn() }));
+const m = vi.hoisted(() => ({ loggerInfo: vi.fn(), loggerWarn: vi.fn() }));
 vi.mock('../../src/lib/logger', () => ({
-  logger: { info: m.loggerInfo, warn: vi.fn(), error: vi.fn() },
+  logger: { info: m.loggerInfo, warn: m.loggerWarn, error: vi.fn() },
 }));
 
 import { ApiError } from '../../src/lib/api-error';
@@ -137,5 +137,89 @@ describe('ElevenLabsSpeech — the STT request shape', () => {
     expect(sent[0].get('audio')).toBeNull();
     expect(sent[0].get('model_id')).toBe('scribe_v1');
     expect(sent[0].get('language_code')).toBe('en');
+  });
+});
+
+describe('ElevenLabsSpeech — retry only what is retryable', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    m.loggerWarn.mockReset();
+  });
+
+  it('a 401 quota-exhausted response calls fetch once and throws VOICE_UNAVAILABLE', async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ detail: { status: 'quota_exceeded', message: 'out of credits' } }), {
+          status: 401,
+          statusText: 'Unauthorized',
+        }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const driver = new ElevenLabsSpeech('key', 'eleven_multilingual_v2', 'scribe_v1');
+    await expect(driver.speak('hello', { voiceId: 'v-1', language: 'en', ctx })).rejects.toMatchObject({
+      code: 'VOICE_UNAVAILABLE',
+    });
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it('a 500 still retries 3 times then throws VOICE_UNAVAILABLE', async () => {
+    const fetchMock = vi.fn(async () => new Response('server on fire', { status: 500, statusText: 'Internal Server Error' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const driver = new ElevenLabsSpeech('key', 'eleven_multilingual_v2', 'scribe_v1');
+    await expect(driver.speak('hello', { voiceId: 'v-1', language: 'en', ctx })).rejects.toMatchObject({
+      code: 'VOICE_UNAVAILABLE',
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('the failure log carries the quota detail from the response body', async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ detail: { status: 'quota_exceeded', message: 'out of credits' } }), {
+          status: 401,
+          statusText: 'Unauthorized',
+        }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const driver = new ElevenLabsSpeech('key', 'eleven_multilingual_v2', 'scribe_v1');
+    await expect(driver.speak('hello', { voiceId: 'v-1', language: 'en', ctx })).rejects.toThrow();
+
+    const failed = m.loggerWarn.mock.calls.find(([, event]) => event === 'SPEECH_TTS_FAILED');
+    expect(failed?.[0]).toMatchObject({ status: 401, detail: 'quota_exceeded' });
+  });
+
+  it('transcribe(): a 402 quota-exhausted response calls fetch once and throws VOICE_UNAVAILABLE', async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ detail: { status: 'quota_exceeded', message: 'out of credits' } }), {
+          status: 402,
+          statusText: 'Payment Required',
+        }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const driver = new ElevenLabsSpeech('key', 'eleven_multilingual_v2', 'scribe_v1');
+    await expect(
+      driver.transcribe(Buffer.from([1, 2, 3]), { mime: 'audio/webm', language: 'en' }),
+    ).rejects.toMatchObject({ code: 'VOICE_UNAVAILABLE' });
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it('transcribe(): a 429 still retries 3 times then throws VOICE_UNAVAILABLE', async () => {
+    const fetchMock = vi.fn(async () => new Response('slow down', { status: 429, statusText: 'Too Many Requests' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const driver = new ElevenLabsSpeech('key', 'eleven_multilingual_v2', 'scribe_v1');
+    await expect(
+      driver.transcribe(Buffer.from([1, 2, 3]), { mime: 'audio/webm', language: 'en' }),
+    ).rejects.toMatchObject({ code: 'VOICE_UNAVAILABLE' });
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 });
