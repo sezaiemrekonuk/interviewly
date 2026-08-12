@@ -184,6 +184,7 @@ which one a decision belongs to.
 | `C` | [conductor](.agents/ledgers/conductor/DECISIONS.md) | the interviewer's turn, the agenda, the guards |
 | `W` | [frontend](.agents/ledgers/frontend/DECISIONS.md) | data layer, room, report screen, console UI |
 | `ADD` | [additionals](.agents/ledgers/additionals/DECISIONS.md) | everything asked for after the plan was written |
+| `P` | [platform](.agents/ledgers/platform/DECISIONS.md) | the Fly and Kubernetes deploys, and the measured scale levels in `SCALE.md` |
 
 How these were built, and what they cost, is in [AI_DEVLOG.md](AI_DEVLOG.md); the per-task
 write-ups are in [`.agents/devlogs/`](.agents/devlogs/).
