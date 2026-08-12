@@ -1,15 +1,31 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
+import { useState } from 'react';
 
-import type { AdminInterviewRow, AdminStatsResponse } from '../../lib/query';
+import {
+  COST_RANGES,
+  type AdminInterviewRow,
+  type AdminStatsResponse,
+  type CostRange,
+  useAdminCosts,
+} from '../../lib/query';
+import { useErrorMessage } from '../../lib/use-error-message';
 import { Meter } from '../shell/meter';
 
+import chartStyles from './charts/charts.module.css';
+import { ModelDelta } from './charts/model-delta';
+import { ModelMix } from './charts/model-mix';
+import { ModelShare } from './charts/model-share';
+import { ModelTable } from './charts/model-table';
+import { SpendHeatmap } from './charts/spend-heatmap';
+import { PerInterviewTrend, SpendTrend } from './charts/trend-lines';
 import { isUnpriced, microUsd } from './interview-table';
-// Shares the Overview panel vocabulary (card, eyebrow, row, meter) rather than restating it.
 import styles from './panels.module.css';
 
 const usd = (micro: number) => (micro / 1_000_000).toFixed(6);
+
+const SKELETONS = ['trend', 'perDay', 'mix', 'delta', 'share', 'table', 'heat'];
 
 /**
  * Costs.
@@ -35,6 +51,9 @@ export function CostPanel({
   stats: AdminStatsResponse | undefined;
 }) {
   const t = useTranslations('admin');
+  const errorMessage = useErrorMessage();
+  const [days, setDays] = useState<CostRange>(30);
+  const costs = useAdminCosts(true, days);
 
   const priced = items.filter((row) => !isUnpriced(row));
   const unpricedCount = items.length - priced.length;
@@ -56,8 +75,13 @@ export function CostPanel({
     .sort((a, b) => b.micro - a.micro);
   const clusterMax = Math.max(1, ...clusterRows.map((row) => row.micro));
 
-  const models = stats?.perModel ?? [];
-  const modelMax = Math.max(1, ...models.map((row) => microUsd(row.costUsd)));
+  const data = costs.data;
+  const windowMicro = data ? microUsd(data.totals.costUsd) : 0;
+  const previousMicro = data ? microUsd(data.previous.costUsd) : 0;
+  const deltaPercent =
+    previousMicro === 0 ? null : Math.round(((windowMicro - previousMicro) / previousMicro) * 100);
+  const perInterview =
+    data && data.totals.interviews > 0 ? windowMicro / data.totals.interviews : 0;
 
   return (
     <section className={styles.panel} aria-labelledby="admin-costs-heading">
@@ -65,45 +89,78 @@ export function CostPanel({
         {t('costs.heading')}
       </h2>
 
-      <div className={styles.card} data-testid="admin-platform-spend">
-        <span className={styles.eyebrow}>{t('costs.platformTotal')}</span>
-        {/* The backend's six-decimal string, printed. Re-rounding a ledger figure in the
-            client is how two screens come to disagree about what something cost. */}
-        <p className={`${styles.big} tabular`}>{stats?.totalCostUsd ?? '0.000000'}</p>
-        <p className={styles.note}>{t('costs.platformTotalNote')}</p>
-        {unpricedCount > 0 ? (
-          <p className={styles.note}>{t('costs.unpricedNote', { count: unpricedCount })}</p>
-        ) : null}
+      <div className={chartStyles.range} role="group" aria-label={t('costs.range')}>
+        <span className={chartStyles.rangeLabel}>{t('costs.range')}</span>
+        {COST_RANGES.map((option) => (
+          <button
+            className={chartStyles.rangeButton}
+            key={option}
+            type="button"
+            aria-pressed={option === days}
+            data-testid={`admin-cost-range-${option}`}
+            onClick={() => setDays(option)}
+          >
+            {t('costs.rangeOption', { days: option })}
+          </button>
+        ))}
       </div>
 
-      <div className={styles.card} data-testid="admin-by-model">
-        <h3 className={styles.title}>{t('costs.byModel')}</h3>
-        <p className={styles.note}>{t('costs.byModelCaption')}</p>
-        {models.length === 0 ? (
-          <p className={styles.empty}>{t('costs.noSpend')}</p>
-        ) : (
-          <ul className={styles.rows}>
-            {models.map((row) => (
-              <li className={styles.row} key={`${row.provider}:${row.model}`}>
-                <span className={styles.rowLabel}>
-                  {row.provider} · {row.model}
-                </span>
-                <span className={`${styles.rowValue} tabular`}>{row.costUsd}</span>
-                <Meter
-                  className={styles.rowMeter}
-                  value={microUsd(row.costUsd)}
-                  max={modelMax}
-                  decorative
-                />
-                <span className={styles.rowNote}>
-                  {t('costs.modelCalls', { count: row.calls })} ·{' '}
-                  {t('costs.modelLatency', { ms: row.averageLatencyMs })}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
+      <div className={styles.figures}>
+        <div className={styles.card} data-testid="admin-platform-spend">
+          <span className={styles.eyebrow}>{t('costs.platformTotal')}</span>
+          {/* The backend's six-decimal string, printed. Re-rounding a ledger figure in the
+              client is how two screens come to disagree about what something cost. */}
+          <p className={`${styles.big} tabular`}>{stats?.totalCostUsd ?? '0.000000'}</p>
+          <p className={styles.note}>{t('costs.platformTotalNote')}</p>
+          {unpricedCount > 0 ? (
+            <p className={styles.note}>{t('costs.unpricedNote', { count: unpricedCount })}</p>
+          ) : null}
+        </div>
+
+        <div className={styles.card} data-testid="admin-window-spend">
+          <span className={styles.eyebrow}>{t('costs.windowSpend')}</span>
+          <p className={`${styles.big} tabular`}>{data?.totals.costUsd ?? '0.000000'}</p>
+          <p className={styles.note}>{t('costs.windowSpendNote')}</p>
+          <p
+            className={chartStyles.delta}
+            data-direction={
+              deltaPercent === null ? undefined : deltaPercent > 0 ? 'up' : deltaPercent < 0 ? 'down' : undefined
+            }
+          >
+            {deltaPercent === null
+              ? t('costs.windowDeltaNone')
+              : t('costs.windowDelta', { percent: deltaPercent, days })}
+          </p>
+        </div>
+
+        <div className={styles.card} data-testid="admin-cost-per-interview">
+          <span className={styles.eyebrow}>{t('costs.perInterview')}</span>
+          <p className={`${styles.big} tabular`}>{usd(perInterview)}</p>
+          <p className={styles.note}>{t('costs.perInterviewNote')}</p>
+        </div>
       </div>
+
+      {costs.error ? (
+        <p className={styles.empty} role="alert">
+          {errorMessage(costs.error.code)}
+        </p>
+      ) : null}
+
+      {data ? (
+        <>
+          <SpendTrend data={data} />
+          <PerInterviewTrend data={data} />
+          <ModelMix data={data} />
+          <ModelDelta data={data} />
+          <ModelShare data={data} />
+          <ModelTable data={data} />
+          <SpendHeatmap data={data} />
+        </>
+      ) : costs.error ? null : (
+        SKELETONS.map((id) => (
+          <div className={chartStyles.skeleton} key={id} data-testid="admin-cost-loading" />
+        ))
+      )}
 
       <div className={styles.card}>
         <h3 className={styles.title}>{t('costs.byCluster')}</h3>
