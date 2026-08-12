@@ -1,7 +1,18 @@
 # Platform — State
 
 Last updated: 2026-08-12
-Last session ended: **Ledger opened (Ahmet, 2026-08-12, opus-5). No code written yet.** The spec
+Last session ended: **P05 taken out of order and left `in_progress` (Ahmet, 2026-08-12, opus-5).**
+The owner had ~1.5 hours and chose the Fly deploy over the critical path, so **P01 was skipped**
+and all four apps build on Fly's remote builder instead of GHCR. The stack is up and serving at
+**https://interviewly-edge.fly.dev** — `/api/readyz` returns `{"ready":true}`, the release command
+applied 21 migrations, and the worker's abandon sweep completed against both dependencies. Four
+Definition-of-done bullets are unverified and named in P05's Notes; the SSE stream through the edge
+is the one that matters most, because P06 depends on it and it was never exercised.
+
+Read P05's `## Notes` before touching anything Fly-shaped. Seven configuration traps are recorded
+there, two of which produce a green machine serving 502s.
+
+Before this session: the ledger was opened the same day — the spec
 (`.agents/specs/2026-08-12-platform.md`), PLAN, ten ADRs and nine task files are in place, and the
 ownership row is in `.agents/EXECUTE.md`.
 
@@ -44,14 +55,22 @@ re-apply EXECUTE.md §4 and continue with what it gives you.
 
 ## Current task
 
-**`P02`** — the load-test provider profile — or **`P01`**, the GHCR workflow. Both are unblocked and
-they start the two independent chains: P02 leads to the harness and the baseline, P01 leads to both
-deploys. Take P02 first if you are on opus (it is the only opus-tier task in the first four), P01
-if you are on sonnet.
+**`P02`** — the load-test provider profile — still. The Fly deploy did not move the critical path:
+`P02 → P03 → P04 → P06 → P09` is untouched, and P06 cannot run without P04's baseline no matter
+how deployed Fly is. P02 remains the smallest task in the ledger and the one everything waits on.
 
 `P02` is where this ledger can do real damage: a fake speech provider that reaches a production boot
 transcribes nothing, scores nobody, and looks entirely normal. Its guard has no override flag, on
-purpose — read the Non-negotiables before writing the `superRefine`.
+purpose — read the Non-negotiables before writing the `superRefine`. Note that a live Fly deployment
+now exists with `AI_ENABLED=true`, which raises the stakes on that guard rather than lowering them.
+
+Two smaller things are open and can be picked up by anyone:
+
+- **Finish P05.** Four unverified bullets, listed in its Notes. The SSE stream through the edge is
+  the one P06 depends on.
+- **P01, still worth doing.** Skipping it means Fly and `kind` will not deploy the same bytes, so
+  P06's and P08's tables are not comparable (ADR-P06). Doing it later is cheaper than explaining
+  the gap in `SCALE.md`.
 
 ## Environment
 
@@ -75,10 +94,20 @@ it applies.
   owns what, and it currently assigns infra (`F03`, compose/CI/deploy shape) to Sezai with no ledger
   owning deployment at all. The row added for this ledger needs the team's agreement, not just a
   commit. Blocks: everything.
-- **A Fly account with billing.** P05 and P06 spend real money — machines, Postgres, Upstash,
-  Tigris. Whose account, and what ceiling. Blocks: P05, P06.
-- **GHCR package visibility.** P01 publishes under the org; P05's Fly pull needs the packages
-  readable by the deploy token. Blocks: P05.
+- ~~**A Fly account with billing.**~~ **Settled 2026-08-12:** Ahmet's personal org
+  (`ahmet-kilic-924`). No ceiling was agreed before spending started. Standing cost is **$38/month**
+  for Managed Postgres Basic plus per-command Upstash billing, and it accrues whether or not the
+  apps are running. **The team should agree a ceiling now, retroactively** — and decide whether the
+  deployment stays warm between sessions or is torn down (`fly/README.md` § Cost).
+- **Upstash must move to a fixed-price plan before P06.** Pay-as-you-go bills $0.20 per 100K
+  commands, and Fly's own CLI warns that BullMQ polls frequently. A load run on this plan has no
+  cost bound. Blocks: P06.
+- **The Redis connection limit is still unknown**, and it is ADR-P09's headline number. Not in
+  `fly redis status`; read it from the Upstash console. Blocks: P09's ceiling claim, and any
+  reading of P06's tables.
+- **GHCR package visibility.** P01 publishes under the org; a Fly pull would need the packages
+  readable by the deploy token. Not currently blocking — P05 builds on Fly's remote builder — but
+  it returns the moment P01 is done properly.
 
 ## Task ledger (P01–P09)
 
@@ -91,7 +120,7 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 | P02 | The load-test provider profile: fake speech at real latency, and a guard that cannot be quiet | | todo | — |
 | P03 | k6 harness: browse, and a room that holds its stream open | | todo | P02 |
 | P04 | The single-replica baseline, and the worker-replica check | | todo | P03 |
-| P05 | Fly: four apps, managed dependencies, and the three settings that fail silently | | todo | P01 |
+| P05 | Fly: four apps, managed dependencies, and the three settings that fail silently | | in_progress | P01 (skipped) |
 | P07 | kind: kustomize base and overlay, and the ingress annotation that decides whether SSE works | | todo | P01 |
 | P06 | Fly scale runs: 1, 2, 4, 8 api machines, and which resource actually stopped each one | | todo | P04, P05 |
 | P08 | kind: metrics-server, an HPA on api, and the second table | | todo | P04, P07 |

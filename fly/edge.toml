@@ -1,0 +1,41 @@
+# P05 — the `edge` app (ADR-P03). Deploy from the repo root: `fly deploy -c fly/edge.toml`
+#
+# The only app in this deployment with a public IP. Path routing stays in one reviewed Caddy
+# file rather than being spread across Fly service definitions, so the four behaviours that
+# break in four different ways stay reviewable together.
+app = "interviewly-edge"
+primary_region = "fra"
+
+[build]
+  dockerfile = "edge/Dockerfile"
+
+[env]
+  # Only the bucket name, and no secrets. The edge has no business holding the S3 credentials —
+  # the same reason compose.yaml gives this service an explicit `environment` block instead of
+  # `env_file: [.env]`. Set to the real Tigris bucket name, which is not `interviewly`: Tigris
+  # names are globally unique, so `fly storage create` issues its own. The `/assets/*` rewrite
+  # reads this, and a stale value 404s every avatar and mascot.
+  S3_BUCKET = "interviewly-assets"
+
+[http_service]
+  internal_port = 80
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  # Never zero. A cold start on the edge delays every request behind it, and P06's numbers must
+  # not include a machine waking up.
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    # Caddy answers this itself only if something is behind it, so the check is deliberately on
+    # the api's liveness path through the proxy: it fails when the `/api/*` prefix strip or the
+    # `.internal` resolution breaks, which are the two ways this file goes wrong silently.
+    interval = "10s"
+    timeout = "5s"
+    grace_period = "20s"
+    method = "GET"
+    path = "/api/healthz"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

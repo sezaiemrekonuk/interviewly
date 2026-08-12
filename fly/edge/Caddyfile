@@ -1,0 +1,99 @@
+# P05 — the root ./Caddyfile, moved to Fly. All four load-bearing behaviours are reproduced
+# unchanged: the `/api/*` prefix strip, `flush_interval -1` on the api upstream, the `/assets/*`
+# bucket rewrite, and `Vary` on negotiated paths. Only the upstream addressing differs, plus the
+# three deviations named below — each one is a place where copying the file verbatim would have
+# produced a stack that looks deployed and does not work.
+#
+#   1. Site address `:80`, not `http://localhost`. Fly's proxy terminates TLS and forwards
+#      cleartext to the machine's internal port. A hostname here would make Caddy attempt its own
+#      certificate for a name it does not control.
+#   2. `versions ipv6` on every dynamic upstream. Fly's `.internal` DNS publishes AAAA records
+#      only; Caddy's `dynamic a` module asks for A records by default and would resolve an empty
+#      upstream set on every refresh — a 502 on every request, with no dial error to read.
+#   3. The bucket is Tigris over TLS on a shared hostname, so the upstream Host header has to be
+#      rewritten. Caddy preserves the client's Host by default, and Tigris routes on it.
+#
+# The log split is unchanged from the root file. A client closing a long-lived SSE stream is
+# normal — every room unmount does it — but `reverse_proxy` reports it as `warn: aborting with
+# incomplete response` with a full header dump, one per closed stream, which buries real proxy
+# warnings in the one log an operator reads first (issue 134). A genuine upstream failure is
+# logged by `http.log.error`, a different logger, which keeps the default level here.
+{
+    log default {
+        exclude http.handlers.reverse_proxy
+    }
+    log proxy {
+        include http.handlers.reverse_proxy
+        level ERROR
+    }
+}
+
+:80 {
+    handle_path /api/* {
+        # SSE lives at /api/interviews/:id/events, so the no-buffering guarantee belongs
+        # here. It used to sit on a `/events/*` block, which no request ever matched.
+        reverse_proxy {
+            dynamic a {
+                name interviewly-api.internal
+                port 4000
+                refresh 5s
+                versions ipv6
+            }
+            # This is what makes P06's api replica count mean anything: `.internal` returns one
+            # AAAA per machine, and the policy spreads requests across the set.
+            lb_policy round_robin
+            flush_interval -1
+        }
+    }
+    handle /webhooks/* {
+        reverse_proxy {
+            dynamic a {
+                name interviewly-api.internal
+                port 4000
+                refresh 5s
+                versions ipv6
+            }
+            lb_policy round_robin
+        }
+    }
+    # S3 puts the bucket in the path, so `/assets/mascot/x.webp` has to reach the bucket as
+    # `/<bucket>/mascot/x.webp`. Proxying the URL unchanged made MinIO read "assets" as the
+    # bucket name and 404 every avatar and mascot; Tigris reads a path-style request the same way.
+    handle_path /assets/* {
+        rewrite * /{$S3_BUCKET:interviewly}{uri}
+        reverse_proxy https://fly.storage.tigris.dev {
+            header_up Host fly.storage.tigris.dev
+        }
+    }
+    handle /{$S3_BUCKET:interviewly}/* {
+        reverse_proxy https://fly.storage.tigris.dev {
+            header_up Host fly.storage.tigris.dev
+        }
+    }
+    # `/` answers in English or redirects to `/tr` depending on the `NEXT_LOCALE` cookie and
+    # then `Accept-Language` (issue 91), so a cache keyed only on the path would hand one
+    # visitor's language to the next. Here rather than in the middleware that does the
+    # negotiating, because Next rebuilds `Vary` from its own RSC entries when it renders a page.
+    # Excluded from the immutable static chunks, where a cookie key would be pure fragmentation.
+    @negotiated not path /_next/static/* /_next/image*
+    handle {
+        header @negotiated +Vary "Cookie, Accept-Language"
+        reverse_proxy {
+            dynamic a {
+                name interviewly-web.internal
+                port 3000
+                refresh 5s
+                versions ipv6
+            }
+            lb_policy round_robin
+        }
+    }
+
+    # CSP is set per-request by frontend/src/middleware.ts (needs a per-request nonce
+    # for Next's inline hydration scripts) — setting it here too would clobber that.
+    header {
+        X-Content-Type-Options nosniff
+        Referrer-Policy strict-origin-when-cross-origin
+        X-Frame-Options DENY
+    }
+}
