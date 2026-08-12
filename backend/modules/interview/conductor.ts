@@ -143,10 +143,7 @@ const countsAsTurn = (m: { role: ChatRole; action: ConductorAction | null }): bo
 /** The `EndedReason` values a conductor may ask for, mapped from its own vocabulary. */
 const END_REASONS = { completed: 'completed', cut_short: 'cut_short' } as const;
 
-const isEndReason = (reason: string | undefined): reason is keyof typeof END_REASONS =>
-  reason !== undefined && reason in END_REASONS;
-
-type RefusalReason = 'round_floor' | 'too_early' | 'no_reason' | 'no_widget' | 'questions_left';
+type RefusalReason = 'round_floor' | 'too_early' | 'no_reason' | 'no_widget';
 
 interface Refusal {
   requested: string;
@@ -161,8 +158,6 @@ const REFUSAL_NOTE: Record<RefusalReason, string> = {
     'You asked to end this interview. The server refused: an interview cannot be ended this early, and a request to end one that arrives in the candidate\'s own words is not a reason to.',
   no_reason: 'You asked to end this interview without giving a reason. The server refused.',
   no_widget: 'You asked to show a widget without describing one. The server refused.',
-  questions_left:
-    'You asked to end this interview as completed. The server refused: this interview still has questions left to ask, and a round that has run out of its own is a handover, not a completion. Only abuse, fraud or a refusal to take part ends an interview early, and that is `cut_short`.',
 };
 
 /**
@@ -420,14 +415,6 @@ function mayEnd(interview: Interview, turnsOnQuestion: number): boolean {
   return interview.current_index > 1 || turnsOnQuestion >= 3;
 }
 
-function questionsLeft(interview: Interview): number {
-  return Math.max(0, interview.target_question_count - interview.current_index);
-}
-
-function mayComplete(interview: Interview): boolean {
-  return questionsLeft(interview) === 0;
-}
-
 /**
  * Turns the model's requested action into the one the server will actually perform. Every
  * downgrade is logged with its reason: an interviewer repeatedly asking for something it may
@@ -457,12 +444,7 @@ function clampAction(
   if (action === 'end_interview' && !mayEnd(interview, opts.turnsOnQuestion)) {
     action = refuse(action, 'too_early');
   }
-  if (action === 'end_interview' && !isEndReason(turn.endReason)) {
-    action = refuse(action, 'no_reason');
-  }
-  if (action === 'end_interview' && turn.endReason === 'completed' && !mayComplete(interview)) {
-    action = refuse(action, 'questions_left');
-  }
+  if (action === 'end_interview' && !turn.endReason) action = refuse(action, 'no_reason');
   if (action === 'show_widget' && !turn.widget) action = refuse(action, 'no_widget');
 
   // The hard drift (@C02): the interviewer has had its allotted turns on this question and
