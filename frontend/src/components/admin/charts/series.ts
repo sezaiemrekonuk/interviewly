@@ -12,6 +12,13 @@ export const STROKE_CLASS: Record<SeriesToken, string> = {
   sOther: 'strokeOther',
 };
 
+export const FILL_CLASS: Record<SeriesToken, string> = {
+  s1: 'fill1',
+  s2: 'fill2',
+  s3: 'fill3',
+  sOther: 'fillOther',
+};
+
 export const ARC_CLASS: Record<SeriesToken, string> = {
   s1: 'arcS1',
   s2: 'arcS2',
@@ -28,12 +35,27 @@ export function seriesToken(row: Pick<AdminCostModel, 'provider'>, index: number
 }
 
 export function seriesKey(row: Pick<AdminCostModel, 'provider' | 'model'>): string {
-  return row.provider === null ? 'other' : `${row.provider}:${row.model}`;
+  if (row.provider === null) return 'other';
+  return row.model === null ? row.provider : `${row.provider}:${row.model}`;
 }
 
 export function seriesLabel(row: Pick<AdminCostModel, 'provider' | 'model'>, otherLabel: string): string {
-  return row.provider === null ? otherLabel : `${row.provider} · ${row.model}`;
+  if (row.provider === null) return otherLabel;
+  return row.model === null ? row.provider : `${row.provider} · ${row.model}`;
 }
+
+export const COMPARE_LIMIT = 6;
+
+export interface SeriesStyle {
+  token: SeriesToken;
+  dashed: boolean;
+}
+
+export function seriesStyle(index: number): SeriesStyle {
+  return { token: TOKENS[index % TOKENS.length] ?? 'sOther', dashed: index >= TOKENS.length };
+}
+
+export const solid = (token: SeriesToken): SeriesStyle => ({ token, dashed: false });
 
 export function seriesShare(row: AdminCostModel, totalUsd: string): number {
   const total = microUsd(totalUsd);

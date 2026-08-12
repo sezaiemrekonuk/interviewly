@@ -190,6 +190,13 @@ export function useAdminStats(enabled = true): UseQueryResult<AdminStatsResponse
   });
 }
 
+export interface AdminCostDaily {
+  costUsd: string[];
+  calls: number[];
+  tokens: number[];
+  latencyMs: number[];
+}
+
 export interface AdminCostModel {
   provider: string | null;
   model: string | null;
@@ -198,7 +205,7 @@ export interface AdminCostModel {
   calls: number;
   tokens: number;
   averageLatencyMs: number;
-  daily: string[];
+  daily: AdminCostDaily;
 }
 
 export interface AdminCostsResponse {
@@ -210,6 +217,7 @@ export interface AdminCostsResponse {
   totals: { costUsd: string; calls: number; tokens: number; interviews: number };
   previous: { costUsd: string };
   models: AdminCostModel[];
+  truncated: number;
   hourly: { dow: number; hour: number; costUsd: string }[];
 }
 

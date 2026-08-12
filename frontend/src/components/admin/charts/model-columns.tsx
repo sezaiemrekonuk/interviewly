@@ -2,7 +2,7 @@
 
 import { useTranslations } from 'next-intl';
 
-import type { AdminCostsResponse } from '../../../lib/query';
+import type { AdminCostModel } from '../../../lib/query';
 import { microUsd } from '../interview-table';
 
 import styles from './charts.module.css';
@@ -33,14 +33,15 @@ const truncate = (label: string) =>
   label.length > LABEL_LIMIT ? `${label.slice(0, LABEL_LIMIT - 1)}…` : label;
 
 export function ModelColumns({
-  data,
+  models,
+  days,
   compare,
 }: {
-  data: AdminCostsResponse;
+  models: AdminCostModel[];
+  days: number;
   compare: boolean;
 }) {
   const t = useTranslations('admin');
-  const { models } = data;
 
   const groupWidth = compare ? GROUP_W : SOLO_W;
   const plotWidth = Math.max(
@@ -152,7 +153,7 @@ export function ModelColumns({
           <li className={styles.legendRow}>
             <span className={styles.swatch} data-series="sOther" />
             <span className={styles.legendLabel}>
-              {t('costs.previousRange', { days: data.days })}
+              {t('costs.previousRange', { days })}
             </span>
             <span />
           </li>

@@ -499,3 +499,77 @@ ADR-ADD09; this is what changed and where.
 
 **Not done here (see ADR-ADD09 "Skipped"):** no URL or storage persistence for the chosen view,
 no hover layer, and the plot is still a fixed-width SVG rather than a measured one.
+
+## 2026-08-12 — comparing series: the endpoint stopped folding, and the charts learned six slots
+
+The console could draw spend by model, but never *two named things against each other*. Worse,
+`/admin/costs` folded everything past the top three into one `Other` row before the response left
+the server, so `google:gemini-2.5-flash` and `openai:gpt-4.1-nano` — two of the five models the
+platform actually calls — were unreachable by any chart or table. See `DECISIONS.md` ADR-ADD10.
+
+**Backend**
+
+- `backend/modules/admin/costs.ts` — `foldModels` → `rankModels`, returning `{ models, truncated }`.
+  Every `(provider, model)` in the window comes back, ranked by cost with the same deterministic
+  tie-break; there is no `Other` row and `provider`/`model` are never null. `MODEL_SERIES_LIMIT = 3`
+  → `MODEL_CAP = 24`, a hard cap rather than a fold point, with `truncated` reporting exactly how
+  many were dropped. A model that spent only in the *previous* window is seeded with zeroed current
+  figures so it still appears — a model that just stopped being used is the fact an operator is
+  looking for, not one to drop.
+- Each model's `daily` went from `string[]` to `{ costUsd, calls, tokens, latencyMs }`, all dense
+  and index-aligned to `buckets`. Every one of those already came out of query 1; the accumulator
+  now carries all four instead of discarding three. **No new query, no schema change, no new index.**
+- `backend/modules/admin/costs.test.ts` — `rankModels` covered in 9 cases (16 in the file):
+  no fold, no nulls, the tie-break, the previous-window-only model, dense zero-filled arrays,
+  daily latency rounding and its divide-by-zero guard, the cap and its count, and the money
+  invariant asserted three ways.
+
+**Frontend**
+
+- `components/admin/charts/fold.ts` + `fold.test.ts` — new, and the reason the server could stop
+  deciding. `foldTop()` rebuilds the three-plus-Other view at render time; `byProvider()` rolls
+  models up into providers. 14 tests: every sum goes through `microUsd` integer micro-dollars,
+  the platform total survives both operations exactly, daily series add index by index, and
+  latency is weighted by calls rather than averaging averages.
+- `components/admin/charts/series.ts` — `seriesStyle(index)` gives slots 0–2 the three hues solid
+  and 3–5 the same three dashed. `FILL_CLASS` joins the stroke and arc maps.
+- `components/admin/charts/series-picker.tsx` — new. Toggle chips, six-cap, disabled past it.
+  Each chip carries a 16×2 line swatch in its own colour and stroke, so the picker **is** the
+  legend rather than needing one beside it.
+- `components/admin/charts/plot.tsx` — `Plot` takes a `format` prop (it hardcoded four-decimal
+  dollars, and calls/tokens/latency are not money). `MultiLineMarks` takes `SeriesStyle[]` and an
+  optional `filled`, which is the area form.
+- `components/admin/charts/chart-panel.tsx` — the `compare` view, its `By` and `Measure` selects,
+  and the folding that used to happen on the server. Switching dimension resets the selection;
+  nothing is stored in an effect.
+- `components/admin/charts/{model-legend,model-share,model-columns}.tsx` — take `models` and the
+  figure they need rather than the whole response, since the panel now decides what they see.
+- `components/admin/charts/model-table.tsx` — reads `daily.costUsd`, and now lists **every** model.
+- `messages/{en,tr}.json` — 15 keys. `tokenlessNote` is the one that matters.
+- `DESIGN.md` §W11 — the palette rule split into filled marks (three, then Other) and stroked
+  marks (three, then dashed), plus five new rows for the compare view.
+- `lib/query.ts` — `AdminCostDaily`, `truncated`.
+
+**Verified**
+
+- `npm test` — 126 files / 1358 tests. `npm run typecheck` clean. eslint clean.
+- Read in the browser against the seeded stack across both dimensions and all four measures.
+  Confirmed the two previously-hidden models are now selectable and draw.
+- **One real defect found there and fixed:** `.scroller` carries `overflow-x: auto`, which
+  zeroes a flex item's automatic minimum size, so the nested flex columns of the shell compressed
+  it to 106px and clipped a 260px plot. It only became visible once the picker and its note added
+  enough content to the card. `flex: none` on `.scroller` — the plot is sized by its own SVG and
+  should never have been a shrink target. Also gave the selected chip the sunken bed the range
+  buttons already use; border colour alone was too quiet a "this one is drawn".
+
+  Two more the test pass caught before merge: the unfolded table was still asking `seriesToken`
+  for a colour past the third row and getting `sOther` back — the same grey the legend uses to
+  *mean* "the remaining models", so two named models were being labelled as the residual. Rows
+  past the third now carry no swatch at all; absence is unambiguous where a grey box was not.
+  And `truncatedNote` only rendered under the compare view, while the **table** is the surface
+  that claims to be the whole ranked list and prints the platform total in its footer — with a
+  real capped response its rows and its total would not have reconciled, and nothing nearby
+  would have said why.
+
+**Not done here (see ADR-ADD10 "Skipped"):** no small multiples past six series, no persistence of
+the picked series, and overlapping filled areas still muddy past three.

@@ -536,3 +536,64 @@ container behind a dropdown that picks between charts — or between chart types
   width the console supports.
 - **No second panel for side-by-side comparison.** It was offered and declined; two half-width
   panels would each scroll a fixed-width chart, which is worse than switching between them.
+
+## ADR-ADD10 — comparing named series, and what a palette of three can honestly draw
+
+**Ask (owner, 2026-08-12):** the charts have nothing to compare in line or area form — "I want to
+compare elevenlabs and openai or their models etc. we should build up a dynamic selectable way."
+
+**Shape chosen:**
+
+- **The fold was in the wrong layer, and that was the actual bug.** ADR-ADD08 had the endpoint
+  return the top three models plus an `Other` row. That is a *presentation* decision, and making it
+  server-side meant no client could undo it: of the five `(provider, model)` pairs the platform
+  calls, two were absent from the payload entirely. No picker could have offered them. So
+  `/admin/costs` now returns every model, ranked, and `charts/fold.ts` rebuilds three-plus-Other at
+  render time. The model table stopped hiding two models as a side effect — that was a real gap
+  nobody had filed yet.
+- **A hard cap, and it says so.** 24 models, with `truncated` counting what was dropped. The fold
+  it replaces was lossless-but-invisible; a cap is lossy, so it is announced. Silent truncation
+  reads as "that is everything", which is the failure `stats.ts` names in its own header.
+- **A model that stopped being used still appears.** It is seeded with zeroed current figures and
+  its real previous-window spend. Dropping it would hide precisely the change an operator opened
+  the comparison to find.
+- **Four daily arrays, no new query.** `costUsd`, `calls`, `tokens`, `latencyMs` per model per day.
+  Query 1 already computed all four per `(day, provider, model)` and threw three away. Latency by
+  provider is a genuinely different question this data always answered and nothing on the console
+  surfaced.
+- **Compare is its own view, and it never stacks.** Filtering a *stacked* chart makes its silhouette
+  a lie about total spend — the figure card above it would contradict the chart below. So
+  `Spend by model over time` keeps showing everything, and the subset comparison is unstacked and
+  separate. Two questions, two views.
+- **Six slots: three hues, then the same three dashed.** The palette clears exactly three
+  categorical hues (ADR-ADD08). Slots 4–6 reuse them with a dashed stroke, so the 1↔4 pair has a
+  colour ΔE of **zero** and is separated entirely by a non-colour channel. That is only honest
+  because the picker chip *is* the legend: each chip carries a 16×2 swatch showing its colour and
+  its stroke pattern next to the name it belongs to, so identity is never colour-alone and never
+  needs a second lookup. Six is the ceiling and the seventh chip is `disabled` with a line saying
+  why — a control that silently ignores a click is worse than one that refuses.
+- **Provider rollup is client-side and exact.** Every model row carries its provider, so grouping
+  is a sum over `microUsd` integer micro-dollars — no float, no extra query, no second endpoint
+  shape to keep in step. Latency rolls up weighted by calls; averaging the averages would let one
+  rare slow model outvote ninety fast ones.
+- **One measure at a time.** Spend, calls, tokens, average latency — switched, never combined,
+  because two measures on one chart is a second y-axis. The axis formatter follows the measure.
+- **"Not reported" is said out loud.** Under Tokens a per-second voice model draws a flat zero
+  because it stores no token count. A note names those series. An operator reading that line as
+  "costs nothing" is the exact misreading the note exists to prevent, and it is the same duty of
+  care `unpricedNote` already discharges for a zero cost on an unpriced model.
+- **Nothing selected is not "nothing spent".** Unticking every series says the chart is waiting
+  for one, not that the range is empty. Two different facts never share a sentence here.
+
+**Skipped, deliberately:**
+
+- **No small multiples past six.** It was the scalable answer and it was declined for a platform
+  with five models; a grid of tiny charts is a second rendering mode to build and maintain for a
+  case that does not exist yet. Revisit if the provider list grows.
+- **No persistence of the picked series.** Same reasoning as the view picker in ADR-ADD09: add it
+  when someone needs to send a colleague a link to one comparison.
+- **Filled areas still muddy past three.** Six translucent overlapping areas is unreadable; the
+  lines on top stay legible, so `area` is honest at two or three series and degrades gracefully
+  rather than being forbidden. Named here rather than guarded in code.
+- **`--series-4/5/6` are still unused as hues.** Nothing measured has changed since ADR-ADD08.
+  The dashed variants are how the chart gets past three, not a quiet re-admission of those tokens.

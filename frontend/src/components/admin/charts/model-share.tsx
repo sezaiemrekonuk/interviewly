@@ -1,6 +1,6 @@
 'use client';
 
-import type { AdminCostsResponse } from '../../../lib/query';
+import type { AdminCostModel } from '../../../lib/query';
 import { microUsd } from '../interview-table';
 
 import styles from './charts.module.css';
@@ -14,8 +14,8 @@ const SIZE = CENTER * 2;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 const TEXT_DY = 5;
 
-export function ModelShare({ data }: { data: AdminCostsResponse }) {
-  const values = data.models.map((row) => microUsd(row.costUsd));
+export function ModelShare({ models, totalUsd }: { models: AdminCostModel[]; totalUsd: string }) {
+  const values = models.map((row) => microUsd(row.costUsd));
   const spent = values.some((value) => value > 0);
   const slices = donutSlices(values, CIRCUMFERENCE);
 
@@ -26,7 +26,7 @@ export function ModelShare({ data }: { data: AdminCostsResponse }) {
         <g transform={`rotate(-90 ${CENTER} ${CENTER})`}>
           {spent
             ? slices.map((slice, index) => {
-                const row = data.models[index];
+                const row = models[index];
                 return (
                   <circle
                     key={seriesKey(row)}
@@ -42,11 +42,11 @@ export function ModelShare({ data }: { data: AdminCostsResponse }) {
             : null}
         </g>
         <text className={styles.value} x={CENTER} y={CENTER + TEXT_DY} textAnchor="middle">
-          {data.totals.costUsd}
+          {totalUsd}
         </text>
       </svg>
 
-      <ModelLegend data={data} money />
+      <ModelLegend models={models} totalUsd={totalUsd} money />
     </div>
   );
 }
