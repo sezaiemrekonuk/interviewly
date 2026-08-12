@@ -46,7 +46,7 @@ export type VoiceBeat = 'listening' | 'speaking' | 'acknowledging' | null;
  * whether the utterance was finished. So it is short on purpose: it costs a round trip when the
  * candidate is mid-thought, and a long one is latency on every answer they did finish.
  */
-export const VAD_SILENCE_MS = 2_000;
+export const VAD_SILENCE_MS = 1_000;
 
 /**
  * The CEILING on what counts as speech, not the test for it (ADR-T07). 0.05 RMS is a loud voice

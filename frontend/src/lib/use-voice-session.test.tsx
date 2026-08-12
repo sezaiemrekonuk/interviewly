@@ -389,8 +389,8 @@ describe('useVoiceSession — the turn loop (C02)', () => {
     expect(hits(calls, SPEECH('m1'))).toBe(0);
   });
 
-  it('keeps the spec default of a two-second silence window', () => {
-    expect(VAD_SILENCE_MS).toBe(2_000);
+  it('probes after one second of silence, the window L03 shortened', () => {
+    expect(VAD_SILENCE_MS).toBe(1_000);
   });
 
   // ADR-T08 — a tripwire, not an obstacle. Both windows are numbers the owner has now moved
