@@ -322,3 +322,28 @@ benchmarks, prices, outcomes).
 pre-existing, and a copy decision that should not be buried in a layout diff. The `--accent`
 focus ring is 2.1:1 on the rail, under the 3:1 floor for a non-text indicator; that is the
 app-wide recipe and wants one token decision rather than a second ring on this page.
+
+## 2026-08-12 — the Google callback lands on the dashboard
+
+Follow-up to the same day's entry, and a regression it caused. `/` stopped redirecting, but the
+Google OAuth callback still 302'd there — so a Google sign-in ended on the marketing page. See
+DECISIONS.md ADR-ADD07.
+
+- `backend/modules/auth/google.ts` — the success redirect is `${PUBLIC_ORIGIN}/dashboard`.
+- `backend/modules/auth/google-callback.test.ts` — the issue-80 test pinned the old destination
+  by name; it pins the new one, and that the public landing is never the target again.
+- `frontend/src/app/[locale]/dashboard/page.tsx` — the onboarding half of K8.7 at the
+  destination: an account with no `onboardingCompletedAt` is replaced to `/onboarding/1` and the
+  page renders `null` meanwhile. Not `firstRunPath`, which would bounce a zero-interview account
+  to `/interviews/new` and make this page unreachable for them.
+- `frontend/src/app/[locale]/dashboard/page.test.tsx` — the `/me` fixture carries
+  `onboardingCompletedAt` and `interviewCount` now (it matched no real payload before), plus one
+  case for the new bounce.
+
+Password sign-in and register were already correct — both call `firstRunPath(user)` where the
+session is issued — and are untouched.
+
+**Verified:** `npm test` 122 files / 1260 tests pass; typecheck and eslint clean. In a browser
+against a stubbed `/me`: an account with `onboardingCompletedAt: null` opening `/dashboard` lands
+on `/tr/onboarding/1` (locale carried), and an onboarded one stays on `/tr/dashboard` with the
+rail drawn.

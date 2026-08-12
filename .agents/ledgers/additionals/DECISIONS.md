@@ -336,3 +336,41 @@ And an authenticated user must not be able to open register or sign-in.
 - **No loading state on the guard.** It needs a message key in both locales for a frame that the
   overwhelming majority of visitors never see, and it reintroduces the layout shift the fail-open
   decision exists to avoid.
+
+## ADR-ADD07 — the Google callback lands inside the app, not on the front door
+
+**Ask (owner, 2026-08-12):** after signing in or registering, land on the dashboard, not the home
+page.
+
+**What was actually broken:** only the Google path. Password sign-in and register both already
+call `router.replace(firstRunPath(user))` at the point the session is issued. The OAuth callback
+is a server 302 and passed no such call site — it redirected to `${PUBLIC_ORIGIN}/`, because for
+issue 80 the *landing page* carried the K8.7 bounce (`home-switch.tsx`). ADR-ADD06 made `/`
+public and deleted that bounce, so the same 302 left a Google user reading marketing copy.
+A regression of ADR-ADD06, not a pre-existing defect.
+
+**Shape chosen:**
+
+- **`res.redirect(302, `${config.PUBLIC_ORIGIN}/dashboard`)`.** The destination is inside the app,
+  where it always should have been; `/` was only ever chosen because it was the one route that
+  applied the first-run rule.
+- **The onboarding half of K8.7 moved to `/dashboard`.** That is the arrival no sign-in call site
+  can cover, so the check belongs at the destination: `!user.onboardingCompletedAt` →
+  `router.replace('/onboarding/1')`, and the page renders `null` until it resolves so the
+  briefing never paints for a frame behind the redirect. Issue 80 stays closed — a Google account
+  that has never onboarded still cannot reach the signed-in home.
+- **Only the onboarding half.** Calling `firstRunPath` here would send a fully-onboarded account
+  with zero interviews to `/interviews/new` and make `/dashboard` unreachable for them. The
+  "where do I land" rule and the "may I be here" rule are different questions and only the second
+  belongs on the page.
+- **The rule was not put in `useRequireAuth`.** That was tried first and it is the tempting
+  version — one home, every protected surface at once. It also silently changes what `/settings`,
+  `/profile`, `/interviews` and the room do for a half-onboarded account, which is a product
+  decision nobody asked for, and it broke 38 tests by doing it. The reported bug is one arrival;
+  the fix is at that arrival. If the wider gate is wanted it should be its own change, with the
+  exemptions (`/onboarding`, `/verify-email` — a candidate who cannot confirm their address must
+  not be told to fill in a profile instead) decided deliberately rather than as a side effect.
+
+**Also fixed:** the `/me` fixtures in `dashboard/page.test.tsx` omitted `onboardingCompletedAt`
+and `interviewCount` entirely, so they did not match the payload the endpoint actually returns.
+That is why the wider gate looked like it broke twenty unrelated tests.

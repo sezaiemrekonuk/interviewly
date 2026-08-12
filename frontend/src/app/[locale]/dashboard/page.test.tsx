@@ -74,7 +74,14 @@ interface Call {
   method: string;
 }
 
-function stub(options: { runs?: unknown[]; questions?: unknown[]; profile?: unknown } = {}) {
+function stub(
+  options: {
+    runs?: unknown[];
+    questions?: unknown[];
+    profile?: unknown;
+    onboardingCompletedAt?: string | null;
+  } = {},
+) {
   const calls: Call[] = [];
   const json = (status: number, body: unknown) =>
     new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -85,7 +92,15 @@ function stub(options: { runs?: unknown[]; questions?: unknown[]; profile?: unkn
       calls.push({ url, method: init?.method ?? 'GET' });
       if (url === '/api/me')
         return json(200, {
-          user: { id: 'u1', email: 'a@b.c', role: 'candidate', emailVerifiedAt: 'now' },
+          user: {
+            id: 'u1',
+            email: 'a@b.c',
+            role: 'candidate',
+            emailVerifiedAt: 'now',
+            onboardingCompletedAt:
+              options.onboardingCompletedAt === undefined ? 'now' : options.onboardingCompletedAt,
+            interviewCount: 1,
+          },
         });
       if (url === '/api/me/profile') return json(200, options.profile ?? PROFILE);
       // Ahead of the list branch, which `startsWith` would otherwise answer for it — the
@@ -329,6 +344,18 @@ describe('/dashboard — the briefing', () => {
       '/interviews/new',
     );
     expect(screen.queryByTestId('standing')).toBeNull();
+  });
+
+  it('sends an account that has not finished onboarding back to onboarding', async () => {
+    stub({ onboardingCompletedAt: null });
+
+    let container!: HTMLElement;
+    await act(async () => {
+      ({ container } = renderWithProviders(<Dashboard />));
+    });
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/onboarding/1'));
+    expect(container).toBeEmptyDOMElement();
   });
 
   it('carries sign-out on the rail, which the product never had anywhere', async () => {
