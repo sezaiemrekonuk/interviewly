@@ -16,7 +16,8 @@ export const downloadReport: RequestHandler = async (req, res, next) => {
       orderBy: { created_at: 'desc' },
     });
     if (!report?.pdf_key) throw new ApiError('INTERVIEW_NOT_FOUND');
-    res.json({ url: await storage.signedUrl(report.pdf_key, MAX_TTL_SECONDS) });
+    const filename = `interviewly-report-${report.created_at.toISOString().slice(0, 10)}.pdf`;
+    res.json({ url: await storage.signedUrl(report.pdf_key, MAX_TTL_SECONDS, filename) });
   } catch (err) {
     next(err);
   }

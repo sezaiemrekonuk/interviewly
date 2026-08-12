@@ -474,3 +474,53 @@
     font-size: 20px;
   }
 }
+
+.trend {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+}
+
+.trendScroll {
+  overflow-x: auto;
+}
+
+.chart {
+  display: block;
+}
+
+.chartTrack {
+  fill: var(--surface-sunken);
+}
+
+.chartBarHr {
+  fill: var(--series-1);
+}
+
+.chartBarTech {
+  fill: var(--series-3);
+}
+
+.chartValue {
+  font-family: var(--font-body), sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  fill: var(--text);
+}
+
+.chartGroup {
+  font-family: var(--font-body), sans-serif;
+  font-size: 13px;
+  fill: var(--text-muted);
+}
+
+.chartAverage {
+  stroke: var(--text);
+  stroke-width: 1;
+}
+
+.trendCaption {
+  font-size: 13px;
+  color: var(--text-muted);
+}

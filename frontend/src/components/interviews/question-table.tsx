@@ -12,7 +12,7 @@ import styles from './question-table.module.css';
 const cx = (...names: Array<string | false | undefined>) => names.filter(Boolean).join(' ');
 
 const ROUNDS = ['all', 'hr', 'tech'] as const;
-const SORTS = ['recent', 'worst'] as const;
+const SORTS = ['recent', 'oldest', 'best', 'worst'] as const;
 
 type Round = (typeof ROUNDS)[number];
 type Sort = (typeof SORTS)[number];
@@ -60,14 +60,17 @@ export function QuestionTable({
     .filter((row) => round === 'all' || row.roundType === round)
     .slice()
     .sort((a, b) => {
-      if (sort === 'worst') {
+      if (sort === 'worst' || sort === 'best') {
         // Unscored rows go last: a question with no report is not a weakness, and sorting it
         // to the top of "worst first" would put the least informative rows in the best seats.
-        const as = a.score ?? Number.POSITIVE_INFINITY;
-        const bs = b.score ?? Number.POSITIVE_INFINITY;
-        if (as !== bs) return as - bs;
+        if (a.score === null || b.score === null) {
+          if (a.score !== b.score) return a.score === null ? 1 : -1;
+        } else if (a.score !== b.score) {
+          return sort === 'best' ? b.score - a.score : a.score - b.score;
+        }
       }
-      return (b.answeredAt ?? '').localeCompare(a.answeredAt ?? '');
+      const newestFirst = (b.answeredAt ?? '').localeCompare(a.answeredAt ?? '');
+      return sort === 'oldest' ? -newestFirst : newestFirst;
     });
 
   if (rows.length === 0) {

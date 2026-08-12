@@ -590,6 +590,8 @@
     "scoreLabel": "Genel puan",
     "scoreMax": "/ {max}",
     "scoreValue": "{score} / {max}",
+    "trendTitle": "Mülakat boyunca puan",
+    "trendCaption": "Her cevap, sorulduğu sırada ve turuna göre gruplandırılmış puanıyla. Kesikli çizgi genel puan: {score} / {max}.",
     "roundsTitle": "Turlar",
     "roundHr": "İK turu",
     "roundTech": "Teknik tur",
@@ -1303,6 +1305,8 @@
       "sortBy": "Sırala",
       "sorts": {
         "recent": "En yeni",
+        "oldest": "En eski",
+        "best": "En iyiden",
         "worst": "En kötüden"
       },
       "count": "{shown} soru",

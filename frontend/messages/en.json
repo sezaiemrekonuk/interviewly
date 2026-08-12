@@ -590,6 +590,8 @@
     "scoreLabel": "Overall score",
     "scoreMax": "/ {max}",
     "scoreValue": "{score} / {max}",
+    "trendTitle": "Score across the interview",
+    "trendCaption": "Every answer scored in the order it was asked, grouped by round. The dashed line is the overall {score} / {max}.",
     "roundsTitle": "Rounds",
     "roundHr": "HR round",
     "roundTech": "Technical round",
@@ -1303,6 +1305,8 @@
       "sortBy": "Sort",
       "sorts": {
         "recent": "Most recent",
+        "oldest": "Oldest first",
+        "best": "Best first",
         "worst": "Worst first"
       },
       "count": "{shown} {shown, plural, one {question} other {questions}}",

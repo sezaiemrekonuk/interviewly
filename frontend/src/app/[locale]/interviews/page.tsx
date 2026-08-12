@@ -25,6 +25,7 @@ import { REPORTED, RESUMABLE, UNFINISHED } from '../../../components/dashboard/s
 import { QuestionTable } from '../../../components/interviews/question-table';
 import { AppRail } from '../../../components/shell/app-rail';
 import { SplitShell, WorkBody, WorkTop } from '../../../components/shell/split-shell';
+import { Select } from '../../../components/ui/select';
 import { Link, useRouter } from '../../../i18n/navigation';
 import { useMyInterviews, useMyQuestions, type MyInterview } from '../../../lib/query';
 import { useErrorMessage } from '../../../lib/use-error-message';
@@ -238,7 +239,7 @@ function InterviewsArchive() {
 
                 <label className={styles.sortField}>
                   <span className={styles.filterLegend}>{tSessions('sortBy')}</span>
-                  <select
+                  <Select
                     className={styles.select}
                     value={sort}
                     onChange={(event) => setSessionParam('sort', event.target.value)}
@@ -248,7 +249,7 @@ function InterviewsArchive() {
                         {tSessions(`sorts.${key}`)}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </label>
 
                 {/* Says what is on screen against what it was drawn from, so a filter that hides

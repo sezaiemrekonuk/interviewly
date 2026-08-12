@@ -9,6 +9,7 @@ import { SCORE_MAX } from '../../lib/score';
 
 import { EARLY_END_REASONS, EndedReasonLine } from './ended-reason';
 import { exchangesFor, type Exchange } from './exchanges';
+import { ScoreTrend } from './score-trend';
 
 import styles from './report.module.css';
 
@@ -59,6 +60,20 @@ export function ReportView({
       ) : null}
 
       <p className={styles.impression}>{payload.overall_impression}</p>
+
+      {rows.length > 1 ? (
+        <section className={styles.section} data-testid="report-trend">
+          <h2 className={styles.sectionTitle}>{t('trendTitle')}</h2>
+          <ScoreTrend
+            overall={payload.overall_score}
+            points={rows.map(({ question, turn }) => ({
+              id: question.question_id,
+              score: question.score,
+              roundType: turn.roundType,
+            }))}
+          />
+        </section>
+      ) : null}
 
       {/* Each block renders only when the model had something to put in it. An interview that
           was stopped after one question legitimately produces no strengths — the payload

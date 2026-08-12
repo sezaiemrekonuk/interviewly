@@ -23,11 +23,11 @@
 }
 
 .headerScrolled {
-  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  background: color-mix(in srgb, var(--surface) 62%, transparent);
   border-block-end-color: var(--border);
   box-shadow: var(--shadow-hairline);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(32px) saturate(180%);
+  -webkit-backdrop-filter: blur(32px) saturate(180%);
 }
 
 .headerInner {
@@ -77,33 +77,41 @@
   display: inline-flex;
   align-items: center;
   min-height: 44px;
+  padding: 8px 12px;
   font-size: 14px;
+  font-weight: 500;
   color: var(--text-muted);
   border-radius: var(--radius-button);
-  transition: color var(--duration-default) var(--easing-default);
+  transition:
+    color var(--duration-default) var(--easing-default),
+    background-color var(--duration-default) var(--easing-default);
 }
 
 .navLink:hover {
   color: var(--text);
+  background: var(--surface-sunken);
 }
 
-/* Bordered, not `--primary`: the landing hero already carries the surface's one CTA fill
-   (DESIGN §2 rule 1), so this door-in reads as an action without a second orange fighting it. */
 .navCta {
   display: inline-flex;
   align-items: center;
   min-height: 44px;
-  padding: 8px 16px;
+  padding: 8px 20px;
   font-size: 14px;
   font-weight: 600;
-  color: var(--text);
-  border: 1px solid var(--border);
+  color: var(--rail-text);
+  background: var(--rail);
+  border: 1px solid var(--rail);
   border-radius: var(--radius-button);
-  transition: background-color var(--duration-default) var(--easing-default);
+  box-shadow: var(--shadow-hairline);
+  transition:
+    background-color var(--duration-default) var(--easing-default),
+    border-color var(--duration-default) var(--easing-default);
 }
 
 .navCta:hover {
-  background: var(--surface-sunken);
+  background: var(--rail-raised);
+  border-color: var(--rail-raised);
 }
 
 /* ------------------------------------------------------------------ footer */

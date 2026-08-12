@@ -24,7 +24,7 @@ const payload: ReportPayload = {
   language: 'en',
 };
 
-const meta = { interviewId: 'int-1', createdAt: new Date('2026-08-04T10:00:00Z') };
+const meta = { createdAt: new Date('2026-08-04T10:00:00Z'), occupation: 'Backend Engineer' };
 
 describe('renderReportPdf', () => {
   it('renders the payload to PDF bytes', async () => {

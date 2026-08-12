@@ -157,3 +157,58 @@ too many clarification questions, and "thank you for your answer" said back to `
   are per message. Key it by language if a re-spoken question ever surfaces in the wrong one.
 - **The account locale is untouched.** The interview follows the listing; the UI still follows
   the account. Making one write the other is a settings change nobody asked for.
+
+## ADR-ADD04 — the score chart on the report, and what the PDF is allowed to name
+
+**Ask (owner, 2026-08-12):** a visual chart of the candidate's performance on the report, the
+chart and its parameters ours to pick; and the downloaded report file "exposes interview ID
+directly, not a security bug but looks bad".
+
+**Shape chosen:**
+
+- **Per-answer scores, grouped by round — not a second reading of the overall score.** The
+  payload holds three levels of number: one `overall_score`, two round scores, and one score per
+  question. The first two are already single values against a ceiling and are already `Meter`s
+  (DESIGN §5: "bars, not charts" — one value against one ceiling is a bar). The per-question
+  series is the only thing on this surface a bar cannot say: a candidate who opened at 40 and
+  closed at 90 and one who did the reverse own the same 65, and the report could not tell them
+  apart. The chart is the shape of the interview, which is why it sits directly under the verdict
+  sentence and above the rounds.
+- **Hand-rolled SVG, not `recharts`.** The dependency is installed and unimported (same standing
+  as ADR-W09's `<progress>`), and it stays that way: the production CSP is
+  `style-src 'self' 'nonce-…'`, which drops the style attribute every chart library positions
+  with. Every value here is geometry in an attribute — `x`, `y`, `width`, `height`,
+  `stroke-dasharray` — the pattern `sparkPoints` (dashboard) already established. Colour comes
+  from `--series-1`/`--series-3` through CSS module classes, so no hex reaches the `.tsx` the
+  token lint scans.
+- **Grouped by round, labelled in text under each group.** Colour distinguishes the two rounds
+  and is deliberately redundant: the group's name is printed under it and each column prints its
+  own score above it, so nothing on the chart is readable by hue or by length alone (§6). That
+  also removed the legend — a key explaining two colours that are already labelled is a third
+  copy of the same fact.
+- **The chart is `aria-hidden`, with a `figcaption` that states the baseline.** Every number in
+  it is already text in "Question by question" underneath. Announcing a third traversal of the
+  same scores is noise, and the same reasoning `Meter decorative` already encodes.
+- **Two answers minimum.** One column is not a trend, and a chart of one bar next to that
+  question's own `Meter` is the same value drawn twice.
+- **The PDF names the practice, not the row.** `Interview <cuid>` in the document header and in
+  the PDF `Title` is replaced by the interview's `occupation` — the thing the candidate would
+  call this run — and the id is gone from both. `finalizeReport` reads it through the `include`
+  it already had a query for; the renderer stays pure and deterministic, which is what the
+  byte-equality test protects.
+- **The saved filename is set on the signed URL, not by renaming the object.** The key stays
+  `reports/<interviewId>.pdf`: it is derived, idempotent under retry, and asserted in four test
+  files. What the browser saves is a `ResponseContentDisposition` on the presign —
+  `interviewly-report-<yyyy-mm-dd>.pdf` — so the id stops being the filename without the storage
+  layer learning a second naming scheme. `signedUrl`'s third parameter is optional, so the CV
+  upload path and every fake `Storage` are untouched.
+
+**Skipped, deliberately:**
+
+- **No STAR series on the chart.** It applies to HR questions only, so a second series would be
+  drawn for half the columns and absent for the other half — a hole a reader reads as a zero.
+- **No occupation in the filename.** It is free text from a pasted listing; sanitising it into a
+  filename is more code than the date, and the date already separates one download from another.
+- **The report page still does not know its own occupation.** `GET /interviews/:id` returns
+  `{interviewId, state, report}`, and the PDF gets the role from the worker's own query. Threading
+  it into the screen is a change to that endpoint, which nothing on the screen asked for.

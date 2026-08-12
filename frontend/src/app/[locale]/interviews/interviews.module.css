@@ -163,15 +163,10 @@
   align-items: flex-start;
 }
 
-.select {
+.sortField .select {
+  width: auto;
   min-height: 44px;
-  padding: 8px 12px;
-  font-family: inherit;
-  font-size: 14px;
-  color: var(--text);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-button);
+  padding-block: 8px;
   cursor: pointer;
 }
 
@@ -182,7 +177,6 @@
 }
 
 .chip:focus-visible,
-.select:focus-visible,
 .searchInput:focus-visible,
 .clear:focus-visible {
   outline: 2px solid var(--accent);
