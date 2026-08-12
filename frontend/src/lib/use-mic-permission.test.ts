@@ -102,3 +102,103 @@ describe('useMicPermission (W09)', () => {
     expect(result.current.deviceId).toBe('mic-b');
   });
 });
+
+/**
+ * The bug this exists to prevent, found in a live room on 2026-08-11 and worth stating plainly:
+ * a suspended `AudioContext` reports pure silence, so `level` never leaves 0, the VAD's
+ * `heardRef` never arms, and a spoken turn is never probed — the room listens forever to a
+ * candidate who is talking. Browsers create the context suspended when the page has had no user
+ * gesture, which is precisely what a RELOAD is. It cost a whole live interview.
+ */
+describe('useMicPermission — the meter has to be awake to measure anything', () => {
+  function stubAudioContext(initial: AudioContextState) {
+    const ctx = {
+      state: initial,
+      resume: vi.fn(async () => {
+        ctx.state = 'running';
+      }),
+      close: vi.fn(async () => {}),
+      createAnalyser: () => ({ fftSize: 256, getFloatTimeDomainData: () => {} }),
+      createMediaStreamSource: () => ({ connect: () => {} }),
+    };
+    // A normal function, never an arrow: `new` on an arrow throws "is not a constructor",
+    // and `meter()` runs inside `request()`'s try, so the throw reads as a denied microphone.
+    vi.stubGlobal(
+      'AudioContext',
+      vi.fn(function AudioContextStub() {
+        return ctx;
+      }),
+    );
+    vi.stubGlobal('requestAnimationFrame', () => 1);
+    vi.stubGlobal('cancelAnimationFrame', () => {});
+    return ctx;
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  async function granted() {
+    const { stream } = fakeStream();
+    stubMediaDevices({
+      getUserMedia: vi.fn(async () => stream),
+      enumerateDevices: vi.fn(async () => DEVICES),
+    } as unknown as MediaDevices);
+    const hook = renderHook(() => useMicPermission());
+    await act(async () => hook.result.current.request());
+    await waitFor(() => expect(hook.result.current.state).toBe('granted'));
+    return hook;
+  }
+
+  it('resumes the context it just created', async () => {
+    const ctx = stubAudioContext('suspended');
+    await granted();
+
+    expect(ctx.resume).toHaveBeenCalled();
+  });
+
+  // Chrome refuses `resume()` outright until the page has been touched, and returns a rejected
+  // promise rather than a running context. The next click has to be the second chance.
+  it('waits for a gesture when the browser refuses to resume', async () => {
+    const ctx = {
+      state: 'suspended' as AudioContextState,
+      resume: vi.fn(async () => {
+        throw new Error('not allowed to start');
+      }),
+      close: vi.fn(async () => {}),
+      createAnalyser: () => ({ fftSize: 256, getFloatTimeDomainData: () => {} }),
+      createMediaStreamSource: () => ({ connect: () => {} }),
+    };
+    // A normal function, never an arrow: `new` on an arrow throws "is not a constructor",
+    // and `meter()` runs inside `request()`'s try, so the throw reads as a denied microphone.
+    vi.stubGlobal(
+      'AudioContext',
+      vi.fn(function AudioContextStub() {
+        return ctx;
+      }),
+    );
+    vi.stubGlobal('requestAnimationFrame', () => 1);
+    vi.stubGlobal('cancelAnimationFrame', () => {});
+
+    await granted();
+    expect(ctx.resume).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      window.dispatchEvent(new Event('pointerdown'));
+    });
+
+    expect(ctx.resume).toHaveBeenCalledTimes(2);
+  });
+
+  it('leaves a context the browser started running alone', async () => {
+    const ctx = stubAudioContext('running');
+    await granted();
+
+    await act(async () => {
+      window.dispatchEvent(new Event('pointerdown'));
+    });
+
+    // Resumed once on principle, never again: no listener is left on the window.
+    expect(ctx.resume).toHaveBeenCalledTimes(1);
+  });
+});
