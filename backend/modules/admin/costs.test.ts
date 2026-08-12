@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { describe, expect, it } from 'vitest';
 
-import { MODEL_SERIES_LIMIT, dayKeys, foldModels, resolveDays } from './costs';
+import { MODEL_CAP, dayKeys, rankModels, resolveDays } from './costs';
 
 const row = (
   day: string,
@@ -73,21 +73,32 @@ describe('dayKeys', () => {
   });
 });
 
-describe('foldModels', () => {
-  it('zero-fills a series dense against the buckets it was given', () => {
-    const [series] = foldModels(
-      [row('2026-08-03', 'openai', 'gpt', '0.25'), row('2026-08-01', 'openai', 'gpt', '1.5')],
+describe('rankModels', () => {
+  it('zero-fills all four daily arrays dense against the buckets it was given', () => {
+    const { models } = rankModels(
+      [
+        row('2026-08-03', 'openai', 'gpt', '0.25', 2, 500, 40),
+        row('2026-08-01', 'openai', 'gpt', '1.5', 3, 300, 60),
+      ],
       [],
       BUCKETS,
-      MODEL_SERIES_LIMIT,
+      MODEL_CAP,
     );
 
-    expect(series.daily).toEqual(['1.500000', '0.000000', '0.250000']);
-    expect(series.costUsd).toBe('1.750000');
+    expect(models[0].daily).toEqual({
+      costUsd: ['1.500000', '0.000000', '0.250000'],
+      calls: [3, 0, 2],
+      tokens: [60, 0, 40],
+      latencyMs: [100, 0, 250],
+    });
+    expect(models[0].costUsd).toBe('1.750000');
+    for (const array of Object.values(models[0].daily)) {
+      expect(array).toHaveLength(BUCKETS.length);
+    }
   });
 
-  it('keeps the top N by cost and folds the remainder into one untitled entry', () => {
-    const series = foldModels(
+  it('returns every model, never an Other row and never a null name', () => {
+    const { models, truncated } = rankModels(
       [
         row('2026-08-01', 'openai', 'a', '4'),
         row('2026-08-01', 'openai', 'b', '3'),
@@ -97,24 +108,13 @@ describe('foldModels', () => {
       ],
       [],
       BUCKETS,
-      MODEL_SERIES_LIMIT,
+      MODEL_CAP,
     );
 
-    expect(series.map((s) => s.model)).toEqual(['a', 'b', 'c', null]);
-    expect(series[3]).toMatchObject({ provider: null, costUsd: '1.500000' });
-    expect(series[3].daily).toEqual(['1.000000', '0.500000', '0.000000']);
-  });
-
-  it('returns no folded entry when nothing falls below the limit', () => {
-    const series = foldModels(
-      [row('2026-08-01', 'openai', 'a', '4'), row('2026-08-01', 'openai', 'b', '3')],
-      [],
-      BUCKETS,
-      MODEL_SERIES_LIMIT,
-    );
-
-    expect(series).toHaveLength(2);
-    expect(foldModels([], [], BUCKETS, MODEL_SERIES_LIMIT)).toEqual([]);
+    expect(models.map((s) => s.model)).toEqual(['a', 'b', 'c', 'd', 'e']);
+    expect(models.map((s) => s.provider)).toEqual(Array(5).fill('openai'));
+    expect(truncated).toBe(0);
+    expect(rankModels([], [], BUCKETS, MODEL_CAP)).toEqual({ models: [], truncated: 0 });
   });
 
   it('breaks a cost tie on provider then model, not on row order', () => {
@@ -123,61 +123,97 @@ describe('foldModels', () => {
       row('2026-08-01', 'acme', 'z', '1'),
       row('2026-08-01', 'acme', 'a', '1'),
     ];
-    const ordered = foldModels(rows, [], BUCKETS, MODEL_SERIES_LIMIT);
-    const reversed = foldModels([...rows].reverse(), [], BUCKETS, MODEL_SERIES_LIMIT);
+    const ordered = rankModels(rows, [], BUCKETS, MODEL_CAP).models;
+    const reversed = rankModels([...rows].reverse(), [], BUCKETS, MODEL_CAP).models;
 
     expect(ordered.map((s) => `${s.provider}/${s.model}`)).toEqual(['acme/a', 'acme/z', 'zeta/m']);
     expect(reversed.map((s) => s.model)).toEqual(ordered.map((s) => s.model));
   });
 
-  it('carries each kept model its own previous-window total', () => {
-    const [series] = foldModels(
+  it('carries each model its own previous-window total', () => {
+    const { models } = rankModels(
       [row('2026-08-01', 'openai', 'gpt', '1')],
       [prev('openai', 'gpt', '2.5')],
       BUCKETS,
-      MODEL_SERIES_LIMIT,
+      MODEL_CAP,
     );
 
-    expect(series).toMatchObject({ costUsd: '1.000000', previousCostUsd: '2.500000' });
+    expect(models[0]).toMatchObject({ costUsd: '1.000000', previousCostUsd: '2.500000' });
   });
 
-  it('folds a previous-window-only model into Other instead of dropping it', () => {
-    const series = foldModels(
+  it('keeps a previous-window-only model as its own zeroed row', () => {
+    const { models } = rankModels(
       [row('2026-08-01', 'openai', 'gpt', '1')],
       [prev('openai', 'gpt', '2'), prev('gone', 'retired', '5')],
       BUCKETS,
-      MODEL_SERIES_LIMIT,
+      MODEL_CAP,
     );
 
-    expect(series).toHaveLength(2);
-    expect(series[1]).toMatchObject({
-      provider: null,
-      model: null,
+    expect(models).toHaveLength(2);
+    expect(models[1]).toMatchObject({
+      provider: 'gone',
+      model: 'retired',
       costUsd: '0.000000',
       previousCostUsd: '5.000000',
       calls: 0,
+      tokens: 0,
       averageLatencyMs: 0,
     });
-    expect(series[1].daily).toEqual(['0.000000', '0.000000', '0.000000']);
+    expect(models[1].daily).toEqual({
+      costUsd: ['0.000000', '0.000000', '0.000000'],
+      calls: [0, 0, 0],
+      tokens: [0, 0, 0],
+      latencyMs: [0, 0, 0],
+    });
   });
 
   it('rounds the mean latency to a millisecond and guards the empty divisor', () => {
-    const [thirds, half] = foldModels(
+    const { models } = rankModels(
       [
         row('2026-08-01', 'openai', 'a', '2', 3, 1000),
         row('2026-08-01', 'openai', 'b', '1', 2, 3),
       ],
       [],
       BUCKETS,
-      MODEL_SERIES_LIMIT,
+      MODEL_CAP,
     );
 
-    expect(thirds.averageLatencyMs).toBe(333);
-    expect(half.averageLatencyMs).toBe(2);
-    expect(foldModels([], [prev('gone', 'retired', '1')], BUCKETS, 3)[0].averageLatencyMs).toBe(0);
+    expect(models.map((s) => s.averageLatencyMs)).toEqual([333, 2]);
+    expect(
+      rankModels([], [prev('gone', 'retired', '1')], BUCKETS, MODEL_CAP).models[0]
+        .averageLatencyMs,
+    ).toBe(0);
   });
 
-  it('sums to the same total as the rows it was given, folded entry included', () => {
+  it('means the daily latency over that day alone and reads 0 on a day without calls', () => {
+    const { models } = rankModels(
+      [
+        row('2026-08-01', 'openai', 'a', '1', 3, 1000),
+        row('2026-08-03', 'openai', 'a', '1', 2, 3),
+      ],
+      [],
+      BUCKETS,
+      MODEL_CAP,
+    );
+
+    expect(models[0].daily.latencyMs).toEqual([333, 0, 2]);
+    expect(models[0].averageLatencyMs).toBe(201);
+  });
+
+  it('drops the overflow past the cap and reports how many it dropped', () => {
+    const rows = Array.from({ length: MODEL_CAP + 3 }, (_, index) =>
+      row('2026-08-01', 'openai', `m${String(index).padStart(2, '0')}`, String(100 - index)),
+    );
+    const { models, truncated } = rankModels(rows, [], BUCKETS, MODEL_CAP);
+
+    expect(models).toHaveLength(MODEL_CAP);
+    expect(truncated).toBe(3);
+    expect(models[0].model).toBe('m00');
+    expect(models[MODEL_CAP - 1].model).toBe(`m${String(MODEL_CAP - 1).padStart(2, '0')}`);
+    expect(rankModels(rows, [], BUCKETS, MODEL_CAP + 3).truncated).toBe(0);
+  });
+
+  it('sums to the row total across models and across every daily bucket', () => {
     const rows = [
       row('2026-08-01', 'openai', 'a', '4.000001', 2, 10, 100),
       row('2026-08-02', 'openai', 'a', '0.999999', 1, 5, 50),
@@ -186,14 +222,22 @@ describe('foldModels', () => {
       row('2026-08-02', 'anthropic', 'd', '1.125', 3, 9, 10),
       row('2026-08-03', 'google', 'e', '0.875', 1, 1, 5),
     ];
-    const series = foldModels(rows, [], BUCKETS, MODEL_SERIES_LIMIT);
+    const { models, truncated } = rankModels(rows, [], BUCKETS, MODEL_CAP);
 
     const rowTotal = rows.reduce((sum, r) => sum.plus(r.cost), new Prisma.Decimal(0));
-    const seriesTotal = series.reduce((sum, s) => sum.plus(s.costUsd), new Prisma.Decimal(0));
+    const modelTotal = models.reduce((sum, s) => sum.plus(s.costUsd), new Prisma.Decimal(0));
+    const dailyTotal = models.reduce(
+      (sum, s) => s.daily.costUsd.reduce((inner, value) => inner.plus(value), sum),
+      new Prisma.Decimal(0),
+    );
 
-    expect(seriesTotal.toFixed(6)).toBe(rowTotal.toFixed(6));
-    expect(seriesTotal.toFixed(6)).toBe('12.750000');
-    expect(series.reduce((sum, s) => sum + s.calls, 0)).toBe(12);
-    expect(series.reduce((sum, s) => sum + s.tokens, 0)).toBe(215);
+    expect(truncated).toBe(0);
+    expect(modelTotal.toFixed(6)).toBe(rowTotal.toFixed(6));
+    expect(dailyTotal.toFixed(6)).toBe(rowTotal.toFixed(6));
+    expect(modelTotal.toFixed(6)).toBe('12.750000');
+    expect(models.reduce((sum, s) => sum + s.calls, 0)).toBe(12);
+    expect(models.reduce((sum, s) => sum + s.tokens, 0)).toBe(215);
+    expect(models.flatMap((s) => s.daily.calls).reduce((sum, n) => sum + n, 0)).toBe(12);
+    expect(models.flatMap((s) => s.daily.tokens).reduce((sum, n) => sum + n, 0)).toBe(215);
   });
 });
