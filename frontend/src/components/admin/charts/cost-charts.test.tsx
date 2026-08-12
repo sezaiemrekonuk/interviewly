@@ -1,9 +1,8 @@
 import { act, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { ReactElement } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { COST_RANGES, type AdminCostsResponse } from '../../../lib/query';
+import { COST_RANGES, type AdminCostsResponse, type CostRange } from '../../../lib/query';
 import { messages, renderWithIntl, renderWithProviders } from '../../../test/render';
 
 const costsQuery = vi.hoisted(() => ({ useAdminCosts: vi.fn() }));
@@ -15,14 +14,10 @@ vi.mock('../../../lib/query', async (importOriginal) => ({
 
 import { CostPanel } from '../cost-panel';
 
-import { ModelDelta } from './model-delta';
-import { ModelMix } from './model-mix';
-import { ModelShare } from './model-share';
+import { ChartPanel } from './chart-panel';
+import { ModelLegend } from './model-legend';
 import { ModelTable } from './model-table';
-import { SpendHeatmap } from './spend-heatmap';
-import { PerInterviewTrend, SpendTrend } from './trend-lines';
-
-type Chart = (props: { data: AdminCostsResponse }) => ReactElement;
+import { heatGrid, pad } from './spend-heatmap';
 
 const copy = messages.admin.costs as Record<string, string>;
 const OTHER = copy.otherModels;
@@ -97,23 +92,64 @@ const TIED: AdminCostsResponse = {
   ],
 };
 
-const SVG_CHARTS: [string, Chart][] = [
-  ['trendTitle', SpendTrend],
-  ['perDayTitle', PerInterviewTrend],
-  ['mixTitle', ModelMix],
-  ['deltaTitle', ModelDelta],
-  ['shareTitle', ModelShare],
+const VIEW_MARKS: [string, string][] = [
+  ['trend', 'line'],
+  ['perDay', 'line'],
+  ['mix', 'polygon'],
+  ['share', 'circle'],
+  ['delta', 'rect'],
+  ['hours', '[data-testid="heat-0-0"]'],
 ];
 
-const ZERO_CHARTS: [string, Chart, string][] = [
-  ['trendTitle', SpendTrend, 'line'],
-  ['perDayTitle', PerInterviewTrend, 'line'],
-  ['mixTitle', ModelMix, 'line'],
-  ['deltaTitle', ModelDelta, 'line'],
-  ['shareTitle', ModelShare, 'circle'],
-  ['modelsTitle', ModelTable, ''],
-  ['heatTitle', SpendHeatmap, '[data-testid="heat-0-0"]'],
+const TYPES_PER_VIEW: [string, string[]][] = [
+  ['trend', ['line', 'area', 'columns']],
+  ['perDay', ['line', 'columns']],
+  ['mix', ['stackedArea', 'stackedColumns', 'lines']],
+  ['share', ['donut', 'bars']],
+  ['delta', []],
+  ['hours', []],
 ];
+
+const ZERO_VIEWS: [string, string][] = [
+  ['trend', 'line'],
+  ['perDay', 'line'],
+  ['mix', 'line'],
+  ['share', 'circle'],
+  ['delta', 'line'],
+  ['hours', '[data-testid="heat-0-0"]'],
+];
+
+function openPanel(
+  data: AdminCostsResponse = FIXTURE,
+  onDaysChange: (days: CostRange) => void = vi.fn(),
+) {
+  const result = renderWithIntl(<ChartPanel data={data} days={30} onDaysChange={onDaysChange} />);
+  return { ...result, view: within(result.container).getByTestId('admin-cost-view') };
+}
+
+async function pick(select: HTMLElement, value: string) {
+  await act(async () => {
+    await userEvent.selectOptions(select, value);
+  });
+}
+
+const typeSelect = (container: HTMLElement) => within(container).queryByTestId('admin-cost-type');
+
+const typeOptions = (container: HTMLElement) =>
+  [...(typeSelect(container)?.querySelectorAll('option') ?? [])].map((option) => option.value);
+
+const captionOf = (container: HTMLElement) =>
+  container.querySelector('figcaption')?.textContent?.trim() ?? '';
+
+const highestMark = (container: HTMLElement) =>
+  Math.min(
+    ...[...container.querySelectorAll('polyline, polygon')].flatMap((node) =>
+      (node.getAttribute('points') ?? '')
+        .split(' ')
+        .filter(Boolean)
+        .map((pair) => Number(pair.split(',')[1])),
+    ),
+  );
 
 describe('admin cost charts (W11)', () => {
   beforeEach(() => {
@@ -140,18 +176,11 @@ describe('admin cost charts (W11)', () => {
     expect(within(table.container).queryByText('null · null')).not.toBeInTheDocument();
     table.unmount();
 
-    const mix = renderWithIntl(<ModelMix data={FIXTURE} />);
-    expect(
-      within(within(mix.container).getByTestId('admin-cost-mix')).getByText(OTHER),
-    ).toBeInTheDocument();
-    expect(within(mix.container).queryByText('null')).not.toBeInTheDocument();
-    mix.unmount();
-
-    const share = renderWithIntl(<ModelShare data={FIXTURE} />);
-    expect(
-      within(within(share.container).getByTestId('admin-cost-share')).getByText(OTHER),
-    ).toBeInTheDocument();
-    expect(within(share.container).queryByText('null')).not.toBeInTheDocument();
+    const legend = renderWithIntl(<ModelLegend data={FIXTURE} money />);
+    const row = within(legend.container).getByText(OTHER);
+    expect(row.textContent?.trim()).toBe(OTHER);
+    expect(within(legend.container).queryByText('null')).not.toBeInTheDocument();
+    expect(within(legend.container).queryByText('null · null')).not.toBeInTheDocument();
   });
 
   it('scales every sparkline against one shared maximum, so a small model draws small', () => {
@@ -167,70 +196,136 @@ describe('admin cost charts (W11)', () => {
     expect(new Set(points).size).toBe(FIXTURE.models.length);
   });
 
-  it.each(SVG_CHARTS)('%s hides its drawing from assistive tech and captions the figure', (_key, Chart) => {
-    const { container, unmount } = renderWithIntl(<Chart data={FIXTURE} />);
+  it.each(VIEW_MARKS)(
+    'the %s view hides its drawing from assistive tech and captions the figure',
+    async (id, marks) => {
+      const { container, view } = openPanel();
+      await pick(view, id);
 
-    const svgs = [...container.querySelectorAll('svg')];
-    expect(svgs.length).toBeGreaterThan(0);
-    for (const svg of svgs) expect(svg).toHaveAttribute('aria-hidden', 'true');
+      expect(container.querySelectorAll(marks).length).toBeGreaterThan(0);
+      for (const svg of container.querySelectorAll('svg')) {
+        expect(svg).toHaveAttribute('aria-hidden', 'true');
+      }
 
-    const caption = container.querySelector('figcaption');
-    expect(caption?.textContent?.trim()).toBeTruthy();
-    unmount();
+      expect(container.querySelector('[aria-hidden="true"]')).not.toBeNull();
+      expect(captionOf(container)).toBeTruthy();
+    },
+  );
+
+  it('offers only the drawings the chosen view can be drawn as, and hides the picker when there is one', async () => {
+    const { container, view } = openPanel();
+
+    for (const [id, expected] of TYPES_PER_VIEW) {
+      await pick(view, id);
+      if (expected.length === 0) {
+        expect(typeSelect(container)).toBeNull();
+      } else {
+        expect(typeSelect(container)).not.toBeNull();
+        expect(typeOptions(container)).toEqual(expected);
+      }
+    }
   });
 
-  it('hides the sparkline svgs and gives the model table a visually hidden caption', () => {
-    const { container } = renderWithIntl(<ModelTable data={FIXTURE} />);
+  it('redraws the same view when the drawing changes and keeps the caption the view owns', async () => {
+    const { container, view } = openPanel();
+    await pick(view, 'mix');
 
-    const svgs = [...container.querySelectorAll('svg')];
-    expect(svgs).toHaveLength(FIXTURE.models.length);
-    for (const svg of svgs) expect(svg).toHaveAttribute('aria-hidden', 'true');
+    const caption = captionOf(container);
+    expect(container.querySelectorAll('polygon').length).toBeGreaterThan(0);
+    expect(container.querySelectorAll('rect')).toHaveLength(0);
 
-    expect(container.querySelector('caption')?.textContent?.trim()).toBeTruthy();
+    await pick(within(container).getByTestId('admin-cost-type'), 'stackedColumns');
+
+    expect(container.querySelectorAll('rect').length).toBeGreaterThan(0);
+    expect(container.querySelectorAll('polygon')).toHaveLength(0);
+    expect(captionOf(container)).toBe(caption);
   });
 
-  it('hides the heatmap grid from assistive tech and captions the figure', () => {
-    const { container } = renderWithIntl(<SpendHeatmap data={FIXTURE} />);
+  it('remembers the drawing chosen for each view instead of resetting it', async () => {
+    const { container, view } = openPanel();
 
-    const grid = container.querySelector('[aria-hidden="true"]');
-    expect(grid).not.toBeNull();
-    expect(within(container).getByTestId('heat-0-0')).toBeInTheDocument();
-    expect(container.querySelector('figcaption')?.textContent?.trim()).toBeTruthy();
+    await pick(within(container).getByTestId('admin-cost-type'), 'area');
+    expect(within(container).getByTestId('admin-cost-type')).toHaveValue('area');
+
+    await pick(view, 'perDay');
+    expect(within(container).getByTestId('admin-cost-type')).toHaveValue('line');
+
+    await pick(view, 'trend');
+    expect(within(container).getByTestId('admin-cost-type')).toHaveValue('area');
   });
 
-  it.each(ZERO_CHARTS)('%s draws a zeroed surface rather than a spinner or a blank', (key, Chart, selector) => {
-    const { container, unmount } = renderWithIntl(<Chart data={ZEROED} />);
+  it('scales one line per model against the tallest model, not against the stacked total', async () => {
+    const { container, view } = openPanel();
+    await pick(view, 'mix');
 
-    expect(container.querySelector('h3')).not.toBeNull();
-    expect(within(container).getByRole('heading', { name: copy[key] })).toBeInTheDocument();
-    expect(within(container).getByText(NO_SPEND)).toBeInTheDocument();
-    expect(within(container).queryByTestId('admin-cost-loading')).not.toBeInTheDocument();
-    expect(container.textContent?.trim()).toBeTruthy();
-    if (selector !== '') expect(container.querySelectorAll(selector).length).toBeGreaterThan(0);
-    unmount();
+    const stacked = highestMark(container);
+
+    await pick(within(container).getByTestId('admin-cost-type'), 'lines');
+
+    const lines = highestMark(container);
+    expect(Number.isFinite(stacked)).toBe(true);
+    expect(Number.isFinite(lines)).toBe(true);
+    expect(lines).toBeLessThan(stacked);
   });
 
-  it('names one deterministic peak bucket when two buckets tie on cost', () => {
-    const first = renderWithIntl(<SpendHeatmap data={TIED} />);
-    const caption = first.container.querySelector('figcaption')?.textContent ?? '';
+  it.each(ZERO_VIEWS)(
+    'the %s view draws a zeroed surface rather than a spinner or a blank',
+    async (id, marks) => {
+      const { container, view } = openPanel(ZEROED);
+      await pick(view, id);
+
+      expect(container.querySelectorAll(marks).length).toBeGreaterThan(0);
+      expect(captionOf(container)).toBeTruthy();
+      expect(within(container).queryByTestId('admin-cost-loading')).not.toBeInTheDocument();
+      expect(within(container).getAllByText(NO_SPEND).length).toBe(1);
+    },
+  );
+
+  it('resolves a tie for the busiest bucket to the lower day then the lower hour', async () => {
+    expect(heatGrid(TIED.hourly)).toMatchObject({ max: 2000, peakDow: 1, peakHour: 5 });
+    expect(heatGrid([])).toMatchObject({ max: 0, peakDow: 0, peakHour: 0 });
+    expect(pad(5)).toBe('05');
+
+    const first = openPanel(TIED);
+    await pick(first.view, 'hours');
+    const caption = captionOf(first.container);
     first.unmount();
 
-    const second = renderWithIntl(<SpendHeatmap data={TIED} />);
-    expect(second.container.querySelector('figcaption')?.textContent).toBe(caption);
+    const second = openPanel(TIED);
+    await pick(second.view, 'hours');
 
+    expect(captionOf(second.container)).toBe(caption);
     expect(caption).toContain(copy.weekday1);
     expect(caption).toContain('05');
     expect(caption).not.toContain(copy.weekday3);
   });
 
-  it('pins exactly one range at a time and refetches the newly chosen span', async () => {
-    renderWithProviders(<CostPanel items={[]} stats={undefined} />);
+  it('pins exactly one range at a time and reports the newly chosen span', async () => {
+    const onDaysChange = vi.fn();
+    const { container } = openPanel(FIXTURE, onDaysChange);
 
-    const buttons = COST_RANGES.map((option) => screen.getByTestId(`admin-cost-range-${option}`));
+    const buttons = COST_RANGES.map((option) =>
+      within(container).getByTestId(`admin-cost-range-${option}`),
+    );
     expect(buttons).toHaveLength(COST_RANGES.length);
     expect(buttons.filter((button) => button.getAttribute('aria-pressed') === 'true')).toHaveLength(
       1,
     );
+    expect(within(container).getByTestId('admin-cost-range-30')).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+
+    await act(async () => {
+      await userEvent.click(within(container).getByTestId('admin-cost-range-7'));
+    });
+
+    expect(onDaysChange).toHaveBeenCalledWith(7);
+  });
+
+  it('moves the pinned range and refetches the newly chosen span', async () => {
+    renderWithProviders(<CostPanel items={[]} stats={undefined} />);
+
     expect(screen.getByTestId('admin-cost-range-30')).toHaveAttribute('aria-pressed', 'true');
     expect(costsQuery.useAdminCosts).toHaveBeenLastCalledWith(true, 30);
 
