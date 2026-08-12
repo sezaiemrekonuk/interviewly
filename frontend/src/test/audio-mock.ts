@@ -29,6 +29,13 @@ export interface FakeRecorder {
   stops: number;
   pauses: number;
   resumes: number;
+  /** What `start()` was given: a timeslice, or undefined for one blob at `stop()`. */
+  timeslice: number | undefined;
+  /**
+   * Deliver one interim chunk, the way a timesliced recorder does. `fill` is repeated to
+   * `bytes` so a test can tell which part of a long recording survived a size cap.
+   */
+  chunk: (bytes?: number, fill?: string) => void;
 }
 
 export interface AudioHarness {
@@ -137,6 +144,12 @@ export function installAudioMock(): AudioHarness {
         stops: 0,
         pauses: 0,
         resumes: 0,
+        timeslice: undefined,
+        chunk: (bytes = 8_000, fill = 'x') => {
+          this.ondataavailable?.({
+            data: new Blob([fill.repeat(bytes)], { type: this.mimeType }),
+          });
+        },
       };
       recorders.push(this.view);
     }
@@ -146,9 +159,10 @@ export function installAudioMock(): AudioHarness {
       return this.view.state;
     }
 
-    start() {
+    start(timeslice?: number) {
       this.view.state = 'recording';
       this.view.starts += 1;
+      this.view.timeslice = timeslice;
     }
 
     pause() {
