@@ -44,7 +44,7 @@ const MAX_TECH = 13;
  * duration above its own configured ceiling, so a deployment that lowered it answers
  * VALIDATION_ERROR rather than silently running the longer interview.
  */
-export const VOICE_MAX_INTERVIEW_SECONDS = 1500;
+export const VOICE_MAX_INTERVIEW_SECONDS = 1800;
 
 // The offered voice lengths. `null` is the default and sends no duration at all, which is what
 // leaves the server's ceiling in charge — sending "1500" instead would pin the interview to a

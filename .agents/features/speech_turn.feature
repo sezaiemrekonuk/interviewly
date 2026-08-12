@@ -190,7 +190,7 @@ Feature: Speech provider seam — SpeechProvider interface contract
     And I have a voice interview in hr_round with current index 1
     When I GET the interview state as that owner
     Then the state startedAt is not null
-    And the state expiresAt is 720 seconds after the state startedAt
+    And the state expiresAt is 1800 seconds after the state startedAt
 
   @speech @AC-12
   Scenario: a chosen duration shortens the window the room counts down
@@ -204,7 +204,7 @@ Feature: Speech provider seam — SpeechProvider interface contract
   Scenario: the expiry state reports is the one the speech route enforces
     Given I am signed in as a speech candidate
     And I have a voice interview in hr_round with current index 1
-    And that interview has spent 719 seconds in the room
+    And that interview has spent 1799 seconds in the room
     When I GET "/interviews/:id/questions/:index/speech" as that owner
     Then the response is "audio/mpeg" bytes
     When I GET the interview state as that owner

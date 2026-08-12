@@ -96,8 +96,8 @@ describe('deliverCurrentQuestion', () => {
 
 /**
  * S09, as I16 left it. The room derives its countdown from these, so they are the same
- * arithmetic `isPastSpeechCeiling` refuses on — 720 is `VOICE_MAX_ROUND_SECONDS`, the lower of
- * the two configured ceilings.
+ * arithmetic `isPastSpeechCeiling` refuses on — 1800 is both configured ceilings, which now
+ * hold the same 30 minutes.
  *
  * The window is now measured from *active* time, so `now` is passed explicitly and every
  * expectation is relative to it rather than to `started_at`. A fixture with no banked seconds
@@ -113,7 +113,7 @@ describe('interviewWindow', () => {
   it('expires a voice interview at the configured ceiling', () => {
     expect(interviewWindow({ ...fresh, mode: 'voice', max_duration_seconds: null }, now)).toEqual({
       startedAt: started_at.toISOString(),
-      expiresAt: at(720),
+      expiresAt: at(1800),
       elapsedSeconds: 0,
     });
   });
@@ -129,7 +129,7 @@ describe('interviewWindow', () => {
   it('never reports past the ceiling, however long the choice was', () => {
     expect(
       interviewWindow({ ...fresh, mode: 'voice', max_duration_seconds: 86_400 }, now).expiresAt,
-    ).toBe(at(720));
+    ).toBe(at(1800));
   });
 
   // The ceiling bounds voice only, and a text interview never reaches the routes that enforce
@@ -161,8 +161,8 @@ describe('interviewWindow', () => {
       away,
     );
     expect(window.elapsedSeconds).toBe(180);
-    // 720 - 180 = 540 seconds left, measured from `away` — the hour out of the room cost nothing.
-    expect(window.expiresAt).toBe(new Date(away.getTime() + 540 * 1000).toISOString());
+    // 1800 - 180 = 1620 seconds left, measured from `away` — the hour out of the room cost nothing.
+    expect(window.expiresAt).toBe(new Date(away.getTime() + 1620 * 1000).toISOString());
   });
 });
 
