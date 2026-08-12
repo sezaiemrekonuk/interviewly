@@ -62,6 +62,9 @@ guarded advance (I06), and the shared Redis connection (`auth/rate-limit.ts`).
 | T03 | The turn paths: gate + join + hold in `submitTurnAudio`, `kind: 'silence'`, both ceilings, `pendingTurn` on `/state`, silence hidden from the room |
 | T04 | The room: probe-vs-final stop, restart-before-upload, the 13 s clock, the recovery notice |
 | T05 | Gate accuracy after the first live run: two clocks (ADR-T06) and prompt v2 |
+| T06 | The suspended `AudioContext` — a reloaded room measured nothing, so the VAD never armed |
+| T07 | Unprobed speech dies with the page: recorder timeslice and a `pagehide` flush |
+| T08 | The VAD armed on a fixed 0.05 RMS and never heard the candidate (ADR-T07) |
 
 ## What this ledger deliberately does not do
 

@@ -98,13 +98,33 @@ FINISHED" and names the transcript trap outright: a missing full stop is not a b
 `CONDUCTOR_TURN_FORWARDED` logs `chars`, `probes`, `gated`, `finished` on the branch that does
 not hold, so the hold rate is now countable from one grep instead of inferable from a silence.
 
-**Deviation — the gate's live accuracy is still unmeasured.** Step 4 asked for cases proving a
+**Measured live, 2026-08-12 05:21–05:23** (one interview, two questions, six uploads — small,
+but the first real data this ledger has ever had):
+
+| | |
+|---|---|
+| Gated uploads | 6 |
+| Held | 4 (111, 192, 207, 55 chars) |
+| Forwarded `finished: true` | 2 (336 chars, and an 11-char closing line) |
+
+The three holds inside the first answer were **correct** — the candidate paused ≥ 2 s and then
+kept talking, and the fragments joined 111 → 192 → 207. What the gate still got wrong is the
+*last* one: it held 207 characters that were the end of the answer, so the turn was ended by the
+4 s flush rather than by a verdict. That flush is visible in the log as a conductor turn at
+05:22:25 with **no STT line before it**, three seconds after the hold, and the interviewer spoke
+at 05:22:28. ADR-T06 is doing exactly what it was written to do, and prompt v2 forwarded a
+336-character answer that v1's shape would very likely have held.
+
+**Still conservative.** A gate that ends an answer by timing out is a gate that was wrong, even
+at 3 s. The next tuning pass has data now: `CONDUCTOR_TURN_FORWARDED` and `CONDUCTOR_TURN_HELD`
+carry chars/probes/verdict, so the hold rate is one `grep` away.
+
+**Deviation — the gate's live accuracy was unmeasured when this task shipped.** Step 4 asked for cases proving a
 ~130-character Turkish sentence comes back finished, and the seam's tests stub the transport:
 they can assert the wire, never the model's judgement. What they assert instead is the K9
 contract — v2 is served, on v1's uuid, on nano, at temperature 0 — plus the two sentences the
-revision exists for. The real check is the manual one under `## Verification`, and it has **not
-been run**. Until it is, the prompt half of this task is a hypothesis with a test suite around
-it, not a fix.
+revision exists for. The real check was the manual one under `## Verification`, and it could not run until `T08` made
+the room able to hear at all. It has now run — see the table above.
 
 **Acceptance skipped, not green.** The stack is up under plain `docker compose up`, which
 publishes no host ports, so the suite could not reach db or cache. It was green (111 scenarios)
