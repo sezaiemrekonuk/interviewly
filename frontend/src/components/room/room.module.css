@@ -444,6 +444,26 @@
   box-shadow: var(--shadow-soft);
 }
 
+/* Stop's slot. Both children occupy the SAME grid cell, so the slot is the width of the button
+   whether or not the button is in it, and starting or ending a turn moves nothing else in the
+   row. A held width, not a held button: there is still nothing to click when nothing is being
+   recorded. */
+.stopSlot {
+  display: grid;
+  align-items: center;
+}
+
+.stopSlot > * {
+  grid-area: 1 / 1;
+}
+
+/* Furniture. `visibility` and not `display: none` — a hidden box still has a size, and the size
+   is the entire point of this element. */
+.stopGhost {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 /* 44px on both axes: the mic is hit mid-sentence. */
 .ck {
   display: inline-flex;
