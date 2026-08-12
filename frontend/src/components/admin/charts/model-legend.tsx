@@ -1,0 +1,31 @@
+'use client';
+
+import { useFormatter, useTranslations } from 'next-intl';
+
+import type { AdminCostsResponse } from '../../../lib/query';
+
+import styles from './charts.module.css';
+import { seriesKey, seriesLabel, seriesShare, seriesToken } from './series';
+
+export function ModelLegend({ data, money }: { data: AdminCostsResponse; money?: boolean }) {
+  const t = useTranslations('admin');
+  const format = useFormatter();
+
+  return (
+    <ul className={styles.legend}>
+      {data.models.map((row, index) => (
+        <li className={styles.legendRow} key={seriesKey(row)}>
+          <span className={styles.swatch} data-series={seriesToken(row, index)} />
+          <span className={styles.legendLabel}>{seriesLabel(row, t('costs.otherModels'))}</span>
+          <span className={`${styles.legendValue} tabular`}>
+            {format.number(seriesShare(row, data.totals.costUsd), {
+              style: 'percent',
+              maximumFractionDigits: 0,
+            })}
+            {money ? ` · ${row.costUsd}` : ''}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
