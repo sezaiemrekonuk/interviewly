@@ -225,7 +225,7 @@ export function useVoiceSession(
   const [error, setError] = useState<string | null>(null);
   const [holding, setHolding] = useState(false);
 
-  const { request: requestMic } = mic;
+  const { request: requestMic, release: releaseMic } = mic;
   const active = enabled && Boolean(interviewId);
 
   const liveRef = useRef(true);
@@ -301,9 +301,17 @@ export function useVoiceSession(
     messagesRef.current = messages;
   }, [messages]);
 
+  const openedRef = useRef(false);
   useEffect(() => {
-    if (active) requestMic();
-  }, [active, requestMic]);
+    if (active) {
+      openedRef.current = true;
+      requestMic();
+      return;
+    }
+    if (!openedRef.current) return;
+    openedRef.current = false;
+    releaseMic();
+  }, [active, requestMic, releaseMic]);
 
   // Re-asking for the mic is the whole retry now — there is no connection to re-establish.
   const reconnect = useCallback(() => requestMic(), [requestMic]);
@@ -534,7 +542,15 @@ export function useVoiceSession(
           if (!liveRef.current) return resolve(false);
           releasePlayer();
           setPhase('idle');
-          void voiceDowngrade(String(interviewId)).finally(refetchState);
+          void voiceDowngrade(String(interviewId))
+            .then((result) => {
+              if (result.ok || !liveRef.current) return;
+              failedAtRef.current = 'speak';
+              failedMessageRef.current = messageId;
+              setError(result.code ?? 'UNKNOWN');
+              setPhase('failed');
+            })
+            .finally(refetchState);
           resolve(false);
         };
         player.addEventListener('error', downgrade);

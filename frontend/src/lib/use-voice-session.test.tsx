@@ -438,6 +438,40 @@ describe('useVoiceSession — failure branches (S06)', () => {
     expect(hook.result.current.beat).toBe(null);
   });
 
+  it('surfaces a refused downgrade instead of leaving the room silently idle', async () => {
+    const calls = stubApi({
+      '/api/interviews/i1/voice/downgrade': jsonError(403, 'FORBIDDEN'),
+    });
+    const hook = mount();
+    await waitFor(() => expect(audio.players).toHaveLength(1));
+
+    await act(async () => audio.players[0].fail());
+
+    await waitFor(() => expect(hits(calls, '/api/interviews/i1/voice/downgrade')).toBe(1));
+    await waitFor(() => expect(hook.result.current.error).toBe('FORBIDDEN'));
+    expect(hook.result.current.beat).toBe(null);
+  });
+
+  it('releases the microphone once the room is no longer in voice mode', async () => {
+    stubApi();
+    const hook = renderHook(
+      (props: { enabled: boolean }) =>
+        useVoiceSession('i1', {
+          enabled: props.enabled,
+          messages: MESSAGES,
+          speakable: true,
+          vad: VAD,
+        }),
+      { wrapper: wrapper(client), initialProps: { enabled: true } },
+    );
+    await waitFor(() => expect(mics.tracks).toHaveLength(1));
+
+    await act(async () => hook.rerender({ enabled: false }));
+
+    expect(mics.tracks[0].stop).toHaveBeenCalled();
+    expect(mics.tracks).toHaveLength(1);
+  });
+
   it('reports the ceiling refusal as its own code and lets the refetch end the room', async () => {
     const invalidate = vi.spyOn(client, 'invalidateQueries');
     const calls = stubApi({ [SPEECH('m1')]: jsonError(403, 'VOICE_SESSION_EXPIRED') });
