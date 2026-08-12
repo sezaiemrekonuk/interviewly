@@ -46,7 +46,27 @@ export type VoiceBeat = 'listening' | 'speaking' | 'acknowledging' | null;
  * candidate is mid-thought, and a long one is latency on every answer they did finish.
  */
 export const VAD_SILENCE_MS = 2_000;
+
+/**
+ * The CEILING on what counts as speech, not the test for it (ADR-T07). 0.05 RMS is a loud voice
+ * on a close microphone; a laptop mic at arm's length runs an order of magnitude quieter, and
+ * against a fixed 0.05 such a candidate is never heard at all — no probe is ever sent, and the
+ * only thing that ends their turn is the clock. That cost four live interviews.
+ */
 export const VAD_THRESHOLD = 0.05;
+
+/**
+ * How far above the room's own noise floor a frame has to sit to be somebody talking. Three
+ * times is the usual margin: room tone is steady, speech is not, and the gap between them is
+ * far larger than this on any real microphone.
+ */
+const SPEECH_OVER_FLOOR = 3;
+
+/**
+ * ...and the quietest thing that may ever count as speech, whatever the floor says. Without it a
+ * dead-silent room (floor ~0) would arm on its own dither. -40 dBFS.
+ */
+const VAD_FLOOR = 0.01;
 
 /**
  * T04 — how long a turn may say nothing at all before the room tells the server so. The room
@@ -205,6 +225,8 @@ export function useVoiceSession(
   // otherwise upload two seconds of nothing and come back SPEECH_AUDIO_INVALID.
   const heardRef = useRef(false);
   const lastLoudRef = useRef(0);
+  // The quietest level seen since this recorder opened — this room, this microphone, this turn.
+  const floorRef = useRef(VAD_THRESHOLD);
   // When this recorder opened. The 13 s clock measures from here until something is heard, and
   // from the last loud frame after that.
   const turnStartedRef = useRef(0);
@@ -304,6 +326,7 @@ export function useVoiceSession(
     }
 
     heardRef.current = false;
+    floorRef.current = threshold;
     chunksRef.current = [];
     discardRef.current = false;
     silenceSentRef.current = false;
@@ -502,7 +525,17 @@ export function useVoiceSession(
   // ever is. The recorder then never stops and the turn never uploads.
   useEffect(() => {
     if (phase !== 'listening' || mic.muted) return;
-    if (mic.level < threshold) return;
+    // What this microphone's silence actually measures, learned per recording rather than
+    // assumed. It only ever moves DOWN within a turn, and `startRecording` resets it, so a room
+    // that gets noisier mid-answer cannot desensitise the rest of that answer.
+    const armAt = Math.min(threshold, Math.max(floorRef.current * SPEECH_OVER_FLOOR, VAD_FLOOR));
+    if (mic.level < armAt) {
+      // A level of exactly zero is not a measurement of the room — it is a microphone that is
+      // delivering nothing (muted, suspended, or not yet running). Learning from it would teach
+      // the room that silence is 0 and drop the bar to `VAD_FLOOR` for the rest of the turn.
+      if (mic.level > 0) floorRef.current = Math.min(floorRef.current, mic.level);
+      return;
+    }
     heardRef.current = true;
     lastLoudRef.current = Date.now();
   }, [phase, mic.level, mic.muted, threshold]);

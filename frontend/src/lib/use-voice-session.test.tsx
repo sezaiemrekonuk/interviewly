@@ -645,6 +645,35 @@ describe('useVoiceSession — a pause is not the end of the turn (T04)', () => {
     await tick();
   });
 
+  // ADR-T07 — the bug that cost four live runs. `VAD_THRESHOLD` is a loud voice on a close mic;
+  // a laptop mic at arm's length is an order of magnitude quieter, so `heardRef` never armed, no
+  // probe was ever sent, and the room sat listening to a candidate who was talking to it. The
+  // room now measures what silence sounds like on THIS microphone and calls speech anything well
+  // above it.
+  it('probes speech that never reaches the absolute threshold', async () => {
+    const { calls } = await listening({ [UPLOAD]: held(null) });
+
+    // A quiet room, so the floor is learned.
+    await act(async () => audio.level(0.001, 4));
+    // A quiet speaker: a fifth of `VAD_THRESHOLD`, and inaudible to the old rule.
+    await act(async () => audio.level(0.012, 4));
+    await act(async () => audio.level(0.001));
+    await tick(VAD.silenceMs + 200);
+
+    expect(hits(calls, UPLOAD)).toBe(1);
+  });
+
+  // The other half of adapting: a room with a loud noise floor must not talk to itself. Ambient
+  // never counts as speech, however high it sits.
+  it('never arms on the noise floor itself, however loud the room is', async () => {
+    const { calls } = await listening({ [UPLOAD]: held(null) });
+
+    await act(async () => audio.level(0.02, 20));
+    await tick(VAD.silenceMs * 5);
+
+    expect(hits(calls, UPLOAD)).toBe(0);
+  });
+
   // ADR-T06 — the two clocks. A candidate the server is already holding a fragment for has
   // spoken, has paused, and has had the gate's verdict; four seconds later the room says so. A
   // candidate who has said nothing at all is thinking, and thirteen seconds is theirs.

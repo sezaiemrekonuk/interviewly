@@ -215,3 +215,31 @@ true when written; only the held branch is superseded. Two clocks is two chances
 turn always ends*, which is why T05 is opus-tier and why its tests assert both branches fire
 exactly once. The gate's real grace after a verdict is ~3 s, not 4 — the round trip is inside
 the window.
+
+---
+
+## ADR-T07 — 2026-08-12 — The VAD arms against the room's own noise floor, not a fixed level (supersedes ADR-S06's threshold)
+
+**Context:** Four live runs, no `SPEECH_STT_TRANSCRIBED` in any of them. The owner confirmed the
+Stop button was visible (recorder open) and that their own mic bars moved (meter alive) — so
+`mic.level` was non-zero and never once reached `VAD_THRESHOLD = 0.05`. 0.05 RMS is a loud voice
+on a close microphone; a laptop mic at arm's length runs an order of magnitude quieter. The room
+was listening to a candidate who was talking and refusing to call it speech, so nothing was
+uploaded, nothing was held, and the only thing that ended a turn was the 13 s clock.
+
+**Decision:** Arm on `min(VAD_THRESHOLD, max(floor × 3, 0.01))`, where `floor` is the quietest
+level measured since this recorder opened. The fixed threshold becomes a **ceiling**: the rule is
+never less sensitive than before, and on a quiet microphone it is far more so. The floor is reset
+per recording and only ever moves down within one, so a room that gets noisier mid-answer cannot
+desensitise the rest of it. A level of exactly 0 never teaches the floor anything — that is a
+microphone delivering nothing, not a measurement of the room.
+
+**Why not just lower the number:** the same guess, one order of magnitude down, and wrong for the
+next microphone in the other direction. Three times the measured floor is the standard margin and
+needs no knowledge of the hardware.
+
+**Consequences:** Over-sensitivity degrades safely — a room whose tone sits above the bar keeps
+refreshing `lastLoud`, so the VAD simply never fires and the clock ends the turn, which is
+exactly today's behaviour and no worse. ADR-S06's threshold and `VAD_THRESHOLD`'s value are
+unchanged as written; what changed is that the value is now a bound rather than the test.
+`speech-latency` `L03` still owns `VAD_SILENCE_MS`.
