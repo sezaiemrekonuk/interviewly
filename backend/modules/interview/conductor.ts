@@ -35,6 +35,7 @@ import { config } from '../../src/lib/env';
 import { prisma } from '../../src/lib/db';
 import { logger } from '../../src/lib/logger';
 import { aiClient } from '../ai';
+import { prewarmMessageSpeech } from '../speech/tts';
 
 import { promoteNextQuestion } from './adaptive';
 import { recordAnswer } from './answers';
@@ -76,7 +77,17 @@ export type TurnInput = z.infer<typeof turnInputSchema>;
 export interface TurnResult {
   state: InterviewState;
   currentIndex: number;
+  /**
+   * L02 — the assistant rows this turn wrote, oldest first. A handover writes two (the closing
+   * line and the next interviewer's greeting), an opening turn one, a held fragment (T03) none.
+   * A latency shortcut, not a second source of truth (K11): the room fetches their audio early
+   * and still reconciles against `/state`.
+   */
+  spokenIds: string[];
 }
+
+/** The advance half a turn produces before `conductTurn` attaches the ids it spoke (L02). */
+type TurnAdvance = Omit<TurnResult, 'spokenIds'>;
 
 /**
  * How much conversation the conductor is shown. The builder truncates an over-long block with
@@ -104,8 +115,19 @@ const HISTORY_ELIDED = '[earlier turns omitted]';
  * What the interviewer reads where the candidate's utterance would have been. Written as an
  * observation rather than an instruction: the interviewer decides whether to nudge, re-ask or
  * move on, exactly as it decides everything else about a turn.
+ *
+ * Six, not thirteen: ADR-T08 shortened the room's silent-turn window (`FORCE_SUBMIT_MS`) and
+ * this string was missed, so for two days the interviewer was told the candidate had sat in
+ * silence twice as long as they had — and it decides how hard to nudge from exactly that. The
+ * room's constant is the source of truth; this sentence has to be edited with it. It is not
+ * derived from config because the window is a room constant the server never receives, and a
+ * number invented here would be a second, quieter way to be wrong.
+ *
+ * Only the genuine-silence path writes it. A silence that arrives while the server holds a
+ * fragment is turned back into an ordinary utterance before it reaches here (T03), so the
+ * shorter `FLUSH_HELD_MS` window never produces this sentence.
  */
-const SILENCE_NOTE = '[The candidate has said nothing for 13 seconds.]';
+const SILENCE_NOTE = '[The candidate has said nothing for 6 seconds.]';
 
 /**
  * A turn the candidate spent, for both ceilings. Silence is one of them (ADR-T04): a silent
@@ -174,14 +196,25 @@ export async function conductTurn(
   input: TurnInput,
   opts: ConductOpts,
 ): Promise<TurnResult> {
-  return runTurn(interview, input, opts);
+  const advance = await runTurn(interview, input, opts);
+  // The assistant rows this request wrote, in order. `say()` stamps every one with the
+  // request's `trace_id`, unique per turn, so this is the whole of what the turn spoke — a
+  // handover's two lines included, since the nested `openRound` shares the trace. L02 hands
+  // these to the room so it can begin fetching their audio before the `/state` refetch reveals
+  // them; the row still wins on any disagreement (K11).
+  const spoken = await prisma.chatMessage.findMany({
+    where: { interview_id: interview.id, role: 'assistant', trace_id: opts.traceId },
+    orderBy: [{ created_at: 'asc' }, { id: 'asc' }],
+    select: { id: true },
+  });
+  return { ...advance, spokenIds: spoken.map((row) => row.id) };
 }
 
 async function runTurn(
   interview: Interview,
   input: TurnInput | null,
   opts: ConductOpts,
-): Promise<TurnResult> {
+): Promise<TurnAdvance> {
   const { traceId } = opts;
   const ctx: AiCtx = { interviewId: interview.id, traceId };
 
@@ -434,7 +467,7 @@ async function applyAction(
   turn: ConductorReply,
   action: ConductorAction,
   opts: ConductOpts,
-): Promise<TurnResult> {
+): Promise<TurnAdvance> {
   const { traceId } = opts;
 
   switch (action) {
@@ -492,7 +525,7 @@ async function nextQuestion(
   turn: ConductorReply,
   action: ConductorAction,
   opts: ConductOpts,
-): Promise<TurnResult> {
+): Promise<TurnAdvance> {
   const { traceId } = opts;
 
   const transcript = await answerWindow(interview.id, question.id);
@@ -599,7 +632,7 @@ async function handover(
   question: QuestionRow,
   saidText: string | null,
   opts: ConductOpts,
-): Promise<TurnResult> {
+): Promise<TurnAdvance> {
   const { traceId } = opts;
   const expected = interview.current_index;
   const target = interview.hr_question_count + 1;
@@ -625,11 +658,20 @@ async function handover(
   );
 
   const state = await applyTransition(interview, 'tech_round', { traceId });
-  await say(interview, saidText ?? question.text, 'handover', null, traceId);
+  const closingId = await say(interview, saidText ?? question.text, 'handover', null, traceId);
   logger.info(
     { traceId, interviewId: interview.id, from: expected, to: target },
     'CONDUCTOR_HANDOVER',
   );
+
+  // L02 — the one path where "when the row is written" and "when the response is sent" are a
+  // second apart. Everywhere else `say()` is the last thing a turn does, so the route's prewarm
+  // loses nothing by waiting for `res.json`; here a whole second conductor call (`openRound`,
+  // ~1 180 ms) still has to run, and without this the candidate hears the closing line only
+  // after it. Floating and self-swallowing, like the route's: it must not delay the handover it
+  // is buying audio for, and the room's own GET stays the path that reports a failure. The
+  // route fires for this id too — the budget lock and the re-read inside it make that one bill.
+  if (interview.mode === 'voice') void prewarmMessageSpeech(interview.id, closingId, traceId);
 
   // The new interviewer introduces itself and asks its own first question. Best-effort: a
   // handover that lands and then fails to greet is a round the candidate can still be asked
@@ -649,7 +691,7 @@ async function endInterview(
   endedReason: 'completed' | 'cut_short' | 'budget_exhausted',
   saidText: string | null,
   opts: ConductOpts,
-): Promise<TurnResult> {
+): Promise<TurnAdvance> {
   const { traceId } = opts;
 
   // The closing answer counts. An interview that ends on the candidate's best answer used to
@@ -814,14 +856,15 @@ function trimHistory(history: ConversationRow[]): { role: 'user' | 'assistant' |
   return from > 0 ? [{ role: 'system' as const, content: HISTORY_ELIDED }, ...kept] : kept;
 }
 
+/** Writes an assistant line and returns its id — L02's prewarm is keyed by it. */
 async function say(
   interview: Interview,
   content: string,
   action: ConductorAction,
   questionId: string | null,
   traceId: string,
-): Promise<void> {
-  await prisma.chatMessage.create({
+): Promise<string> {
+  const row = await prisma.chatMessage.create({
     data: {
       interview_id: interview.id,
       role: 'assistant',
@@ -830,7 +873,9 @@ async function say(
       question_id: questionId,
       trace_id: traceId,
     },
+    select: { id: true },
   });
+  return row.id;
 }
 
 /**

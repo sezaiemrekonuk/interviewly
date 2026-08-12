@@ -11,6 +11,7 @@ const m = vi.hoisted(() => ({
   findRound: vi.fn(),
   findMessage: vi.fn(),
   findQuestion: vi.fn(),
+  meterTts: vi.fn(),
   loggerInfo: vi.fn(),
   now: vi.fn(() => new Date('2026-08-06T10:10:00.000Z')),
 }));
@@ -33,17 +34,31 @@ vi.mock('../../src/lib/storage', () => ({ storage: { get: m.storageGet, put: m.s
 vi.mock('./SpeechProvider', () => ({ speechProvider: { speak: m.speak } }));
 vi.mock('../voice/downgrade', () => ({ downgradeToText: m.downgrade }));
 vi.mock('../../src/lib/logger', () => ({ logger: { info: m.loggerInfo, error: vi.fn(), warn: vi.fn() } }));
-vi.mock('../interview/budget', () => ({
-  withBudget: async (_id: string, fn: () => Promise<unknown>) => fn(),
-  BudgetExceeded: class extends Error {},
-}));
-vi.mock('./metering', () => ({ meterTts: vi.fn() }));
+vi.mock('../interview/budget', () => {
+  // The real ceiling serialises one interview's generations under an advisory lock. The double
+  // -bill test below depends on that: without serialisation the second `synthesise` re-reads the
+  // cache before the first has written it, and the re-read this test exists to prove would be a
+  // no-op. A chained promise is the smallest faithful stand-in.
+  let chain = Promise.resolve();
+  return {
+    withBudget: (_id: string, fn: () => Promise<unknown>) => {
+      const run = chain.then(() => fn());
+      chain = run.then(
+        () => undefined,
+        () => undefined,
+      );
+      return run;
+    },
+    BudgetExceeded: class extends Error {},
+  };
+});
+vi.mock('./metering', () => ({ meterTts: m.meterTts }));
 
 import { type Request, type Response } from 'express';
 
 import { ApiError } from '../../src/lib/api-error';
 
-import { isPastSpeechCeiling, serveMessageSpeech, serveQuestionSpeech } from './tts';
+import { isPastSpeechCeiling, prewarmMessageSpeech, serveMessageSpeech, serveQuestionSpeech, synthesise } from './tts';
 
 const interview = {
   id: 'itv-1',
@@ -309,6 +324,80 @@ describe('serveMessageSpeech', () => {
 
     expect(m.applyTransition.mock.calls[0]?.[2]?.endedReason).toBe('time_exhausted');
     expect(m.findMessage).not.toHaveBeenCalled();
+    expect(m.speak).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * L02 — the paid half of a route, split out so the eager prewarm and the client's own GET share
+ * it. The one thing that must survive the split is the double-checked read under the budget lock.
+ */
+describe('synthesise', () => {
+  it('two concurrent synthesises of one line bill exactly once', async () => {
+    // The store misses until the first synthesis writes it, then hits — the shape of two first
+    // requests for the same line racing through the lock.
+    let stored: Buffer | null = null;
+    m.storageGet.mockImplementation(async () => {
+      if (stored) return stored;
+      throw new Error('miss');
+    });
+    m.storagePut.mockImplementation(async (_key: string, buf: Buffer) => {
+      stored = buf;
+    });
+    m.speak.mockResolvedValue({ audio: Buffer.from([9, 9]), mime: 'audio/mpeg', characters: 24 });
+
+    const spec = {
+      key: 'speech/msg-m1.mp3',
+      text: 'Welcome.',
+      voiceId: async () => 'voice-hr',
+      traceId: 'trace-1',
+      log: { messageId: 'm1' },
+    };
+    const arg = { ...interview } as unknown as Parameters<typeof synthesise>[0];
+    const [a, b] = await Promise.all([synthesise(arg, spec), synthesise(arg, spec)]);
+
+    expect(m.speak).toHaveBeenCalledOnce();
+    expect(m.meterTts).toHaveBeenCalledOnce();
+    expect(a.audio).toEqual(b.audio);
+    // One served freshly billed bytes, the other the re-read cache — never a second charge.
+    expect([a.cached, b.cached].sort()).toEqual([false, true]);
+  });
+});
+
+/** L02 — synthesis begun when the row is written. Off the turn, so it must never block or fail it. */
+describe('prewarmMessageSpeech', () => {
+  it('synthesises the line off the request that will serve it', async () => {
+    m.storageGet.mockRejectedValue(new Error('miss'));
+    m.speak.mockResolvedValue({ audio: Buffer.from([1]), mime: 'audio/mpeg', characters: 12 });
+
+    await prewarmMessageSpeech('itv-1', 'm1', 'trace-1');
+
+    expect(m.speak).toHaveBeenCalledOnce();
+    expect(m.meterTts).toHaveBeenCalledOnce();
+  });
+
+  it('never rejects when synthesis fails — the room GET is what reports failure', async () => {
+    m.storageGet.mockRejectedValue(new Error('miss'));
+    m.speak.mockRejectedValue(new Error('provider down'));
+
+    await expect(prewarmMessageSpeech('itv-1', 'm1', 'trace-1')).resolves.toBeUndefined();
+  });
+
+  it("does not spend past the ceiling, and does not end the interview — that is the GET's job", async () => {
+    m.activeInterview.mockResolvedValue({ ...interview, elapsed_seconds: 721 });
+
+    await prewarmMessageSpeech('itv-1', 'm1', 'trace-1');
+
+    expect(m.findMessage).not.toHaveBeenCalled();
+    expect(m.speak).not.toHaveBeenCalled();
+    expect(m.applyTransition).not.toHaveBeenCalled();
+  });
+
+  it('speaks nothing for a text interview', async () => {
+    m.activeInterview.mockResolvedValue({ ...interview, mode: 'text' });
+
+    await prewarmMessageSpeech('itv-1', 'm1', 'trace-1');
+
     expect(m.speak).not.toHaveBeenCalled();
   });
 });

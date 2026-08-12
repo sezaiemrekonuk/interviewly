@@ -36,7 +36,7 @@ import {
   takePendingTurn,
 } from "./pending-turn";
 import { speechProvider } from "./SpeechProvider";
-import { isPastSpeechCeiling, VOICE_CAPABLE_STATES } from "./tts";
+import { isPastSpeechCeiling, prewarmMessageSpeech, VOICE_CAPABLE_STATES } from "./tts";
 
 // ponytail: a fixed cap like uploads.ts MAX_BYTES; a single recorded answer is small, and a
 // per-answer size limit is not a decision the config surface needs to carry.
@@ -81,7 +81,7 @@ const parseAudio = audioParser({ fields: 1, parts: 3 });
  * the wire would let a candidate post words they never spoke into the utterance the conductor
  * answers, the transcript records and the report scores, while paying for a fraction of a second
  * of audio. `force` cannot buy that — all it skips is a gate the candidate skips anyway by
- * staying quiet for thirteen seconds. The multer limit caps the COUNT; `turnFields` below is
+ * staying quiet for six seconds. The multer limit caps the COUNT; `turnFields` below is
  * what refuses a field by name.
  */
 const parseTurnAudio = audioParser({ fields: 1, parts: 3 });
@@ -436,4 +436,11 @@ export const submitTurnAudio: RequestHandler = async (req, res) => {
   const result = await conductTurn(interview, parsed.data, { traceId });
 
   res.status(200).json({ ...result, pendingTurn: null });
+
+  // L02 — the audio for the lines this turn just wrote is worth synthesising now, off the
+  // response, rather than when the room's GET asks for it. Floating and self-swallowing: it
+  // never blocks the turn the candidate is waiting on and never fails it.
+  for (const id of result.spokenIds) {
+    void prewarmMessageSpeech(interview.id, id, traceId);
+  }
 };

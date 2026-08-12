@@ -11,6 +11,7 @@ const m = vi.hoisted(() => ({
   hold: vi.fn(),
   turnComplete: vi.fn(),
   withBudget: vi.fn(),
+  prewarm: vi.fn(),
   loggerInfo: vi.fn(),
   loggerWarn: vi.fn(),
   loggerError: vi.fn(),
@@ -67,6 +68,12 @@ vi.mock('../interview/conductor', async (orig) => {
   const actual = await orig<typeof import('../interview/conductor')>();
   return { turnInputSchema: actual.turnInputSchema, conductTurn: m.conduct };
 });
+// L02's eager synthesis is a floating provider call off the turn — spied here so the wiring is
+// asserted without a real synthesise firing, while the pure ceiling helpers stay real.
+vi.mock('./tts', async (orig) => ({
+  ...(await orig<typeof import('./tts')>()),
+  prewarmMessageSpeech: m.prewarm,
+}));
 
 import { type Request, type Response } from 'express';
 
@@ -127,7 +134,7 @@ beforeEach(() => {
   m.currentQuestion.mockResolvedValue({ id: 'q-1', text: 'Tell me about yourself.' });
   m.transcribe.mockResolvedValue({ transcript: 'A spoken answer.', seconds: 12 });
   m.advance.mockResolvedValue({ state: 'hr_round', nextIndex: 2 });
-  m.conduct.mockResolvedValue({ state: 'hr_round', currentIndex: 1 });
+  m.conduct.mockResolvedValue({ state: 'hr_round', currentIndex: 1, spokenIds: ['m-said'] });
   m.take.mockResolvedValue(null);
   m.hold.mockResolvedValue(undefined);
   m.turnComplete.mockResolvedValue({ finished: true });
@@ -261,7 +268,15 @@ describe('submitTurnAudio', () => {
     expect(m.advance).not.toHaveBeenCalled();
     expect(out.status).toBe(200);
     // T03: `pendingTurn` is on every response of this route — null means the turn was conducted.
-    expect(out.body).toEqual({ state: 'hr_round', currentIndex: 1, pendingTurn: null });
+    // L02: the ids the turn wrote ride the same response, for the room to fetch their audio early.
+    expect(out.body).toEqual({
+      state: 'hr_round',
+      currentIndex: 1,
+      spokenIds: ['m-said'],
+      pendingTurn: null,
+    });
+    // …and their synthesis is begun off the response, not left for the room's GET to trigger.
+    expect(m.prewarm).toHaveBeenCalledWith('itv-1', 'm-said', 'trace-1');
   });
 
   // The whole point of the route: a recording no longer consumes a question by arriving. T03
@@ -407,7 +422,7 @@ describe('submitTurnAudio — the completeness gate (T03)', () => {
   });
 
   // @AC-11 — manual Stop. All `force` buys is skipping a gate the candidate could skip by
-  // waiting thirteen seconds anyway.
+  // waiting six seconds anyway.
   it('force submits whatever the transcript looks like, without calling the gate', async () => {
     m.take.mockResolvedValue(held());
     m.transcribe.mockResolvedValue({ transcript: 'and', seconds: 1 });

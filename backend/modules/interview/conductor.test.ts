@@ -153,7 +153,7 @@ describe('clampAction', () => {
 /**
  * T03 — the wire contract for a turn nobody spoke.
  *
- * The room cannot tell "silent for thirteen seconds" from "stopped mid-thought and then silent";
+ * The room cannot tell "silent for six seconds" from "stopped mid-thought and then silent";
  * the server can, because it holds the partial. So the client says only that the clock ran out,
  * and `kind` is the whole of what it is allowed to say.
  */

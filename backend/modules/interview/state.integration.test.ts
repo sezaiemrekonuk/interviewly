@@ -102,7 +102,7 @@ describe('resolveMessages (T03)', () => {
     const { interview, question } = await seed();
     await write(interview.id, question.id, 'assistant', 'Tell me about a deadline.', 'continue');
     await write(interview.id, question.id, 'user', 'I missed one by a week.', null);
-    await write(interview.id, question.id, 'system', '[The candidate has said nothing for 13 seconds.]', 'silence');
+    await write(interview.id, question.id, 'system', '[The candidate has said nothing for 6 seconds.]', 'silence');
     await write(interview.id, null, 'system', 'You asked to end this interview. Refused.', 'refused');
     await write(interview.id, null, 'system', 'The interviewer was moved on.', 'drift');
     await write(interview.id, question.id, 'user', 'The migration had not been rehearsed.', null);

@@ -1104,6 +1104,12 @@ export interface SubmitAudioTurnBody {
  */
 export interface SubmitAudioTurnResult {
   pendingTurn: string | null;
+  /**
+   * L02 — the assistant lines this turn wrote, oldest first, so the room can begin fetching
+   * their audio before the `/state` refetch surfaces them. Empty when the gate held the turn.
+   * A latency shortcut only (K11): `state`/`currentIndex` still arrive off the refetch.
+   */
+  spokenIds: string[];
 }
 
 /**
@@ -1133,7 +1139,10 @@ export function useSubmitAudioTurn(
       );
       if (!result.ok) throw new ApiError(result.code ?? 'UNKNOWN');
       // A pre-T03 body has no `pendingTurn`; absent is "nothing held", never "held undefined".
-      return { pendingTurn: result.data?.pendingTurn ?? null };
+      return {
+        pendingTurn: result.data?.pendingTurn ?? null,
+        spokenIds: result.data?.spokenIds ?? [],
+      };
     },
     onError: (err) => {
       if (SILENT_REFETCH_CODES.has(err.code)) {

@@ -237,6 +237,16 @@ export function useVoiceSession(
   // high-water index: `messages` is refetched whole after every turn and a position in it means
   // nothing across two fetches, while an id means the same line in both.
   const spokenRef = useRef<Set<string>>(new Set());
+  // L02 — audio fetches started the moment the turn response names the lines it wrote, keyed by
+  // id, so the GET is already in flight when the speak effect (after the /state refetch) reaches
+  // it. It consumes these; the effect still drives playback and reconciliation (K11) — the ids
+  // only move the fetch earlier, they do not bypass the loop.
+  // Resolves to null rather than rejecting: this promise floats between `onstop` and the speak
+  // effect, so a rejection nobody is awaiting yet is an unhandled one. `speak` falls through to a
+  // fresh fetch on null, which is also what a torn-down turn wants.
+  const prefetchedRef = useRef<
+    Map<string, Promise<Awaited<ReturnType<typeof apiGetBlob>> | null>>
+  >(new Map());
   // Whether the backlog has been written off yet — see the seeding block in the speak effect.
   const seededRef = useRef(false);
   // Which half to re-run on retry: the interviewer's audio, or only the recording.
@@ -386,13 +396,25 @@ export function useVoiceSession(
       // the conductor's call (C02). The upload is the whole of what this hook asserts.
       submitAudio
         .mutateAsync({ audio, force: !probe })
-        .then(({ pendingTurn }) => {
+        .then(({ pendingTurn, spokenIds = [] }) => {
           uploadingRef.current = false;
           if (!liveRef.current) return;
           setHolding(pendingTurn !== null);
           // Still the candidate's turn: the gate called it unfinished, nothing was conducted,
           // and the recorder opened a moment ago is already carrying the rest of the sentence.
           if (pendingTurn !== null) return;
+          // L02 — the turn named the lines it wrote, so begin fetching their audio NOW rather
+          // than after the /state refetch surfaces them. Cached by id; `speak` reuses the
+          // in-flight promise. The speak effect still plays and reconciles — the ids only move
+          // the network fetch earlier, and a line already spoken or already fetching is skipped.
+          for (const id of spokenIds) {
+            if (!spokenRef.current.has(id) && !prefetchedRef.current.has(id)) {
+              prefetchedRef.current.set(
+                id,
+                apiGetBlob(`/interviews/${interviewId}/messages/${id}/speech`).catch(() => null),
+              );
+            }
+          }
           // Conducted. Close the mic re-opened for the probe — the interviewer's reply arrives
           // as a new assistant message off the refetch, and an open mic would record it.
           discardRecorder();
@@ -477,7 +499,14 @@ export function useVoiceSession(
 
     /** Resolves true when the line has been heard to the end; false on any branch that stops. */
     const speak = async (messageId: string): Promise<boolean> => {
-      const result = await apiGetBlob(`/interviews/${interviewId}/messages/${messageId}/speech`);
+      // L02 — reuse the fetch `onstop` began for this id, if any, so playback does not wait on a
+      // request it could have started a refetch ago. Consumed once: a retry (via `attempt`) then
+      // fetches afresh rather than replaying a stale, possibly-failed promise.
+      const prefetched = prefetchedRef.current.get(messageId);
+      prefetchedRef.current.delete(messageId);
+      const result =
+        (await prefetched) ??
+        (await apiGetBlob(`/interviews/${interviewId}/messages/${messageId}/speech`));
       if (cancelled || !liveRef.current) return false;
 
       if (!result.ok || !result.data) {

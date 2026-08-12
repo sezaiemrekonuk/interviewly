@@ -337,6 +337,31 @@ describe('useVoiceSession — the turn loop (C02)', () => {
     expect(hits(calls, SPEECH('m1'))).toBe(1);
   });
 
+  // L02 — the turn response names the line it wrote, so the room fetches its audio off that
+  // response rather than waiting for the /state refetch to reveal it. The speak effect still
+  // plays and reconciles; it reuses the in-flight fetch instead of issuing a second one.
+  it('fetches a conducted line off the turn response, before the refetch, and reuses it', async () => {
+    const calls = stubApi({
+      [UPLOAD]: () =>
+        new Response(
+          JSON.stringify({ state: 'hr_round', currentIndex: 1, pendingTurn: null, spokenIds: ['m2'] }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+    });
+    const hook = await recording(mount());
+
+    await act(async () => hook.result.current.stop());
+
+    // Its audio is already being fetched, though no message update has surfaced m2 yet.
+    await waitFor(() => expect(hits(calls, SPEECH('m2'))).toBe(1));
+    expect(audio.players).toHaveLength(1);
+
+    // The refetch now hands the room the new line: it plays, reusing the fetch — not a second GET.
+    hook.rerender({ messages: [msg('m1', 'assistant'), msg('u1', 'user'), msg('m2', 'assistant')] });
+    await waitFor(() => expect(audio.players).toHaveLength(2));
+    expect(hits(calls, SPEECH('m2'))).toBe(1);
+  });
+
   it('opens no microphone and speaks nothing in text mode', async () => {
     const calls = stubApi();
     renderHook(
