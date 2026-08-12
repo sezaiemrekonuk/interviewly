@@ -212,3 +212,127 @@ directly, not a security bug but looks bad".
 - **The report page still does not know its own occupation.** `GET /interviews/:id` returns
   `{interviewId, state, report}`, and the PDF gets the role from the worker's own query. Threading
   it into the screen is a change to that endpoint, which nothing on the screen asked for.
+
+## ADR-ADD05 — the landing page as the room, and a cast that reacts
+
+**Ask (owner, 2026-08-12):** the homepage read as "AI slop" — half professional, half enjoyable,
+and boring enough that a visitor left fast. Revise it completely, with illustrated Open Peeps-
+style avatars and real motion rather than a slide or a component swap, without drifting from the
+design language.
+
+**Shape chosen:**
+
+- **The page is the room, not a page about one.** The retired arrangement was a tall hero band, a
+  boxed `<DemoInterview>` under it, and six documentary bands. The demo was the strongest thing
+  on the surface and it was in a box, three-quarters of a viewport below the fold. Now the first
+  viewport *is* the dark act: `--rail` full-bleed, headline and the page's single `--primary` on
+  the left, the job listing as a lit `--surface` sheet under them, and the two interviewers in
+  `--stage` tiles down the right. Nothing is illustrated *about* the product; the product is what
+  is on screen.
+- **The right-hand tile column is the split shell rotated.** DESIGN §1 is "a working console,
+  split": a dark context column carrying what is true right now, against a working surface holding
+  one subject. That is exactly what Ada and Turing are on this page, so the column is `position:
+  sticky` and rides the whole exchange. This is the shell's own grammar, not a new layout.
+- **Two grounds, no wash.** The night (`--rail`) and the document (`--bg`) are the shell's two
+  shipped materials, alternating down the page. §2 rule 4 forbids a route painting a *wash* or
+  opting into a different page background; it does not forbid the rail's own material appearing
+  full-bleed, which `room` and `pre-join` already do. No gradient was added and none is needed —
+  the "lamp" is a `clip-path` wipe, not a light source painted in colour.
+- **The cast is drawn, not fetched.** `components/home/peeps.tsx` is one inline SVG per character
+  with a shared bust and six moods, every stroke `currentColor` and every fill a token. It costs
+  no request, no `<link rel=preload as=image>` and no hex — which is what keeps the §8.1 anonymous
+  JS/asset budget and the token lint intact, and why the seeded persona *photographs* were not
+  used here. Those are photographs of real people and belong in the room, where a candidate has
+  consented to be in a session, not on a marketing page.
+- **The mood is the round's own state, never decoration.** `moodFor()` derives it: asking while
+  the question types, listening while the answer list is up, then `pleased` or `unconvinced`
+  against the same 60 the copy already implies. An interviewer who reacted on a timer would be
+  the "AI slop" the ask named. Colour never carries it either — the tile prints "Has the floor" /
+  "Waiting" / "Round done" in words, per §6.
+- **One authored motion moment, and it is the handover.** The lamp comes up once on mount (a
+  `clip-path` wipe across the listing sheet, the two tiles rising behind it), and thereafter the
+  only authored motion is the round changing hands: a hairline seam sweeps the exchange, the tile
+  that lost the floor dims, the one that gained it lights, and both faces change. Every duration
+  is `calc(var(--duration-default) * n)`, so `prefers-reduced-motion` zeroes the whole page from
+  the one token rather than from six media queries.
+- **The state machine was kept, the staging was replaced.** `useTyped`, `useSettled`, the
+  render-phase reset that stops a new question painting at the previous one's length, the
+  post-mount shuffle that avoids a hydration tear (issue 418), the `visibility: hidden` sizing
+  span that stops the 217px shift (issue 237), the focus move to the result (WCAG 2.4.3) and the
+  announce-once `role="status"` are all carried over verbatim from `demo-interview.tsx`. A
+  rewrite that re-derived them would have re-earned every one of those bugs.
+- **The three-step band became a drawn flow.** Numbered nodes sitting on hairlines that draw
+  themselves on scroll (`animation-timeline: view()`, the precedent this page already set),
+  rather than three same-size cards of heading-plus-text.
+- **The header takes the rail's material on this route only** (`<SiteHeader onDark />`). The bar
+  sits in flow above a `--rail` first viewport; left on `--bg` it was a light strip pinned over
+  the night, and a light-to-dark flip on scroll would be worse than either. `/privacy` and
+  `/terms` are unchanged. The landing's five section anchors are hidden below 48rem, where they
+  wrapped the header into a 320px stack that covered the headline.
+
+**Skipped, deliberately:**
+
+- **No third character.** The desk is seen from the candidate's chair, so "you" has no portrait —
+  which is also why exactly two exist.
+- **No per-role listing provenance.** Drawing a line from the phrase in the listing to the question
+  it produced is the strongest version of "written from your listing", and it needs three more
+  authored passages per role in two locales. The flow band claims it; the demo proves it.
+- **No new message key, and no copy rewritten.** Every string on the page was already in
+  `messages/{en,tr}.json` and already good. `landing.howItWorks` and `landing.demo.title` are now
+  unreferenced and were left in both files rather than deleted in a visual change.
+- **The report's "out of five" still disagrees with the demo's "82 / 100".** Pre-existing: the
+  anatomy copy and `SCORE_MAX` have always said different things. Not this ADR's to fix, and
+  fixing it in a redesign would bury a copy decision inside a layout diff.
+
+**Known, not fixed:** the focus ring is `--accent` on `--rail` at 2.1:1, under the 3:1 WCAG floor
+for a non-text indicator. That is the app-wide recipe (`app-rail.module.css` and DESIGN §3.6), so
+every rail surface shares it; inventing a second ring on the landing alone would be worse than the
+defect. It wants one token decision across the app.
+
+## ADR-ADD06 — the front door is public, and the doors in route by session
+
+**Ask (owner, 2026-08-12):** every visitor can reach `/`, with no auth check. The navbar does not
+change for a signed-in visitor — but pressing sign in or try now takes them straight to the app.
+And an authenticated user must not be able to open register or sign-in.
+
+**Shape chosen:**
+
+- **The redirect off `/` is deleted, not weakened.** `components/home/home-switch.tsx` probed
+  `/me` and `router.replace(firstRunPath(user))`, so a customer could not read the FAQ, re-check
+  what the report contains, or send someone the demo without being thrown into the dashboard.
+  With the redirect gone the component was `({children}) => <>{children}</>`, so it went too.
+- **The guard moved to the three pages that are genuinely anonymous-only.**
+  `components/auth/anonymous-only.tsx` is the same probe-and-replace shape, inverted, on
+  `/sign-in`, `/register` and `/forgot-password`. Not a `(auth)/layout.tsx`: that group also holds
+  `/verify-email`, which *requires* a session (`useRequireAuth`), `/verify-email/[token]`, which
+  is public on purpose because the link is opened wherever the mail was read, and
+  `/reset-password/[token]`, which a signed-in user clicking their own reset link has to reach.
+  A layout guard would have broken all three.
+- **`firstRunPath(user)`, not `DEFAULT_LANDING_PATH`** — K8.7 and issue 80. A signed-in visitor
+  who never finished onboarding belongs at `/onboarding/1`, and sending every session to one
+  landing path is what let a Google user skip onboarding entirely. `/sign-in?returnPath=…` is
+  honoured through `safeReturnPath`, matching what the sign-in success handler already does.
+- **It fails open.** Children render immediately and the guard renders `null` beside them. The
+  alternative — withholding the form until `/me` answers — costs a layout shift on the anonymous
+  path, which is nearly every render of these three routes, and makes the sign-in page permanently
+  unreachable when the API is down, to the one visitor who most needs it. A signed-in visitor
+  seeing a live sign-in form for one frame is the cheaper failure; nothing on these three screens
+  is destructive.
+- **Not middleware.** `use-require-auth.ts` already argues this and the argument holds inverted:
+  the session cookie is opaque and `httpOnly`, so middleware can only see that a cookie *exists*.
+  Here that is worse than on a protected route — a stale or revoked cookie would lock a user out
+  of `/sign-in`, the page they need to recover.
+- **The header renders one thing for everyone.** Both actions, both labels, always; only the
+  destination changes once the probe answers. That retired the tri-state of issue 95 — it existed
+  because the labels differed by session and a header that flashed the wrong doorway was worse
+  than one that arrived late. With identical labels there is no wrong doorway to flash, so the
+  links paint immediately with their signed-out hrefs and re-point when `/me` lands. The guard is
+  the backstop for anyone who types the URL.
+
+**Skipped, deliberately:**
+
+- **`nav.today` was not deleted.** It looked like an orphan and is not — `shell/app-rail.tsx` and
+  `report/report-rail.tsx` both still render it.
+- **No loading state on the guard.** It needs a message key in both locales for a frame that the
+  overwhelming majority of visitors never see, and it reintroduces the layout shift the fail-open
+  decision exists to avoid.

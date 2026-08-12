@@ -257,3 +257,68 @@ ADR-ADD04. Eight items in one pass; what changed and where.
 
 `npm test` 121 files / 1253 tests pass (new: three on the chart's geometry, two on the added
 sorts); typecheck and eslint clean.
+
+## 2026-08-12 — the landing is the room now, and the front door is public
+
+Two asks from the owner, one branch. The homepage read as slop and bored people off the page;
+and `/` redirected anyone with a session, so a customer could never see it. See DECISIONS.md
+ADR-ADD05 and ADR-ADD06.
+
+**The cast**
+
+- `frontend/src/components/home/peeps.tsx` + `peeps.module.css` — new. `<Peep name="ada"|"turing"
+  mood={…} />`, inline SVG, six moods (idle / listening / asking / marking / pleased /
+  unconvinced) over a shared bust. Ada is long hair and a hoop; Turing is round glasses and
+  headphones. Every stroke is `currentColor`, every fill a token, so nothing here trips the hex
+  scan and nothing requests an object. Blink is CSS, offset per character, and gated on
+  `prefers-reduced-motion: no-preference`.
+
+**The dark act**
+
+- `frontend/src/components/home/handover.tsx` + `handover.module.css` — new, and the whole first
+  screen: headline, the page's one `--primary`, the listing sheet with the role chips on it, the
+  sticky two-tile cast column, the exchange, and the assembled sample report. Replaces
+  `demo-interview.tsx` + `landing.module.css`, both deleted. The state machine, the typing hook,
+  the settle-from-zero meters, the post-mount shuffle, the sizing span and the focus move all
+  came across unchanged; the staging, the cast and the motion are new.
+- `frontend/src/app/[locale]/page.tsx` + `page.module.css` — rewritten. The page is now the dark
+  act, then five quiet light bands, then a dark closing bookend with both characters. The
+  three-step band became a flow diagram whose hairlines draw on scroll; the languages band has
+  Turing asking the same question between the two quotes.
+- `frontend/src/components/chrome/{header.tsx,chrome.module.css}` — `SiteHeader` takes `onDark`,
+  which gives the bar the rail's material. Set on the landing only. The five section anchors get
+  `.navSection` and are hidden below 48rem, where they wrapped the header into a 320px stack over
+  the headline.
+
+**The front door**
+
+- `frontend/src/components/home/home-switch.tsx` — deleted. Its only job was the redirect off `/`.
+- `frontend/src/components/auth/anonymous-only.tsx` + test — new. The inverse guard, on
+  `/sign-in`, `/register` and `/forgot-password` only. `safeReturnPath` then `firstRunPath`,
+  `router.replace`, fails open, carries its own `<Suspense>` so the pages stay prerenderable.
+- `frontend/src/components/chrome/header-nav.tsx` — both actions for everyone, same labels; only
+  the href changes once `probeSession()` answers. The issue-95 tri-state is gone with the reason
+  for it.
+- `frontend/src/test/fetch.ts` — the shared `stubFetch` answers `/api/me` 401 and `formCalls`
+  excludes it, which is the root fix for the auth page tests now that a guard mounts in them.
+- Stale doc comments in `lib/auth-redirect.ts`, `shell/split-shell.tsx` and `home/demo-content.ts`
+  corrected — all three described the redirect or the deleted demo file.
+
+**Verified**
+
+- `npm test` — 122 files / 1259 tests pass.
+- `npm run typecheck` — clean. `eslint` on every touched file — clean.
+- `next build` — succeeds, all 21 routes.
+- In a browser at 1440 and at 390, English and Turkish: the lamp-up, the mark landing with Ada's
+  face changing on it, the handover to Turing, the drawn flow hairlines, and the closing bookend.
+
+**Also added:** `PRODUCT.md` at the repo root. `AGENTS.md` has cited it since 2026-08-07 as the
+holder of product truth and what the marketing page may claim; it had never actually been
+written, and a redesign that decides what the landing page says is the wrong moment to still be
+guessing. Facts only, plus an explicit list of what must never be fabricated (customers, logos,
+benchmarks, prices, outcomes).
+
+**Not done:** the report anatomy still says "out of five" while the demo prints "82 / 100" —
+pre-existing, and a copy decision that should not be buried in a layout diff. The `--accent`
+focus ring is 2.1:1 on the rail, under the 3:1 floor for a non-text indicator; that is the
+app-wide recipe and wants one token decision rather than a second ring on this page.
