@@ -9,30 +9,35 @@ export function jsonResponse(status: number, body: unknown): Response {
 }
 
 const CAPABILITIES = '/api/auth/capabilities';
+const ME = '/api/me';
+const BACKGROUND = new Set<string>([CAPABILITIES, ME]);
 
 /**
- * A `fetch` stand-in that answers one canned status + body, with `GET /auth/capabilities`
- * answered separately.
+ * A `fetch` stand-in that answers one canned status + body, with the two calls an auth screen
+ * makes on mount for its own reasons answered separately.
  *
- * Both auth screens ask that endpoint on mount now (issue 60 — the Google button has to know
- * whether the deployment can serve the flow before it offers a link that would otherwise
- * paint a JSON error as the whole page). Folding it into the canned answer would put a
- * capabilities call where a screen's assertions expect its own, so it is routed by URL and
- * excluded from `formCalls`.
+ * `GET /auth/capabilities` because both screens ask it (issue 60 — the Google button has to
+ * know whether the deployment can serve the flow before it offers a link that would otherwise
+ * paint a JSON error as the whole page). `GET /me` because these screens are wrapped in
+ * `components/auth/anonymous-only.tsx`, which sends a visitor who already has a session into
+ * the app; answering it with the canned login body would make every case here a signed-in one.
+ * Both are routed by URL and excluded from `formCalls`, so a screen's assertions still see
+ * only its own traffic.
  */
 export function stubFetch(status: number, body: unknown, google = true): Mock {
-  const spy = vi.fn(async (url: string | URL) =>
-    String(url) === CAPABILITIES
-      ? jsonResponse(200, { oauth: { google } })
-      : jsonResponse(status, body),
-  );
+  const spy = vi.fn(async (url: string | URL) => {
+    const target = String(url);
+    if (target === CAPABILITIES) return jsonResponse(200, { oauth: { google } });
+    if (target === ME) return jsonResponse(401, { error: { code: 'UNAUTHENTICATED' } });
+    return jsonResponse(status, body);
+  });
   vi.stubGlobal('fetch', spy);
   return spy as unknown as Mock;
 }
 
-/** The recorded calls that were not the capabilities probe, oldest first. */
+/** The recorded calls that were neither the capabilities nor the session probe, oldest first. */
 export function formCalls(spy: Mock): [string, RequestInit | undefined][] {
   return (spy.mock.calls as unknown as [string | URL, RequestInit | undefined][])
-    .filter(([url]) => String(url) !== CAPABILITIES)
+    .filter(([url]) => !BACKGROUND.has(String(url)))
     .map(([url, init]) => [String(url), init]);
 }

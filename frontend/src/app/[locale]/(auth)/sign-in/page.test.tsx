@@ -161,11 +161,12 @@ describe('sign-in page', () => {
     });
     vi.stubGlobal(
       'fetch',
-      vi.fn(async (url: string | URL) =>
-        String(url) === '/api/auth/capabilities'
-          ? jsonResponse(200, { oauth: { google: true } })
-          : inFlight,
-      ),
+      vi.fn(async (url: string | URL) => {
+        const target = String(url);
+        if (target === '/api/auth/capabilities') return jsonResponse(200, { oauth: { google: true } });
+        if (target === '/api/me') return jsonResponse(401, { error: { code: 'UNAUTHENTICATED' } });
+        return inFlight;
+      }),
     );
     renderWithProviders(<SignInPage />);
 
