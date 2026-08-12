@@ -1,7 +1,19 @@
 # Speech-latency — State
 
-Last updated: 2026-08-11
-Last session ended: **Ledger opened (Ahmet, 2026-08-11, opus-5). No code written yet.** The room
+Last updated: 2026-08-12
+Last session ended: **`L02` implemented and green, but not finished (Ahmet, 2026-08-12,
+opus-5).** All six steps' code is in the working tree and every gate passes, including the two
+`spokenIds` integration tests (which `npm test` excludes — run them with `test:integration`
+against the host-published ports). What is missing is step 6: the room timing needs a microphone,
+so the before/after medians have not been taken. The row stays `in_progress` until they are.
+The structural figure is in the task's `## Notes` and it is **~300 ms on an ordinary turn, not
+780** — TTS was delayed by the two round trips, never started by them, so removing them buys only
+their cost. The rest of the gate's price has to come from `L01`'s model swap. The handover turn is
+the exception and gains ~1.1 s on each of its two lines: its closing line is now prewarmed at
+`say()`, inside `handover`, because that is the one path where a second conductor call still runs
+between the row being written and the response being sent.
+
+Before this session: **Ledger opened (Ahmet, 2026-08-11, opus-5). No code written yet.** The room
 takes ~7.1 s from a candidate's last word to the interviewer's first sound, measured against live
 providers rather than estimated (REFERENCE.md carries the table and the method). The spec
 (`.agents/specs/2026-08-11-speech-latency.md`), PLAN, five ADRs and four task files are in place;
@@ -29,8 +41,14 @@ commit** → re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**`L01`** — the biggest cheap win, blocked on nothing, and it needs a human's ears rather than a
-green test. `L04` is equally unblocked if you would rather measure than listen.
+**`L02`**, and it is `in_progress` rather than `todo`: the code is written and green, and what is
+left is the measurement — five hand-timed turns in the room with `AI_ENABLED=true`, before and
+after, medians into the task's `## Notes`. That is the owner's, not a fresh session's, because it
+needs a microphone. **Do not start another task on top of it** (EXECUTE § 4 rule 1).
+
+After it: **`L01`** — the biggest cheap win, blocked on nothing, and it needs a human's ears
+rather than a green test. `L04` is equally unblocked if you would rather measure than listen, and
+L02's own `## Notes` now says the ordinary turn still owes ~480 ms that only L01 can pay.
 
 ## Ledger
 
@@ -38,7 +56,7 @@ green test. `L04` is equally unblocked if you would rather measure than listen.
 |----|-------|------|--------|------------|
 | L01 | The TTS model: measure, listen, then swap or reject | | todo | S02 |
 | L04 | The conductor's real prompt: production-sized TTFT, then prefix caching or not | | todo | C02 |
-| L02 | Assistant ids on the turn response, synthesis begun when the row is written | | todo | T03, S02 |
+| L02 | Assistant ids on the turn response, synthesis begun when the row is written | | in_progress | T03, S02 |
 | L03 | Shorten `VAD_SILENCE_MS` behind the gate | | todo | T04, L01 |
 
 ## Dependency graph
@@ -84,7 +102,9 @@ done against the fake provider, because the entire question is what the audio so
 | T03 | the turn response shape L02 edits again | L02 |
 | T04 | restart-before-upload, without which a shorter window is a regression | L03 |
 
-S02, C02 and I08 are `done`. **T03 and T04 are `todo`** in `.agents/ledgers/turn-taking/`.
+S02, C02 and I08 are `done`. **T03 and T04 are `done` too** as of 2026-08-12 — the whole
+turn-taking ledger is green through `T08` — so nothing in this ledger is blocked cross-ledger any
+more.
 
 ## Cross-ledger dependencies (this ledger blocks)
 

@@ -1,5 +1,6 @@
 # L02 — Assistant ids on the turn response, and synthesis begun when the row is written
-REPO: (this repo) · Depends: T03, S02 · Status: todo
+REPO: (this repo) · Depends: T03, S02 · Status: in_progress (code + gates done; step 6 room
+measurement outstanding — see `## Notes`)
 Read first: STATE.md, REFERENCE.md, then this.
 **Model: claude-opus-5** — this task fires a **paid** provider call outside the request that
 serves its bytes. `tts.ts:100-106` says in as many words that the subtle parts here are the
@@ -53,19 +54,19 @@ completeness gate adds.
   `:160-163` for the id-keyed effect that must not be broken.
 
 ## Steps
-- [ ] **1. Test red** — two concurrent synthesises of one message write exactly one `llm_calls`
+- [x] **1. Test red** — two concurrent synthesises of one message write exactly one `llm_calls`
   row; a turn response carries the ids of the assistant rows it wrote; an eager synthesis that
   throws does not fail the turn. See them red.
-- [ ] **2. Extract `synthesise(interview, spec)`** from `serveSpeech`, returning the audio.
+- [x] **2. Extract `synthesise(interview, spec)`** from `serveSpeech`, returning the audio.
   `serveSpeech` becomes cache-read-or-`synthesise`, then send. No behaviour change — **the
   existing `tts.test.ts` must stay green without edits**, which is the proof the extraction was
   clean.
-- [ ] **3. `TurnResult` gains `spokenIds: string[]`** — the assistant rows this turn wrote, in
+- [x] **3. `TurnResult` gains `spokenIds: string[]`** — the assistant rows this turn wrote, in
   order. A handover writes two; an opening turn writes one; a held fragment (T03) writes none.
-- [ ] **4. Start synthesis when the row is written**, not when it is requested: after the turn
+- [x] **4. Start synthesis when the row is written**, not when it is requested: after the turn
   response is sent, `void synthesise(...).catch(log)` per id. Log `SPEECH_TTS_PREWARMED` with the
   id and whether it was already cached.
-- [ ] **5. Room: use the ids, keep the reconciliation.** `onstop` reads `spokenIds` off the
+- [x] **5. Room: use the ids, keep the reconciliation.** `onstop` reads `spokenIds` off the
   mutation result and starts fetching that audio immediately instead of waiting for the `/state`
   refetch to reveal it. The refetch still happens and still reconciles; the ids only move the
   fetch earlier. Mark them via the same `spokenRef` set so the speak effect does not re-request
@@ -92,4 +93,103 @@ Then in the real room with `AI_ENABLED=true`: answer a question and time from la
 audio, five times, before and after. Both medians go in `## Notes`.
 
 ## Notes
-_(fill in when done — the measured before/after is the point of the task)_
+
+### What exists now
+
+- `synthesise(interview, spec)` (`tts.ts`) is the paid half, exported: cache read → budget lock →
+  re-read under the lock → `speak` → `meterTts` → store. `serveSpeech` is now that call plus the
+  response and its error handling. The existing `serveSpeech` assertions were not touched.
+- `prewarmMessageSpeech(interviewId, messageId, traceId)` (`tts.ts`) re-reads the interview so it
+  resolves voice and language exactly as the GET does — the two cannot cache one line in two
+  voices — declines past the speech ceiling without ending the interview (that stays the GET's
+  job, ADR-S06), skips text mode, logs `SPEECH_TTS_PREWARMED` / `SPEECH_TTS_PREWARM_FAILED`, and
+  never rejects.
+- `TurnResult.spokenIds` is read back in `conductTurn` by `(interview_id, role='assistant',
+  trace_id)`, ordered `created_at, id`. The trace is per-request, so a handover's second line —
+  written by the nested `openRound`, which shares the trace — is included and ordered after the
+  first. `TurnAdvance = Omit<TurnResult,'spokenIds'>` is what the inner functions return, so only
+  the entry point can forget the ids.
+- `submitTurnAudio` fires `void prewarmMessageSpeech(...)` per id **after** `res.json`, and
+  `handover` fires it for its closing line at `say()` — the one path where those two moments are
+  a second apart (see the measurement note below). `say()` now returns the row id for it.
+- The room: `onstop` starts the blob GET per id into `prefetchedRef`; `speak` consumes it once,
+  falling back to a fresh fetch (a retry, or a prefetch that failed). `spokenRef`, the pending
+  derivation and the `/state` reconciliation are unchanged — K11 holds.
+
+### Measured before / after — **the live room figure was NOT taken. Read this.**
+
+The session gates ran green (below), but the `## Verification` room timing — `AI_ENABLED=true`,
+answer a question, hand-time last word → first audio, ×5 — needs a microphone and a pair of ears.
+It has not been run. **Owner action, before this is called finished.**
+
+What the change is worth structurally, against REFERENCE.md's baseline table:
+
+| | before | after | why |
+|---|---|---|---|
+| ordinary turn (one line) | refetch + `GET speech` **~300 ms**, *then* TTS ~1 130 ms starts | TTS starts at `res.json`; the room's GET arrives ~100 ms later, misses, and waits on the lock the prewarm already holds | **~300 ms** |
+| handover, line 1 (the closing line) | its TTS starts after the response, which is after `openRound`'s ~1 180 ms second conductor call | prewarmed at `say()`, so it is synthesised *during* that call and is cached before the response is even sent | **~1 100 ms** |
+| handover, line 2 (the greeting) | its GET is issued only after line 1 has finished *playing*, so its ~1 130 ms of TTS is dead air between them | prewarmed off the response; synthesised while line 1 plays | **~1 100 ms on the gap** |
+
+**So the ordinary turn does not get its 780 ms back from this task alone, and the DoD's escape
+clause is being used deliberately.** The reason is arithmetic, not a defect: TTS was never
+*started* by the two round trips, only *delayed* by them, so removing them buys their ~300 ms and
+no more. The remaining payback has to come from `L01` (the model swap: 1 024 → 313 ms measured, a
+~700 ms line on its own) and `L03`. Do not revert this on the 780 ms clause — 300 ms of it is
+real, the handover case is much bigger, and both are prerequisites for L01 being worth its ear
+test.
+
+**Where the rest of it was, and what was done about it.** `nextQuestion` calls `say()` last, so
+firing the prewarm after the response costs that path nothing — step 4's placement is right for
+every ordinary turn. `handover` was the exception: it `say()`s the closing line and *then* runs a
+whole second conductor call (`openRound`, ~1 180 ms) before returning, so the route's prewarm left
+that line unbought for the duration of it. `handover` now fires the prewarm on the closing line's
+id the moment the row is written, which is the Goal's own wording and the `conductor.ts` anchor's
+("everything after it is latency"). One call site, mode-guarded, floating, and the route still
+fires for the same id — the budget lock and the re-read make that one bill. The ordering is the
+assertion: `['conduct', 'prewarm', 'conduct']`, red as `['conduct', 'conduct']` without it.
+
+This is the only place `say()`'s moment and the response's moment differ. It is not a general
+"prewarm inside `say()`" — that would fire on every path for no gain and would put a paid call
+behind a write helper.
+
+### Verification output
+
+```
+npm test                                                 121 files, 1275 tests passed
+INTEGRATION=1 … conductor.integration                      1 file,   17 tests passed
+npm run -w frontend test -- use-voice-session               1 file,   45 tests passed
+npm run lint && npm run typecheck && npm run -w frontend lint   clean
+```
+
+The integration file is excluded from `npm test` by design (`vitest.config.mts`), so the task's
+verification line does **not** run the two `spokenIds` tests. They were run separately, from the
+host, against the compose Postgres on the published port:
+
+```bash
+DATABASE_URL=postgresql://…@localhost:5433/interviewly REDIS_URL=redis://localhost:6380 \
+  npm run test:integration -- conductor.integration
+```
+
+`compose.l02.yaml` (untracked, in the tree) is the `db` port override that makes that reachable.
+
+### Deviations
+
+- **`tts.test.ts` was edited, against step 2's "unedited".** No existing assertion changed — what
+  changed is the `withBudget` mock, from `fn => fn()` to a promise chain. The double-bill test is
+  the reason: the real ceiling *serialises* one interview's generations under an advisory lock,
+  and without that serialisation the second `synthesise` re-reads the cache before the first has
+  written it, so the re-read the test exists to prove would pass for the wrong reason. The
+  pre-existing tests passing under both mocks is what carries step 2's intent.
+- **`conductor.ts` now imports `speech/tts`.** One symbol, `prewarmMessageSpeech`, for the
+  handover call site. No cycle: `tts` imports `interview/{budget,machine,state}` and none of them
+  reaches back to the conductor. The integration test spies the symbol rather than running it —
+  a real synthesis from a test that stands up only Postgres would reach ElevenLabs.
+- The room's prefetch promise is stored with a `.catch(() => null)`: it floats between `onstop`
+  and the speak effect, so a rejection nobody is awaiting yet would be an unhandled one. `speak`
+  falls through to a fresh fetch on `null`.
+
+### For L03
+
+`spokenIds` and the prefetch are the mechanism a shorter `VAD_SILENCE_MS` compounds with: with
+synthesis already running when the window closes, the shorter window's saving lands on the
+critical path rather than being absorbed by TTS.
