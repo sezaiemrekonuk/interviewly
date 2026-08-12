@@ -257,3 +257,85 @@ ADR-ADD04. Eight items in one pass; what changed and where.
 
 `npm test` 121 files / 1253 tests pass (new: three on the chart's geometry, two on the added
 sorts); typecheck and eslint clean.
+
+## 2026-08-12 — cost analytics on the console: six chart forms over one time-bucketed read
+
+The Costs section was three cards of all-time totals. `/admin/stats` had no notion of a date, so
+nothing on the surface could answer "is this rising", "is the mix shifting" or "when does the
+money land". See `DECISIONS.md` ADR-ADD05 for the reasoning; this is what changed and where.
+
+**Backend**
+
+- `backend/modules/admin/costs.ts` — new. `GET /admin/costs?days=7|30|90`. Four `Promise.all`
+  aggregations over the window: `(day, provider, model)` on `llm_calls`, `day` on `interviews`,
+  `(isodow, hour)` on `llm_calls`, and `(provider, model)` over the preceding window of equal
+  length. Daily and platform totals are folded from the first query rather than queried again,
+  so `totals.costUsd`, `sum(daily.costUsd)` and `sum(models[].costUsd)` are the same figure by
+  construction. Exports `resolveDays`, `dayKeys`, `foldModels` and `MODEL_SERIES_LIMIT = 3`.
+- `backend/modules/admin/costs.test.ts` — new. 15 unit tests on the pure helpers: the `days`
+  whitelist and every rejection path, `dayKeys` across month and leap-day boundaries, and
+  `foldModels` for dense zero-fill, top-N selection, the deterministic tie-break, the Other
+  fold including a previous-window-only model, and the latency divide-by-zero guard.
+- `backend/modules/admin/router.ts` — `GET /costs` under `adminStatsLimiter`, the same limiter
+  and for the same reason as `/stats`.
+- `backend/src/lib/audit.ts` — `admin.costs_read` added to the `AuditAction` union. An aggregate
+  over every user's spend is still a read of their data (issue 86).
+- `backend/prisma/schema.prisma` + `migrations/20260812120000_llm_calls_created_at_idx/` —
+  `@@index([created_at])` on `llm_calls`. Not a prefix of the existing
+  `[interview_id, created_at]`, so it is a genuine second btree insert on the hottest write
+  path in the schema; every query above filters on a bare date range and would otherwise scan.
+
+**Frontend**
+
+- `components/admin/charts/geometry.ts` + `geometry.test.ts` — new. Pure SVG geometry:
+  `niceMax`, `tickValues`, `labelledIndexes`, `bands`, `stackBands`, `donutSlices`. 20 tests,
+  including that a stacked total overflowing its axis clamps rather than drawing above the plot,
+  and that the donut's slices consume exactly one circumference.
+- `components/admin/charts/series.ts` — new. The one place a model is mapped to a colour slot,
+  a key, a label and its share, so the same model wears the same slot in the area, the bars,
+  the donut, the table swatch and its sparkline.
+- `components/admin/charts/charts.module.css` — new. Every colour the charts use, because a
+  chart under `style-src 'self' 'nonce-…'` can carry geometry in attributes but never a fill.
+- `components/admin/charts/trend-lines.tsx` — new. `SpendTrend` (daily total) and
+  `PerInterviewTrend` (daily spend ÷ interviews started), both with a dashed mean the caption
+  also states, and a dot on the last point only.
+- `components/admin/charts/model-mix.tsx` — new. Stacked area, daily spend by model.
+- `components/admin/charts/model-delta.tsx` — new. Grouped columns, each model over the range
+  against the same span immediately before it. The previous bar is `--surface-sunken`, never a
+  fourth hue.
+- `components/admin/charts/model-share.tsx` — new. Donut over `stroke-dasharray`, model share
+  of range spend.
+- `components/admin/charts/model-table.tsx` — new. The exact figures, and therefore the
+  accessible rendering of the three charts above it. One sparkline scale shared by every row.
+- `components/admin/charts/spend-heatmap.tsx` — new. 7 × 24 UTC grid of `data-tier` cells,
+  reusing the dashboard's `activityTier` and its `color-mix` ramp rather than a second one.
+- `components/admin/charts/cost-charts.test.tsx` — new. 19 render tests: money printed
+  verbatim, the Other row labelled rather than blank, the shared sparkline scale (the fixture's
+  two models are 100× apart and byte-identical under a per-row max), every SVG `aria-hidden`
+  with a captioned figure, a zeroed surface for each of the seven, the heatmap's deterministic
+  peak, and the range control's single pressed state.
+- `components/admin/cost-panel.tsx` — the range control, three figure cards (platform total,
+  range spend with its delta, cost per interview) and the seven graphics. The per-model `Meter`
+  list is gone; the per-occupation one stays, still labelled loaded-rows-only.
+- `lib/query.ts` — `AdminCostsResponse`, `AdminCostModel`, `COST_RANGES`, `useAdminCosts`.
+- `messages/{en,tr}.json` — 47 keys added under `admin.costs`; the four orphaned by the deleted
+  `Meter` list were removed.
+- `DESIGN.md` §W11 — a **Cost charts** block. "Bars, not charts" now points at it rather than
+  reading as a blanket ban.
+- `app/[locale]/admin/page.test.tsx` — a `/admin/costs` fixture in `stubFetch`; the assertion
+  that named the deleted `admin-by-model` testid now checks the model is named in more than one
+  graphic, which is the series-identity claim.
+
+**Verified**
+
+- `npm test` — 124 files / 1307 tests pass. `npm run typecheck` clean. eslint clean on every
+  touched file.
+- Read in the browser against the seeded stack at three ranges. Three defects found and fixed
+  there rather than in review: the legend's `flex: 1 1 220px` was a 220px *height* in a column
+  flex card (a dead band under two charts), the per-bar delta copy was a sentence that
+  overlapped its neighbours, and the delta legend's swatch claimed the selected range was blue
+  when the bars are one hue per model.
+
+**Not done here (see ADR-ADD05 "Skipped"):** no per-cluster spend from the server, no hover or
+tooltip layer, no CSV export, and the `--series-4/5/6` tokens stay in the registry unused by
+these charts.
