@@ -22,7 +22,7 @@ import { prisma } from '../../src/lib/db';
 import { logger } from '../../src/lib/logger';
 
 export interface PrepareNextCandidatesOpts {
-  interview: { id: string; language: string };
+  interview: { id: string; language: string; job_text: string };
   /**
    * The N+1 row, already resolved by the caller. D03 resolves it anyway — to check
    * `chosen_reason` and to promote into it — so re-deriving the per-round `order_index` here
@@ -58,6 +58,7 @@ export async function prepareNextCandidates({
     priorQuestion: currentQuestion.text,
     priorScore: 50,
     topicsUsed,
+    jobListing: interview.job_text,
     language: interview.language,
     ctx,
   });

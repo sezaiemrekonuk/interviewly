@@ -186,6 +186,7 @@ export interface GenerateCandidatesArgs {
   priorQuestion: string;
   priorScore: number;
   topicsUsed: string[];
+  jobListing: string;
   language: string;
   ctx: AiCtx;
 }
