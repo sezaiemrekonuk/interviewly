@@ -367,6 +367,14 @@ describe('useVoiceSession — the turn loop (C02)', () => {
   it('keeps the spec default of a two-second silence window', () => {
     expect(VAD_SILENCE_MS).toBe(2_000);
   });
+
+  // ADR-T08 — a tripwire, not an obstacle. Both windows are numbers the owner has now moved
+  // twice by sitting in the room, and neither should ever move again without someone deciding
+  // to: a candidate's thinking time and the cost of a wrongly held answer are what they price.
+  it('waits six seconds on a silent turn and four on a held one', () => {
+    expect(FORCE_SUBMIT_MS).toBe(6_000);
+    expect(FLUSH_HELD_MS).toBe(4_000);
+  });
 });
 
 describe('useVoiceSession — failure branches (S06)', () => {
@@ -485,7 +493,7 @@ describe('useVoiceSession — failure branches (S06)', () => {
 /**
  * T04 — the recorder still stops on silence, the TURN no longer ends there.
  *
- * Fake timers throughout, and every wait is an explicit advance: the 13 s clock is not a window
+ * Fake timers throughout, and every wait is an explicit advance: the silent-turn clock is not a window
  * a test can sit through, and a real-clock `waitFor` racing a request the loop has to issue is
  * what made issue #219 red-light PRs that touched nothing near the room.
  */
@@ -594,7 +602,7 @@ describe('useVoiceSession — a pause is not the end of the turn (T04)', () => {
     expect(hits(calls, UPLOAD)).toBe(1);
   });
 
-  it('submits a silence turn after thirteen seconds, uploads no audio, and does it once', async () => {
+  it('submits a silence turn once the window passes, uploads no audio, and does it once', async () => {
     const { calls } = await listening();
 
     await tick(FORCE_SUBMIT_MS + 200);
@@ -611,7 +619,7 @@ describe('useVoiceSession — a pause is not the end of the turn (T04)', () => {
   });
 
   // The clock measures silence since the last thing heard, so a candidate mid-sentence at the
-  // thirteen-second mark is not cut off — the VAD probe is what ends their pause.
+  // silent-turn mark is not cut off — the VAD probe is what ends their pause.
   it('does not fire the silence clock while a probe upload is in flight', async () => {
     let release!: () => void;
     const gate = new Promise<void>((resolve) => {
@@ -677,8 +685,8 @@ describe('useVoiceSession — a pause is not the end of the turn (T04)', () => {
 
   // ADR-T06 — the two clocks. A candidate the server is already holding a fragment for has
   // spoken, has paused, and has had the gate's verdict; four seconds later the room says so. A
-  // candidate who has said nothing at all is thinking, and thirteen seconds is theirs.
-  it('flushes a held fragment after four seconds, not thirteen', async () => {
+  // candidate who has said nothing at all is thinking, and the longer window is theirs.
+  it('flushes a held fragment after four seconds, not six', async () => {
     const { calls } = await listening({ [UPLOAD]: held('I was going to say') });
 
     await pause();

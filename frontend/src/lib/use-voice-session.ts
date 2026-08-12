@@ -71,15 +71,20 @@ const VAD_FLOOR = 0.01;
 
 /**
  * T04 — how long a turn may say nothing at all before the room tells the server so. The room
- * asserts nothing by sending it (K11): "thirteen seconds have passed" is the whole message, and
- * whether that is a real silence or a flush of what is already held is the server's call.
+ * asserts nothing by sending it (K11): "the window has passed" is the whole message, and whether
+ * that is a real silence or a flush of what is already held is the server's call.
+ *
+ * Six seconds since ADR-T08, down from thirteen. ADR-T06 defended the longer number as a
+ * thinking budget and the owner overruled it from the room: thirteen seconds of an interviewer
+ * saying nothing reads as a room that has stopped working, and a candidate who is genuinely
+ * thinking is better served by an interviewer that speaks than by one that waits.
  */
-export const FORCE_SUBMIT_MS = 13_000;
+export const FORCE_SUBMIT_MS = 6_000;
 
 /**
  * ADR-T06 — the same signal, sent sooner, when the server is already holding a fragment. That
- * candidate has spoken, has paused, and has had the gate's verdict; thirteen more seconds of
- * silence buys nothing and is what a wrongly-held finished answer costs. The gate's round trip
+ * candidate has spoken, has paused, and has had the gate's verdict; four more seconds of
+ * silence buy nothing and is what a wrongly-held finished answer costs. The gate's round trip
  * is inside this window, so the real grace after a verdict is nearer three seconds.
  *
  * The long window stays for the other case, which is not the same case: a candidate who has said
@@ -244,7 +249,7 @@ export function useVoiceSession(
   const lastLoudRef = useRef(0);
   // The quietest level seen since this recorder opened — this room, this microphone, this turn.
   const floorRef = useRef(VAD_THRESHOLD);
-  // When this recorder opened. The 13 s clock measures from here until something is heard, and
+  // When this recorder opened. The silent-turn clock measures from here until something is heard, and
   // from the last loud frame after that.
   const turnStartedRef = useRef(0);
   // Why the recorder stopped, read once in `onstop`.
@@ -253,7 +258,7 @@ export function useVoiceSession(
   // answer came back conducted, and the one the silence clock closes. Its bytes are dropped
   // rather than uploaded — the interviewer is about to speak, and an open mic records the TTS.
   const discardRef = useRef(false);
-  // An upload is in flight. The 13 s clock must not fire underneath one: a probe keeps the phase
+  // An upload is in flight. The silent-turn clock must not fire underneath one: a probe keeps the phase
   // on 'listening', so nothing else would stop it.
   const uploadingRef = useRef(false);
   // The silence turn is sent once per open recorder, whatever the interval sees afterwards.

@@ -67,8 +67,8 @@ actually saves (T07's Verification says exactly what to write down). `L02` and `
 | T01 | The completeness gate: prompt, schema, seam method, chainless, fail-open | | done | C02, I02 |
 | T02 | The held partial: `pending-turn.ts`, atomic take, the two caps | | done | F03, S03 |
 | T03 | Turn paths: gate + join + hold, the silence turn, `pendingTurn` on `/state` | | done | T01, T02, C01, C02 |
-| T04 | The room: probe-vs-final stop, the 13 s clock, the recovery notice | | done | T03, S06 |
-| T05 | Gate accuracy: two clocks (4 s held / 13 s silent) and prompt v2 | | done | T04 |
+| T04 | The room: probe-vs-final stop, the silent-turn clock, the recovery notice | | done | T03, S06 |
+| T05 | Gate accuracy: two clocks (4 s held / 6 s silent, ADR-T08) and prompt v2 | | done | T04 |
 | T06 | The suspended `AudioContext`: a reloaded room measured nothing and never probed | | done | T04 |
 | T07 | Speech spoken before the first probe still dies with the page | | done | T06 |
 | T08 | The VAD never heard the candidate: arm against the noise floor (ADR-T07) | | done | T06 |
@@ -134,6 +134,12 @@ that skips the gate.
 
 ADR-T02 is an exception to **ADR-C01**'s "nothing durable lives there", argued rather than
 assumed: the held partial is not durable and is not the conversation. ADR-C01 is not superseded.
+
+ADR-T08 supersedes **ADR-T06**'s silence number only: `FORCE_SUBMIT_MS` is 6 s, down from 13, on
+the owner's call after sitting in the finished room. ADR-T06's two-clock structure and its held
+branch stand. The cost is stated in the ADR rather than hidden — a candidate who needs longer
+than six seconds to begin a hard answer now gets a nudge instead of silence — and both windows
+are asserted by value in `use-voice-session.test.tsx` so neither drifts again by accident.
 
 ## ⚠ Known tech debt
 
