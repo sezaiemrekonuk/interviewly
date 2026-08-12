@@ -71,6 +71,17 @@ Given(
         trace_id: 'erasure-fixture',
       },
     });
+    // ADR-ADD14: a landing captures the vacancy without creating an interview, so this row
+    // outlives the interview above and is not reached by soft-deleting it.
+    await prisma.jobListing.create({
+      data: {
+        user_id: user.id,
+        external_job_id: 'erasure-fixture-4172834901',
+        job_title: 'Backend Developer',
+        job_company: 'Fixture Ltd',
+        job_text: 'Backend Developer\nFixture Ltd\n\nPostgres, Node, on-call rotation.',
+      },
+    });
 
     this.passwords.set(lower(email), FIXTURE_PASSWORD);
     await this.request('POST', '/auth/login', { body: { email, password: FIXTURE_PASSWORD } });
@@ -107,6 +118,12 @@ Then('no personal data remains for {string}', async function (this: AuthWorld, e
   assert.equal(shell.password_hash, null);
   assert.equal(shell.google_sub, null);
   assert.ok(shell.deleted_at, 'expected deleted_at to record the erasure');
+
+  assert.equal(
+    await prisma.jobListing.count({ where: { user_id: erasedUserId } }),
+    0,
+    'a captured job listing survived the erasure',
+  );
 });
 
 Then('no interview of that account is retrievable', async function () {

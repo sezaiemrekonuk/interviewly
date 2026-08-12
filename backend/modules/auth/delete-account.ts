@@ -15,6 +15,10 @@
  *   - the CV file loses its row and its bytes, unless those exact bytes are still someone
  *     else's (uploads dedupe on `sha256`, so one row can have two owners);
  *   - report PDFs lose their bytes and their key;
+ *   - every captured job listing is **removed outright**, not anonymised: `job_listings` is a
+ *     record of which vacancies this account browsed (additionals ADR-ADD14), it is the
+ *     account's own data with no operator ledger behind it, and nothing references the rows —
+ *     the same reasoning as `email_tokens` below;
  *   - `email_lower` is overwritten with a tombstone and both credentials are nulled, so the
  *     address can neither sign in nor be recovered — and it is free to register again;
  *   - every session is revoked, so the browser that asked is signed out on its next request.
@@ -58,6 +62,7 @@ export const deleteMe: RequestHandler = async (req, res) => {
     // Nothing references an email token, and a consumed one is only retained for an audit
     // of an account that is about to stop existing.
     await tx.emailToken.deleteMany({ where: { user_id: user.id } });
+    await tx.jobListing.deleteMany({ where: { user_id: user.id } });
 
     await tx.user.update({
       where: { id: user.id },
