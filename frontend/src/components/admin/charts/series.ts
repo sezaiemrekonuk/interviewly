@@ -5,6 +5,20 @@ export type SeriesToken = 's1' | 's2' | 's3' | 'sOther';
 
 const TOKENS: SeriesToken[] = ['s1', 's2', 's3'];
 
+export const STROKE_CLASS: Record<SeriesToken, string> = {
+  s1: 'stroke1',
+  s2: 'stroke2',
+  s3: 'stroke3',
+  sOther: 'strokeOther',
+};
+
+export const ARC_CLASS: Record<SeriesToken, string> = {
+  s1: 'arcS1',
+  s2: 'arcS2',
+  s3: 'arcS3',
+  sOther: 'arcSOther',
+};
+
 export function isOther(row: Pick<AdminCostModel, 'provider'>): boolean {
   return row.provider === null;
 }
