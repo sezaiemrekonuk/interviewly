@@ -330,6 +330,11 @@ describe('VoiceControls pause line (T04)', () => {
           expiresAt={null}
           captionsOn
           onToggleCaptions={vi.fn()}
+          cameraOn={false}
+          onToggleCamera={vi.fn()}
+          cameras={[]}
+          cameraId={null}
+          onSelectCamera={vi.fn()}
           transcriptOpen={false}
           onToggleTranscript={vi.fn()}
         />
