@@ -760,3 +760,52 @@ candidate's CV, because `reportVars` had never been given the vacancy.
 Left open, deliberately and now the only one: `interview.question.candidates` is anchored to
 neither the listing nor the CV and overwrites question rows, but the path is dead today
 (`promoteNextQuestion` returns early for every interview). ADR-ADD15 says who owns it.
+
+## 2026-08-12 — adaptive questioning fires for the first time
+
+`DECISIONS.md` ADR-ADD16. The K4 hook was never dead code: it ran on every answer, scored every
+answer, and promoted nothing, because the candidate pool behind it failed on both providers for
+two unrelated reasons. Found by running an end-to-end text interview and reading the logs.
+
+**packages/ai**
+
+- `src/providers.ts` — `geminiTransport` sends `thinkingConfig: { thinkingBudget: 0 }`.
+  `gemini-2.5-flash` charges thinking against `maxOutputTokens`, so the whole fallback tier was
+  returning `finishReason: MAX_TOKENS` on prompts whose budgets are 30–800 tokens. Measured
+  before: 765 thinking / 20 output of 800. After: `STOP`, 138 output.
+- `prompts/interview.question.candidates.v3.prompt.yaml` — new. Reply contract is
+  `{"candidates":[…]}`, not a bare array: OpenAI's `response_format: json_object` cannot emit a
+  top-level array, so v1 and v2 failed their schema on every call ever made. `<job_listing>` is
+  bound and named as the anchor for all three candidates, which ADR-ADD15 assigned to whoever
+  woke this path up. v1/v2 untouched, same uuid, K9 header carried.
+- `src/schemas.ts` — `CandidateBatchSchema`, shaped like `QuestionBatchSchema`. Exported from
+  `src/index.ts`.
+- `src/live-client.ts` — `generateCandidates` validates the batch and returns `.candidates`. The
+  seam still returns `Candidate[]`, so no caller changed shape.
+- `src/AiClient.ts`, `src/prompt-vars.ts` — `jobListing` on `GenerateCandidatesArgs` and
+  `candidateVars`.
+- `src/providers.test.ts` — the first tests that assert what the transports actually send. Every
+  existing chain test injects a mock transport, so `openaiTransport` and `geminiTransport` were
+  never executed by the suite and neither bug was reachable by it.
+- `src/prompt-builder.test.ts` — the shipped candidates prompt must ask for a JSON object, must
+  not ask for an array, and must bind the listing.
+
+**backend**
+
+- `modules/interview/candidate-prep.ts` — passes `interview.job_text`; the opts type carries it.
+  `adaptive.ts` already hands the full `Interview`, so nothing above it moved.
+- `modules/interview/candidate-prep.selftest.ts` — the new required arg.
+
+**Verified**
+
+- End-to-end: six-question text interview through `POST /turns` against an image built from this
+  branch, run beside the untouched stack. Five pools of three, five promotions, zero
+  `CANDIDATE_PREGENERATION_FAILED`, every candidate call `attempt_no: 1` with no `fell_back_from`.
+  Difficulty walked `medium → easy → medium → easy → easy → medium` under scores 10/75/20/10/65 —
+  `selectNextQuestion`'s table exactly, floor clamp included.
+- `npm test` 127 files / 1400 tests. `test:acceptance --tags @adaptive-questions` 7 scenarios /
+  53 steps. `adaptive-select` and `candidate-prep` selftests. `typecheck`, `lint` exit 0.
+
+**Not done:** the conductor still overwrites the promoted row's `text` while leaving the promoted
+`topic` and `difficulty`, so a row's topic label can stop describing its text. Audit surface only,
+predates this branch, and it is a conductor decision rather than a provider one.
