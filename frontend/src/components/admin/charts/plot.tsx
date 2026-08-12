@@ -6,7 +6,7 @@ import { sparkPoints } from '../../dashboard/summary';
 
 import styles from './charts.module.css';
 import { bands, labelledIndexes, stackBands, tickValues } from './geometry';
-import { STROKE_CLASS, type SeriesToken } from './series';
+import { FILL_CLASS, STROKE_CLASS, type SeriesStyle, type SeriesToken } from './series';
 
 const GUTTER = 64;
 const TOP = 12;
@@ -24,7 +24,9 @@ const RADIUS = 2;
 
 export const AREA = { width: WIDTH, height: HEIGHT };
 
-const scale = (micro: number) => (micro / 1_000_000).toFixed(4);
+export const asUsd = (micro: number) => (micro / 1_000_000).toFixed(4);
+
+export const asCount = (value: number) => String(Math.round(value));
 
 const topOf = (value: number, max: number) =>
   HEIGHT - (Math.min(Math.max(value, 0), max) / max) * HEIGHT;
@@ -35,10 +37,12 @@ const pointX = (index: number, count: number) =>
 export function Plot({
   max,
   labels,
+  format = asUsd,
   children,
 }: {
   max: number;
   labels: string[];
+  format?: (value: number) => string;
   children: ReactNode;
 }) {
   const baseline = TOP + HEIGHT;
@@ -58,7 +62,7 @@ export function Plot({
             <g key={tick}>
               <line className={styles.grid} x1={GUTTER} x2={GUTTER + WIDTH} y1={y} y2={y} />
               <text className={styles.tick} x={GUTTER - TICK_DX} y={y + TICK_DY} textAnchor="end">
-                {scale(tick)}
+                {format(tick)}
               </text>
             </g>
           );
@@ -214,18 +218,38 @@ export function StackedColumnMarks({
 export function MultiLineMarks({
   series,
   max,
-  tokens,
+  styles: sequence,
+  filled,
 }: {
   series: number[][];
   max: number;
-  tokens: SeriesToken[];
+  styles: SeriesStyle[];
+  filled?: boolean;
 }) {
   return (
     <>
+      {filled
+        ? series.map((values, index) => {
+            const [polygon] = stackBands([values], AREA, max);
+            return polygon ? (
+              <polygon
+                className={styles[FILL_CLASS[sequence[index].token]]}
+                key={`fill-${index}`}
+                points={polygon}
+              />
+            ) : null;
+          })
+        : null}
       {series.map((values, index) => (
         <polyline
-          className={`${styles.seriesLine} ${styles[STROKE_CLASS[tokens[index]]]}`}
-          key={`${tokens[index]}-${index}`}
+          className={[
+            styles.seriesLine,
+            styles[STROKE_CLASS[sequence[index].token]],
+            sequence[index].dashed ? styles.dashed : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+          key={`line-${index}`}
           points={sparkPoints(values, { width: WIDTH, height: HEIGHT, max })}
           vectorEffect="non-scaling-stroke"
         />
