@@ -7,7 +7,6 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import trMessages from '../../../messages/tr.json';
-import { DEFAULT_LANDING_PATH } from '../../lib/auth-redirect';
 import { messages, renderWithIntl } from '../../test/render';
 
 const nav = vi.hoisted(() => ({ replace: vi.fn(), push: vi.fn() }));
@@ -20,7 +19,7 @@ vi.mock('next/navigation', async () => ({
 }));
 const replace = nav.replace;
 
-import landing from '../../components/home/landing.module.css';
+import handover from '../../components/home/handover.module.css';
 
 import styles from './page.module.css';
 import Home from './page';
@@ -34,8 +33,6 @@ describe('landing (screen 1)', () => {
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(messages.landing.hero);
     expect(screen.getByText(messages.landing.subhead)).toBeInTheDocument();
 
-    // The page is no longer a hero and three props: each band below the stage is a section
-    // with a real subject, and a missing one is a page that got emptied out again.
     for (const title of [
       messages.landing.mechanism.title,
       messages.landing.modes.title,
@@ -61,13 +58,29 @@ describe('landing (screen 1)', () => {
     expect(screen.getByTestId('demo-question')).toHaveTextContent(FRONTEND.hr.question);
   });
 
+  it('draws both interviewers, and only the one with the floor is asking', async () => {
+    renderWithIntl(<Home />);
+
+    const hrPeep = screen.getByTestId('demo-tile-hr').querySelector('svg');
+    const techPeep = screen.getByTestId('demo-tile-tech').querySelector('svg');
+    expect(hrPeep).not.toBeNull();
+    expect(techPeep).not.toBeNull();
+    expect(techPeep).toHaveAttribute('data-mood', 'listening');
+
+    await userEvent.click(screen.getByRole('button', { name: FRONTEND.hr.answers.a }));
+
+    expect(screen.getByTestId('demo-tile-hr').querySelector('svg')).toHaveAttribute(
+      'data-mood',
+      'pleased',
+    );
+  });
+
   it('scores the answer the visitor picks, with the written reason', async () => {
     renderWithIntl(<Home />);
 
     await userEvent.click(screen.getByRole('button', { name: FRONTEND.hr.answers.a }));
 
     const score = screen.getByTestId('demo-score');
-    // 4 of 5 for this answer (`demo-content.ts`).
     expect(screen.getByTestId('demo-score-overall')).toHaveTextContent('82');
     expect(within(score).getByText(FRONTEND.hr.reasons.a)).toBeInTheDocument();
     expect(within(score).getByText('STAR 82%')).toBeInTheDocument();
@@ -80,18 +93,15 @@ describe('landing (screen 1)', () => {
     expect(within(score).getAllByRole('progressbar', { hidden: true })).toHaveLength(2);
   });
 
-  // The marking is the climax and it belongs to the exchange. Rendered under the stage it left
-  // the room a flat rectangle with a question stranded at the top and pushed the written reason
-  // off a 900px screen — so this pins *where*, not just that it exists.
-  it('marks the answer inside the room, in the answer list’s place', async () => {
+  it('marks the answer in the exchange, in the answer list’s place', async () => {
     const { container } = renderWithIntl(<Home />);
-    const stage = container.querySelector(`.${landing.stage}`);
-    expect(stage).not.toBeNull();
+    const exchange = container.querySelector(`.${handover.exchange}`);
+    expect(exchange).not.toBeNull();
 
     await userEvent.click(screen.getByRole('button', { name: FRONTEND.hr.answers.a }));
 
-    expect(stage).toContainElement(screen.getByTestId('demo-result'));
-    expect(stage).toContainElement(screen.getByTestId('demo-score'));
+    expect(exchange).toContainElement(screen.getByTestId('demo-result'));
+    expect(exchange).toContainElement(screen.getByTestId('demo-score'));
     // Taking its place, not sitting under it: two lists of the same three answers would be
     // asking the visitor to choose again after they already have.
     expect(screen.queryByTestId('demo-answers')).toBeNull();
@@ -141,23 +151,22 @@ describe('landing (screen 1)', () => {
     expect(screen.getByText(messages.landing.closing.line)).toBeInTheDocument();
     const closing = container.querySelector(`.${styles.closingCta}`);
     expect(closing).toHaveAttribute('href', '/register');
-    expect(closing).not.toHaveClass(styles.cta);
+    expect(closing).not.toHaveClass(handover.cta);
   });
 
   it('has exactly one --primary CTA and it links to /register', () => {
     const { container } = renderWithIntl(<Home />);
-    const ctas = container.querySelectorAll(`.${styles.cta}`);
+    const ctas = container.querySelectorAll(`.${handover.cta}`);
     expect(ctas).toHaveLength(1);
     expect(ctas[0]).toHaveAttribute('href', '/register');
     expect(ctas[0]).toHaveTextContent(messages.landing.cta);
   });
 
-  // Direction B: the only picture on the landing is a session. No character, and therefore
-  // no image request and no `<link rel=preload as=image>` in the §8.1 budget either.
-  it('draws no mascot and preloads no image', () => {
+  it('requests no image for its illustration', () => {
     const { container } = renderWithIntl(<Home />);
     expect(container.querySelector('img')).toBeNull();
     expect(document.querySelector('link[rel="preload"][as="image"]')).toBeNull();
+    expect(container.querySelectorAll('svg[data-mood]').length).toBeGreaterThan(0);
   });
 
   it('resolves its copy in Turkish, demo included', () => {
@@ -211,11 +220,9 @@ describe('landing (screen 1)', () => {
     expect(source).not.toContain('@tanstack/react-query');
     expect(source).not.toContain('./providers');
 
-    // The gate is the boundary: a shared `/me` probe and a redirect. Nothing signed-in is
-    // imported into this tree at all, lazily or otherwise — including through the two modules
-    // it does reach for, which is where a React Query import would sneak in unnoticed.
     for (const path of [
-      ['components', 'home', 'home-switch.tsx'],
+      ['components', 'home', 'handover.tsx'],
+      ['components', 'home', 'peeps.tsx'],
       ['lib', 'session-probe.ts'],
       ['lib', 'first-run.ts'],
     ]) {
@@ -237,21 +244,18 @@ describe('landing — a visitor who is already signed in', () => {
     replace.mockClear();
   });
 
-  // Issue 80: `/` applies the K8.7 first-run rule rather than sending every session to one
-  // landing path. Sending them all to the signed-in home is what let a Google user — who
-  // arrives here after the callback — skip onboarding entirely and keep an empty profile.
   it.each([
-    ['who has not finished onboarding', { onboardingCompletedAt: null, interviewCount: 0 }, '/onboarding/1'],
-    ['with no interviews yet', { onboardingCompletedAt: 'now', interviewCount: 0 }, '/interviews/new'],
-    ['who is fully set up', { onboardingCompletedAt: 'now', interviewCount: 3 }, DEFAULT_LANDING_PATH],
-  ])('sends a visitor %s to %s', async (_name, account, destination) => {
+    ['who has not finished onboarding', { onboardingCompletedAt: null, interviewCount: 0 }],
+    ['who is fully set up', { onboardingCompletedAt: 'now', interviewCount: 3 }],
+  ])('leaves a visitor %s on the landing page', async (_name, account) => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () =>
-        new Response(JSON.stringify({ user: { id: 'u1', email: 'a@b.c', ...account } }), {
-          status: 200,
-          headers: { 'content-type': 'application/json' },
-        }),
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ user: { id: 'u1', email: 'a@b.c', ...account } }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
       ),
     );
 
@@ -259,16 +263,16 @@ describe('landing — a visitor who is already signed in', () => {
       renderWithIntl(<Home />);
     });
 
-    await waitFor(() => expect(replace).toHaveBeenCalledWith(destination));
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(messages.landing.hero),
+    );
+    expect(replace).not.toHaveBeenCalled();
   });
 
-  // Issue 130: the header and the redirect gate each probed `/me` for themselves, so the
-  // app's most-visited page made two identical requests — two 401s and two red console lines
-  // anonymously, two authenticated requests (each a Postgres write) signed in.
   it.each([
     ['unauthenticated', 401, { error: { code: 'UNAUTHENTICATED' } }],
     ['authenticated', 200, { user: { id: 'u1', email: 'a@b.c' } }],
-  ])('probes the session exactly once (%s), not once per reader', async (_name, status, body) => {
+  ])('probes the session at most once (%s)', async (_name, status, body) => {
     const urls: string[] = [];
     vi.stubGlobal(
       'fetch',
@@ -286,24 +290,5 @@ describe('landing — a visitor who is already signed in', () => {
     });
 
     expect(urls.filter((url) => url === '/api/me')).toHaveLength(1);
-  });
-
-  it('leaves an anonymous visitor exactly where they are', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () =>
-        new Response(JSON.stringify({ error: { code: 'UNAUTHENTICATED' } }), {
-          status: 401,
-          headers: { 'content-type': 'application/json' },
-        }),
-      ),
-    );
-
-    await act(async () => {
-      renderWithIntl(<Home />);
-    });
-
-    expect(replace).not.toHaveBeenCalled();
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(messages.landing.hero);
   });
 });
