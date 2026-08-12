@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 
 import type { AdminSessionRow } from '../../lib/query';
@@ -14,6 +15,7 @@ export function SessionTable({
   onLoadMore,
   sort,
   onSort,
+  filter,
 }: {
   items: AdminSessionRow[];
   hasNextPage: boolean;
@@ -21,6 +23,7 @@ export function SessionTable({
   onLoadMore: () => void;
   sort: { field: string; dir: 'asc' | 'desc' };
   onSort: (field: string) => void;
+  filter?: ReactNode;
 }) {
   const t = useTranslations('admin');
   const format = useFormatter();
@@ -32,6 +35,7 @@ export function SessionTable({
           {t('sessions.heading')}
         </h2>
         <p className={styles.note}>{t('sessions.note')}</p>
+        {filter ? <div className={styles.filter}>{filter}</div> : null}
       </div>
 
       {items.length === 0 ? (

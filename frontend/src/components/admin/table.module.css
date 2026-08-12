@@ -32,6 +32,13 @@
   color: var(--text-muted);
 }
 
+.filter {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-block-start: 12px;
+}
+
 /* The table scrolls inside its own box so the page body never scrolls sideways at 390px. */
 .scroller {
   overflow-x: auto;

@@ -304,11 +304,13 @@ export default function AdminInterviewDetailPage() {
           {/* Hidden when nothing was recorded: a box that can only ever return the same empty
               table is chrome. */}
           {all.length > 0 ? (
-            <FilterBuilder
-              value={callQuery}
-              onChange={setCallQuery}
-              fields={fieldDescriptors(CALL_SPEC)}
-            />
+            <div className={table.filter}>
+              <FilterBuilder
+                value={callQuery}
+                onChange={setCallQuery}
+                fields={fieldDescriptors(CALL_SPEC)}
+              />
+            </div>
           ) : null}
         </div>
 
@@ -435,11 +437,13 @@ export default function AdminInterviewDetailPage() {
           </h2>
           <p className={table.note}>{t('detail.eventsNote')}</p>
           {all.length > 0 ? (
-            <FilterBuilder
-              value={eventQuery}
-              onChange={setEventQuery}
-              fields={fieldDescriptors(EVENT_SPEC)}
-            />
+            <div className={table.filter}>
+              <FilterBuilder
+                value={eventQuery}
+                onChange={setEventQuery}
+                fields={fieldDescriptors(EVENT_SPEC)}
+              />
+            </div>
           ) : null}
         </div>
 

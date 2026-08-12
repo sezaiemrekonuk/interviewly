@@ -193,6 +193,28 @@ export default function AdminPage() {
     setSection('interviews');
   };
 
+  /* One control for every field this table has. The hand-written dropdowns it replaces
+     covered three facets out of fifteen and had to be extended by hand for each new one;
+     this is built from the envelope, so a field added on the server appears here with
+     no client change at all.
+
+     The queue is the one section without it: no list, no cursor, no order, and a filter
+     over five counters would be furniture.
+
+     Optional-chained through `query` as well as `meta` — an older api container answers
+     these lists without the envelope, and crashing over a filter control would take the
+     whole surface down. */
+  const filter = meta ? (
+    <>
+      <FilterBuilder value={active.q ?? ''} onChange={onSearch} fields={meta.query?.fields ?? []} />
+      {(meta.query?.ignored?.length ?? 0) > 0 ? (
+        <p className={styles.ignored} role="status" data-testid="admin-search-ignored">
+          {t('filter.ignored', { terms: (meta.query?.ignored ?? []).join(', ') })}
+        </p>
+      ) : null}
+    </>
+  ) : null;
+
   const table = (
     <InterviewTable
       items={items}
@@ -201,6 +223,7 @@ export default function AdminPage() {
       hasNextPage={Boolean(interviews.hasNextPage)}
       isFetchingNextPage={interviews.isFetchingNextPage}
       onLoadMore={() => interviews.fetchNextPage()}
+      filter={filter}
     />
   );
 
@@ -247,6 +270,7 @@ export default function AdminPage() {
             hasNextPage={Boolean(calls.hasNextPage)}
             isFetchingNextPage={calls.isFetchingNextPage}
             onLoadMore={() => calls.fetchNextPage()}
+            filter={filter}
           />
         );
       case 'sessions':
@@ -258,6 +282,7 @@ export default function AdminPage() {
             hasNextPage={Boolean(sessions.hasNextPage)}
             isFetchingNextPage={sessions.isFetchingNextPage}
             onLoadMore={() => sessions.fetchNextPage()}
+            filter={filter}
           />
         );
       case 'users':
@@ -270,6 +295,7 @@ export default function AdminPage() {
             isFetchingNextPage={users.isFetchingNextPage}
             onLoadMore={() => users.fetchNextPage()}
             onFilterByUser={openInterviewsFor}
+            filter={filter}
           />
         );
       case 'queue':
@@ -283,6 +309,7 @@ export default function AdminPage() {
             hasNextPage={Boolean(audit.hasNextPage)}
             isFetchingNextPage={audit.isFetchingNextPage}
             onLoadMore={() => audit.fetchNextPage()}
+            filter={filter}
           />
         );
       default:
@@ -340,34 +367,7 @@ export default function AdminPage() {
   return (
     <SplitShell rail={rail} width="narrow">
       <WorkTop title={t(`nav.${section}`)} />
-      <WorkBody className={styles.body}>
-        {/* Above the data, not in the header strip: three selects and a search box need the
-            work column's width, and a filter that wraps into the title row reads as chrome. */}
-        {/* One control for every field this table has. The hand-written dropdowns it replaces
-            covered three facets out of fifteen and had to be extended by hand for each new one;
-            this is built from the envelope, so a field added on the server appears here with
-            no client change at all.
-
-            The queue is the one section without it: no list, no cursor, no order, and a filter
-            over five counters would be furniture.
-
-            Optional-chained through `query` as well as `meta` — an older api container answers
-            these lists without the envelope, and crashing over a filter control would take the
-            whole surface down. */}
-        {meta ? (
-          <FilterBuilder
-            value={active.q ?? ''}
-            onChange={onSearch}
-            fields={meta.query?.fields ?? []}
-          />
-        ) : null}
-        {(meta?.query?.ignored?.length ?? 0) > 0 ? (
-          <p className={styles.ignored} role="status" data-testid="admin-search-ignored">
-            {t('filter.ignored', { terms: (meta?.query?.ignored ?? []).join(', ') })}
-          </p>
-        ) : null}
-        {body()}
-      </WorkBody>
+      <WorkBody className={styles.body}>{body()}</WorkBody>
     </SplitShell>
   );
 }
