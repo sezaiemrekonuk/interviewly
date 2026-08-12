@@ -16,6 +16,10 @@ const integration = process.env.INTEGRATION === '1';
 
 export default defineConfig({
   test: {
+    // Issues #170/#119, the vitest half: `test:integration` resolves DATABASE_URL/REDIS_URL to
+    // disposable targets, and this refuses anything that still arrives pointed at the
+    // application's stores. Root level, so it runs once for `node` and `worker` both.
+    globalSetup: integration ? ['./vitest.global-setup.mts'] : [],
     projects: [
       {
         // `@interviewly/ai` now publishes `dist/` as its entry point, so that its consumers

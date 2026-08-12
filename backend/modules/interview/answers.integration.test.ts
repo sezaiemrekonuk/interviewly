@@ -12,8 +12,6 @@
  * integration files too, and those need Redis, so bring both up:
  *
  *   docker compose -f compose.yaml -f compose.dev.yaml up -d db cache
- *   export DATABASE_URL=postgresql://interviewly:interviewly@localhost:5432/interviewly
- *   export REDIS_URL=redis://localhost:6380
  *   npm run test:integration
  */
 import { randomUUID } from 'node:crypto';

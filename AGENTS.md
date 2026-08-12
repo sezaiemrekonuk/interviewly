@@ -42,13 +42,18 @@ npm run lint
 `process.exit(1)` when required vars are missing, and the root script supplies them with
 `--env-file-if-exists=.env`.
 
-**`test:integration` cannot run on the host as-is.** `.env` points at `db:5432` and
-`cache:6379`, which only resolve inside the compose network; on a laptop it hangs on
-`getaddrinfo ENOTFOUND cache`. Export host-reachable `DATABASE_URL` / `REDIS_URL` first — a
-shell export beats `--env-file` — or run it in the container. This is not a broken setup, and
-"fixing" `.env` breaks compose.
+**`test:integration` no longer reads `.env` for its stores either.** It used to, and `.env`
+names `db:5432/interviewly` — the application's own database — so the ring that creates users,
+interviews and personas and cleans up almost none of it was pointed at production data by
+default. The script now resolves both URLs itself, ahead of `--env-file-if-exists`, to
+`interviewly_test` on `localhost:5432` and Redis db **1** on `localhost:6380` — the same
+disposable targets and the same `TEST_DATABASE_URL` / `TEST_REDIS_URL` precedence
+`test:acceptance` uses, and the same `assertDisposableStores` refusal
+(`vitest.global-setup.mts`) if a non-disposable URL still arrives from a shell export. So bring
+the stack up with `compose.dev.yaml` (below) and `npm run test:integration` works on a laptop;
+the global setup runs `prisma migrate deploy` into the test database for you.
 
-**`test:acceptance` no longer reads `.env` for its stores** (issues #170, #119). It runs against
+**`test:acceptance` does not read `.env` for its stores** (issues #170, #119). It runs against
 `interviewly_test` on `localhost:5432` and Redis db **1** on `localhost:6380` — both published
 by `compose.dev.yaml`, so bring the stack up with it (`docker compose -f compose.yaml -f
 compose.dev.yaml up -d`) or the run cannot connect. Override by **exporting**
@@ -59,6 +64,7 @@ default, which is how CI points the run at its own services.
 **The Redis database index is not yours to pick.** Whatever URL wins, `cucumber.js` moves it to
 db 1 if it resolves to db 0 — a pathless `redis://host:port` included, which is the shape nearly
 every REDIS_URL here has. The suite FLUSHDBs what it connects to, so db 0 is never the answer.
+`test:integration` does not rewrite: it refuses db 0 and tells you to spell an index out.
 
 The suite then refuses to start against a database whose name does not end in `_test`/`ci`, or
 against Redis db 0 — it TRUNCATEs and FLUSHDBs what it is given, and it used to be given the
