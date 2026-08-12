@@ -11,6 +11,8 @@ import { parseOutput } from './live-client';
 import {
   FALLBACK_STEP,
   buildChain,
+  geminiTransport,
+  openaiTransport,
   runChain,
   type ChainDeps,
   type LlmCallRecord,
@@ -60,6 +62,46 @@ describe('buildChain', () => {
     expect(buildChain(built, { openai: 'k1' })).toEqual([
       { provider: 'openai', model: 'gpt-4.1-mini' },
     ]);
+  });
+});
+
+describe('transport request bodies', () => {
+  async function sentBody(
+    transport: typeof geminiTransport,
+    response: unknown,
+  ): Promise<Record<string, never> & Record<string, unknown>> {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(response), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      await transport({
+        model: 'm',
+        apiKey: 'k',
+        system: 'system template',
+        messages: [{ role: 'user', content: 'u' }],
+        params: { temperature: 0.6, max_tokens: 800 },
+        signal: new AbortController().signal,
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    return JSON.parse(String(fetchMock.mock.calls[0][1].body));
+  }
+
+  it('spends the gemini output budget on output, never on thinking', async () => {
+    const body = await sentBody(geminiTransport, {
+      candidates: [{ content: { parts: [{ text: '[]' }] } }],
+    });
+    expect(body.generationConfig).toMatchObject({
+      maxOutputTokens: 800,
+      thinkingConfig: { thinkingBudget: 0 },
+    });
+  });
+
+  it('makes openai enforce JSON, which is why no prompt may ask for a top-level array', async () => {
+    const body = await sentBody(openaiTransport, {
+      choices: [{ message: { content: '{}' } }],
+    });
+    expect(body.response_format).toEqual({ type: 'json_object' });
   });
 });
 
