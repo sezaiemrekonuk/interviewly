@@ -285,3 +285,15 @@
     margin-top: 0;
   }
 }
+
+/* A term the server did not recognise. A warning, never an error: the page worked, the list is
+   simply wider than the operator thinks it is — which is exactly why it cannot go unsaid. */
+.ignored {
+  margin: 0;
+  padding: 8px 12px;
+  background: var(--surface);
+  border: 1px solid var(--warning);
+  border-radius: var(--radius-card);
+  font-size: 13px;
+  color: var(--text);
+}

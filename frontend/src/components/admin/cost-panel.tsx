@@ -4,7 +4,6 @@ import { useTranslations } from 'next-intl';
 
 import type { AdminInterviewRow, AdminStatsResponse } from '../../lib/query';
 import { Meter } from '../shell/meter';
-import { Spec } from '../shell/split-shell';
 
 import { isUnpriced, microUsd } from './interview-table';
 // Shares the Overview panel vocabulary (card, eyebrow, row, meter) rather than restating it.
@@ -13,31 +12,36 @@ import styles from './panels.module.css';
 const usd = (micro: number) => (micro / 1_000_000).toFixed(6);
 
 /**
- * Costs. There is no cost endpoint: `/admin/stats` returns no money at all, so every figure
- * here is summed from the interview rows currently loaded — which is what the copy says.
+ * Costs.
  *
- * The date range, the provider/model/mode filters and the per-model breakdown the design
- * calls for have no data source; they are drawn in the Spec state rather than faked, and the
- * unpriced rows are excluded from the total rather than counted as free.
+ * The platform total and the per-model breakdown now come from `/admin/stats` — `totalCostUsd`
+ * and `perModel[]`, both aggregated in Postgres over every `llm_calls` row. What was here
+ * before summed whatever interviews the table had paged in and said so out loud, because there
+ * was no endpoint that knew the platform figure.
+ *
+ * The per-CLUSTER breakdown is still summed client-side from the loaded rows, and that is not
+ * an oversight: `perOccupation[]` counts interviews, not dollars, so cluster spend has no
+ * server-side source. It is labelled as loaded-rows-only for the same reason the total used
+ * to be.
+ *
+ * Voice rolls into the same money. It is charged per second rather than per token, so it has
+ * no token count to appear under — the drill-down's `unitKind` column is where the two split.
  */
 export function CostPanel({
   items,
-  clusters,
+  stats,
 }: {
   items: AdminInterviewRow[];
-  clusters: AdminStatsResponse['perOccupation'];
+  stats: AdminStatsResponse | undefined;
 }) {
   const t = useTranslations('admin');
 
   const priced = items.filter((row) => !isUnpriced(row));
-  // Summed as integer micro-dollars: adding six-decimal strings as floats drifts, and this
-  // is money on an audit surface.
-  const totalMicro = priced.reduce((sum, row) => sum + microUsd(row.costUsd), 0);
   const unpricedCount = items.length - priced.length;
 
-  // The only breakdown the two endpoints support: `occupationCluster` is on every row and
-  // `/admin/stats` carries the readable label for each cluster key.
-  const labels = new Map(clusters.map((entry) => [entry.cluster, entry.label]));
+  const labels = new Map((stats?.perOccupation ?? []).map((entry) => [entry.cluster, entry.label]));
+  // Summed as integer micro-dollars: adding six-decimal strings as floats drifts, and this
+  // is money on an audit surface.
   const byCluster = new Map<string, number>();
   for (const row of priced) {
     const key = row.occupationCluster ?? '';
@@ -52,30 +56,53 @@ export function CostPanel({
     .sort((a, b) => b.micro - a.micro);
   const clusterMax = Math.max(1, ...clusterRows.map((row) => row.micro));
 
+  const models = stats?.perModel ?? [];
+  const modelMax = Math.max(1, ...models.map((row) => microUsd(row.costUsd)));
+
   return (
     <section className={styles.panel} aria-labelledby="admin-costs-heading">
       <h2 className={styles.srOnly} id="admin-costs-heading">
         {t('costs.heading')}
       </h2>
 
-      <div>
-        <div className={styles.filters}>
-          <span className={styles.chip}>{t('filters.dateRange')}</span>
-          <span className={styles.chip}>{t('filters.provider')}</span>
-          <span className={styles.chip}>{t('filters.mode')}</span>
-          <span className={styles.chip}>{t('filters.search')}</span>
-          <Spec />
-        </div>
-        <p className={styles.rowNote}>{t('spec.filters')}</p>
-      </div>
-
-      <div className={styles.card}>
-        <span className={styles.eyebrow}>{t('costs.total')}</span>
-        <p className={`${styles.big} tabular`}>{usd(totalMicro)}</p>
-        <p className={styles.note}>{t('costs.totalNote', { count: items.length })}</p>
+      <div className={styles.card} data-testid="admin-platform-spend">
+        <span className={styles.eyebrow}>{t('costs.platformTotal')}</span>
+        {/* The backend's six-decimal string, printed. Re-rounding a ledger figure in the
+            client is how two screens come to disagree about what something cost. */}
+        <p className={`${styles.big} tabular`}>{stats?.totalCostUsd ?? '0.000000'}</p>
+        <p className={styles.note}>{t('costs.platformTotalNote')}</p>
         {unpricedCount > 0 ? (
           <p className={styles.note}>{t('costs.unpricedNote', { count: unpricedCount })}</p>
         ) : null}
+      </div>
+
+      <div className={styles.card} data-testid="admin-by-model">
+        <h3 className={styles.title}>{t('costs.byModel')}</h3>
+        <p className={styles.note}>{t('costs.byModelCaption')}</p>
+        {models.length === 0 ? (
+          <p className={styles.empty}>{t('costs.noSpend')}</p>
+        ) : (
+          <ul className={styles.rows}>
+            {models.map((row) => (
+              <li className={styles.row} key={`${row.provider}:${row.model}`}>
+                <span className={styles.rowLabel}>
+                  {row.provider} · {row.model}
+                </span>
+                <span className={`${styles.rowValue} tabular`}>{row.costUsd}</span>
+                <Meter
+                  className={styles.rowMeter}
+                  value={microUsd(row.costUsd)}
+                  max={modelMax}
+                  decorative
+                />
+                <span className={styles.rowNote}>
+                  {t('costs.modelCalls', { count: row.calls })} ·{' '}
+                  {t('costs.modelLatency', { ms: row.averageLatencyMs })}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       <div className={styles.card}>
@@ -93,13 +120,7 @@ export function CostPanel({
             ))}
           </ul>
         )}
-      </div>
-
-      <div className={styles.card}>
-        <h3 className={styles.title}>{t('costs.byModel')}</h3>
-        <div className={styles.hatch}>
-          <p className={styles.hatchNote}>{t('spec.byModel')}</p>
-        </div>
+        <p className={styles.note}>{t('costs.totalNote', { count: items.length })}</p>
       </div>
     </section>
   );

@@ -3,43 +3,70 @@
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
+import { AuditTable } from '../../../components/admin/audit-table';
+import { CallTable } from '../../../components/admin/call-table';
 import { CostPanel } from '../../../components/admin/cost-panel';
+import { FilterBuilder } from '../../../components/admin/filter-builder';
 import { InterviewTable } from '../../../components/admin/interview-table';
+import { QueuePanel } from '../../../components/admin/queue-panel';
+import { SessionTable } from '../../../components/admin/session-table';
 import { StatsPanel } from '../../../components/admin/stats-panel';
-import {
-  RailFoot,
-  RailMark,
-  Spec,
-  SplitShell,
-  WorkBody,
-  WorkTop,
-} from '../../../components/shell/split-shell';
+import { UserTable } from '../../../components/admin/user-table';
+import { RailFoot, RailMark, SplitShell, WorkBody, WorkTop } from '../../../components/shell/split-shell';
 import { Link } from '../../../i18n/navigation';
 import { DEFAULT_LANDING_PATH } from '../../../lib/auth-redirect';
-import { useAdminInterviews, useAdminStats } from '../../../lib/query';
+import {
+  type AdminListMeta,
+  useAdminAudit,
+  useAdminInterviews,
+  useAdminLlmCalls,
+  useAdminQueue,
+  useAdminSessions,
+  useAdminStats,
+  useAdminUsers,
+} from '../../../lib/query';
 import { useErrorMessage } from '../../../lib/use-error-message';
 import { useRequireAuth } from '../../../lib/use-require-auth';
 
 import styles from './admin.module.css';
 
 /**
- * The console's sections, in nav order. `built` means an endpoint answers it — there are
- * exactly two (`/admin/stats`, `/admin/interviews`), so five sections are drawn in the Spec
- * state with the missing data named in one sentence. A nav item that opens invented numbers
- * is worse than one that opens an honest gap.
+ * The console's sections, in nav order. Every one of them is answered by an endpoint now —
+ * the five that were drawn in the Spec state (`modelCalls`, `sessions`, `users`, `queue`,
+ * `audit`) were placeholders for reads that did not exist, not for features nobody wanted.
  */
 const SECTIONS = [
-  { id: 'overview', built: true },
-  { id: 'interviews', built: true },
-  { id: 'costs', built: true },
-  { id: 'modelCalls', built: false },
-  { id: 'sessions', built: false },
-  { id: 'users', built: false },
-  { id: 'queue', built: false },
-  { id: 'audit', built: false },
+  'overview',
+  'interviews',
+  'costs',
+  'modelCalls',
+  'sessions',
+  'users',
+  'queue',
+  'audit',
 ] as const;
 
-type SectionId = (typeof SECTIONS)[number]['id'];
+type SectionId = (typeof SECTIONS)[number];
+
+type Filters = Record<string, string | undefined>;
+
+/**
+ * Which filter bag a section reads and writes.
+ *
+ * Overview, Interviews and Costs are three views of ONE list, so they share one bag: narrowing
+ * on Overview and switching to Costs must keep the narrowing, and a bag each would have let a
+ * section write a filter that the query it renders never reads.
+ */
+const FILTER_BAG: Record<SectionId, SectionId> = {
+  overview: 'interviews',
+  interviews: 'interviews',
+  costs: 'interviews',
+  modelCalls: 'modelCalls',
+  sessions: 'sessions',
+  users: 'users',
+  queue: 'queue',
+  audit: 'audit',
+};
 
 /** Two figures and the table at their final row height, so nothing jumps when data lands. */
 function TableSkeleton({ label }: { label: string }) {
@@ -59,38 +86,37 @@ function TableSkeleton({ label }: { label: string }) {
   );
 }
 
-/**
- * A section the design specifies and no endpoint answers yet. Same neutral marker as the
- * rail — never a warning colour, because colouring a scheduled gap as a failure is how an
- * operator learns to ignore the failures that matter.
- */
-function SpecPanel({ note }: { note: string }) {
-  return (
-    <div className={styles.specPanel}>
-      <div className={styles.specCard}>
-        <Spec />
-        <p className={styles.specNote}>{note}</p>
-      </div>
-    </div>
-  );
-}
-
 export default function AdminPage() {
   const { user, loading: authLoading } = useRequireAuth();
   const t = useTranslations('admin');
   const errorMessage = useErrorMessage();
-  // Sections are client state, not routes: the console reads one pair of endpoints and
-  // swapping the working surface costs nothing. A route each would refetch both per click.
+  // Sections are client state, not routes: swapping the working surface must not remount the
+  // shell or refetch what the previous section already has. A route each would.
   const [section, setSection] = useState<SectionId>('overview');
+  // One filter bag per section. Shared state would carry `state=completed` from the interview
+  // list into the audit trail, where it means nothing and silently empties the table.
+  const [filters, setFilters] = useState<Record<string, Filters>>({});
+  const bagKey = FILTER_BAG[section];
+  const active = filters[bagKey] ?? {};
 
   const isAdmin = !authLoading && user !== null && user.role === 'admin';
-  const interviews = useAdminInterviews(isAdmin);
-  const stats = useAdminStats(isAdmin);
+  // Enabled per section: eight endpoints fired on every load would make opening the console
+  // the most expensive request in the system, seven-eighths of it for a panel nobody opened.
+  const wantsInterviews = section === 'overview' || section === 'interviews' || section === 'costs';
+  const wantsStats = wantsInterviews;
+
+  const interviews = useAdminInterviews(isAdmin && wantsInterviews, filters.interviews ?? {});
+  const stats = useAdminStats(isAdmin && wantsStats);
+  const calls = useAdminLlmCalls(isAdmin && section === 'modelCalls', filters.modelCalls ?? {});
+  const sessions = useAdminSessions(isAdmin && section === 'sessions', filters.sessions ?? {});
+  const users = useAdminUsers(isAdmin && section === 'users', filters.users ?? {});
+  const queue = useAdminQueue(isAdmin && section === 'queue');
+  const audit = useAdminAudit(isAdmin && section === 'audit', filters.audit ?? {});
 
   if (authLoading || !user) return null;
 
-  const refusal =
-    interviews.error?.code === 'FORBIDDEN' || stats.error?.code === 'FORBIDDEN' ? 'FORBIDDEN' : null;
+  const queries = [interviews, stats, calls, sessions, users, queue, audit];
+  const refusal = queries.some((query) => query.error?.code === 'FORBIDDEN');
 
   // Rendered in place, never redirected: bouncing a non-admin off `/admin` tells them the
   // route exists and that they were bounced off it (error-routing.ts, `not-authorized`).
@@ -110,12 +136,68 @@ export default function AdminPage() {
   }
 
   const items = interviews.data?.pages.flatMap((page) => page.items) ?? [];
-  const failure = interviews.error?.code ?? stats.error?.code ?? null;
-  const built = SECTIONS.find((entry) => entry.id === section)?.built ?? false;
+  const callRows = calls.data?.pages.flatMap((page) => page.items) ?? [];
+  const auditRows = audit.data?.pages.flatMap((page) => page.items) ?? [];
+
+  const setFilter = (next: Filters) => setFilters((all) => ({ ...all, [bagKey]: next }));
+
+  // The first page of whichever list is on screen. Every list echoes the same envelope, so the
+  // search box and the headers read their vocabulary from the server rather than from a copy
+  // of the whitelist that would drift the first time a field is renamed.
+  const meta: AdminListMeta | undefined = {
+    overview: interviews.data?.pages[0],
+    interviews: interviews.data?.pages[0],
+    costs: interviews.data?.pages[0],
+    modelCalls: calls.data?.pages[0],
+    sessions: sessions.data?.pages[0],
+    users: users.data?.pages[0],
+    queue: undefined,
+    audit: audit.data?.pages[0],
+  }[section];
+
+  /**
+   * The local bag wins over the echo while a re-sort is in flight, so a clicked header flips
+   * immediately instead of waiting a round trip to look like it did anything. Before the first
+   * click there is nothing local, and the server's default is the truth.
+   */
+  const activeSort = active.sort
+    ? { field: active.sort, dir: active.dir === 'asc' ? ('asc' as const) : ('desc' as const) }
+    : { field: meta?.sort?.field ?? '', dir: meta?.sort?.dir ?? ('desc' as const) };
+
+  /**
+   * Same column flips the direction; a different column starts at descending — newest, biggest,
+   * most expensive first is what an operator means by "sort by this".
+   *
+   * The cursor is not cleared by hand: the sort lives in the query key, so a new order is a new
+   * cache entry that starts at page one. The backend refuses a cursor minted under a different
+   * order anyway, which is the belt to this bracers.
+   */
+  const onSort = (field: string) =>
+    setFilter({
+      ...active,
+      sort: field,
+      dir: field === activeSort.field && activeSort.dir === 'desc' ? 'asc' : 'desc',
+    });
+
+  const onSearch = (q: string) => setFilter({ ...active, q: q || undefined });
+
+  /**
+   * "Show me this account's interviews", from a row in the accounts table.
+   *
+   * Written as a query term rather than a separate parameter so it lands as a visible, removable
+   * chip — a jump that filtered the next screen invisibly is how an operator ends up reading a
+   * narrowed list without knowing it is narrowed.
+   */
+  const openInterviewsFor = (userId: string) => {
+    setFilters((all) => ({ ...all, interviews: { q: `user:${userId}` } }));
+    setSection('interviews');
+  };
 
   const table = (
     <InterviewTable
       items={items}
+      sort={activeSort}
+      onSort={onSort}
       hasNextPage={Boolean(interviews.hasNextPage)}
       isFetchingNextPage={interviews.isFetchingNextPage}
       onLoadMore={() => interviews.fetchNextPage()}
@@ -123,28 +205,94 @@ export default function AdminPage() {
   );
 
   function body() {
-    if (!built) return <SpecPanel note={t(`spec.${section}`)} />;
-    if (interviews.isPending || stats.isPending) return <TableSkeleton label={t('loading')} />;
+    // The section's OWN query decides the skeleton. A shared `isPending` would blank the
+    // queue panel because the interview list it never asked for has not landed.
+    const query = {
+      overview: interviews,
+      interviews,
+      costs: interviews,
+      modelCalls: calls,
+      sessions,
+      users,
+      queue,
+      audit,
+    }[section];
+
+    if (query.isPending) return <TableSkeleton label={t('loading')} />;
+    const failure = query.error?.code ?? (wantsStats ? (stats.error?.code ?? null) : null);
     if (failure)
       return (
         <p className={styles.error} role="alert">
           {errorMessage(failure)}
         </p>
       );
-    if (section === 'interviews') return table;
-    if (section === 'costs')
-      return (
-        <>
-          <CostPanel items={items} clusters={stats.data?.perOccupation ?? []} />
-          {table}
-        </>
-      );
-    return (
-      <>
-        {stats.data && <StatsPanel stats={stats.data} />}
-        {table}
-      </>
-    );
+
+    switch (section) {
+      case 'interviews':
+        return table;
+      case 'costs':
+        return (
+          <>
+            <CostPanel items={items} stats={stats.data} />
+            {table}
+          </>
+        );
+      case 'modelCalls':
+        return (
+          <CallTable
+            items={callRows}
+            sort={activeSort}
+            onSort={onSort}
+            showInterview
+            hasNextPage={Boolean(calls.hasNextPage)}
+            isFetchingNextPage={calls.isFetchingNextPage}
+            onLoadMore={() => calls.fetchNextPage()}
+          />
+        );
+      case 'sessions':
+        return (
+          <SessionTable
+            items={sessions.data?.pages.flatMap((page) => page.items) ?? []}
+            sort={activeSort}
+            onSort={onSort}
+            hasNextPage={Boolean(sessions.hasNextPage)}
+            isFetchingNextPage={sessions.isFetchingNextPage}
+            onLoadMore={() => sessions.fetchNextPage()}
+          />
+        );
+      case 'users':
+        return (
+          <UserTable
+            items={users.data?.pages.flatMap((page) => page.items) ?? []}
+            sort={activeSort}
+            onSort={onSort}
+            hasNextPage={Boolean(users.hasNextPage)}
+            isFetchingNextPage={users.isFetchingNextPage}
+            onLoadMore={() => users.fetchNextPage()}
+            onFilterByUser={openInterviewsFor}
+          />
+        );
+      case 'queue':
+        return queue.data ? <QueuePanel data={queue.data} /> : null;
+      case 'audit':
+        return (
+          <AuditTable
+            items={auditRows}
+            sort={activeSort}
+            onSort={onSort}
+            hasNextPage={Boolean(audit.hasNextPage)}
+            isFetchingNextPage={audit.isFetchingNextPage}
+            onLoadMore={() => audit.fetchNextPage()}
+          />
+        );
+      default:
+        return (
+          <>
+            {stats.data && <StatsPanel stats={stats.data} />}
+            {table}
+          </>
+        );
+    }
   }
 
   const rail = (
@@ -153,17 +301,16 @@ export default function AdminPage() {
       <p className={styles.railKicker}>{t('title')}</p>
 
       <nav className={styles.nav} aria-label={t('nav.label')}>
-        {SECTIONS.map((entry) => (
+        {SECTIONS.map((id) => (
           <button
-            key={entry.id}
+            key={id}
             type="button"
-            data-testid={`admin-nav-${entry.id}`}
-            className={entry.id === section ? `${styles.navItem} ${styles.navOn}` : styles.navItem}
-            aria-current={entry.id === section ? 'page' : undefined}
-            onClick={() => setSection(entry.id)}
+            data-testid={`admin-nav-${id}`}
+            className={id === section ? `${styles.navItem} ${styles.navOn}` : styles.navItem}
+            aria-current={id === section ? 'page' : undefined}
+            onClick={() => setSection(id)}
           >
-            <span className={styles.navLabel}>{t(`nav.${entry.id}`)}</span>
-            {entry.built ? null : <Spec onRail />}
+            <span className={styles.navLabel}>{t(`nav.${id}`)}</span>
           </button>
         ))}
       </nav>
@@ -192,15 +339,35 @@ export default function AdminPage() {
 
   return (
     <SplitShell rail={rail} width="narrow">
-      <WorkTop title={t(`nav.${section}`)}>
-        {built ? (
-          <span className={styles.scope}>
-            {t('scope.allTime')}
-            <Spec />
-          </span>
+      <WorkTop title={t(`nav.${section}`)} />
+      <WorkBody className={styles.body}>
+        {/* Above the data, not in the header strip: three selects and a search box need the
+            work column's width, and a filter that wraps into the title row reads as chrome. */}
+        {/* One control for every field this table has. The hand-written dropdowns it replaces
+            covered three facets out of fifteen and had to be extended by hand for each new one;
+            this is built from the envelope, so a field added on the server appears here with
+            no client change at all.
+
+            The queue is the one section without it: no list, no cursor, no order, and a filter
+            over five counters would be furniture.
+
+            Optional-chained through `query` as well as `meta` — an older api container answers
+            these lists without the envelope, and crashing over a filter control would take the
+            whole surface down. */}
+        {meta ? (
+          <FilterBuilder
+            value={active.q ?? ''}
+            onChange={onSearch}
+            fields={meta.query?.fields ?? []}
+          />
         ) : null}
-      </WorkTop>
-      <WorkBody className={styles.body}>{body()}</WorkBody>
+        {(meta?.query?.ignored?.length ?? 0) > 0 ? (
+          <p className={styles.ignored} role="status" data-testid="admin-search-ignored">
+            {t('filter.ignored', { terms: (meta?.query?.ignored ?? []).join(', ') })}
+          </p>
+        ) : null}
+        {body()}
+      </WorkBody>
     </SplitShell>
   );
 }

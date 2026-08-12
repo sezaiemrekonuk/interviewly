@@ -57,7 +57,8 @@ frontend/ (Next.js App Router, `web` container)
     interviews/[id]/room/      ← W06 text room + W10 voice room (screen 11)
     interviews/[id]/           ← W07 report + transcript (screen 12)
     dashboard/                 ← W08 history (screen 13)
-    admin/                     ← W11 list + stats (screen 14)
+    admin/                     ← W11 list + stats (screen 14); W12 the other six sections
+    admin/interviews/[id]/     ← W12 per-interview drill-down (US-26/28/29)
   src/lib/
     api.ts                     ← SHIPPED (A03): apiGet/apiPost, /api prefix, error-code read
     auth-redirect.ts           ← SHIPPED (A03): safeReturnPath, signInPathFor
@@ -83,6 +84,7 @@ Backend it consumes (never re-decides a shape or a code):
   GET  /interviews/:id          (report+transcript read)     R01 (see ADR-W07 — handler unowned)
   GET  /me/interviews, DELETE /interviews/:id                N01
   GET  /admin/interviews, /admin/stats                       N01/N02
+  GET  /admin/interviews/:id, /llm-calls, /users, /sessions, /audit, /queue   N03–N05
   Voice mint + webhooks                                      V02/V05
 ```
 
@@ -97,12 +99,14 @@ Backend it consumes (never re-decides a shape or a code):
 | ADR-W05 | i18n | Every screen ships `en` + `tr` keys in its own namespace; `messages/en.json` is the source, `tr.json` mirrors keys; LLM content is rendered in the interview language, never through `next-intl` | §4.5; owner decision (EN+TR from day one) |
 | ADR-W06 | Sweeper & voice phasing | The 24 h `abandoned` sweeper is **not** here — it is report **R04** (a `worker` job, appended to the report ledger). The voice room is a real gated phase (the final demo uses voice), built after text mode so a working demo always exists | Prompt §2/§6.2; owner decision |
 | ADR-W07 | Report read dependency | W07 depends on **R01** (which serves the ready report at `GET /interviews/:id`). The `GET /interviews/:id` handler itself is owned by no task — R01's DoD assumes it. Flagged, not planned around | Prompt §5 — do not plan a frontend task against a phantom route without naming the gap; see STATE.md blockers |
+| ADR-W09 | Charting (W12) | **Recharts is not adopted** despite the spec naming it three times; every bar is native `<progress>` via `components/shell/meter.tsx`. The dependency stays installed and unimported | `style-src 'self' 'nonce-…'` (`src/middleware.ts:19`) silently drops the inline `style` attributes Recharts writes — empty charts in production, green in jsdom. The binding AC (`:567-569`, "as returned") is met either way |
+| ADR-W10 | Admin console topology (W12) | The eight console sections are **client state**; `/admin/interviews/:id` is a **real route**. One filter bag per section; every hook `enabled` per section | Swapping section must not remount the shell or refetch; the drill-down is a link target from the interview table, the dead letter and the audit trail, and a link into client state is not a link |
 
 ## Data model additions
 
 **None.** This ledger writes no schema, no migration, no backend route. It adds two npm
-dependencies (`@tanstack/react-query` in W02; `recharts` in W11) and one Next dependency
-already present (`next-intl`). Every value it renders comes from an endpoint another ledger
+dependencies (`@tanstack/react-query` in W02; `recharts` in W11 — installed, then left
+unimported by ADR-W09) and one Next dependency already present (`next-intl`). Every value it renders comes from an endpoint another ledger
 owns or from the `ui` token registry F01 shipped.
 
 ## Phasing / task clusters (see STATE.md ledger)
@@ -118,14 +122,16 @@ owns or from the `ui` token registry F01 shipped.
 5. **Voice** (W09–W10) — pre-join device check and the voice room surface; gated on the voice
    ledger (V02/V05). The final demo uses voice; text mode (phase 3) is what guarantees a demo if
    voice slips.
-6. **Admin** (W11) — the admin list + Recharts stats surface; off the candidate demo path.
+6. **Admin** (W11–W12) — W11 is the interview list + the stats surface over N01/N02. W12 finishes
+   the console once N03–N05 land the reads: the five sections that were drawn as `Spec`
+   placeholders (`modelCalls`, `sessions`, `users`, `queue`, `audit`), real backend-applied
+   filters, and the `/admin/interviews/:id` drill-down the spec's route map named
+   (`:77`, §7 `:419-425`). Off the candidate demo path.
 
 ## Out of scope (backlog rows in STATE.md, unnumbered)
 
-- **Admin per-call cost detail** (`/admin/interviews/:id`, US-26/29) — its backend endpoint is
-  unowned (admin ledger Backlog, `admin/STATE.md:113`). Promote to a `W` task once Fatih numbers
-  `GET /admin/interviews/:id` in the admin ledger.
-- **Rich admin filters** beyond the list's cluster/state/user columns.
+- ~~**Admin per-call cost detail** (`/admin/interviews/:id`, US-26/29)~~ and ~~**rich admin
+  filters**~~ — both promoted and shipped as **W12** once N03–N05 landed the reads.
 - **Adaptive candidate-analysis view** (`adaptive/PLAN.md:118`) — adaptive ledger.
 - **Real illustrated avatar/mascot artwork** — the F02-seeded placeholders (34-byte 1×1 WebP)
   are enough for the PoC; swapping bytes at content-addressed keys needs no task.

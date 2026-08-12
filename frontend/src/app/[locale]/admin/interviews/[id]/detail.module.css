@@ -1,0 +1,76 @@
+/* Per-call cost detail (US-26/28/29). The cards, tables and pills are the console's own
+ * (`components/admin/table.module.css`) — only the summary list and the event metadata are
+ * new shapes, so only they live here.
+ */
+
+/* One column at 390px, as many as fit after that. A <dl> laid out directly would put every
+   term and value in its own row; the pair is the grid item instead. */
+.grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  margin: 0;
+  padding: 8px 16px 16px;
+}
+
+.fact {
+  min-width: 0;
+}
+
+.term {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* Flex so a pill sits beside its value without a margin on the pill itself — the pill is
+   shared with the tables, where it is the only thing in its cell. */
+.value {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.report {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0 16px 16px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+/* US-28 rolls a prompt back by this uuid: it wraps rather than being clipped, so the whole
+   string can be selected and pasted. */
+.uuid {
+  overflow-wrap: anywhere;
+}
+
+/* A metadata pair, on its own line under the action it belongs to. The cells are
+   `white-space: nowrap` from the shared table, so the block has to say otherwise. */
+.meta {
+  display: block;
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--text-muted);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.metaKey::after {
+  content: ': ';
+}
+
+/* The id beside the heading is a lookup key, not part of the title's voice. */
+.titleId {
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}

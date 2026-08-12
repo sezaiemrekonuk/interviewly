@@ -1,10 +1,27 @@
 # Admin — State
 
-Last updated: 2026-08-03
-Last session ended: **N02 done.** `@admin-cost` fully green (2 scenarios / 24 steps).
-`modules/admin/stats.ts` created; `/stats` mounted on admin router. `@unwired` removed.
-Prisma aggregations: `llmCall.aggregate` for totalTokens, in-memory groupBy for perOccupation.
-`averageDurationMs` returns 0 when no completed rows with timestamps. lint + typecheck clean.
+Last updated: 2026-08-11
+Last session ended: **N06 done — every console list is filterable and sortable from one
+grammar.** `query-language.ts` compiles a query string against a per-table whitelist in
+`specs.ts` (bare word, `"phrase"`, `field:value`, trailing `*`, `>`/`<`/`>=`/`<=`); an unknown
+term is **reported in `ignored`, never 422'd and never dropped** (ADR-N08). The grammar is the
+**wire format, not the interface** — W13's builder composes it by clicking — so `query.fields`
+is `FieldDescriptor[]` (`{ name, kind, values? }`), which is what lets a control be built per
+field and an enum offer the server's exact values. `FieldKind` gained `computed` for the one
+field no leaf can express: `sessions.active` is "neither revoked nor past its expiry", built
+from two columns and the **caller's** clock, which `compileQuery(…, now)` and `listParams` now
+thread through (ADR-N11). The cursor is `base64url(sort:dir:id)` and a cursor from another order
+is refused (ADR-N09); `compileSort` always appends `id`. `interviews>N` is sort-only — Prisma
+has no count predicate (ADR-N10). `list.ts` holds the paging all five handlers were repeating.
+`npm test` → 1225 passing / 119 files; typecheck + lint clean. **Acceptance NOT run this
+session** (needs the compose stack).
+
+Previous: **N03, N04 and N05 done.** US-29 events now land in `audit_logs` (3 new
+`AuditAction` values, no migration); the interview list takes the spec's three facets and
+`GET /admin/interviews/:id` exists; `/admin/llm-calls`, `/users`, `/sessions`, `/audit`,
+`/queue` mounted, and `/admin/stats` gained `totalCostUsd` + `perModel[]`.
+`npm test -- --run backend/modules/admin` → 5 files / 27 tests; `npm run typecheck` clean.
+**Acceptance NOT run this session** (needs the compose stack up) — see the task Notes.
 
 ## Execution protocol (follow exactly)
 
@@ -21,7 +38,12 @@ re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**All admin tasks done.** N01 and N02 both `done`. Admin ledger fully green.
+**All admin tasks done.** N01–N06 all `done`. Admin ledger fully green.
+
+N03–N06 have **no `@AC` scenario**: `COVERAGE.md` maps none to those endpoints, and inventing
+one would mean inventing an acceptance criterion. Their gate is
+`npm test -- --run backend/modules/admin` + `npm run typecheck`; `@AC-17`/`@AC-18` are the
+regression check, and they read only fields those tasks preserved.
 
 ## Environment
 
@@ -67,6 +89,14 @@ npm run test:acceptance -- --tags "@admin-cost and @AC-18"   # N02 check
 npm run test:acceptance -- --tags "@admin-cost"              # whole feature (after N02)
 ```
 
+N03–N06 verify on unit tests + typecheck, which need no stack:
+
+```bash
+npm test -- --run backend/modules/admin                      # N04, N05, N06
+npm test -- --run packages/ai/src/prompt-builder.test.ts     # N03 security sink
+npm run typecheck
+```
+
 ## Open blockers / decisions for the user
 
 None blocking this ledger.
@@ -77,7 +107,7 @@ wire the steps and delete it". That endpoint now exists (N01), but the scenarios
 `email_verification.feature` and the steps are the auth ring's — auth ledger, not this one.
 Left untouched deliberately; A06 should close it.
 
-## Task ledger (N01–N02)
+## Task ledger (N01–N06)
 
 Statuses: todo → in_progress → done → (blocked if waiting on user).
 `Repo`: blank = this repo.
@@ -86,12 +116,27 @@ Statuses: todo → in_progress → done → (blocked if waiting on user).
 |----|-------|------|--------|------------|
 | N01 | Admin-role gate + soft-delete audit path: `requireAdmin`, `GET /admin/interviews`, `DELETE /interviews/:id`, `GET /me/interviews` | | done | F01, F02, F03, A01, A02, I03, I06, I08 |
 | N02 | Admin stats aggregation: `GET /admin/stats` (K11 metrics) | | done | N01 |
+| N03 | Security, budget and time events land in `audit_logs` (US-29) | | done | N01 |
+| N04 | Interview list facets and the per-interview drill-down | | done | N01, N03 |
+| N05 | The console's remaining read endpoints and per-model spend | | done | N01, N02, N03, N04 |
+| N06 | One query language behind every console list, and a sort that pages correctly | | done | N04, N05 |
+
+Four ADRs landed with N06: **N08** ignored-not-422, **N09** the order-carrying cursor, **N10**
+`interviews>N` sort-only, **N11** the `computed` field kind.
 
 ## Critical path
 
-F01/F02/F03 + A01/A02 + I03/I06/I08 → **N01 → N02** (sequential, one owner). N02 reuses the
-`requireAdmin` gate and `GET /admin/interviews` list N01 builds, adding only the stats
-endpoint that greens `@AC-18`.
+F01/F02/F03 + A01/A02 + I03/I06/I08 → **N01 → N02 → N03 → N04 → N05 → N06** (sequential, one
+owner).
+N02 reuses the `requireAdmin` gate and `GET /admin/interviews` list N01 builds, adding only the
+stats endpoint that greens `@AC-18`. N03 writes no endpoint at all — it makes US-29's events
+exist as rows, which is why **N04 names it in `Depends on`**: the drill-down's `events` array
+has no data source without it and would have shipped permanently empty. N05 then mounts five
+more reads and two additive `/admin/stats` fields on the same gate, and depends on N04 only
+because it follows its parser contract (`filters.test.ts` pins the same "narrow or drop" rule
+across all four of its query parsers). N06 then puts one query language and one sort behind all
+five of those lists; it depends on N04 and N05 because those are the lists, and it extends the
+same "narrow or report, never throw" rule from discrete facets to free text.
 
 ## Cross-ledger dependencies (blocks this ledger)
 
@@ -113,17 +158,20 @@ never on a half-done branch.
 
 ## Backlog (deferred, unnumbered — promote to a task when its trigger fires)
 
-- **`GET /admin/interviews/:id` per-call drill-down** (provider, model, `prompt_uuid`+version,
-  units, cost, latency + security/budget/time events) — the backend spec defines it but no
-  `admin_cost.feature` scenario maps it (absent from `COVERAGE.md`). Promote when the admin
-  drill-down UI (US-29) or a scenario is specced; it is a plain relational read over
-  `llm_calls` for one interview.
+- ~~**`GET /admin/interviews/:id` per-call drill-down**~~ — **built, N04 (2026-08-11).** The
+  security/budget/time half of it needed rows to read, which is N03. Still no scenario maps it;
+  the unit tests on `shapeInterviewDetail` are the gate.
 - **`llm_calls(interview_id, created_at)` composite cost-aggregation index** — F02 already
   has `@@index([interview_id])`, which covers the MVP admin reads. Promote as a safe additive
-  Prisma migration rebased on F02 if `GET /admin/stats` aggregation is slow at scale.
-- **Rich admin filters** (`?occupationCluster&state&userId` faceting) — the spec lists them,
-  but @AC-17/@AC-18 assert only listing + a `cursor/limit` page. Implement the minimal cursor
-  pagination for the green run; promote faceted filters when the admin panel UI needs them.
+  Prisma migration rebased on F02 if `GET /admin/stats` aggregation is slow at scale. **Still
+  not built** — N04's drill-down and N05's `?interviewId=` both hit the single-column index and
+  then sort, so this is the first thing to try if either gets slow. **N06 widened the trigger:**
+  `?sort=` now reaches `occupation`, `account`, `action` and every other whitelisted column from
+  a click on a column header, and none of them is indexed. Promote all of it as one additive
+  migration rebased on F02.
+- ~~**Rich admin filters** (`?occupationCluster&state&userId` faceting)~~ — **built, N04
+  (2026-08-11)**, once the console needed them. Every facet narrows; none adds a `deleted_at`
+  clause, so the K11 bypass survives every combination.
 - **`cutShort` broken out as a distinct stat** beyond the `completed` count — N02 returns it
   per K11, but no scenario asserts the split; keep it, promote a dedicated assertion only if
   the dashboard surfaces it separately.

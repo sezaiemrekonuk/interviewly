@@ -14,9 +14,11 @@ import {
   type KeyValidation,
   type LlmCallRecord,
   type ProviderKeys,
+  type SecurityEventSink,
 } from '@interviewly/ai';
 
-import { recordLlmCall as chargeLlmCall } from '../../src/lib/db';
+import { recordAudit } from '../../src/lib/audit';
+import { prisma, recordLlmCall as chargeLlmCall } from '../../src/lib/db';
 import { config } from '../../src/lib/env';
 import { logger } from '../../src/lib/logger';
 
@@ -63,6 +65,43 @@ export async function writeLlmCall(
   );
 }
 
+/**
+ * US-29. The scan in `@interviewly/ai` logs a suspicion and refuses to block the call; this
+ * turns that log line into an `audit_logs` row so the admin panel has something to read.
+ *
+ * The actor is the interview's own account rather than the operator, because nobody privileged
+ * is present — the row records "this account's content matched", which is the question the
+ * security view is opened with. Detached (`void`) and swallowed: the scan is explicitly
+ * non-blocking, and awaiting a write here would let Postgres latency, or a failed insert,
+ * delay or fail the interview turn the suspicion was noticed during.
+ */
+export const recordSecurityEvent: SecurityEventSink = ({
+  interviewId,
+  traceId,
+  field,
+  patternId,
+}) => {
+  void (async () => {
+    const interview = await prisma.interview.findUnique({
+      where: { id: interviewId },
+      select: { user_id: true },
+    });
+    if (!interview) return;
+    await recordAudit(prisma, {
+      actorUserId: interview.user_id,
+      action: 'security.prompt_injection_suspected',
+      subjectType: 'interview',
+      subjectId: interviewId,
+      traceId,
+      // The field NAME and the pattern id — never the value that matched, which is the
+      // candidate's own text and the one thing this table must not carry (issue 063).
+      metadata: { field, patternId },
+    });
+  })().catch((err: unknown) => {
+    logger.error({ err, traceId, interviewId }, 'AUDIT_WRITE_FAILED');
+  });
+};
+
 let client: AiClient | undefined;
 
 /** Resolved once. `AI_ENABLED=false` gives the stub; either way every attempt is audited. */
@@ -71,6 +110,7 @@ export function aiClient(): AiClient {
     recordLlmCall: writeLlmCall,
     keys: providerKeys,
     logger,
+    onSecurityEvent: recordSecurityEvent,
   });
   return client;
 }

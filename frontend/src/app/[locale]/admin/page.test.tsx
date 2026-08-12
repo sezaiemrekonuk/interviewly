@@ -36,15 +36,91 @@ function row(over: Record<string, unknown> = {}) {
   return {
     id: 'i1',
     userId: 'u9',
+    userEmail: 'ada@example.com',
     state: 'completed',
     deleted: false,
     occupation: 'Backend engineer',
     occupationCluster: 'software',
     totalTokens: 4210,
     costUsd: '0.041200',
+    budgetUsd: '0.500000',
+    startedAt: '2026-08-11T09:00:00.000Z',
+    createdAt: '2026-08-11T09:00:00.000Z',
     ...over,
   };
 }
+
+const CALL = {
+  id: 'c1',
+  interviewId: 'i1',
+  provider: 'openai',
+  model: 'gpt-4.1-mini',
+  promptUuid: '11111111-2222-3333-4444-555555555555',
+  promptVersion: 3,
+  attemptNo: 1,
+  fellBackFrom: null,
+  units: '1200',
+  unitKind: 'token',
+  inputTokens: 800,
+  outputTokens: 400,
+  costUsd: '0.000400',
+  latencyMs: 950,
+  traceId: 'trace_1',
+  createdAt: '2026-08-11T09:00:00.000Z',
+};
+
+const USER_ROW = {
+  id: 'u9',
+  email: 'ada@example.com',
+  role: 'user',
+  locale: 'en',
+  emailVerified: true,
+  onboarded: true,
+  consentVersion: '2026-08-01',
+  consentedAt: '2026-08-01T00:00:00.000Z',
+  erased: false,
+  interviewCount: 3,
+  createdAt: '2026-08-01T00:00:00.000Z',
+};
+
+const SESSION_ROW = {
+  id: 's1',
+  userId: 'u9',
+  userEmail: 'ada@example.com',
+  role: 'user',
+  active: true,
+  revokedAt: null,
+  expiresAt: '2026-09-11T09:00:00.000Z',
+  createdAt: '2026-08-11T09:00:00.000Z',
+};
+
+const AUDIT_ROW = {
+  id: 'a1',
+  action: 'security.prompt_injection_suspected',
+  actorUserId: 'u9',
+  actorEmail: 'ada@example.com',
+  actorRole: 'user',
+  subjectType: 'interview',
+  subjectId: 'i1',
+  traceId: 'trace_1',
+  metadata: { field: 'jobListing', patternId: 'ignore-previous-instructions' },
+  createdAt: '2026-08-11T09:00:00.000Z',
+};
+
+const QUEUE = {
+  queues: [
+    { name: 'report', waiting: 2, active: 1, delayed: 0, failed: 1, completed: 40 },
+  ],
+  deadLetter: [
+    {
+      id: 'i7',
+      interviewId: 'i7',
+      attemptsMade: 3,
+      failedReason: 'AI_PROVIDER_UNAVAILABLE',
+      failedAt: '2026-08-11T08:00:00.000Z',
+    },
+  ],
+};
 
 const STATS = {
   averageDurationMs: 512000,
@@ -52,6 +128,17 @@ const STATS = {
   cutShort: 3,
   unfinished: 4,
   totalTokens: 84210,
+  totalCostUsd: '1.234560',
+  perModel: [
+    {
+      provider: 'openai',
+      model: 'gpt-4.1-mini',
+      calls: 42,
+      tokens: 84210,
+      costUsd: '1.234560',
+      averageLatencyMs: 950,
+    },
+  ],
   perOccupation: [{ cluster: 'software', label: 'Backend engineer', count: 9 }],
   weakestQuestions: [
     {
@@ -71,6 +158,8 @@ const ZEROED = {
   cutShort: 0,
   unfinished: 0,
   totalTokens: 0,
+  totalCostUsd: '0.000000',
+  perModel: [],
   perOccupation: [],
   weakestQuestions: [],
 };
@@ -79,6 +168,27 @@ interface Call {
   url: string;
   method: string;
 }
+
+/**
+ * The search/sort envelope every admin list echoes. Spread into each stubbed response so the
+ * fixtures answer what the endpoints answer.
+ */
+const META = {
+  query: {
+    applied: [],
+    ignored: [],
+    // Descriptors, not bare names: the builder renders a typed control per kind, and an enum
+    // arrives carrying the exact values the server will accept.
+    fields: [
+      { name: 'id', kind: 'exact' },
+      { name: 'account', kind: 'text' },
+      { name: 'state', kind: 'enum', values: ['completed', 'abandoned', 'failed'] },
+      { name: 'cost', kind: 'decimal' },
+      { name: 'created', kind: 'date' },
+    ],
+  },
+  sort: { field: 'created', dir: 'desc', sortable: ['created', 'cost', 'state'] },
+};
 
 function json(status: number, body: unknown) {
   return new Response(status === 204 ? null : JSON.stringify(body), {
@@ -93,7 +203,9 @@ function json(status: number, body: unknown) {
  */
 function stubFetch({
   user = ADMIN,
-  first = { items: [row()], nextCursor: null as string | null },
+  // `Partial<typeof META>` on top of the page, so a case that wants to assert the ignored-term
+  // warning can override just `query` without restating the whole envelope.
+  first = { items: [row()], nextCursor: null as string | null } as Record<string, unknown>,
   pages = {} as Record<string, unknown>,
   stats = STATS as unknown,
   adminStatus = 200,
@@ -109,9 +221,31 @@ function stubFetch({
       if (adminStatus !== 200) return json(adminStatus, { error: { code: 'FORBIDDEN' } });
       if (url.startsWith('/api/admin/interviews')) {
         const cursor = new URL(url, 'http://x').searchParams.get('cursor');
-        return json(200, cursor ? (pages[cursor] ?? { items: [], nextCursor: null }) : first);
+        return json(200, {
+          ...META,
+          ...(cursor ? (pages[cursor] ?? { items: [], nextCursor: null }) : first),
+        });
       }
       if (url === '/api/admin/stats') return json(200, stats);
+      if (url.startsWith('/api/admin/llm-calls'))
+        return json(200, {
+          ...META,
+          items: [CALL],
+          facets: [{ provider: 'openai', model: 'gpt-4.1-mini', count: 42 }],
+          nextCursor: null,
+        });
+      if (url.startsWith('/api/admin/users'))
+        return json(200, { ...META, items: [USER_ROW], nextCursor: null });
+      if (url.startsWith('/api/admin/sessions'))
+        return json(200, { ...META, items: [SESSION_ROW], nextCursor: null });
+      if (url.startsWith('/api/admin/audit'))
+        return json(200, {
+          ...META,
+          items: [AUDIT_ROW],
+          actions: [{ action: AUDIT_ROW.action, count: 1 }],
+          nextCursor: null,
+        });
+      if (url === '/api/admin/queue') return json(200, QUEUE);
       return json(404, { error: { code: 'NOT_FOUND' } });
     }),
   );
@@ -258,13 +392,12 @@ describe('admin list + stats (W11)', () => {
     expect(screen.queryByTestId('admin-weakest')).not.toBeInTheDocument();
   });
 
-  it('costs totals the priced rows on screen and leaves the unpriced one out', async () => {
+  it('costs prints the platform total the backend computed, not a sum of the loaded rows', async () => {
     stubFetch({
       first: {
         items: [
           row({ costUsd: '0.041200' }),
           row({ id: 'i2', costUsd: '0.100000', occupationCluster: 'data' }),
-          row({ id: 'i3', costUsd: '0.000000', totalTokens: 900 }),
         ],
         nextCursor: null,
       },
@@ -276,13 +409,17 @@ describe('admin list + stats (W11)', () => {
       await userEvent.click(screen.getByTestId('admin-nav-costs'));
     });
 
-    // Summed as integer micro-dollars, and the unpriced row is excluded rather than
-    // counted as free — 0.041200 + 0.100000, not 0.141200 out of three rows.
-    expect(screen.getByText('0.141200')).toBeInTheDocument();
+    // `/admin/stats.totalCostUsd`, printed verbatim. The two rows on screen add up to
+    // 0.141200 and that is deliberately NOT the figure: the platform total is the platform's.
+    const total = within(screen.getByTestId('admin-platform-spend'));
+    expect(total.getByText(STATS.totalCostUsd)).toBeInTheDocument();
+    expect(screen.queryByText('0.141200')).not.toBeInTheDocument();
+    // Spend by model comes from the same endpoint rather than a hatched placeholder.
+    expect(within(screen.getByTestId('admin-by-model')).getByText(/gpt-4\.1-mini/)).toBeInTheDocument();
   });
 
-  it('a section with no endpoint renders its Spec placeholder, not an empty table', async () => {
-    stubFetch({});
+  it('opens the accounts section against its own endpoint, not an empty placeholder', async () => {
+    const calls = stubFetch({});
     await renderAdmin();
     await screen.findAllByTestId('admin-interview-row');
 
@@ -290,8 +427,192 @@ describe('admin list + stats (W11)', () => {
       await userEvent.click(screen.getByTestId('admin-nav-users'));
     });
 
-    expect(screen.queryByRole('table')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('admin-interview-row')).not.toBeInTheDocument();
+    const rows = await screen.findAllByTestId('admin-user-row');
+    expect(within(rows[0]).getByText(USER_ROW.email)).toBeInTheDocument();
+    expect(calls.some((c) => c.url.startsWith('/api/admin/users'))).toBe(true);
+  });
+
+  it('fetches only the section on screen, never all eight endpoints at once', async () => {
+    const calls = stubFetch({});
+    await renderAdmin();
+    await screen.findAllByTestId('admin-interview-row');
+
+    // Overview reads the list and the stats. The other five sections are untouched until
+    // one of them is opened — the console is not eight requests wide on load.
+    for (const path of ['/api/admin/llm-calls', '/api/admin/users', '/api/admin/sessions', '/api/admin/audit', '/api/admin/queue'])
+      expect(calls.some((c) => c.url.startsWith(path))).toBe(false);
+
+    await act(async () => {
+      await userEvent.click(screen.getByTestId('admin-nav-queue'));
+    });
+    await screen.findByTestId('admin-queue');
+    expect(calls.some((c) => c.url === '/api/admin/queue')).toBe(true);
+  });
+
+  it('builds a filter by picking a field and a value, never by typing syntax', async () => {
+    const calls = stubFetch({});
+    await renderAdmin();
+    await screen.findAllByTestId('admin-interview-row');
+
+    await act(async () => {
+      await userEvent.click(screen.getByTestId('admin-filter-add'));
+    });
+    await act(async () => {
+      await userEvent.selectOptions(screen.getByTestId('admin-filter-field'), 'state');
+    });
+    // `state` is an enum, so its value control is a list of what the server accepts — the
+    // operator cannot pick a value that would come back ignored.
+    await act(async () => {
+      await userEvent.selectOptions(screen.getByTestId('admin-filter-value'), 'completed');
+    });
+    await act(async () => {
+      await userEvent.click(screen.getByTestId('admin-filter-apply'));
+    });
+
+    await waitFor(() =>
+      expect(
+        calls.some(
+          (c) =>
+            c.url.startsWith('/api/admin/interviews?') &&
+            decodeURIComponent(c.url).includes('state:completed'),
+        ),
+      ).toBe(true),
+    );
+    // And it reads back as a sentence, not as the term it compiled to.
+    expect(screen.getByTestId('admin-filter-chip')).toHaveTextContent(messages.admin.field.state);
+  });
+
+  it('removes a filter from its chip without disturbing the search words', async () => {
+    const calls = stubFetch({});
+    await renderAdmin();
+    await screen.findAllByTestId('admin-interview-row');
+
+    await act(async () => {
+      await userEvent.type(screen.getByTestId('admin-search'), 'ada');
+    });
+    await act(async () => {
+      await userEvent.click(screen.getByTestId('admin-filter-add'));
+    });
+    await act(async () => {
+      await userEvent.selectOptions(screen.getByTestId('admin-filter-field'), 'state');
+      await userEvent.selectOptions(screen.getByTestId('admin-filter-value'), 'completed');
+      await userEvent.click(screen.getByTestId('admin-filter-apply'));
+    });
+    await act(async () => {
+      await userEvent.click(screen.getByTestId('admin-filter-remove'));
+    });
+
+    // The chip is gone and the word survived — one query string holds both, so dropping one
+    // half must not take the other with it.
+    await waitFor(() => expect(screen.queryByTestId('admin-filter-chip')).not.toBeInTheDocument());
+    expect(screen.getByTestId('admin-search')).toHaveValue('ada');
+    const last = calls.filter((c) => c.url.startsWith('/api/admin/interviews')).at(-1)!.url;
+    expect(decodeURIComponent(last)).toContain('q=ada');
+    expect(decodeURIComponent(last)).not.toContain('state:completed');
+  });
+
+  it('surfaces a recorded prompt-injection suspicion in the audit trail (US-29)', async () => {
+    stubFetch({});
+    await renderAdmin();
+    await screen.findAllByTestId('admin-interview-row');
+
+    await act(async () => {
+      await userEvent.click(screen.getByTestId('admin-nav-audit'));
+    });
+
+    const rows = await screen.findAllByTestId('admin-audit-row');
+    expect(
+      within(rows[0]).getByText(messages.admin.audit.action.security_prompt_injection_suspected),
+    ).toBeInTheDocument();
+  });
+
+  it('shows the report queue depth and its dead letter (issue 095)', async () => {
+    stubFetch({});
+    await renderAdmin();
+    await screen.findAllByTestId('admin-interview-row');
+
+    await act(async () => {
+      await userEvent.click(screen.getByTestId('admin-nav-queue'));
+    });
+
+    const queue = within(await screen.findByTestId('admin-queue'));
+    expect(queue.getByText(messages.admin.queue.waiting).nextSibling).toHaveTextContent('2');
+    const dead = await screen.findAllByTestId('admin-deadletter-row');
+    expect(within(dead[0]).getByText('AI_PROVIDER_UNAVAILABLE')).toBeInTheDocument();
+  });
+
+  it('sends a typed word to the backend rather than filtering in the browser', async () => {
+    const calls = stubFetch({});
+    await renderAdmin();
+    await screen.findAllByTestId('admin-interview-row');
+
+    await act(async () => {
+      await userEvent.type(screen.getByTestId('admin-search'), 'ada');
+    });
+
+    // Debounced, so the assertion waits for the settled value rather than one request per key.
+    await waitFor(() =>
+      expect(
+        calls.some((c) => c.url.includes('/api/admin/interviews?') && c.url.includes('q=ada')),
+      ).toBe(true),
+    );
+    // A client-side filter over one loaded page would answer a different question — the page
+    // in hand, not the platform — so the request is the assertion.
+    expect(calls.filter((c) => c.url.startsWith('/api/admin/interviews')).length).toBeGreaterThan(1);
+  });
+
+  it('warns about a term the backend could not understand instead of dropping it', async () => {
+    // The dangerous failure: a mistyped field vanishes and an unnarrowed list reads as narrowed.
+    stubFetch({
+      first: {
+        items: [row()],
+        nextCursor: null,
+        query: { applied: [], ignored: ['nonsense:x'], fields: ['state'] },
+      },
+    });
+    await renderAdmin();
+
+    expect(await screen.findByTestId('admin-search-ignored')).toHaveTextContent('nonsense:x');
+  });
+
+  it('re-sorts through the backend, and flips direction on a second click', async () => {
+    const calls = stubFetch({});
+    await renderAdmin();
+    await screen.findAllByTestId('admin-interview-row');
+
+    await act(async () => {
+      await userEvent.click(screen.getByTestId('admin-sort-cost'));
+    });
+    await waitFor(() =>
+      expect(calls.some((c) => c.url.includes('sort=cost') && c.url.includes('dir=desc'))).toBe(
+        true,
+      ),
+    );
+
+    await act(async () => {
+      await userEvent.click(screen.getByTestId('admin-sort-cost'));
+    });
+    await waitFor(() =>
+      expect(calls.some((c) => c.url.includes('sort=cost') && c.url.includes('dir=asc'))).toBe(true),
+    );
+  });
+
+  it('keeps each section\'s search to itself', async () => {
+    // One shared query string would carry `state:completed` into the audit trail, where it
+    // means nothing and silently empties the table.
+    stubFetch({});
+    await renderAdmin();
+    await screen.findAllByTestId('admin-interview-row');
+
+    await act(async () => {
+      await userEvent.type(screen.getByTestId('admin-search'), 'ada');
+    });
+    await act(async () => {
+      await userEvent.click(screen.getByTestId('admin-nav-audit'));
+    });
+
+    await screen.findAllByTestId('admin-audit-row');
+    expect(screen.getByTestId('admin-search')).toHaveValue('');
   });
 
   it('a non-admin sees the not-authorized card and no table, and asks for no admin data', async () => {

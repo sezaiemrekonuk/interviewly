@@ -22,11 +22,13 @@ existing API, a token-lint suite, and a chart bound to server numbers are mechan
 | W09 | Pre-join device check (screen 10, voice) | `claude-sonnet-4.6` | `getUserMedia` bound to a local `<video>` + a permission-denied downgrade; no server truth, camera off by default is a stated default |
 | W10 | Voice room surface (screen 11-voice) | `claude-opus-4.8` | The live ASR transcript, the amplitude avatar driver and the fatal-error → text downgrade — real streaming state on top of W06's room, gated on the voice ledger |
 | W11 | Admin list + stats (screen 14) | `claude-sonnet-4.6` | Tables + Recharts bound to `GET /admin/stats` **as returned** — the client never recomputes a metric (K11), so there is no judgement to get wrong |
+| W12 | Admin console sections, filters + drill-down | `claude-opus-4.8` | A data-layer change, not screen composition: six new hooks, a filter-state machine keyed per section, and a cache-key contract where the wrong key shows the previous filter's rows for a frame. The rule of thumb below puts the data layer and a client state machine in the expensive tier |
+| W13 | A filter builder and a sort on every console table | `claude-opus-4.8` | Same rule of thumb, twice over: per-section query state that has to survive a section switch, a cache-key contract carrying the query and the sort beside the filters, and one query string that two controls read and write without being allowed to disagree. Neither screen nor composition |
 
 ## Summary
 
-- **`claude-opus-4.8` (4 tasks):** W02, W06, W07, W10 — the data/SSE layer, the text room, the
-  report-wait, the voice room.
+- **`claude-opus-4.8` (6 tasks):** W02, W06, W07, W10, W12, W13 — the data/SSE layer, the text
+  room, the report-wait, the voice room, the admin data layer, the console's query state.
 - **`claude-sonnet-4.6` (7 tasks):** W01, W03, W04, W05, W08, W09, W11.
 
 Rule of thumb: **the data layer / a client state machine / a transport-degradation path = the
@@ -34,4 +36,10 @@ expensive tier; screen composition over an existing endpoint = the moderate tier
 sonnet task surfaces a real edge case (an optimistic-update race, an SSE reconnect gap), run it
 with sonnet and code-review the diff with `claude-opus-4.8` — cheaper than running the whole task
 expensive. Never use haiku, mini or flash: the invariant a cheap model erodes is exactly the one
-that renders a raw error code or a room from a stale SSE payload.
+that renders a raw error code or a room from a stale SSE payload. W13 is the sixth opus row and
+it renders a box, three selects and a `<th>`: the tier comes from the query state behind them —
+a filter bag shared by three sections, a key that must carry `q`/`sort`/`dir`, one query string
+that the chips and the words must never disagree about, and a client-side grammar that must not
+narrow on a term it cannot honour. The task was also **run twice** (the owner rejected the first
+interface), which is the other thing this tier buys: the second pass kept the wire format and
+replaced only the surface, and a cheap model is where that distinction gets lost.

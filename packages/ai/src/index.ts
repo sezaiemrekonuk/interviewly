@@ -58,6 +58,7 @@ export { PromptRegistry, loadPromptRegistry, PROMPTS_DIR } from './registry';
 export type { PromptFile } from './registry';
 
 export { PromptBuilder, createPromptBuilder, MAX_BLOCK_CHARS } from './prompt-builder';
+export type { SecurityEventSink } from './prompt-builder';
 export type { BuildArgs, BuiltPrompt, BuiltPromptMessage } from './prompt-builder';
 
 export { ModelPrices, loadModelPrices, loadInjectionPatterns, CONFIG_DIR } from './config';

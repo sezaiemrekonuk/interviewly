@@ -389,7 +389,7 @@ Reuse `room.module.css` and W06's tiles/transcript/avatar — voice adds control
 | Motion | one authored moment: the `--live` ring/badge crossfading between tiles at `--duration-default`. No pulsing ring, no waveform animation, no typing animation in voice. Static under reduced motion |
 | Forbidden | mascot, gradient, `--shadow-soft`, `--live` anywhere but the active tile, any second shadow layer |
 
-### W11 — Admin list + stats (`/admin`)
+### W11/W12 — Admin console (`/admin`, `/admin/interviews/:id`)
 
 **Mode: admin, compact (Jotform) density.** Flat `--bg`, `--shadow-hairline`, no gradient, no
 mascot, no `--live`. Density tightens: 13/14px type, 8–12px cell padding, hairline row rules.
@@ -400,18 +400,26 @@ mascot, no `--live`. Density tightens: 13/14px type, 8–12px cell padding, hair
 | Figures row | `averageDurationMs` and `totalTokens` as two `--surface` cards: label 13px `--text-muted`, value 40px `--font-heading` 600, `font-variant-numeric: tabular-nums`. Grid `repeat(auto-fit, minmax(240px, 1fr))` → stacks at 390px |
 | Table shell | `--surface`, 1px `--border`, `--radius-card`, `--shadow-hairline`, `overflow: hidden`; the `<table>` sits in an inner `overflow-x: auto` wrapper so the page body never scrolls sideways |
 | Header row | 13px/600 `--text-muted`, sentence case, `border-bottom: 1px var(--border)`, sticky, padding 12px 16px. No uppercase, no letter-spacing tricks |
-| Data rows | 14px `--text`, padding 12px 16px, `border-bottom: 1px var(--border)` (no zebra fill). Numeric columns right-aligned with `tabular-nums`. Rows are **not** links (drill-down backlogged) — no hover-pointer, no chevron |
+| Data rows | 14px `--text`, padding 12px 16px, `border-bottom: 1px var(--border)` (no zebra fill). Numeric columns right-aligned with `tabular-nums`. The row itself is **not** a click target — it carries ids an operator selects and copies, and a clickable row fights that. The drill-down is one `Open` link in a trailing column whose `<th>` is visually hidden |
 | `deleted` flag | 13px pill, `--surface-sunken` bed, `--text-muted` label, `--radius-button`. Not `--danger` — a soft-deleted row is a fact, not an error |
 | Load more | secondary button (bordered `--surface`) centred under the table, shown only while `nextCursor` exists. Not the page's `--primary` |
 | Primary action | at most one on the whole surface; if none exists, the surface has no orange. Do not promote "Load more" to fill the slot |
-| Charts (recharts) | series colours from the informational family only: `--accent` (completed / primary series), `--warning` (cut short), `--text-muted` (unfinished / baseline). **Never `--primary`**. Read them via `getComputedStyle` or a small token→string map — no hex literals in TSX (the lint scans `.tsx`) |
-| Chart chrome | `isAnimationActive={false}` (satisfies room-quiet *and* reduced motion in one flag); no drop shadows, no gradients, no 3D; at most one axis of gridlines in `--border`; axis/tick text 13px `--text-muted` inheriting `--font-body`; custom tooltip styled as a `--surface` / `--radius-card` / `--shadow-hairline` card with 13px text — never the recharts default |
-| Legibility | every series carries a text label or a legend entry; a chart is never readable by colour alone. The split chart also states its three numbers as text under the graphic |
+| Bars, not charts | every quantity on this surface is one value against one ceiling, so it is a `Meter` (`components/shell/meter.tsx`), never a chart library. A native `<progress>` carries its value as a **DOM property**, which is the only kind of bar that survives the production CSP (`style-src 'self' 'nonce-…'` drops the style attribute a width-in-a-prop bar needs). See ADR-W09 — the dependency is installed and deliberately unimported |
+| Bar colour | the informational family only: `--accent` (primary series), `--warning` (cut short), `--text-muted` (baseline). **Never `--primary`** — that slot belongs to the surface's one primary action. No hex literals in TSX; the lint scans `.tsx` |
+| Legibility | every bar states its number as text beside it; nothing on this surface is readable by colour or length alone. A `Meter` beside its own printed figure passes `decorative`, because announcing "progress bar 41%" next to the 41% it duplicates is noise |
 | `weakestQuestions` | a list, not a chart: `--surface` card, question text 14px, score 14/600 right-aligned, hairline rules between rows |
 | Empty platform | zeroed charts (axes drawn, series at 0) plus a 14px `--text-muted` line "No interviews yet" inside the table card. Never a spinner, never a blank region |
 | Loading | table skeleton: header row plus 5 rows of `--surface-sunken` bars at final row height; chart areas hold their final height |
 | `FORBIDDEN` | a centred `--surface` card on flat `--bg`: 20px title, 14px `--text-muted` explanation, one secondary link back to the dashboard. No mascot (admin exclusion), no table shell behind it |
-| 390px | figures stack; the table scrolls inside its wrapper; charts drop to `width: 100%` with a fixed height, legends below |
+| Sections | eight, in the left rail, all answered by an endpoint (W12). Section is client state, not a route — swapping it must not remount the shell. The one real route is the drill-down, because it is a link target, and a link into client state is not a link (ADR-W10) |
+| Filters | above the data, never in the header strip: three selects and a search box need the work column's width, and a filter that wraps into the title row reads as chrome. Options come from the data (`perOccupation`, the call facets, the audit action counts), never a hardcoded list that drifts. Every filter narrows on the **server** — a client-side filter over one loaded page silently answers a different question |
+| Filter builder | one control per table, and it covers **every** field the table has — the three hand-written dropdowns it replaced covered three of fifteen and had to be extended by hand for each new one. A plain box for words; an `Add filter` row of three selects (field, condition, value) that emits a removable chip. The value control is typed to the field: an enum is a list of exactly what the server accepts, a date is `<input type="date">`, a number is `<input type="number">`. Nothing is typed as syntax, and nothing has to be looked up — **a control whose first job is to explain itself is a control that failed**, which is why the `Syntax` panel that preceded this is gone |
+| Chips | each filter reads as a sentence — `State is Completed`, not `state:completed` — with the field, the condition and the value all translated. Removable individually. A jump from another section ("this account's interviews") lands as a chip too, never as an invisible parameter: a filtered list that does not say it is filtered is the failure this whole control exists to avoid |
+| Ignored terms | a term the server did not recognise is named back to the operator in `--warning`, never `--danger` and never silently dropped. The page worked; the list is simply wider than it looks |
+| Sortable header | the whole `<th>` carries `aria-sort`, and the label is a `<button>`. The direction arrow is one `<svg>` with both polygons always drawn — active in `--text`, inactive in `--border` — so an unsorted column still advertises that it is sortable. Attribute geometry, never a CSS transform: the CSP drops the style attribute that would need. Sized like the row's `Open` link, not 44px — a 44px control in every header doubles the header height of every table |
+| Empty after a search | a different fact from an empty table, and never the same line. "Nothing was recorded" told to someone whose query simply matched nothing is a lie about the data |
+| Drill-down | same shell, same rail, same not-authorized card. Summary as a `<dl>`, then the report's prompt uuid + version, then the call table, then the event timeline. Money prints the backend's six-decimal string verbatim; a voice call keeps its own per-second row rather than folding into a token count |
+| 390px | figures stack; every table scrolls inside its own wrapper; the filter controls drop to one per line |
 
 ---
 

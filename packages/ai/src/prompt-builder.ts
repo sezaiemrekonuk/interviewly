@@ -63,11 +63,29 @@ export interface BuildArgs {
   ctx: AiCtx;
 }
 
+/**
+ * US-29 — the panel has to show prompt-injection suspicions, and a pino line on stdout is not
+ * something a panel can read. This package owns no database (K1), so the durable half is the
+ * caller's: `backend` passes a sink that writes an `audit_logs` row, `worker` and the tests
+ * pass nothing and keep the log-only behaviour.
+ *
+ * Fire-and-forget by contract. The scan already refuses to block a call (§7.1.5) and a sink
+ * that could fail a build would give the regex the veto the scan deliberately does not have.
+ */
+export type SecurityEventSink = (event: {
+  interviewId: string;
+  traceId: string;
+  /** The bound variable that matched — a name, never its value. */
+  field: string;
+  patternId: string;
+}) => void;
+
 export class PromptBuilder {
   constructor(
     private readonly registry: PromptRegistry,
     private readonly patterns: InjectionPattern[],
     private readonly logger: AiLogger = noopLogger,
+    private readonly onSecurityEvent?: SecurityEventSink,
   ) {}
 
   build({ promptName, version, vars, ctx }: BuildArgs): BuiltPrompt {
@@ -217,6 +235,12 @@ export class PromptBuilder {
           },
           'SECURITY_PROMPT_INJECTION_SUSPECTED',
         );
+        this.onSecurityEvent?.({
+          traceId: ctx.traceId,
+          interviewId: ctx.interviewId,
+          field,
+          patternId: pattern.id,
+        });
       }
     }
   }
@@ -238,6 +262,13 @@ function systemMessage(template: PromptFile, promptName: string): string {
   return system.content;
 }
 
-export function createPromptBuilder(opts: { logger?: AiLogger } = {}): PromptBuilder {
-  return new PromptBuilder(loadPromptRegistry(), loadInjectionPatterns(), opts.logger);
+export function createPromptBuilder(
+  opts: { logger?: AiLogger; onSecurityEvent?: SecurityEventSink } = {},
+): PromptBuilder {
+  return new PromptBuilder(
+    loadPromptRegistry(),
+    loadInjectionPatterns(),
+    opts.logger,
+    opts.onSecurityEvent,
+  );
 }

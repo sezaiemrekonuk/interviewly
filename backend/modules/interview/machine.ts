@@ -8,6 +8,7 @@
 import type { Interview, InterviewState } from '@prisma/client';
 
 import { ApiError } from '../../src/lib/api-error';
+import { recordAudit } from '../../src/lib/audit';
 import { clock } from '../../src/lib/clock';
 import { prisma } from '../../src/lib/db';
 import { logger } from '../../src/lib/logger';
@@ -82,6 +83,52 @@ export const deadEndsMissingFromTerminal = (): InterviewState[] =>
     (state) => (TRANSITIONS[state]?.length ?? 0) === 0 && !TERMINAL.has(state),
   );
 
+/**
+ * US-29's budget and time trips, written where the two of them actually happen. Four call
+ * sites set `ended_reason = 'budget_exhausted'` (`budget.ts`, `conductor.ts`, `speech/stt.ts`,
+ * `speech/tts.ts`) and two set `time_exhausted`, and every one of them arrives through this
+ * function — so the record is written once here rather than six times out there, where the
+ * seventh call site would forget.
+ *
+ * Best-effort, on purpose, and the only audit write in the codebase that is: an interview that
+ * ran out of budget HAS run out of budget, and refusing the transition because the note about
+ * it could not be filed would leave the interview burning the budget it just exceeded. The
+ * destructive paths still write their audit row inside the transaction — there, a mutation
+ * with no record is the failure worth refusing.
+ */
+async function recordExhaustion(
+  interview: Interview,
+  ctx: { traceId: string; endedReason?: Interview['ended_reason'] },
+): Promise<void> {
+  const action =
+    ctx.endedReason === 'budget_exhausted'
+      ? 'interview.budget_exhausted'
+      : ctx.endedReason === 'time_exhausted'
+        ? 'interview.time_exhausted'
+        : null;
+  if (!action) return;
+
+  try {
+    await recordAudit(prisma, {
+      actorUserId: interview.user_id,
+      action,
+      subjectType: 'interview',
+      subjectId: interview.id,
+      traceId: ctx.traceId,
+      metadata: {
+        spentUsd: interview.spent_usd.toString(),
+        budgetUsd: interview.budget_usd.toString(),
+        elapsedSeconds: interview.elapsed_seconds,
+      },
+    });
+  } catch (err) {
+    logger.error(
+      { err, traceId: ctx.traceId, interviewId: interview.id, action },
+      'AUDIT_WRITE_FAILED',
+    );
+  }
+}
+
 export async function applyTransition(
   interview: Interview,
   to: InterviewState,
@@ -123,6 +170,8 @@ export async function applyTransition(
     { traceId: ctx.traceId, interviewId: interview.id, from, to },
     'INTERVIEW_STATE_CHANGED',
   );
+
+  await recordExhaustion(interview, ctx);
 
   // Best-effort, and deliberately not symmetric with `enqueueReport` below. The fan-out is a
   // push optimisation — a room that misses an event still reconstructs from `GET /state` — so

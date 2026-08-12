@@ -196,3 +196,94 @@ a screen that mounts both. Supersedes ADR-W02's key, not its nudge-then-refetch 
 
 **Consequences:** two reads per report render (both cached, both nudged together). If `get.ts` ever
 grows `transcript`/`endedReason`, drop the state read here — not the reverse.
+
+## ADR-W09 — 2026-08-11 — Recharts is not adopted; `Meter` stands
+
+**Context:** The frontend spec names Recharts three times (`.agents/specs/2026-07-29-frontend.md`
+`:20`, `:180`, `:425`) and `DESIGN.md` §5 specifies its series colours and
+`isAnimationActive={false}`. The dependency is installed (`frontend/package.json:20`) and has
+zero imports. Options: (A) adopt it as specified; (B) native `<progress>`; (C) a different chart
+library.
+
+**Decision:** (B). Production CSP is `style-src 'self' 'nonce-…'` (`frontend/src/middleware.ts:19`),
+which silently drops inline `style` attributes — and Recharts writes them. Its charts would render
+empty in production and pass every test, because jsdom has no CSP. `components/shell/meter.tsx`
+carries the value as a DOM property (`<progress value max>`) instead, which no policy can strip.
+The acceptance criterion that actually binds — "renders K11's metrics exactly as returned"
+(`:567-569`) — is satisfied either way; the spec named a library, not a requirement.
+
+**Why not another library:** the same failure mode. Only one that renders geometry as SVG
+attributes (`points`, `d`, `x`, `width`) survives this CSP.
+
+**Consequences:** every admin bar is `Meter`, `decorative`, with the number stated as text beside
+it. `recharts` stays in `package.json` unimported. Reopens on either a CSP decision or a library
+that draws with SVG attributes rather than inline styles. `DESIGN.md` §5's Recharts rows are now
+stale and are flagged in W12's Notes, not edited from a task file.
+
+## ADR-W10 — 2026-08-11 — Console sections are client state; the drill-down is a real route
+
+**Context:** `/admin` has eight sections. `/admin/interviews/:id` is a ninth surface. Options:
+(A) a route per section and per interview; (B) client state for all nine; (C) client state for
+the sections, a route for the drill-down.
+
+**Decision:** (C). Swapping section must not remount the shell or refetch what the previous
+section already holds — a route each does both, and the console is a working surface an operator
+sits in. The drill-down is a route because it is a **link target**: the interview table
+(`interview-table.tsx`), the dead-letter list (`queue-panel.tsx:86`) and the audit trail
+(`audit-table.tsx:86`) all link into it, and a link into client state is not a link.
+
+**Consequences:** `page.tsx` holds `section` and one filter bag **per** section — shared state
+would carry `state=completed` from the interview list into the audit trail, where it means
+nothing and silently empties the table. Every hook is `enabled`-gated on the section on screen,
+so opening the console is two requests, not eight. A section is not addressable and not
+bookmarkable; promote one to a route only when something outside the console needs to link to it.
+
+## ADR-W11 — 2026-08-11 — The console's filter is a builder over the grammar, not a query language the operator types
+
+**Context:** N06 put one query language behind all five console lists. W13 shipped it first as
+what it is — a search box plus a `Syntax` disclosure listing the server's own fields, so an
+operator could look up `state:completed cost>0.10` and type it. The owner rejected it on sight:
+he is not learning a syntax to read his own data. The tell was in the design already — a control
+whose first job is to explain itself is a control that failed, and a help panel beside an input
+is an admission that the input is wrong. Options: (A) keep the grammar as the wire format and
+put a point-and-click builder in front of it — a plain box for words, plus field → condition →
+value producing removable chips; (B) keep the typed box and invest in the syntax help
+(autocomplete, inline validation, examples); (C) drop the grammar and go back to hand-written
+facet selects per table, extended per field as anyone asks.
+
+**Decision:** (A). `components/admin/filter-builder.tsx` is the one narrowing control on all
+eight console tables. It builds its field list, each field's kind and each enum's exact values
+from the response envelope's `query.fields` (N06's `FieldDescriptor[]`), so it covers every
+field a table declares and can never offer a value the server would refuse. `filter-bar.tsx`
+(W12's three facet selects) and the syntax-first `search-bar.tsx` are both **deleted**, not kept
+alongside it. **The query string stays the single source of truth:** chips and words are two
+views of one string, `parseQuery`/`serialiseQuery` are exact inverses pinned in both directions,
+and the string composed by clicking is byte-for-byte what the typed box sent — so the request,
+the `?q=` contract, the cache key and any link that carries a query are unaffected by the
+change of interface.
+
+**Why not better syntax help:** autocomplete and inline validation are a larger surface than the
+builder, and they still leave the operator composing text against a grammar. The rejection was
+not "the help is thin", it was "this is a language".
+
+**Why not going back to facets:** that is the state the owner complained about first. The facet
+bar covered three fields out of fifteen and had to be extended by hand for each new one; a
+control that covers some of the columns teaches an operator to distrust the ones it does not.
+
+**Why not keeping both controls:** two ways to narrow one table give two answers to "what is
+applied", and the one that is not in the query string is the one that does not survive a link.
+The builder covers everything the facet bar did, so the facet bar is deletion, not loss.
+
+**Why one string rather than chips-state plus words-state:** two states can disagree, and there
+is no correct resolution when they do. One string also means a query arriving from a link or a
+paste renders as chips rather than as syntax the operator has to read back — the builder is a
+view of the query, not an author of it.
+
+**Consequences:** the console renders no syntax anywhere, and the copy grew accordingly — 42
+translated field labels and 12 condition labels in both locales, with the raw field name as the
+fallback, because the envelope may name a field this build has no string for yet. A malformed
+descriptor (an older `api` answering with a bare `string[]`) is filtered out rather than thrown
+on, the same defence as the optional-chained envelope. `query.ignored` is now rare by
+construction — the builder cannot produce an unknown field — so when it appears it means the
+query is older than the schema, and it must still be shown. `DESIGN.md` §5's `Search` row still
+describes the rejected syntax panel; flagged in W13's Notes, not edited from a task file.

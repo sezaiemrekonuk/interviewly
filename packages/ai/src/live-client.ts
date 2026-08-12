@@ -74,7 +74,9 @@ export class LiveAiClient implements AiClient {
     private readonly deps: ChainDeps,
     opts: { builder?: PromptBuilder } = {},
   ) {
-    this.builder = opts.builder ?? createPromptBuilder({ logger: deps.logger });
+    this.builder =
+      opts.builder ??
+      createPromptBuilder({ logger: deps.logger, onSecurityEvent: deps.onSecurityEvent });
   }
 
   generateRoundQuestions(args: GenerateRoundQuestionsArgs): Promise<QuestionBatch> {

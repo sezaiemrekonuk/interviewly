@@ -16,7 +16,12 @@
 import { AiError, noopLogger, type AiLogger } from './errors';
 import { costFor, DEFAULT_UNIT_KIND } from './cost';
 import { loadModelPrices, type ModelPrices } from './config';
-import type { AiCtx, BuiltPrompt, BuiltPromptMessage } from './prompt-builder';
+import type {
+  AiCtx,
+  BuiltPrompt,
+  BuiltPromptMessage,
+  SecurityEventSink,
+} from './prompt-builder';
 
 /** Tier-2 (B6). Declared by the chain, not by a prompt file — no prompt names gemini. */
 export const FALLBACK_STEP: ChainStep = { provider: 'google', model: 'gemini-2.5-flash' };
@@ -95,6 +100,11 @@ export interface ChainDeps {
   prices?: ModelPrices;
   /** Injected so the acceptance suite does not spend real seconds on a backoff. */
   sleep?: (ms: number) => Promise<void>;
+  /**
+   * US-29's durable half for prompt-injection suspicions. Optional: a caller with no database
+   * (the worker, every test) leaves the scan log-only, exactly as before.
+   */
+  onSecurityEvent?: SecurityEventSink;
 }
 
 // ------------------------------------------------------------------ transports

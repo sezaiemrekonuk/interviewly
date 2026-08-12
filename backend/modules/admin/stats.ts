@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import type { RequestHandler } from 'express';
 
 import { recordAudit } from '../../src/lib/audit';
@@ -107,9 +108,15 @@ export function weakestQuestions(limit = 5): Promise<WeakestQuestion[]> {
   `;
 }
 
+/**
+ * Money on the wire, at the column's own precision. `Decimal(12,6)` through a JS number stops
+ * being the figure the ledger holds, and a null sum is a table with no rows, which is 0 spent.
+ */
+const usd = (value: Prisma.Decimal | null): string => (value ?? new Prisma.Decimal(0)).toFixed(6);
+
 export const getAdminStats: RequestHandler = async (req, res, next) => {
   try {
-    const [completedAgg, stateCounts, tokenSum, occupationGroups, clusters, weakest] =
+    const [completedAgg, stateCounts, tokenSum, occupationGroups, clusters, weakest, modelGroups] =
       await Promise.all([
         // averageDurationMs + cutShort source: completed state only.
         // ADMIN AUDIT — intentionally bypasses userInterviews (K11: deleted interviews counted)
@@ -139,7 +146,9 @@ export const getAdminStats: RequestHandler = async (req, res, next) => {
         prisma.interview.groupBy({ by: ['state'], _count: { _all: true } }),
         // totalTokens across ALL llm_calls — deleted interviews included (K11)
         // ADMIN AUDIT — intentionally bypasses userInterviews (K11: deleted interviews counted)
-        prisma.llmCall.aggregate({ _sum: { input_tokens: true, output_tokens: true } }),
+        prisma.llmCall.aggregate({
+          _sum: { input_tokens: true, output_tokens: true, cost_usd: true },
+        }),
         // perOccupation: grouped in Postgres (deleted included). The result set is
         // clusters × distinct occupations, not one row per interview.
         // ADMIN AUDIT — intentionally bypasses userInterviews (K11: deleted interviews counted)
@@ -152,6 +161,20 @@ export const getAdminStats: RequestHandler = async (req, res, next) => {
         // seeded reference table (`prisma/seed.ts` owns the canonical list).
         prisma.occupationCluster.findMany({ select: { id: true, key: true } }),
         weakestQuestions(),
+        // US-26's "spend by model", grouped in Postgres. The result set is providers × models
+        // — a handful of rows, not one per call — which is why this one can afford to be
+        // unbounded where the two scans issue 85 removed could not.
+        //
+        // Voice rolls into the same total by design: a per-second row and a per-token row are
+        // both money spent, and separating them into two currencies would leave no figure that
+        // answers "what did this cost". `unitKind` on the drill-down is where the two split.
+        prisma.llmCall.groupBy({
+          by: ['provider', 'model'],
+          _sum: { cost_usd: true, input_tokens: true, output_tokens: true },
+          _avg: { latency_ms: true },
+          _count: { _all: true },
+          orderBy: { _sum: { cost_usd: 'desc' } },
+        }),
       ]);
 
     // averageDurationMs: mean of ended_at - started_at over completed; 0 if none qualify
@@ -189,6 +212,21 @@ export const getAdminStats: RequestHandler = async (req, res, next) => {
       cutShort,
       unfinished,
       totalTokens,
+      // The platform total the cost panel could not print, because nothing returned one: it
+      // was summing the interviews it happened to have loaded and saying so. Summed from
+      // `llm_calls` rather than `interviews.spent_usd` so it agrees with `perModel` below —
+      // the two must add up to the same figure or the panel contradicts itself.
+      totalCostUsd: usd(tokenSum._sum.cost_usd),
+      perModel: modelGroups.map((group) => ({
+        provider: group.provider,
+        model: group.model,
+        calls: group._count._all,
+        tokens: (group._sum.input_tokens ?? 0) + (group._sum.output_tokens ?? 0),
+        costUsd: usd(group._sum.cost_usd),
+        // Rounded to a millisecond: an average latency carrying six decimals of precision it
+        // does not have reads as a measurement rather than a mean.
+        averageLatencyMs: Math.round(group._avg.latency_ms ?? 0),
+      })),
       perOccupation,
       // `sampleSize` ships rather than being filtered on. A `HAVING COUNT(*) >= n` floor was
       // the obvious guard against one bad answer outranking a well-sampled question, and it is
