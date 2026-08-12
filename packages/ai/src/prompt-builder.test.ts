@@ -288,6 +288,22 @@ describe('PromptRegistry', () => {
   });
 });
 
+describe('interview.question.generate', () => {
+  it('anchors questions in the listing and keeps the CV out of the subject', () => {
+    const system = loadPromptRegistry()
+      .resolve('interview.question.generate')
+      .messages.filter((m) => m.role === 'system')
+      .map((m) => m.content)
+      .join(' ')
+      .replace(/\s+/g, ' ');
+    expect(system).toContain(
+      'every question must test a requirement, responsibility or skill the listing actually names',
+    );
+    expect(system).toContain('It is never the subject of a question');
+    expect(system).not.toContain('Name a specific thing from the CV');
+  });
+});
+
 describe('StubAiClient', () => {
   it('returns exactly the requested count, schema-valid, through the real builder', async () => {
     const { logger, events } = capturing();
