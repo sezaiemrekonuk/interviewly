@@ -305,3 +305,72 @@ tracking, tracking model shares to the total cost"; the shapes and their paramet
   This work was done under a standing no-comments instruction, so the marker is recorded here
   instead. `grep -rn "ADMIN AUDIT" modules/admin` no longer returns every such read; restoring
   the four one-line markers is the fix if that convention is to hold.
+
+## ADR-ADD06 — one panel instead of seven cards, and the filter's real scope
+
+**Ask (owner, 2026-08-12):** carry the filter into the container of the table it belongs to, "in
+the same container top-down"; and on Costs, compress the title, the chart and the range into one
+container behind a dropdown that picks between charts — or between chart types for the same data,
+"available, applicable ones".
+
+**Shape chosen:**
+
+- **The filter moved because it was claiming scope it never had.** It floated on `--bg` above
+  whatever the section rendered, which on Costs put it above six graphics fed by `/admin/costs` —
+  an endpoint that does not read the filter bag at all. A control positioned over a region reads
+  as scoping that region. Inside the `.head` of the table it filters, it can only claim the rows
+  underneath it, which is exactly what it does. The layout ask and the correctness fix are the
+  same edit.
+- **One optional prop, not five layouts.** The five tables were already the identical
+  `.card > .head > .scroller > table` shell, so `filter?: ReactNode` rendered at the end of `.head`
+  covers all of them. The drill-down had been doing this by hand since it was written; it now
+  takes the same wrapper, so the two surfaces space it the same way instead of by coincidence.
+- **On Costs the filter is now at the bottom, and that is correct.** It sits with the interview
+  list, which is the only thing on that surface it narrows. A filter high on the page that
+  silently governs one card near the bottom is the failure the whole filter-builder exists to
+  avoid (§W11 "Chips").
+- **Six questions, one panel.** Seven stacked cards was 4400px of scrolling to reach a heatmap,
+  and any given operator wants one of them. A `Chart` select picks the question and a `Drawn as`
+  select picks the form, sharing the strip with the range control.
+- **The type list is per-question, so the control cannot lie.** A form is offered only where it
+  answers the same question: a part-to-whole gets a donut or bars, never a line; a time series
+  gets a line, an area or columns, never a donut. Where one form is honest — this range against
+  the last, when the money lands — the second select is **absent**, not a select with a single
+  option. A control with one choice is furniture that looks live.
+- **The type is remembered per question.** Switching away and back returns the drawing the
+  operator left it on. Resetting to the default is a second decision they did not make.
+- **The model table never goes behind the dropdown.** Every drawing here is an `aria-hidden` SVG
+  whose text counterpart is that table (ADR-ADD05). If the table were a seventh view, choosing
+  any chart would leave the surface with a graphic and no accessible form of it. It stays below
+  the panel, always rendered.
+- **One plot shell.** `trend-lines`, `model-mix` and `model-delta` each carried their own copy of
+  the gutter, gridlines, ticks, axes and date labels. That is now `charts/plot.tsx`, and a chart
+  *type* is only the marks drawn inside it — which is why three new forms (area, columns, stacked
+  columns, one line per model) cost roughly one file rather than four. `area` needed no new
+  geometry at all: `stackBands` with a single series already returns that polygon.
+- **The residual series is dashed when it is a line.** As a fill it is `--surface-sunken` with a
+  hairline (ADR-ADD05). A line has no fill to be pale, so it takes `--text-muted` — which is
+  ΔE 0.3 from `--series-3` under deuteranopia — plus a dash pattern. The dash is the separation;
+  the colour is not doing that work.
+- **The multi-line form scales to the tallest series, the stacked forms to the stacked total.**
+  Same data, two different axes, because "how big is this model" and "how big is everything" are
+  different questions. A test asserts the line form reaches higher in the plot than the stacked
+  one for identical input, so the axes cannot silently be unified.
+- **One empty-state line, owned by the panel.** The note used to live in each chart card, so
+  deleting six cards deleted it for three of the six views — they drew a flat zero line under a
+  caption that confidently read "0.000000 a day on average" and never said nothing was spent.
+  The panel now decides emptiness per view and the `figcaption` carries the sentence, and the
+  test asserts exactly one occurrence, so it can neither vanish again nor be printed twice.
+
+**Skipped, deliberately:**
+
+- **No URL or storage persistence for the chosen view.** Add it when someone needs to link a
+  colleague to a specific chart; until then it is state nobody asked to survive a reload.
+- **No hover or tooltip layer.** Unchanged from ADR-ADD05: the table below prints every figure,
+  and a tooltip needs a positioned element the CSP would drop.
+- **The plot is still a fixed-width SVG in its own scroller.** It grew to 880 × 220 now that it
+  owns the card alone, but it does not measure its container. Scaling a `viewBox` scales the 13px
+  type with it, and measuring means a resize observer for a chart that already fits every desktop
+  width the console supports.
+- **No second panel for side-by-side comparison.** It was offered and declined; two half-width
+  panels would each scroll a fixed-width chart, which is worse than switching between them.

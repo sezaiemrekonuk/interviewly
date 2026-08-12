@@ -339,3 +339,73 @@ money land". See `DECISIONS.md` ADR-ADD05 for the reasoning; this is what change
 **Not done here (see ADR-ADD05 "Skipped"):** no per-cluster spend from the server, no hover or
 tooltip layer, no CSV export, and the `--series-4/5/6` tokens stay in the registry unused by
 these charts.
+
+## 2026-08-12 — the filter moved into its table, and the cost charts became one panel
+
+Two owner asks in one pass. The filter floated on `--bg` above whatever the section rendered,
+and the Costs section had grown to seven stacked chart cards and 4400px. See `DECISIONS.md`
+ADR-ADD06; this is what changed and where.
+
+**The filter, into the container of the table it filters**
+
+- `components/admin/{interview,call,session,user,audit}-table.tsx` — each gained an optional
+  `filter?: ReactNode`, rendered as the last child of the `.head` it already had. Nothing else
+  about the five shells changed; they were already identical, which is what made this one prop
+  rather than five layouts.
+- `components/admin/table.module.css` — one rule, `.filter`, a 12px flex column. No hairline
+  above it: `.builder` carries its own border, and a rule 12px from that one is two lines.
+- `app/[locale]/admin/page.tsx` — builds the node once behind the `meta ?` guard it already had
+  and hands it to the section's table. The queue gets none, because it has no list.
+- `app/[locale]/admin/interviews/[id]/page.tsx` — the drill-down had been rendering
+  `FilterBuilder` inside `table.head` all along, flush against the heading. Both call sites now
+  take the same `.filter` wrapper, so the console and the drill-down space it identically.
+
+**The cost charts, into one panel**
+
+- `components/admin/charts/plot.tsx` — new. The shared time-series shell (gutter, gridlines,
+  ticks, axes, date labels) plus the marks that draw inside it: `LineMarks`, `AreaMarks`,
+  `ColumnMarks`, `StackedAreaMarks`, `StackedColumnMarks`, `MultiLineMarks`. The plot grew to
+  880 × 220 now that it owns the card alone.
+- `components/admin/charts/chart-panel.tsx` — new. The card: a `Chart` select over six views, a
+  `Drawn as` select over that view's applicable forms (absent when there is one), the range
+  buttons, the body, and the `figcaption`. Holds the per-view type choice, so leaving a view and
+  returning does not reset the drawing.
+- `components/admin/charts/model-columns.tsx` — new, absorbing `model-delta.tsx`. `compare`
+  true is the this-range-against-last grouped chart; false is one bar per model, which is the
+  share view's second form.
+- `components/admin/charts/model-legend.tsx` — new. The swatch/label/share list the mix and
+  share views both drew.
+- `components/admin/charts/{model-share,spend-heatmap}.tsx` — bodies now, without their own
+  card, title or caption. `spend-heatmap` also exports `heatGrid()` and `pad()` so the panel can
+  build the peak sentence without rendering the grid.
+- **Deleted:** `trend-lines.tsx`, `model-mix.tsx`, `model-delta.tsx`. Their chrome is `plot.tsx`
+  and their marks are its exports.
+- `components/admin/cost-panel.tsx` — the range control moved into the panel's control strip;
+  the seven graphics became `<ChartPanel>` + the always-on `<ModelTable>`. Two loading
+  skeletons, not seven.
+- `components/admin/charts/charts.module.css` — `.controls`, `.control`, `.controlLabel` for the
+  strip; `.areaFill`, `.column`, `.seriesLine` and `.stroke1/2/3/Other` for the new forms.
+  `.strokeOther` is dashed on purpose: as a line, the residual series has only `--text-muted`
+  available, which is ΔE 0.3 from `--series-3` under deuteranopia, so the dash is what separates
+  it. `.legend` lost the `flex: 1 1 220px` that was a 220px *height* in a column flex card.
+- `components/admin/charts/series.ts` — `STROKE_CLASS` and `ARC_CLASS` alongside the fill map,
+  so the four places a model becomes a colour all read from one file.
+- `messages/{en,tr}.json` — 12 keys (`view`, `type`, ten `type*` labels). `mixCaption` and
+  `modelsNote` were rewritten: both described a layout that no longer exists, and `mixCaption`
+  said "the bands are stacked" under a drawing that can now be lines.
+- `DESIGN.md` §W11 — the `Filters` row said "above the data", which is no longer where they are;
+  the Cost charts block described seven stacked graphics. Five new rows carry the panel's rules.
+- `charts/cost-charts.test.tsx` — rewritten to 22 cases against the panel, driving both selects.
+
+**Verified**
+
+- `npm test` — 124 files / 1310 tests. `npm run typecheck` clean. eslint clean.
+- Read in the browser against the seeded stack, every view and every drawing. The Costs section
+  went from 4451px to 2345px. Three things were fixed there rather than in review: the
+  `mixCaption` wording above, the plot leaving a third of the card empty, and — the real one —
+  **the empty-state line had gone missing on three views.** It used to live inside each deleted
+  chart card; the panel now owns it, and the test asserts `toBe(1)` per view so it can neither
+  vanish again nor be printed twice.
+
+**Not done here (see ADR-ADD06 "Skipped"):** no URL or storage persistence for the chosen view,
+no hover layer, and the plot is still a fixed-width SVG rather than a measured one.
