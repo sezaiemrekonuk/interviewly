@@ -10,6 +10,7 @@ import { getAdminInterview } from './interview-detail';
 import { listAllInterviews } from './interviews';
 import { listLlmCalls } from './llm-calls';
 import { requireAdmin } from './middleware';
+import { getPerfSnapshot, resetPerfWindow } from './perf';
 import { getQueueStatus } from './queue';
 import { requeueReport } from './report-requeue';
 import { listSessions } from './sessions';
@@ -55,5 +56,8 @@ router.get('/audit', listAuditLog);
 // Redis rather than Postgres, and the only route here that can fail because a dependency is
 // down rather than because a row is missing.
 router.get('/queue', getQueueStatus);
+
+router.get('/perf', getPerfSnapshot);
+router.post('/perf/reset', resetPerfWindow);
 
 export default router;
