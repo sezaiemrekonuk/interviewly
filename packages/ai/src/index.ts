@@ -20,6 +20,7 @@ export type {
 export { TIMEOUT_MS } from './AiClient';
 
 export {
+  CandidateBatchSchema,
   CandidateSchema,
   ConductorTurnSchema,
   DifficultySchema,

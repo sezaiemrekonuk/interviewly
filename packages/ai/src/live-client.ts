@@ -43,7 +43,7 @@ import {
   turnCompleteVars,
 } from './prompt-vars';
 import {
-  CandidateSchema,
+  CandidateBatchSchema,
   ConductorTurnSchema,
   InterviewTitleSchema,
   ListingCheckSchema,
@@ -109,14 +109,15 @@ export class LiveAiClient implements AiClient {
     );
   }
 
-  generateCandidates(args: GenerateCandidatesArgs): Promise<Candidate[]> {
-    return this.call(
+  async generateCandidates(args: GenerateCandidatesArgs): Promise<Candidate[]> {
+    const batch = await this.call(
       PROMPT_NAMES.generateCandidates,
       candidateVars(args),
-      z.array(CandidateSchema),
+      CandidateBatchSchema,
       TIMEOUT_MS.generateCandidates,
       args.ctx,
     );
+    return batch.candidates;
   }
 
   generateInterviewTitle(args: GenerateInterviewTitleArgs): Promise<InterviewTitle> {
