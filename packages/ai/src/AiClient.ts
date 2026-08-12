@@ -89,6 +89,7 @@ export interface ReportIntegrity {
 export interface GenerateReportArgs {
   transcript: string;
   perAnswerScores?: Scores[];
+  jobListing: string;
   candidateProfile: unknown | null;
   candidateCv: string | null;
   language: string;

@@ -153,6 +153,7 @@ export async function runReport(interviewId: string, opts: ReportOpts): Promise<
       // The scoring hook is the adaptive ledger's; an interview with no scored answers sends
       // `none` and the evaluation reasons from the transcript alone.
       perAnswerScores: turns.flatMap((t) => (t.scores ? [t.scores] : [])),
+      jobListing: interview.job_text,
       ...profileVariables(interview),
       language: interview.language,
       // C03. `turnsOf` already dropped every question with no answer, so `turns.length` is

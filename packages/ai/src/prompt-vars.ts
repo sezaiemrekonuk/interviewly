@@ -48,6 +48,7 @@ export function reportVars(args: GenerateReportArgs): Record<string, unknown> {
     language: args.language,
     perAnswerScores: args.perAnswerScores ? JSON.stringify(args.perAnswerScores) : 'none',
     transcript: args.transcript,
+    jobListing: args.jobListing,
     candidateProfile: args.candidateProfile,
     candidateCv: args.candidateCv,
     endedReason: args.endedReason,
