@@ -27,6 +27,7 @@ import { BudgetExceeded, withBudget } from "../interview/budget";
 import { conductTurn, turnInputSchema } from "../interview/conductor";
 import { applyTransition } from "../interview/machine";
 import { currentQuestionRow } from "../interview/state";
+import { downgradeToText } from "../voice/downgrade";
 
 import { meterStt } from "./metering";
 import {
@@ -224,6 +225,10 @@ async function transcribeRecording(
         );
       }
       throw new ApiError("BUDGET_EXCEEDED");
+    }
+    if (err instanceof ApiError && err.code === "VOICE_UNAVAILABLE") {
+      await downgradeToText(interview, { traceId });
+      throw new ApiError("VOICE_UNAVAILABLE");
     }
     throw err;
   }

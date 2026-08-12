@@ -11,12 +11,14 @@ import { After, Before, Given, Then, When } from '@cucumber/cucumber';
 import { FakeSpeechProvider } from '../../modules/speech/fake-speech';
 import { setSpeechProvider } from '../../modules/speech/SpeechProvider';
 import { prisma } from '../../src/lib/db';
+import { config } from '../../src/lib/env';
 import { logger } from '../../src/lib/logger';
 import { setStorage } from '../../src/lib/storage';
 
 import { makeFakeStorage } from '../fixtures/fake-storage';
 import { questionIdAt } from './answers.steps';
 import { signIn } from './interview-generation.steps';
+import { serverState } from './server';
 import { AiWorld } from './world';
 
 // target 8 → hr 3 (setup.ts split), so question 3 is the last HR question: the downgrade and
@@ -130,6 +132,35 @@ When('the fake speech provider reports a fatal error', async function (this: AiW
 
   this.resetEvents();
   await getCurrentQuestionSpeech(this);
+  assert.equal(this.lastStatus, 503, `expected VOICE_UNAVAILABLE: ${JSON.stringify(this.lastBody)}`);
+});
+
+async function postTurnAudio(world: AiWorld): Promise<void> {
+  const form = new FormData();
+  const bytes = Buffer.from('fake-audio-bytes-for-one-turn');
+  form.append(
+    'audio',
+    new Blob([Uint8Array.from(bytes)], { type: 'audio/webm' }),
+    'turn.webm',
+  );
+
+  const res = await fetch(`${serverState.baseUrl}/interviews/${world.interviewId}/turns/audio`, {
+    method: 'POST',
+    headers: {
+      origin: config.PUBLIC_ORIGIN,
+      ...(world.cookie ? { cookie: world.cookie } : {}),
+    },
+    body: form,
+  });
+  world.lastStatus = res.status;
+  world.lastBody = await res.json().catch(() => undefined);
+}
+
+When('the fake speech provider fails the next transcription', async function (this: AiWorld) {
+  fake.failNext();
+
+  this.resetEvents();
+  await postTurnAudio(this);
   assert.equal(this.lastStatus, 503, `expected VOICE_UNAVAILABLE: ${JSON.stringify(this.lastBody)}`);
 });
 
