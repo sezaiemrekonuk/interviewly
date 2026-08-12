@@ -1,3 +1,14 @@
+# K9 versioned prompt. `uuid` is a permanent address: never edited, never reused. A new
+# revision is a NEW FILE with the same `name`, the same `uuid`, and `version` incremented.
+#
+# Revision 4 of interview.question.generate (additionals ADR-ADD13): v1..v3 stay on disk
+# unedited and `resolve()` serves the highest. What changed is the anchor. v2 and v3 told the
+# model to ground questions in the CV and to name a specific thing from it whenever that made
+# the question sharper — written to correct v1, whose CV block carried no instruction at all and
+# was therefore ignored (issue 62's other half). That correction overshot: the owner's report is
+# that the interviewer asks about CV specifics instead of assessing the job. Here the listing is
+# the anchor — every question tests a requirement it states — and the CV is background for
+# pitching level, never the subject of a question.
 uuid: 0f2b7c94-6d31-4a58-9e70-2c1d84af5b13
 name: interview.question.generate
 version: 4

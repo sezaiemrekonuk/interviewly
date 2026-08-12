@@ -1,3 +1,16 @@
+# K9 versioned prompt. `uuid` is a permanent address: never edited, never reused. A new
+# revision is a NEW FILE with the same `name`, the same `uuid`, and `version` incremented.
+#
+# Revision 5 of interview.conduct.turn: same uuid, same name, version bumped — v1..v4 stay on
+# disk unedited (K9). `resolve()` with no version picks the highest, so this is what live turns
+# use once loaded; `prompt_version` on `llm_calls` still tells past turns apart from this one.
+#
+# Two changes from v4, both additionals ADR-ADD12/ADR-ADD13. The data blocks finally say what
+# they are FOR: no version since v1 had told the interviewer what <candidate_cv> was, and an
+# unlabelled CV beside "you are conducting a live job interview" reads as an invitation to
+# interview the resume. And the probing budget is restated to match the server: the drift fires
+# with one turn left now, not zero, so v4's "at zero the server advances for you" was false — and
+# a prompt that misstates its own budget is how the model overspends it.
 uuid: 5b0e9bbc-38e0-42d9-9540-13d4d3c21368
 name: interview.conduct.turn
 version: 5

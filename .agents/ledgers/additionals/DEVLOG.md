@@ -705,7 +705,58 @@ and `interview.question.candidates` sees neither. Both are named in the ADR with
 - `npm run test:acceptance` — 111 scenarios / 885 steps; `cucumber-js -p auth` — 36 / 258.
 - `npm run typecheck` and `npm run lint` — exit 0.
 
-**Flagged, not fixed:** account erasure does not touch `job_listings` (ADR-ADD14's last paragraph).
-The two new prompt YAMLs also ship without the `# K9 versioned prompt` header every other prompt
-file carries — this branch was authored under a no-new-comments constraint; the rule itself is
-unchanged and stated in ADR-ADD13.
+## 2026-08-12 — erasure reaches the captured listings, and the new prompts carry their K9 header
+
+The two items the three entries above flagged, closed on the owner's instruction.
+
+- `backend/modules/auth/delete-account.ts` — `tx.jobListing.deleteMany({ user_id })` inside the
+  erasure transaction, beside `emailToken.deleteMany` and for the same reason: nothing references
+  the rows, so there is no `RESTRICT` to route around and nothing to anonymise. A captured listing
+  is a record of which vacancies the account browsed, with no operator ledger behind it, so it is
+  removed rather than kept. The module's own bullet list of what erasure does now says so.
+- `backend/tests/step-definitions/account-erasure.ts` — the fixture creates a `job_listings` row
+  that outlives the interview beside it (a landing captures without creating an interview, so
+  soft-deleting the interview does not reach it), and `no personal data remains` asserts the count
+  is zero. Without both halves the scenario passed with the row still sitting there.
+- `packages/ai/prompts/interview.question.generate.v4.prompt.yaml`,
+  `packages/ai/prompts/interview.conduct.turn.v5.prompt.yaml` — the `# K9 versioned prompt` header
+  every other prompt file carries, plus the per-revision note saying what changed and why. They
+  shipped without it under this branch's no-new-comments constraint; the header is the file
+  convention that teaches the next editor not to edit a shipped version in place, which is the one
+  place in this tree where losing a comment loses a rule.
+
+## 2026-08-12 — the report grades against the listing
+
+`DECISIONS.md` ADR-ADD15. The last of the three items the entries above flagged. The interview
+assessed fitness for the listed role; the report then graded the same transcript against the
+candidate's CV, because `reportVars` had never been given the vacancy.
+
+- `packages/ai/src/AiClient.ts` — `GenerateReportArgs.jobListing: string`, non-optional and
+  non-nullable (`interviews.job_text` is NOT NULL, so no `NULL_MARKERS` entry).
+- `packages/ai/src/prompt-vars.ts` — `reportVars` passes it through.
+- `backend/modules/interview/report-run.ts` — `jobListing: interview.job_text`; the row is already
+  loaded, so no extra query.
+- `packages/ai/prompts/interview.report.generate.v6.prompt.yaml` — new (K9: same uuid, v1..v5 on
+  disk untouched, no code change to go live). The listing is named as the standard the report
+  grades against and joins the injection boundary; the 0..100 scale reads "as fitness for the role
+  the listing describes"; v5's CV cross-check is kept but subordinated, with "never grade the
+  candidate against their own resume" added and the `no cv provided` path now reasoning from the
+  transcript **and** the listing. Reply contract, bands, `star_adherence`, stopped-early and
+  integrity rules all untouched — exactly one placeholder added.
+- `backend/features/step_definitions/profiling.steps.ts` — the field on the report args those
+  scenarios build. `world.ts` needed nothing: its flattened vars already carry a realistic
+  `jobListing` for the question prompt.
+- `packages/ai/src/prompt-builder.test.ts` — new test asserting the live report prompt binds the
+  listing and instructs grading against it. It resolves with no pinned version, so it also proves
+  v6 is what ships.
+
+**Verified (whole branch, again)**
+
+- `npm test` — 127 files / 1396 tests.
+- `npm run test:integration` — 8 files / 43 tests.
+- `npm run test:acceptance` — 111 scenarios / 885 steps; `cucumber-js -p auth` — 258 steps.
+- `npm run typecheck`, `npm run lint` — exit 0.
+
+Left open, deliberately and now the only one: `interview.question.candidates` is anchored to
+neither the listing nor the CV and overwrites question rows, but the path is dead today
+(`promoteNextQuestion` returns early for every interview). ADR-ADD15 says who owns it.
