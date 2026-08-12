@@ -20,6 +20,7 @@ import { CandidateSchema, StubAiClient } from '@interviewly/ai';
     priorQuestion: 'What is REST?',
     priorScore: 3,
     topicsUsed: [currentTopic],
+    jobListing: 'Backend engineer building HTTP APIs on Node.js and PostgreSQL.',
     language: 'en',
     ctx,
   });

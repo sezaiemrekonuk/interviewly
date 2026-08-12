@@ -199,6 +199,7 @@ export function candidateVars(args: GenerateCandidatesArgs): Record<string, unkn
     language: args.language,
     priorScore: args.priorScore,
     priorQuestion: args.priorQuestion,
+    jobListing: args.jobListing,
     topicsUsed: args.topicsUsed.join(', ') || 'none',
   };
 }

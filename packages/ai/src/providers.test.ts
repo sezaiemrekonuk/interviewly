@@ -11,9 +11,12 @@ import { parseOutput } from './live-client';
 import {
   FALLBACK_STEP,
   buildChain,
+  geminiTransport,
+  openaiTransport,
   runChain,
   type ChainDeps,
   type LlmCallRecord,
+  type ProviderTransport,
 } from './providers';
 import { QuestionBatchSchema } from './schemas';
 import type { BuiltPrompt } from './prompt-builder';
@@ -60,6 +63,51 @@ describe('buildChain', () => {
     expect(buildChain(built, { openai: 'k1' })).toEqual([
       { provider: 'openai', model: 'gpt-4.1-mini' },
     ]);
+  });
+});
+
+describe('transport request bodies', () => {
+  async function sentBody(
+    transport: ProviderTransport,
+    provider: string,
+    response: unknown,
+  ): Promise<Record<string, unknown>> {
+    let sent = '';
+    vi.stubGlobal('fetch', async (_url: string, init: { body: string }) => {
+      sent = init.body;
+      return new Response(JSON.stringify(response), { status: 200 });
+    });
+    try {
+      await transport({
+        provider,
+        model: 'm',
+        apiKey: 'k',
+        system: 'system template',
+        messages: [{ role: 'user', content: 'u' }],
+        params: { temperature: 0.6, max_tokens: 800 },
+        signal: new AbortController().signal,
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    return JSON.parse(sent) as Record<string, unknown>;
+  }
+
+  it('spends the gemini output budget on output, never on thinking', async () => {
+    const body = await sentBody(geminiTransport, 'google', {
+      candidates: [{ content: { parts: [{ text: '[]' }] } }],
+    });
+    expect(body.generationConfig).toMatchObject({
+      maxOutputTokens: 800,
+      thinkingConfig: { thinkingBudget: 0 },
+    });
+  });
+
+  it('makes openai enforce JSON, which is why no prompt may ask for a top-level array', async () => {
+    const body = await sentBody(openaiTransport, 'openai', {
+      choices: [{ message: { content: '{}' } }],
+    });
+    expect(body.response_format).toEqual({ type: 'json_object' });
   });
 });
 

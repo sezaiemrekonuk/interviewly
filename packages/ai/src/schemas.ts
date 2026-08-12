@@ -68,6 +68,10 @@ export const CandidateSchema = z.object({
   topic: z.string().min(1),
 });
 
+export const CandidateBatchSchema = z.object({
+  candidates: z.array(CandidateSchema),
+});
+
 export const INTERVIEW_TITLE_MAX = 80;
 
 export const InterviewTitleSchema = z.object({

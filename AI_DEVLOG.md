@@ -100,6 +100,11 @@ Because the code is owned, not accepted.
 - **`docker compose run api npm run seed`**, an instruction that sat in our own docs for weeks
   ([F05](.agents/devlogs/F05-asset-serving.md)). The image is built `--omit=dev`, so no `tsx`.
   [SETUP.md](SETUP.md) has the path that works.
+- **"Adaptive selection is rare", written into three docs as a fact**
+  ([ADR-ADD16](.agents/ledgers/additionals/DECISIONS.md)). It had never run once: the candidate
+  prompt asked OpenAI for a top-level array, which its JSON mode cannot emit, and the Gemini
+  fallback spent its whole token budget on thinking. Two provider bugs wearing a design decision's
+  clothes, found by running an interview end to end and reading the logs instead of the docs.
 
 ## Honest limits
 

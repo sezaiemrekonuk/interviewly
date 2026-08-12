@@ -170,6 +170,7 @@ export const geminiTransport: ProviderTransport = async (req) => {
         responseMimeType: 'application/json',
         temperature: req.params.temperature,
         maxOutputTokens: req.params.max_tokens,
+        thinkingConfig: { thinkingBudget: 0 },
       },
     }),
   });

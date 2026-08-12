@@ -5,7 +5,8 @@ import { AiError, noopLogger, type AiLogger } from './errors';
 import { MAX_BLOCK_CHARS, PromptBuilder, createPromptBuilder } from './prompt-builder';
 import { PROMPTS_DIR, PromptRegistry, loadPromptRegistry } from './registry';
 import { loadInjectionPatterns } from './config';
-import { PROMPT_NAMES, reportVars } from './prompt-vars';
+import { PROMPT_NAMES, candidateVars, reportVars } from './prompt-vars';
+import { CandidateBatchSchema } from './schemas';
 import { StubAiClient } from './stub';
 
 const ctx = { interviewId: 'itv_1', traceId: 'trace_1' };
@@ -331,6 +332,49 @@ describe('interview.report.generate', () => {
   });
 });
 
+describe('interview.question.candidates', () => {
+  it('asks for a JSON object, because OpenAI JSON mode cannot emit a top-level array', () => {
+    const built = createPromptBuilder().build({
+      promptName: PROMPT_NAMES.generateCandidates,
+      vars: candidateVars({
+        priorQuestion: 'How do you size a connection pool?',
+        priorScore: 50,
+        topicsUsed: ['motivation'],
+        jobListing: 'Senior backend engineer owning a payments ledger on PostgreSQL.',
+        language: 'en',
+        ctx,
+      }),
+      ctx,
+    });
+    const system = built.system.replace(/\s+/g, ' ');
+    expect(system).toContain('Reply with a JSON object only');
+    expect(system).toContain('{"candidates":[');
+    expect(system).not.toContain('Reply with a JSON array only');
+    expect(CandidateBatchSchema.safeParse({ candidates: [] }).success).toBe(true);
+    expect(CandidateBatchSchema.safeParse([]).success).toBe(false);
+  });
+
+  it('binds the listing and makes it the anchor for all three candidates', () => {
+    const listing = 'Senior backend engineer owning a payments ledger on PostgreSQL.';
+    const built = createPromptBuilder().build({
+      promptName: PROMPT_NAMES.generateCandidates,
+      vars: candidateVars({
+        priorQuestion: 'How do you size a connection pool?',
+        priorScore: 50,
+        topicsUsed: [],
+        jobListing: listing,
+        language: 'en',
+        ctx,
+      }),
+      ctx,
+    });
+    expect(built.system.replace(/\s+/g, ' ')).toContain(
+      'it is what every candidate you write must test',
+    );
+    expect(userText(built)).toContain(`<job_listing>${listing}</job_listing>`);
+  });
+});
+
 describe('StubAiClient', () => {
   it('returns exactly the requested count, schema-valid, through the real builder', async () => {
     const { logger, events } = capturing();
@@ -381,6 +425,7 @@ describe('StubAiClient', () => {
         priorQuestion: 'q',
         priorScore: 3,
         topicsUsed: [],
+        jobListing: 'Senior Backend Engineer, payments platform.',
         language: 'en',
         ctx,
       }),
