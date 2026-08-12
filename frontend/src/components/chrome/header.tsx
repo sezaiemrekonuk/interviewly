@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 
 import { Link } from '../../i18n/navigation';
+import { BrandMark } from '../brand-mark';
 import styles from './chrome.module.css';
 import { HeaderNav } from './header-nav';
 
@@ -38,6 +39,7 @@ export function SiteHeader({ onDark = false }: { onDark?: boolean } = {}) {
     <header className={cx(styles.header, onDark && styles.headerOnDark, scrolled && styles.headerScrolled)}>
       <div className={styles.headerInner}>
         <Link href="/" className={styles.wordmark}>
+          <BrandMark />
           Interviewly
         </Link>
         <nav className={styles.nav}>

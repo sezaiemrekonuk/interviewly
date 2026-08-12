@@ -1,6 +1,7 @@
 import { ImageResponse } from 'next/og';
 import { getLocale, getTranslations } from 'next-intl/server';
 
+import { MarkImage } from '../lib/brand-mark-image';
 import { token } from '../lib/design-tokens';
 import { SITE_NAME } from '../lib/site';
 
@@ -28,7 +29,6 @@ export default async function Image() {
   const rail = token('--rail');
   const railText = token('--rail-text');
   const railTextMuted = token('--rail-text-muted');
-  const primary = token('--primary');
 
   return new ImageResponse(
     (
@@ -47,7 +47,7 @@ export default async function Image() {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div style={{ width: 20, height: 20, borderRadius: 4, background: primary }} />
+          <MarkImage unit={1.6} stem={railText} />
           <div style={{ fontSize: 30, color: railText, letterSpacing: -0.5 }}>{SITE_NAME}</div>
         </div>
 

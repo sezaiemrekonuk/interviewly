@@ -74,6 +74,7 @@
 .wordmark {
   display: inline-flex;
   align-items: center;
+  gap: 8px;
   min-height: 44px;
   font-family: var(--font-heading), Georgia, serif;
   font-size: 20px;

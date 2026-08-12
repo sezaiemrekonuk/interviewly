@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { Link } from '../../i18n/navigation';
+import { BrandMark } from '../brand-mark';
 import styles from './shell.module.css';
 
 const cx = (...names: Array<string | false | undefined>) => names.filter(Boolean).join(' ');
@@ -42,7 +43,8 @@ export function SplitShell({
 }
 
 /**
- * The wordmark. The glyph is drawn from currentColor — no asset, no second request.
+ * The wordmark: `BrandMark` plus the name. The mark is drawn from currentColor — no asset,
+ * no second request.
  *
  * `href`, when given, makes it a way back to the marketing home. `/` is public for everyone
  * and never redirects, so every rail can point here without knowing whether the visitor
@@ -51,7 +53,7 @@ export function SplitShell({
 export function RailMark({ label = 'Interviewly', href }: { label?: string; href?: string }) {
   const mark = (
     <div className={styles.mark}>
-      <span className={styles.markGlyph} aria-hidden="true" />
+      <BrandMark />
       <span className={styles.markText}>{label}</span>
     </div>
   );

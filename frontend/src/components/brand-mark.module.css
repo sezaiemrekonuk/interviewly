@@ -1,0 +1,14 @@
+/* The mark's two bars. `display: block` so the svg carries no inline-box descender gap when
+   it sits beside the wordmark, `flex: none` so a tight rail never shrinks it. */
+.mark {
+  display: block;
+  flex: none;
+}
+
+.stem {
+  fill: currentColor;
+}
+
+.turn {
+  fill: var(--primary);
+}

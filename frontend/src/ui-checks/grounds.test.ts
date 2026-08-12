@@ -59,6 +59,10 @@ describe('CSP: no inline style attributes', () => {
     'app/opengraph-image.tsx',
     'app/icon.tsx',
     'app/apple-icon.tsx',
+    // The mark those three share. Not a route, but it renders only inside their satori trees
+    // — the browser-facing mark is `components/brand-mark.tsx`, which is classed like
+    // everything else and is not listed here.
+    'lib/brand-mark-image.tsx',
   ]);
 
   it('no component sets style={{…}}', () => {

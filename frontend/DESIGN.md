@@ -43,6 +43,15 @@ burnt orange means *do this now* and means nothing else. Corners are near-square
 a track or a tile with a large radius stops reading as one thing. Motion is near-zero,
 especially in the room, where the subject is the conversation.
 
+**The mark is two bars taking turns** — a tall stem in `currentColor`, a bar half its height in
+`--primary` beside it: the question and the answer. `components/brand-mark.tsx` is the only
+drawing of it for the browser (rail wordmark and chrome header both take it), and
+`lib/brand-mark-image.tsx` redraws it in divs for the three `ImageResponse` routes, because
+satori rasterises a flex tree and not SVG. `src/app/favicon.ico` is the same mark hand-rastered
+at 16 and 32 by `scripts/build-favicon.py`, which reads this registry — it is the one icon with
+no route form, so it is the one that must be regenerated when the palette moves. The wordmark
+stays the word: "Interviewly" in `--font-heading`, mark to its left.
+
 > **Superseded 2026-08-06.** The previous identity was "a warm coach studio": a lavender→cream→
 > peach gradient on entry routes, flat cream elsewhere, generous air, and a hand-drawn mascot on
 > entry surfaces. All of it is gone. The gradient and its three stops are deleted and two checks

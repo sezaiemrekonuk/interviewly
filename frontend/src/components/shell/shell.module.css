@@ -87,22 +87,9 @@
   outline-offset: 2px;
 }
 
-/* The glyph is drawn, not an asset: one fewer request, and it inherits currentColor so it
-   works on the rail and on a light ground without a second file. */
-.markGlyph {
-  width: 16px;
-  height: 20px;
-  flex: none;
-  border-radius: 1px;
-  background: currentColor;
-  position: relative;
-}
-.markGlyph::after {
-  content: "";
-  position: absolute;
-  inset: 4px 4px 4px 8px;
-  background: var(--rail);
-}
+/* The glyph itself is `components/brand-mark.tsx` — it is on the chrome header too, and the
+   version that lived here knocked its counter out in a hard `var(--rail)`, so it disappeared
+   on any ground that was not the rail. */
 
 .markText {
   font-family: var(--font-heading), Georgia, serif;
