@@ -213,6 +213,31 @@ describe('/interviews — the archive', () => {
     expect(questionTexts()).toEqual(['Twenty', 'Eighty', 'Unscored']);
   });
 
+  it('sorts best first and still puts unscored rows last', async () => {
+    await renderAt('view=questions&sort=best', {
+      questions: [
+        question({ questionId: 'q1', score: 20, text: 'Twenty' }),
+        question({ questionId: 'q2', score: null, starAdherence: null, text: 'Unscored' }),
+        question({ questionId: 'q3', score: 80, text: 'Eighty' }),
+      ],
+    });
+
+    await screen.findByRole('table');
+    expect(questionTexts()).toEqual(['Eighty', 'Twenty', 'Unscored']);
+  });
+
+  it('sorts oldest first at ?sort=oldest', async () => {
+    await renderAt('view=questions&sort=oldest', {
+      questions: [
+        question({ questionId: 'q1', answeredAt: '2026-01-02T10:00:00.000Z', text: 'Newer' }),
+        question({ questionId: 'q2', answeredAt: '2026-01-01T10:00:00.000Z', text: 'Older' }),
+      ],
+    });
+
+    await screen.findByRole('table');
+    expect(questionTexts()).toEqual(['Older', 'Newer']);
+  });
+
   // STAR is a behavioural-story rubric. The backend scores it 0 on a technical question because
   // it never applied, and "0%" beside an 80 reads as broken scoring or an unnamed disaster.
   it('shows no STAR percentage on a technical row, and says why', async () => {
