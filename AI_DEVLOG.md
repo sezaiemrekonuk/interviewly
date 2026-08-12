@@ -1,154 +1,107 @@
-# AI_DEVLOG — how Interviewly was built with AI
+# AI_DEVLOG
 
-Required deliverable (IDEA.md §13). Covers: which AI tools we used and why, the software
-development methodologies we followed and how, what was hard and how we solved it, and the
-skills/MCPs in the loop.
+How Interviewly was actually built. Three of us — Sezai, Ahmet, Fatih — in two weeks, 640 commits,
+84 tasks, 139 recorded decisions.
 
-**This file is compiled, not journalled.** The raw material is one devlog file per task in
-`.agents/devlogs/`, written in the session that did the work by the person who did it.
-Nothing here is reconstructed from memory. See `.agents/EXECUTE.md` § Devlog for the
-contract.
+Compiled, not written from memory: one devlog per task in
+[`.agents/devlogs/`](.agents/devlogs/), written in the session that did the work, plus the ADRs in
+[`.agents/ledgers/`](.agents/ledgers/). Everything below links to its source.
 
-Team: Sezai, Ahmet, Fatih — three AI-native generalists, one owner per ledger.
+## The tools
 
----
+**Copilot, in agent mode, for essentially all of the code.** Not as autocomplete — the unit of
+work was a ledger task, and the model was expected to read the spec, write the failing test first,
+and come back with a diff we could argue with.
 
-## 1. Tooling
+No MCP servers: the useful ones duplicated the terminal. What earned its place was a set of
+reusable prompt files in `.agents/skills/`, invoked by name — *brainstorming* (design conversation
+before code), *test-driven-development* (red before green), *systematic-debugging* (reproduce,
+hypothesise, kill the hypothesis, fix), *verification-before-completion* (no "done" without pasted
+output). Checklists, basically; their value was consistency across three people.
 
-*What we used, and the reasoning. Written once, revised when the answer changes.*
+**Model choice for the agent** was tiered by task: the strongest reasoning model for architecture,
+prompt design and the interview state machine, a cheaper and faster one for renames, i18n sweeps
+and scaffolding. Each devlog records both the recommended and the actual model — they disagree on
+30 of 84 tasks, usually because the first pass showed the work was more mechanical than it looked.
 
-| Tool | Where it ran | Why |
+**Model choice inside the product** is a separate argument:
+
+| Call | Model | Why |
 |---|---|---|
-| | | |
+| questions, scoring, report, conductor turn | `gpt-4.1-mini` | The quality floor we needed at a price that lets an interview cost cents. Larger models wrote nicer prose and no better questions. |
+| turn-complete gate, listing validation, title | `gpt-4.1-nano` | The gate runs on every pause in a conversation: latency is the requirement, the decision is binary. Language switching needs no model at all — a heuristic over two consecutive turns. |
+| fallback tier | `gemini-2.5-flash` | A second vendor, so an OpenAI incident degrades an interview instead of ending it. |
+| speech | `eleven_turbo_v2_5` / `scribe_v1` | ~3× faster than the multilingual model, indistinguishable to our ears in EN and TR. Settled by listening, not a benchmark ([ADR-L03](.agents/ledgers/speech-latency/DECISIONS.md), [L01](.agents/devlogs/L01-tts-model.md)). |
 
-Model tiering is recorded per ledger in `.agents/ledgers/<slug>/MODELS.md`, and the
-*actual* model per task in that task's devlog frontmatter. Where the two disagree, the
-devlog prose says why we switched — those disagreements are the interesting part.
+## How we worked
 
-## 2. Methodology
+**Spec-driven, one direction, one stage per session.**
+[`IDEA.md`](.agents/docs/IDEA.md) → [spec](.agents/specs/) → [Gherkin](.agents/features/) →
+[ledger task](.agents/ledgers/) → code, under the contract in
+[`AUTHOR_DOCS.md`](.agents/prompts/AUTHOR_DOCS.md). The rule that made it work: *a stage that
+finds itself deciding something stops and records an open question instead of inventing a
+requirement.* Half the value of the ledgers is the list of things a spec did not say.
 
-*Spec-Driven Development and ATDD, as actually practised — not as aspired to.*
+**ATDD per task.** Acceptance criterion → scenario → run it red → implementation → green →
+refactor. 24 feature files, Cucumber against a real Postgres and Redis. A verification command
+that passed before any code existed meant the test was wrong, and we treated that as a defect.
 
-The chain is `IDEA.md` → spec → Gherkin → ledger task → code, one stage per session
-(`.agents/prompts/AUTHOR_DOCS.md`). The rule that made it work: a stage that finds itself
-*deciding* something stops and records an open question instead of inventing a
-requirement.
+**One owner per area**, assigned in [`EXECUTE.md`](.agents/EXECUTE.md) — task IDs carry the prefix.
+Two people editing `schema.prisma` in the same week is the expensive way to learn that.
 
-ATDD ordering, enforced per task: acceptance criterion → Gherkin → **run it red** →
-step definitions + implementation → green → refactor. A verification command that passes
-before any code was written means the test is wrong.
+**Every task leaves an ADR and a devlog** with four fixed sections: what we asked for, the
+methodology trace, the friction, what we rejected. The friction section is where this file comes
+from. Iterations, from the frontmatter: 32 tasks landed in one pass, 26 took two, 13 three, 9 four
+or more — the last group almost all conductor and turn-taking, exactly where the requirements were
+ours to invent.
 
-*Fill in: where this held, where it didn't, and what it cost.*
+## What was hard
 
-## 3. Session log
+**The interviewer had no turn of its own**
+([C05](.agents/devlogs/C05-agenda-shaped-batches.md)). Nothing was broken — questions generated,
+answers scored, speech spoke — but progression was arithmetic, one answer and `current_index + 1`.
+It never greeted anyone, never asked what you meant, could not decide a round was finished. The
+fix was a whole ledger: the batch became an *agenda* of intents rather than a script, and the
+interviewer writes the real question from the intent, keeping the pre-written sentence as the
+outage fallback ([ADR-C05](.agents/ledgers/conductor/DECISIONS.md)).
 
-*Regenerated from `.agents/devlogs/*.md` frontmatter when a ledger goes green. Do not
-hand-edit rows.*
+**The opening turn had nothing to advance past**
+([C02](.agents/devlogs/C02-conductor-turn-loop.md)). Treating every reply as "close this question,
+open the next" made the welcome consume question 1. Fixed with no schema change: *the first
+assistant message carrying a question's id is the asking of it.*
 
-<!-- BEGIN GENERATED: session-table -->
-| Task | Author | Model used | Recommended | Iterations | Devlog |
-|---|---|---|---|---|---|
-| — | — | — | — | — | *no tasks complete yet* |
-<!-- END GENERATED: session-table -->
+**An early handover asked the wrong questions** (same devlog). Handing over at question 3 of 5 left
+the state saying `tech_round` while the index still pointed inside the HR block — so Turing asked
+Ada's questions. The handover now jumps the index under the same compare-and-set.
 
-## 4. Per-ledger narrative
+**Truncation kept the wrong half of the conversation** (same devlog). `slice(0, MAX)` keeps the
+oldest text: right for a job listing, wrong for a conversation, where it throws away the exchange
+the interviewer has to reply to. It now trims from the front, with a marker.
 
-*One subsection per ledger, written when that ledger goes green, from its tasks' devlogs.*
+**MinIO read `/assets` as the bucket name** ([F05](.agents/devlogs/F05-asset-serving.md)), 404'ing
+every avatar, then 403'ing because nothing granted anonymous read. Fixed in the edge config and
+the seed — and the obvious bucket-wide public-read policy was rejected, because candidate CVs live
+in the same bucket.
 
-*Order follows the scope bands of IDEA.md §12, not the order they were merged.*
+## What we threw away
 
-### foundations
-### auth
-### interview-core
-### report
-### admin
-### voice
-### adaptive
-### conductor
+Because the code is owned, not accepted.
 
-The ledger that exists because of a complaint no other ledger owned: *the interview feels
-robotic*. Nothing was broken. interview-core progressed correctly, adaptive selected correctly,
-speech spoke correctly — and the interviewer still had no turn of its own. It never greeted
-anyone, never asked what someone meant, and could not decide a round was finished. Progression
-was arithmetic: one answer, `current_index + 1`.
+- **The drift clamp, rewritten by hand** ([C02](.agents/devlogs/C02-conductor-turn-loop.md)). The
+  generated version forced an advance whenever the turn ceiling was spent — including on
+  `end_interview`, which would have resurrected an interview that had just ended. There is now a
+  test named for exactly that.
+- **Conversation state in Redis** ([C01](.agents/devlogs/C01-conversation-persistence.md)). The
+  report is generated by another process, hours later; losing the key would lose the interview.
+- **Returning `chat_messages` verbatim** (same devlog). Leaked `trace_id`, which has no business
+  in a browser.
+- **Deleting the adaptive ledger** once the conductor owned question wording
+  ([C05](.agents/devlogs/C05-agenda-shaped-batches.md)). Kept as the degradation path instead.
+- **`docker compose run api npm run seed`**, an instruction that sat in our own docs for weeks
+  ([F05](.agents/devlogs/F05-asset-serving.md)). The image is built `--omit=dev`, so no `tsx`.
+  [SETUP.md](SETUP.md) has the path that works.
 
-The design conversation is the part worth recording. The first instinct was to let the model
-author every question live and delete the pre-generated batch. Three concrete dependencies
-killed that: topic coverage is derived from the job listing and CV and *is* the product; the
-#89 pause/resume repair regenerates a round and needs something to regenerate into; and ADR-I22
-had already moved batch generation off the critical path so a handover is never a loading
-screen. What shipped instead (ADR-C05) keeps the batch and changes what it holds — an `intent`
-per slot saying what it is *for*, plus one askable sentence kept purely as the fallback for a
-provider outage mid-round. The interviewer writes the real question from the intent.
+## Honest limits
 
-The second decision worth recording is that the model is never the authority (ADR-C02). Its
-action is derived from candidate text and it mutates interview state, so it is untrusted input
-in the §7.1 sense — `injection-patterns.yaml` guards prompt *variables*, and nothing guarded
-*actions*. Five guards are re-derived server-side on every turn, including a hard ceiling past
-which the server advances without asking and writes a system row into the transcript saying so.
-"End the interview now" is a sentence a candidate can type; the opening-turn refusal is what
-makes typing it useless.
-
-K4 survived. The instruction was to keep adaptive question generation, and there was a reading
-that cost nothing: the conductor has the whole conversation, which beats three pre-generated
-candidates, so D01–D03 stopped deciding *wording* and became the degradation path — still
-scoring for the report, still supplying the next row's text when the conductor could not be
-reached. Nothing was deleted.
-
-## 5. What was hard
-
-*The genuine friction, with the fix. Harvested from the `## Friction` sections. Not a
-list of typos — the things that cost hours.*
-
-**The opening turn had no question to advance past (C02).** Treating every interviewer reply as
-"close this question, open the next" made the welcome consume question 1. The fix needed no
-schema: *the first assistant message carrying a question's id is the asking of it*. When the row
-is unasked, the turn writes the wording and does not advance, whatever action came back.
-
-**An early handover asked the wrong questions (C02).** `currentQuestionRow` picks the round by
-comparing `current_index` against `hr_question_count`. Handing over at question 3 of 5 left the
-state saying `tech_round` while the index still pointed inside the HR block — so the *technical*
-interviewer asked HR questions. The handover now jumps the index under the same compare-and-set.
-
-**Truncation kept the wrong half of the conversation (C02).** The prompt builder trims an
-over-long block with `slice(0, MAX_BLOCK_CHARS)`, which keeps the oldest text. For a listing
-that is right; for a conversation it throws away the exchange the interviewer has to reply to.
-Trimming moved into `conductor.ts`, from the front, marking the gap so the interviewer knows it
-is missing the start.
-
-**A query inside the budget lock (C02).** `withBudget` holds a `pg_advisory_xact_lock` for the
-whole callback; resolving the remaining topics inside it sat on the interview's own lock.
-
-## 6. What we rejected
-
-*Generated code we threw away or rewrote by hand, and why. This is the section that shows the
-code is owned rather than accepted.*
-
-**The drift clamp, rewritten by hand (C02).** The first version rewrote `end_interview` and
-`handover` into a forced advance whenever the per-question ceiling was spent. Drift exists to
-stop an interviewer circling one question — applied to an action that already leaves the
-question, it would have *resurrected an interview the interviewer had just ended*. There is now
-a test named for exactly that.
-
-**Conversation state in Redis (C01).** Rejected: the report is generated by a worker in another
-process, possibly hours later, and Redis here holds only fan-out and rate-limit state. Losing
-the key would lose the interview.
-
-**Provider-native tool calling (C02).** ADR-I02 keeps every provider SDK out of this repo — both
-transports are one hand-rolled `fetch`. Native tools would have to be built and kept in step
-twice, in two wire formats, to buy a capability the call never needs.
-
-**Deleting D01–D03 (C05).** The first plan cut the adaptive ledger once the conductor owned
-question wording. Kept instead as the degradation path — see §4.
-
-**Returning `chat_messages` rows verbatim (C01).** Leaked `trace_id`, which joins a K6 log line
-to a row and has no business in a browser. Rewritten to map explicitly.
-
-## 7. Quality evaluation
-
-*`npm run eval` output — the manual LLM-as-judge script (IDEA.md §5.5), run against real
-models before the demo. Paste the run verbatim, with the date and the model set.*
-
-```
-(not run yet)
-```
+Report quality was judged by reading them. There is no automated LLM-as-judge run in this repo,
+and we would rather say so than paste numbers we did not produce.
