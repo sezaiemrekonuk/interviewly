@@ -202,6 +202,12 @@ const END_NOW: ConductorTurn = {
   endReason: 'completed',
 };
 
+const END_ABUSE: ConductorTurn = {
+  say: 'I am ending the interview here.',
+  action: 'end_interview',
+  endReason: 'cut_short',
+};
+
 const turn = (interview: Interview, text: string, ...script: (ConductorTurn | Error)[]) =>
   conductTurn(
     { ...interview },
@@ -259,11 +265,11 @@ describe('the end guard (C02 guard 3)', () => {
   }, 30_000);
 
   // The other half of the guard, and the reason it is a guard rather than a ban: the same reply
-  // is legitimate once the interview has actually started, and refusing it always would leave an
-  // interviewer unable to close an interview it has finished.
-  it('lets the identical reply end the interview once it has moved on', async () => {
-    const { interview, hr } = await seed({ index: 2 });
-    await greet(interview, hr[1]);
+  // is legitimate once the interview has run out of questions, and refusing it always would
+  // leave an interviewer unable to close an interview it has finished.
+  it('lets the identical reply end the interview once it has run out of questions', async () => {
+    const { interview, tech } = await seed({ index: TARGET });
+    await greet(interview, tech[TARGET - HR_COUNT - 1]);
 
     await turn(interview, 'That is everything I wanted to cover, thank you.', END_NOW);
 
@@ -273,6 +279,31 @@ describe('the end guard (C02 guard 3)', () => {
     // `ended_at` is deliberately not asserted: `evaluating` is not terminal (machine.ts), and
     // the stamp belongs to the `evaluating → completed` edge the report run makes.
     expect(await prisma.report.count({ where: { interview_id: interview.id } })).toBe(1);
+  }, 30_000);
+
+  it('refuses a completion that would leave the rest of the interview unasked', async () => {
+    const { interview, hr } = await seed({ index: 2 });
+    await greet(interview, hr[1]);
+
+    await turn(interview, 'My round feels finished, so I will stop here.', END_NOW);
+
+    const row = await reread(interview.id);
+    expect(row.state).toBe('hr_round');
+    expect(row.ended_reason).toBeNull();
+    expect(row.current_index).toBe(2);
+    expect(await prisma.report.count({ where: { interview_id: interview.id } })).toBe(0);
+    expect((await lastAssistant(interview.id))?.action).toBe('continue');
+  }, 30_000);
+
+  it('still lets abuse cut an interview short with questions left', async () => {
+    const { interview, hr } = await seed({ index: 2 });
+    await greet(interview, hr[1]);
+
+    await turn(interview, 'I am not doing this, and you can get lost.', END_ABUSE);
+
+    const row = await reread(interview.id);
+    expect(row.state).toBe('evaluating');
+    expect(row.ended_reason).toBe('cut_short');
   }, 30_000);
 });
 
@@ -285,7 +316,7 @@ describe('the closing answer survives every exit (@AC-11)', () => {
     await greet(interview, hr[1]);
     const said = 'I raise it in the review itself, with the diff open.';
 
-    await turn(interview, said, END_NOW);
+    await turn(interview, said, END_ABUSE);
 
     const answers = await answersFor(hr[1].id);
     expect(answers).toHaveLength(1);
