@@ -8,9 +8,9 @@ import PDFDocument from 'pdfkit';
 import { SCORE_MAX, type ReportPayload } from '@interviewly/ai';
 
 export interface ReportPdfMeta {
-  interviewId: string;
   /** `reports.created_at`. Passed in rather than read, so the render stays deterministic. */
   createdAt: Date;
+  occupation: string | null;
 }
 
 const H1 = 18;
@@ -24,7 +24,7 @@ export async function renderReportPdf(
   const doc = new PDFDocument({
     margin: 50,
     info: {
-      Title: `Interview report ${meta.interviewId}`,
+      Title: meta.occupation ? `Interview report — ${meta.occupation}` : 'Interview report',
       Author: 'Interviewly',
       CreationDate: meta.createdAt,
     },
@@ -49,7 +49,7 @@ export async function renderReportPdf(
   doc
     .font('Helvetica')
     .fontSize(BODY)
-    .text(`Interview ${meta.interviewId}`)
+    .text(meta.occupation ?? 'Practice interview')
     .text(`Generated ${meta.createdAt.toISOString()}`)
     .text(`Language ${payload.language}`);
 

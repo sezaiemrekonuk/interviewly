@@ -39,6 +39,7 @@ const reportRow = {
   id: 'rep-1',
   payload,
   created_at: new Date('2026-08-04T10:00:00Z'),
+  interview: { occupation: 'Backend Engineer' },
 };
 
 beforeEach(() => {

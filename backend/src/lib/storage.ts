@@ -22,7 +22,7 @@ export const cappedTtl = (ttlSeconds: number): number =>
 export interface Storage {
   put(key: string, bytes: Buffer, mime: string): Promise<void>;
   get(key: string): Promise<Buffer>;
-  signedUrl(key: string, ttlSeconds: number): Promise<string>;
+  signedUrl(key: string, ttlSeconds: number, filename?: string): Promise<string>;
   /** Erasure (issue 009). Idempotent on both S3 and MinIO — a missing key is not an error. */
   remove(key: string): Promise<void>;
 }
@@ -60,11 +60,16 @@ export let storage: Storage = {
   },
   // `signingDate` from the Clock seam, not wall time: the expiry the presigned URL carries is
   // what @AC-6 measures against the fixed clock.
-  async signedUrl(key, ttlSeconds) {
-    return getSignedUrl(s3Public, new GetObjectCommand({ Bucket: config.S3_BUCKET, Key: key }), {
-      expiresIn: cappedTtl(ttlSeconds),
-      signingDate: clock.now(),
-    });
+  async signedUrl(key, ttlSeconds, filename) {
+    return getSignedUrl(
+      s3Public,
+      new GetObjectCommand({
+        Bucket: config.S3_BUCKET,
+        Key: key,
+        ResponseContentDisposition: filename ? `attachment; filename="${filename}"` : undefined,
+      }),
+      { expiresIn: cappedTtl(ttlSeconds), signingDate: clock.now() },
+    );
   },
 };
 

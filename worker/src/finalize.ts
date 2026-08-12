@@ -22,6 +22,7 @@ export async function finalizeReport(interviewId: string): Promise<void> {
   const report = await prisma.report.findFirst({
     where: { interview_id: interviewId },
     orderBy: { created_at: 'desc' },
+    include: { interview: { select: { occupation: true } } },
   });
   // The schema-gate branch transitions the interview `failed` and stores no row at all, so
   // "nothing to render" is the normal outcome there, not an error.
@@ -30,8 +31,8 @@ export async function finalizeReport(interviewId: string): Promise<void> {
   // Not re-validated: I09 stored it through `ReportPayloadSchema`, and re-gating here would put
   // a second copy of that decision on the retry path.
   const pdf = await renderReportPdf(report.payload as unknown as ReportPayload, {
-    interviewId,
     createdAt: report.created_at,
+    occupation: report.interview?.occupation ?? null,
   });
 
   const pdfKey = pdfKeyFor(interviewId);
