@@ -21,13 +21,21 @@ guess — guessing writes to another person's ledger, and two people implementin
 | Person | Ledgers |
 |---|---|
 | Sezai | foundations `F03`, interview-core (`I01`–`I15`), frontend (`W01`–`W11`) |
-| Ahmet | foundations `F01`, auth (`A01`–`A06`), report (`R01`–`R04`), speech (`S01`–`S10`), turn-taking (`T01`–`T04`), speech-latency (`L01`–`L04`) |
+| Ahmet | foundations `F01`, auth (`A01`–`A06`), report (`R01`–`R04`), speech (`S01`–`S10`), turn-taking (`T01`–`T04`), speech-latency (`L01`–`L04`), platform (`P01`–`P09`) |
 | Fatih | foundations `F02`, admin (`N01`–`N02`), voice (`V01`–`V05`), adaptive (`D01`–`D03`) |
 
 Task-ID prefixes are unique per ledger — `F` foundations, `A` auth, `I` interview-core,
 `R` report, `N` admin, `V` voice, `D` adaptive, `W` frontend (web), `S` speech, `T` turn-taking,
-`L` speech-latency — so an ID alone tells you whose it is. Foundations is the one per-task split;
-every other ledger belongs wholly to one person.
+`L` speech-latency, `P` platform — so an ID alone tells you whose it is. Foundations is the one
+per-task split; every other ledger belongs wholly to one person.
+
+**`P` is deployment, and it crosses `F03`'s territory (2026-08-12).** Compose, CI and the
+single-VM deploy shape are Sezai's `F03`. The `P` ledger (`.agents/ledgers/platform/`, ADR-P01)
+adds a *second and third* deploy target — Fly and a local `kind` cluster — for the sole purpose of
+producing measured scale levels, and it does not edit `compose.yaml`, `Caddyfile`, `ci.yml` or any
+application behaviour. Exactly one `P` task touches shipped code: `P02`, the load-test provider
+switch. **The row above is provisional until the three of you agree it** — if deployment should sit
+with `F03` instead, move the row rather than working the ledger from two seats.
 
 **speech supersedes voice (2026-08-06).** `V01`–`V05` stay `done` and are not reopened, but the
 architecture under them was reversed by the owner — ElevenLabs is used for voice generation only,
@@ -85,9 +93,11 @@ Apply these in order:
    start anything else.
 2. **Otherwise your task is the first row that is yours, `todo`, and has every ID in its
    `Depends on` at status `done`.** Order: `F` before `A` before `I` before `R` before `N`
-   before `V` before `D` before `S` before `T` before `L`, then ascending number. (`S` has no
-   `todo` rows left; `T` precedes `L` because `L02` and `L03` depend on `T03` and `T04`, so the
-   tie-break and the dependency graph agree rather than fight.) Direct dependencies are enough —
+   before `V` before `D` before `S` before `T` before `L` before `P`, then ascending number. (`S`
+   has no `todo` rows left; `T` precedes `L` because `L02` and `L03` depend on `T03` and `T04`, so
+   the tie-break and the dependency graph agree rather than fight. `P` is last because it measures
+   the system rather than building it, and a scale number taken before the feature work settles is
+   a number about a system that no longer exists.) Direct dependencies are enough —
    a dependency cannot be `done` unless its own dependencies were.
 3. **Nothing eligible?** Walk your blocked row's dependencies until you reach a not-`done`
    task that is not yours, or one whose status is `blocked`. That is the root blocker — the
