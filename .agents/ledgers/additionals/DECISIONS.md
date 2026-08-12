@@ -597,3 +597,263 @@ compare elevenlabs and openai or their models etc. we should build up a dynamic 
   rather than being forbidden. Named here rather than guarded in code.
 - **`--series-4/5/6` are still unused as hues.** Nothing measured has changed since ADR-ADD08.
   The dashed variants are how the chart gets past three, not a quiet re-admission of those tokens.
+
+## ADR-ADD11 — the vitest integration ring gets the guard the acceptance ring already had
+
+**Ask (owner):** "Almost all the tests writing to the production db, must be fixed."
+
+**What was actually true.** The file-pattern gating was already correct: every test that touches a
+real Prisma client is named `*.integration.test.ts` and both vitest configs exclude those unless
+`INTEGRATION=1`. Every other test in the tree mocks `@prisma/client` or `src/lib/db`. So no
+ungated test wrote anywhere.
+
+What was wrong is what `npm run test:integration` was *pointed at*. It loaded the repo-root `.env`
+with `--env-file-if-exists`, and `.env` names `db:5432/interviewly` — the application's own
+database. Six of the eight integration files carried a header telling the developer to
+`export DATABASE_URL=postgresql://…@localhost:5432/interviewly` (the same database, host-reachable)
+and `export REDIS_URL=redis://localhost:6380` (logical db **0**, the application's keyspace).
+Three of them — `state`, `answers`, `conductor` — have no cleanup at all. This is issues #170/#119
+a second time: the acceptance ring learned that lesson and got `cucumber.js`'s forced store URLs,
+`interviewly_test`, `assertDisposableStores` and a Redis-index rewrite; the vitest ring, built
+separately, never received any of it.
+
+**Shape chosen:**
+
+- **The same fix, in the same place in the pipeline.** `cucumber.js` resolves both URLs *before*
+  `loadEnvFile`, because Node leaves an already-set variable alone — that ordering is what takes
+  `.env` out of the decision. The vitest ring has no such file, so the resolution moved into the
+  `test:integration` script itself, ahead of `--env-file-if-exists`, with the identical precedence:
+  exported `TEST_*` first, then an exported `DATABASE_URL`/`REDIS_URL` (how CI points at its
+  ephemeral services), then the disposable localhost defaults `compose.dev.yaml` publishes.
+- **Reused `assertDisposableStores`, did not write a second guard.** It already refuses any
+  database whose name does not end in `_test`/`ci` and any Redis db 0, and it already deliberately
+  imports nothing so it can run before `env.ts` validates a key. `vitest.global-setup.mts` calls
+  it. A guard that differs per ring is a guard with a hole — that sentence is already in
+  `disposable-stores.ts`, and this is the second ring it now covers.
+- **Root-level `globalSetup`, not a per-project `setupFiles`.** It runs once for `node` and
+  `worker` both, which is what the migrate below wants, and the env resolution it validates
+  happened in the shell so it is inherited by every worker rather than needing to propagate.
+- **`prisma migrate deploy` in the global setup.** `db/init.sql` creates `interviewly_test` with no
+  tables in it, and nothing in this ring deployed migrations into it — so pointing the ring at a
+  disposable database without this makes it fail on the first query instead of on the guard.
+  Idempotent, and it is what makes `npm run test:integration` work on a laptop at all, which
+  `AGENTS.md` previously said out loud that it did not.
+- **Two seeded reference personas in the global setup.** This is the bug in its purest form and it
+  is worth naming: `conductor.integration.test.ts` creates its own persona row, but
+  `seededPersona` looks up `id = seed-persona-{hr,tech}` or `role = {hr,tech}` — so 15 of its tests
+  were passing only because the *seeded production database* had those rows. Personas are
+  reference data (`schema.prisma` says so of `OccupationCluster` in the same words), so a
+  disposable database needs them the way it needs its tables. Upserted with `avatar_set: {}` and no
+  object-storage writes — the seed script's `seedPersonas` uploads six avatar objects and would
+  drag MinIO into a ring that stands up Postgres and Redis.
+- **`NODE_ENV=test` on the ring.** `REPORT_QUEUE_PREFIX` is `'acceptance'` under it and `undefined`
+  otherwise, so without it `consumer`/`failure`'s real BullMQ enqueues went onto the same queue
+  name a running production worker consumes from. The database was not the only shared store.
+- **`LOG_TRANSPORT=stdout` on the ring**, for the same reason the vitest configs already force
+  `AI_ENABLED=false`: a developer's `.env` with `elastic` puts a pino thread-stream in front of an
+  Elasticsearch that is not running, and `shutdown.integration.test.ts` then hangs on
+  `process.exit(0)` after logging `SERVER_STOPPED` — a 15s timeout with no useful message. A test
+  ring must not reach a live external service, and this one did.
+- **CI spells the Redis index out** (`redis://localhost:6379/1`) rather than this ring rewriting a
+  db-0 URL the way `cucumber.js` does. Two mechanisms for one rule is how they drift; the ring
+  refuses and names the fix, and the one caller that needed changing is one line of `ci.yml`.
+- **The wrong instructions were deleted, not corrected.** Those six `export DATABASE_URL=…` lines
+  are why this happened. With the script supplying exactly those defaults they are also now
+  redundant, so the block is `docker compose … up -d db cache` then `npm run test:integration`.
+
+**Verified:** `npm run test:integration` against `interviewly_test` — 8 files, 43 tests, 41
+passing before the ADR-ADD12 cap change landed in the same branch (the two remaining failures are
+that change's, and are fixed under it). The refusal itself was observed firing against `.env`'s
+`interviewly` before the script change was made.
+
+**Skipped, deliberately:**
+
+- **No cleanup added to `state`/`answers`/`conductor`.** They write into a disposable database now;
+  a `afterAll` that hard-deletes across `ON DELETE RESTRICT` FKs in the right order is real code to
+  maintain for rows nothing reads. `stats.integration.test.ts` already does it and can keep to it.
+- **`ACCEPTANCE_ALLOW_DESTRUCTIVE_DB` keeps its name** even though a second suite now honours it.
+  It is documented in `AGENTS.md` and set in developers' shells; renaming an escape hatch to make
+  it read better is how an escape hatch stops working. Only the refusal *message* was generalised,
+  since it named acceptance's TRUNCATEs to someone running vitest.
+- **No `SHADOW_DATABASE_URL` handling.** `migrate deploy` does not use one.
+
+## ADR-ADD12 — one follow-up per question, enforced where it is advertised
+
+**Ask (owner):** "Still follow-up/clarification question are too much. It is impossible to
+complete an interview under 20 minutes (6 questions long)."
+
+**What was already there.** The server-side cap exists and works: `runTurn` recomputes
+`turnsOnQuestion` from `chat_messages` on every turn (no counter to persist, no column to
+migrate), and `clampAction` rewrites a non-advancing action to `drift`, which advances and writes
+an honest system note. Two things were wrong with it, and the prompt lever had already been pulled
+three times — v2's own header documents this exact complaint.
+
+1. **The value bought three follow-ups.** `CONDUCTOR_MAX_TURNS_PER_QUESTION=4` = four candidate
+   utterances on one question, while the live prompt said "at most once per question". Six
+   questions × four utterances is 24 model round-trips, each one in voice carrying up to 8 STT
+   calls, a completeness-gate call and a TTS synthesis.
+2. **The hint and the check disagreed by one turn.** `allowedActions` withheld `continue` at
+   `turnsLeftOnQuestion <= 1`; `clampAction` drifted at `<= 0`. A model that ignored the
+   allowed-actions list got exactly one free extra probe *and* the candidate then ate the drift —
+   the cut-off-mid-thought failure v2 was written to stop.
+
+**Shape chosen:**
+
+- **3, not 2.** At 3 the arithmetic is: answer (2 left, probe allowed), follow-up answer (1 left,
+  the interviewer's own turn to close the question in its own words), advance. At 2 there is no
+  follow-up at all and the first answer is immediately terminal, which is a different product.
+  Twelve candidate utterances for a six-question interview instead of twenty-four.
+- **One exported predicate, `mayProbe(turnsLeftOnQuestion)`, called by both sides.** It lives in
+  `packages/ai/src/prompt-vars.ts` next to `allowedActions` and is re-exported from the barrel the
+  backend already imports, so `allowedActions` (the hint) and `clampAction` (the enforcement) are
+  the same decision by construction. A new unit test loops 3/2/1/0 and asserts the offer equals
+  what is honoured — the two cannot drift apart again, which is what they had done.
+- **No wall-clock cut for text interviews.** It was considered and declined. `isPastSpeechCeiling`
+  is voice-only, `activeSeconds` is banked in both modes, and wiring the ceiling into `runTurn`
+  would have been three lines. But the ask is that an interview *finishes* inside twenty minutes,
+  and a timer does the opposite: it ends interviews at twenty minutes with `time_exhausted` and no
+  report worth reading. Fewer turns is what makes it finish; a deadline only makes it stop.
+- **Prompt bumped to v5, not edited** (K9). v4 said "At zero the server advances for you", which
+  the new boundary makes false, and a prompt that misstates its own budget is how the model
+  over-spends it. v5 states the arithmetic it is actually under and keeps v4's promise that the
+  last turn belongs to the interviewer rather than the server.
+
+**Verified:** `npm test` 127 files / 1395 tests; `npm run test:integration` 43/43;
+`test:acceptance` 111 scenarios and the auth profile's 36.
+
+**Consequence worth knowing:** `mayEnd`'s `turnsOnQuestion >= 3` clause is unreachable at the
+default now — the forced advance fires at 2. Behaviour is unchanged (a candidate who will not
+participate reaches `current_index > 1` through the drift and `mayEnd` is true on their third
+utterance exactly as before), and the clause becomes reachable again if the knob is raised, so it
+was left alone rather than deleted.
+
+**Also fixed here, because the cap exposed it:** two integration tests spent more turns on one
+question than the new budget allows and then failed the advance CAS on their own stale interview
+snapshot rather than on the assertion. `stores the whole answer window (C01)` builds its answer
+across two utterances instead of three (the defect it guards — scoring only the last utterance —
+is caught identically), and the T03 silence loop runs `MAX - 1` times, which is where the drift
+now fires for any value of the knob.
+
+## ADR-ADD13 — the listing is the anchor, the CV is background
+
+**Ask (owner):** "While generating questions, we must heavily depend on the dynamic part, job
+listing. Agent always asks about CV's specific parts, which makes the UX bad. HR, Technical must
+review the user like they are really part of the listed job."
+
+**Where it came from, precisely.** Two prompts, and the CV was winning both.
+
+- `interview.question.generate` v2 was deliberately written to push toward the CV (v1 put the CV
+  block in the user message with no instruction, so questions ignored it — issue 62's other half).
+  v3 kept that paragraph: six lines telling the model to ground questions in the CV's roles,
+  projects and tools and to "Name a specific thing from the CV in a question whenever that makes
+  the question sharper." The listing got one clause: "a 'tech' round asks about the concrete
+  skills the listing names." The correction for one imbalance had produced the opposite one.
+- `interview.conduct.turn` has injected `<candidate_cv>` since v1 and **no version has ever said
+  what that block is for.** An unlabelled CV next to "you are conducting a live job interview" is
+  an invitation, and free-associating off the resume is the natural reading.
+
+**Shape chosen:**
+
+- **Two new prompt versions, no code change.** `interview.question.generate` v4 and
+  `interview.conduct.turn` v5 — same uuid, same name, version incremented, v1–v3/v1–v4 untouched
+  (K9). `live-client.ts` pins no version and `registry.resolve()` serves the highest, so the new
+  files go live on deploy while `llm_calls.prompt_version` keeps every past turn attributable.
+- **The listing is named as the anchor, not merely mentioned.** v4: every question must test a
+  requirement, responsibility or skill the listing actually names; if the listing is thin, write
+  from the role it describes — its seniority, its domain, the work it implies — rather than
+  falling back on the CV. `<job_listing>` also moved to the top of the user message, ahead of the
+  candidate blocks.
+- **The CV is demoted to a level-setting device, and the bad shape is named.** It may pitch
+  difficulty and seniority and steer away from what the listing does not need; it is never the
+  subject of a question, and "tell me about `<project/employer/tool>` on your CV" is forbidden
+  explicitly rather than discouraged in general. The `no cv provided` marker and the 12 000-char
+  truncation are untouched — both are asserted by the acceptance suite.
+- **The conduct prompt says what its data blocks are for.** v5 adds the section that never
+  existed: you are interviewing this candidate for the role in `<job_listing>`, probes assess
+  fitness for its stated requirements, `<candidate_cv>` is background, never open a probe with
+  "on your CV you mention…", and if the candidate raises their own experience follow it only as
+  far as it speaks to a listing requirement.
+- **The reply contracts are byte-identical.** `intent`/`text` on the generate side
+  (`QuestionSchema`, and the `intent ?? null` insert in `generation.ts`), and the action list,
+  `avatar`/`widget`/`set_interview_language` and JSON shape on the conduct side
+  (`ConductorTurnSchema`, `clampAction`). Placeholder sets are unchanged — an extra or missing
+  `{{…}}` throws `AI_PROMPT_BUILD_FAILED`.
+- **A test pins the anchoring.** No existing test asserted anything about question *content*, so
+  re-anchoring broke nothing — and nothing would have caught it being quietly reverted either.
+  `prompt-builder.test.ts` now asserts the live generate prompt carries the listing-anchor
+  sentence and "It is never the subject of a question", and does not carry v3's "Name a specific
+  thing from the CV".
+
+**Skipped, deliberately:**
+
+- **`interview.report.generate` still never sees the job listing.** `reportVars` passes
+  `candidateCv` and no `jobListing` at all, so the final evaluation grades the candidate against
+  their own resume rather than against the job — the same complaint one stage later. Fixing it is
+  a new prompt version *plus* an `AiClient` arg, a `prompt-vars` change and a report-schema
+  review, which is a task, not a rider on this one. Named here so it is not rediscovered as a
+  surprise.
+- **`interview.question.candidates` sees neither listing nor CV**, and its output overwrites a
+  pending question's `text`/`topic`/`difficulty` — so a re-anchored batch could in principle be
+  replaced by a listing-blind question. It cannot happen today: `promoteNextQuestion` returns
+  early when a question has no pre-generated candidates, which is every interview. Left alone,
+  with the same caveat as above.
+- **The persona briefs (`Ada`, `Turing`) were not touched.** They say nothing about the listing or
+  the CV, and the conduct prompt's new section covers both personas at once; a seed change would
+  need a re-seed to take effect on any existing deployment.
+
+## ADR-ADD14 — a landing on `/interviews/new` with a job attached is a row
+
+**Ask (owner):** "Write all interview/new landings to db, if they has a text, jobid, jobtitle and
+jobcompany (parameters can be found in the browser-extension/)."
+
+Those four are exactly what `browser-extension/content.js` puts on the URL it opens:
+`?prefill=<listing text>&jobTitle=&jobCompany=&jobId=<LinkedIn numeric id>`. Nothing in the repo
+read three of them — `page.tsx` used `prefill` and dropped the rest on the floor.
+
+**Shape chosen:**
+
+- **A new table, `job_listings`, not columns on `interviews`.** This is the one decision that
+  needed making. `schema.prisma`'s own header restricts feature work to nullable columns and
+  indexes, and three nullable columns on `interviews` would have been the protocol-legal answer —
+  but they cannot hold the thing being asked for. A landing is not an interview: most landings
+  never become one, and "write all landings" is a row that exists before, and often instead of,
+  an interview row. So this is a deliberate, recorded exception to that rule rather than a
+  workaround that answers a different question. Six columns, cuid id, `created_at`, FK
+  `ON DELETE RESTRICT`, `@@map("job_listings")` — the conventions every other model here follows.
+- **Upsert on `(user_id, external_job_id)`, not append.** The unique index is both the dedup key
+  and the only read path, so no second index was added. Re-landing on the same LinkedIn job
+  refreshes the captured title/company/text instead of adding a row; the alternative is a table
+  whose row count measures page refreshes. No landing counter and no `last_seen_at` — neither was
+  asked for, and both are additive later.
+- **Authenticated, on the existing interview router.** It inherits `requireAuth` and
+  `requirePublicOrigin` from the router rather than re-declaring them, which is what that router's
+  own comment asks new routes to do. Deliberately *not* an anonymous endpoint: an unauthenticated
+  write reachable from any origin is a different security decision, and the rows are keyed to a
+  user anyway. Consequence: the capture is a POST from the landed page, never from the content
+  script — a POST from `linkedin.com` would be refused `CSRF_ORIGIN_MISMATCH`, correctly.
+- **A rate limiter, because the endpoint is loopable.** 60/hour per user, `keyedLimiter`, declared
+  beside the other three. No admin bypass; this protects rows, not a product quota.
+- **Bounded input.** `job_text` at `MAX_BLOCK_CHARS` (12 000), the same ceiling `uploads.ts` uses
+  for a listing, logged as `LISTING_TRUNCATED`; title, company and the external id at 300. Three
+  unbounded `TEXT` columns behind an authenticated but loopable endpoint is the wrong kind of
+  lazy.
+- **No new error code.** `VALIDATION_ERROR` already means "this body cannot build the thing", so
+  there is nothing new for `error-codes.ts` or for the EN/TR `errors` namespace to carry. The
+  capture is silent by design — no visible UI, therefore no message keys at all, and a failure
+  never interrupts the setup flow the visitor actually came for.
+- **The sign-in round trip had to be fixed for any of this to fire.** `signInPathFor` encoded only
+  the pathname, so a signed-out extension landing lost the whole payload before sign-in — no
+  capture, and no prefill either, which was a pre-existing bug in its own right. It now carries
+  the query string. `safeReturnPath` needed no change: it already accepted a query and decides
+  both hostile forms (`//evil…`, `/\evil…`) on the first two characters, so a query cannot reopen
+  them — tests were added pinning exactly that rather than rewriting a correct guard.
+- **`window.location.search` in `useRequireAuth`, not `useSearchParams`.** That hook is used by
+  many pages; `useSearchParams` there would force a Suspense boundary onto all of them. The read
+  happens inside the effect, so it is client-only and needs no boundary.
+
+**Flagged, not fixed:** `auth/delete-account.ts` does not touch `job_listings`. Erasure
+anonymises the user row in place and soft-deletes interviews, so these rows would survive an
+Art. 17 / KVKK request. Nothing breaks — the FK is `RESTRICT` and the user row is never hard
+deleted — but if a captured listing counts as personal data, the erasure transaction needs a line
+for it. That is a change to a compliance path with its own tests and documentation, and it is not
+this ADR's to make quietly.

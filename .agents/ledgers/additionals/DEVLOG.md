@@ -573,3 +573,139 @@ platform actually calls — were unreachable by any chart or table. See `DECISIO
 
 **Not done here (see ADR-ADD10 "Skipped"):** no small multiples past six series, no persistence of
 the picked series, and overlapping filled areas still muddy past three.
+
+## 2026-08-12 — the vitest integration ring stopped writing to the application database
+
+Four owner items landed on one branch; this is the first. See `DECISIONS.md` ADR-ADD11 for why.
+
+**Root cause, stated plainly:** `npm run test:integration` resolved `DATABASE_URL` from the repo-root
+`.env`, which names `db:5432/interviewly` — the database `docker compose up` seeds and the app
+serves. Six of the eight `*.integration.test.ts` headers instructed the developer to export that
+same database by name, and Redis logical db 0 with it. Three of those files clean up nothing. The
+acceptance ring was fixed for exactly this (#170, #119); the vitest ring never was.
+
+- `package.json` — `test:integration` now resolves `DATABASE_URL`/`REDIS_URL` itself, ahead of
+  `--env-file-if-exists`, with cucumber.js's precedence (`TEST_*` → exported → disposable localhost
+  default). Also forces `NODE_ENV=test` (moves the report queue to the `acceptance` BullMQ prefix,
+  off the one a running production worker consumes) and `LOG_TRANSPORT=stdout`.
+- `vitest.global-setup.mts` — new. `assertDisposableStores()`, then `prisma migrate deploy` into the
+  test database, then upserts the two reference personas (`seed-persona-hr`, `seed-persona-tech`,
+  `avatar_set: {}`) that `seededPersona` looks up. Without those last two,
+  `conductor.integration.test.ts` fails 15 tests — it was reading the production seed.
+- `vitest.config.mts` — root-level `globalSetup`, gated on `INTEGRATION=1` so the default ring is
+  untouched. One run for `node` and `worker` both.
+- `backend/features/fixtures/disposable-stores.ts` — refusal message generalised; it named
+  acceptance's TRUNCATEs to someone running vitest. Test regex updated with it.
+- `.github/workflows/ci.yml` — the acceptance job's `REDIS_URL` gains an explicit `/1`. This ring
+  refuses db 0 rather than rewriting it, and CI exported a pathless URL.
+- `AGENTS.md` — the "`test:integration` cannot run on the host as-is" paragraph is no longer true
+  and now describes the resolution and the refusal.
+- `{state,answers,conductor,stats}.integration.test.ts`, `worker/src/{consumer,failure,jobs/abandon-sweep}.integration.test.ts`
+  — deleted the `export DATABASE_URL=…interviewly` / `export REDIS_URL=…6380` lines. They are the
+  proximate cause and they are now redundant.
+
+**Verified**
+
+- `npm run test:integration` — runs on a laptop for the first time, against `interviewly_test`:
+  8 files, 43 tests. Observed the refusal fire against `.env`'s `interviewly` before the script
+  change; observed `shutdown.integration.test.ts` hang on `LOG_TRANSPORT=elastic` and pass on
+  `stdout`.
+- `disposable-stores.test.ts` — 12 tests pass.
+
+## 2026-08-12 — one follow-up per question
+
+`DECISIONS.md` ADR-ADD12. The cap already existed; it was set to 4 (three follow-ups per question)
+and the hint disagreed with the enforcement by one turn, so a model that ignored the allowed-actions
+list got a free extra probe and the candidate then ate the forced advance.
+
+- `backend/src/lib/env.ts`, `.env`, `.env.example` — `CONDUCTOR_MAX_TURNS_PER_QUESTION` 4 → 3.
+  Twelve candidate utterances for a six-question interview instead of twenty-four. The adjacent
+  comments described the old arithmetic and were rewritten.
+- `packages/ai/src/prompt-vars.ts` — `mayProbe(turnsLeftOnQuestion)`, one predicate, `> 1`.
+  `allowedActions` calls it; exported from `packages/ai/src/index.ts`.
+- `backend/modules/interview/conductor.ts` — `clampAction`'s drift guard calls `mayProbe` instead
+  of its own `<= 0`. The hint and the check are now the same decision.
+- `backend/modules/interview/conductor.test.ts` — the drift tests retargeted, plus a new one that
+  loops 3/2/1/0 and asserts `allowedActions`' offer of `continue` equals what `clampAction`
+  honours.
+- `backend/src/lib/env-wiring.test.ts` — the pinned default is 3.
+- `backend/modules/interview/conductor.integration.test.ts` — two tests spent more turns on one
+  question than the budget allows and then failed the advance CAS on their own stale interview
+  snapshot. C01 builds its answer over two utterances; the T03 silence loop runs `MAX - 1`, which
+  is where the drift fires for any value of the knob.
+
+Deliberately **no** wall-clock cut for text interviews — see the ADR. The ask is that an interview
+finishes inside twenty minutes; a timer makes it stop instead.
+
+## 2026-08-12 — the interview is anchored in the job listing
+
+`DECISIONS.md` ADR-ADD13. Two prompt versions, no code change: `live-client.ts` pins no version and
+`registry.resolve()` serves the highest, so both go live on deploy while `llm_calls.prompt_version`
+keeps past turns attributable (K9 — v1–v3 and v1–v4 untouched).
+
+- `packages/ai/prompts/interview.question.generate.v4.prompt.yaml` — new. The six-line
+  "ground the questions in the CV, name a specific thing from it" paragraph is replaced by a
+  listing-anchor paragraph and a CV-is-background-only paragraph that forbids the "tell me about
+  `<project>` on your CV" shape. `<job_listing>` moved to the top of the user message. Reply
+  contract, injection paragraph, count/language rules and placeholder set unchanged.
+- `packages/ai/prompts/interview.conduct.turn.v5.prompt.yaml` — new. v4 verbatim plus the section
+  that had never existed in any version: what `<job_listing>` and `<candidate_cv>` are for, and
+  that the CV is never the subject of a question. Its probing budget also restated to match
+  ADR-ADD12 — v4's "at zero the server advances" was made false by that change.
+- `packages/ai/src/prompt-builder.test.ts` — new test pinning the anchoring, since nothing in the
+  suite asserted question content and nothing would have caught a quiet revert.
+
+Not done: `interview.report.generate` still never receives the listing (it grades against the CV),
+and `interview.question.candidates` sees neither. Both are named in the ADR with why.
+
+## 2026-08-12 — job listings captured on landing
+
+`DECISIONS.md` ADR-ADD14. The extension has always put `prefill`, `jobTitle`, `jobCompany` and
+`jobId` on the URL; three of the four were read by nothing.
+
+**Backend**
+
+- `backend/prisma/schema.prisma` — `model JobListing` (cuid id, `user_id`, `external_job_id`,
+  `job_title`, `job_company`, `job_text`, `created_at`, FK `onDelete: Restrict`,
+  `@@unique([user_id, external_job_id])`, `@@map("job_listings")`), plus the `job_listings`
+  back-relation on `User`. A new table is an exception to the schema header's nullable-columns rule
+  and the ADR records why: a landing is not an interview and most landings never become one.
+- `backend/prisma/migrations/20260812150000_job_listings/migration.sql` — hand-written to match
+  what `prisma migrate diff --from-empty` emits, so CI's drift check has nothing to report.
+- `backend/modules/interview/job-listing.ts` — new. `captureJobListing`: zod, all four fields
+  required non-empty, `job_text` capped at `MAX_BLOCK_CHARS` (12 000) and labels at 300, upsert on
+  the unique pair, `JOB_LISTING_CAPTURED`, 204.
+- `backend/modules/interview/rate-limit.ts` — `jobListingLimiter`, 60/hour per user, no admin
+  bypass.
+- `backend/modules/interview/router.ts` — `POST /interviews/job-listings`. Inherits `requireAuth`
+  and `requirePublicOrigin` from the router, which is what that router's comment asks of a new
+  route.
+- `backend/modules/interview/job-listing.test.ts` — 14 tests with `src/lib/db` mocked: upsert
+  shape, every field's rejection, truncation.
+
+**Frontend**
+
+- `interviews/new/page.tsx` — reads all four params; a ref-guarded `useEffect` fires the capture
+  once per landing, after the auth gate resolves. Silent: no UI, no message keys, and a failure
+  never touches the setup flow.
+- `lib/query.ts` — `useCaptureJobListing`, shaped like `useCreateInterview`. Nothing reads the rows
+  back, so no query key.
+- `lib/auth-redirect.ts`, `lib/use-require-auth.ts` — `signInPathFor` carries the query string. It
+  encoded only the pathname, so a signed-out extension landing lost the entire payload before
+  sign-in — no capture and no prefill either. `safeReturnPath` was already correct and gained tests
+  rather than edits.
+- `page.test.tsx`, `auth-redirect.test.ts`, `use-require-auth.test.tsx` — all four params present
+  posts once, a missing one posts nothing, a failed post does not break the page, and the query
+  survives the sign-in round trip while `//evil…?q=` and `/\evil…?q=` stay refused.
+
+**Verified (all four items on this branch, together)**
+
+- `npm test` — 127 files / 1395 tests pass.
+- `npm run test:integration` — 8 files / 43 tests pass, against `interviewly_test`.
+- `npm run test:acceptance` — 111 scenarios / 885 steps; `cucumber-js -p auth` — 36 / 258.
+- `npm run typecheck` and `npm run lint` — exit 0.
+
+**Flagged, not fixed:** account erasure does not touch `job_listings` (ADR-ADD14's last paragraph).
+The two new prompt YAMLs also ship without the `# K9 versioned prompt` header every other prompt
+file carries — this branch was authored under a no-new-comments constraint; the rule itself is
+unchanged and stated in ADR-ADD13.
