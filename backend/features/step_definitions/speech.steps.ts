@@ -29,7 +29,10 @@ let otherInterviewId = '';
 let fakeStorage = makeFakeStorage();
 
 Before({ tags: '@speech' }, function () {
-  fake = new FakeSpeechProvider();
+  fake = new FakeSpeechProvider(
+    { provider: 'elevenlabs', model: config.ELEVENLABS_TTS_MODEL },
+    { provider: 'elevenlabs', model: config.ELEVENLABS_STT_MODEL },
+  );
   fakeStorage = makeFakeStorage();
   setSpeechProvider(fake);
   setStorage(fakeStorage);
@@ -448,9 +451,16 @@ Then('the fake storage holds no audio object', function (this: AiWorld) {
 
 // ---------------------------------------------------------------- S04: per-call usage accounting
 
+const SPEECH_MODEL: Record<string, string> = {
+  tts: config.ELEVENLABS_TTS_MODEL,
+  stt: config.ELEVENLABS_STT_MODEL,
+};
+
 Then(
-  'the interview has exactly {int} elevenlabs llm_calls row for model {string} with unit kind {string}',
-  async function (this: AiWorld, count: number, model: string, unitKind: string) {
+  'the interview has exactly {int} elevenlabs llm_calls row for {string} with unit kind {string}',
+  async function (this: AiWorld, count: number, kind: string, unitKind: string) {
+    const model = SPEECH_MODEL[kind];
+    assert.ok(model, `unknown speech kind ${kind}`);
     const rows = await prisma.llmCall.findMany({
       where: { interview_id: this.interviewId, provider: 'elevenlabs', model },
     });

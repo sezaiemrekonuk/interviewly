@@ -116,8 +116,19 @@ beforeEach(() => {
   m.findRound.mockResolvedValue({ persona: { voice_id: 'voice-hr' } });
   m.storageGet.mockRejectedValue(new Error('cache miss'));
   m.storagePut.mockResolvedValue(undefined);
-  m.speak.mockResolvedValue({ audio: Buffer.from([1, 2, 3]), mime: 'audio/mpeg', characters: 24 });
-  m.transcribe.mockResolvedValue({ transcript: 'A spoken answer.', seconds: 12 });
+  m.speak.mockResolvedValue({
+    audio: Buffer.from([1, 2, 3]),
+    mime: 'audio/mpeg',
+    characters: 24,
+    provider: 'elevenlabs',
+    model: 'eleven_turbo_v2_5',
+  });
+  m.transcribe.mockResolvedValue({
+    transcript: 'A spoken answer.',
+    seconds: 12,
+    provider: 'elevenlabs',
+    model: 'scribe_v1',
+  });
   m.advance.mockResolvedValue({ state: 'hr_round', nextIndex: 2 });
   m.withBudget.mockImplementation(async (_id: string, fn: () => Promise<unknown>) => fn());
   m.applyTransition.mockImplementation(
@@ -128,41 +139,70 @@ beforeEach(() => {
   );
 });
 
+const liveTts = { provider: 'elevenlabs', model: 'eleven_turbo_v2_5', latencyMs: 430 };
+const liveStt = { provider: 'elevenlabs', model: 'scribe_v1', latencyMs: 1650 };
+
 describe('meterTts', () => {
-  it('writes one character-metered elevenlabs/tts row with the price-file cost', async () => {
-    await meterTts('itv-1', 100, 'trace-1');
+  it('writes one character-metered elevenlabs row with the model id the call used and the price-file cost', async () => {
+    await meterTts('itv-1', 100, liveTts, 'trace-1');
 
     expect(m.recordLlmCall).toHaveBeenCalledOnce();
     expect(m.recordLlmCall.mock.calls[0]?.[0]).toMatchObject({
       interview_id: 'itv-1',
       provider: 'elevenlabs',
-      model: 'tts',
+      model: 'eleven_turbo_v2_5',
       unit_kind: 'character',
       units: 100,
       cost_usd: 0.018, // 100 / 1e6 * 180.00
       prompt_uuid: '',
       prompt_version: 0,
       attempt_no: 1,
-      latency_ms: 0,
+      latency_ms: 430,
       trace_id: 'trace-1',
     });
     expect(m.loggerWarn).not.toHaveBeenCalled();
   });
+
+  it('bills nothing for a provider the price file does not name', async () => {
+    await meterTts('itv-1', 100, { provider: 'fake', model: 'fake', latencyMs: 3 }, 'trace-1');
+
+    expect(m.recordLlmCall.mock.calls[0]?.[0]).toMatchObject({
+      provider: 'fake',
+      model: 'fake',
+      units: 100,
+      cost_usd: 0,
+    });
+    expect(m.loggerWarn.mock.calls.at(-1)?.[1]).toBe('PRICE_MISSING');
+  });
 });
 
 describe('meterStt', () => {
-  it('writes one second-metered elevenlabs/stt row with the price-file cost', async () => {
-    await meterStt('itv-1', 60, 'trace-1');
+  it('writes one second-metered elevenlabs row with the model id the call used and the price-file cost', async () => {
+    await meterStt('itv-1', 60, liveStt, 'trace-1');
 
     expect(m.recordLlmCall).toHaveBeenCalledOnce();
     expect(m.recordLlmCall.mock.calls[0]?.[0]).toMatchObject({
       interview_id: 'itv-1',
       provider: 'elevenlabs',
-      model: 'stt',
+      model: 'scribe_v1',
       unit_kind: 'second',
       units: 60,
       cost_usd: 0.006667, // 60 * 0.006667 / 60
+      latency_ms: 1650,
     });
+    expect(m.loggerWarn).not.toHaveBeenCalled();
+  });
+
+  it('bills nothing for a provider the price file does not name', async () => {
+    await meterStt('itv-1', 60, { provider: 'fake', model: 'fake', latencyMs: 3 }, 'trace-1');
+
+    expect(m.recordLlmCall.mock.calls[0]?.[0]).toMatchObject({
+      provider: 'fake',
+      model: 'fake',
+      units: 60,
+      cost_usd: 0,
+    });
+    expect(m.loggerWarn.mock.calls.at(-1)?.[1]).toBe('PRICE_MISSING');
   });
 });
 
@@ -173,10 +213,32 @@ describe('serveQuestionSpeech metering', () => {
     expect(m.speak).toHaveBeenCalledOnce();
     expect(m.recordLlmCall).toHaveBeenCalledOnce();
     expect(m.recordLlmCall.mock.calls[0]?.[0]).toMatchObject({
-      model: 'tts',
+      model: 'eleven_turbo_v2_5',
       unit_kind: 'character',
       units: 24,
     });
+  });
+
+  it('stores how long the provider call actually took', async () => {
+    vi.useFakeTimers();
+    m.speak.mockImplementation(async () => {
+      vi.advanceTimersByTime(430);
+      return {
+        audio: Buffer.from([1, 2, 3]),
+        mime: 'audio/mpeg',
+        characters: 24,
+        provider: 'elevenlabs',
+        model: 'eleven_turbo_v2_5',
+      };
+    });
+
+    try {
+      await serveQuestionSpeech(ttsReq(), ttsRes(), (() => undefined) as never);
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(m.recordLlmCall.mock.calls[0]?.[0]).toMatchObject({ latency_ms: 430 });
   });
 
   it('a throwing provider bills nothing', async () => {
@@ -238,11 +300,33 @@ describe('submitAnswerAudio metering', () => {
     expect(m.transcribe).toHaveBeenCalledOnce();
     expect(m.recordLlmCall).toHaveBeenCalledOnce();
     expect(m.recordLlmCall.mock.calls[0]?.[0]).toMatchObject({
-      model: 'stt',
+      model: 'scribe_v1',
       unit_kind: 'second',
       units: 12,
     });
     expect(m.advance).toHaveBeenCalledOnce();
+  });
+
+  it('stores how long the provider call actually took', async () => {
+    vi.useFakeTimers();
+    m.transcribe.mockImplementation(async () => {
+      vi.advanceTimersByTime(1650);
+      return {
+        transcript: 'A spoken answer.',
+        seconds: 12,
+        provider: 'elevenlabs',
+        model: 'scribe_v1',
+      };
+    });
+    const { r } = sttRes();
+
+    try {
+      await submitAnswerAudio(sttReq(), r, (() => undefined) as never);
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(m.recordLlmCall.mock.calls[0]?.[0]).toMatchObject({ latency_ms: 1650 });
   });
 
   it('a throwing provider bills nothing and does not advance', async () => {

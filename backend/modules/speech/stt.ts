@@ -202,11 +202,21 @@ async function transcribeRecording(
 ): Promise<{ transcript: string; seconds: number }> {
   try {
     return await withBudget(interview.id, async () => {
+      const startedAt = Date.now();
       const result = await speechProvider.transcribe(file.buffer, {
         mime: file.mimetype,
         language: interview.language,
       });
-      await meterStt(interview.id, result.seconds, traceId);
+      await meterStt(
+        interview.id,
+        result.seconds,
+        {
+          provider: result.provider,
+          model: result.model,
+          latencyMs: Date.now() - startedAt,
+        },
+        traceId,
+      );
       return result;
     });
   } catch (err) {

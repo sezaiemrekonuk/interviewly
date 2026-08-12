@@ -135,7 +135,7 @@ Feature: Speech provider seam — SpeechProvider interface contract
     Given I am signed in as a speech candidate
     And I have a voice interview in hr_round with current index 1
     When I GET "/interviews/:id/questions/:index/speech" as that owner
-    Then the interview has exactly 1 elevenlabs llm_calls row for model "tts" with unit kind "character"
+    Then the interview has exactly 1 elevenlabs llm_calls row for "tts" with unit kind "character"
     And the interview spent_usd is greater than zero
 
   @speech @AC-5
@@ -144,7 +144,7 @@ Feature: Speech provider seam — SpeechProvider interface contract
     And I have a voice interview in hr_round with current index 1
     When I POST a "audio/webm" answer recording as that owner
     Then the answer response status is 200
-    And the interview has exactly 1 elevenlabs llm_calls row for model "stt" with unit kind "second"
+    And the interview has exactly 1 elevenlabs llm_calls row for "stt" with unit kind "second"
     And the interview spent_usd is greater than zero
 
   @speech @AC-5
@@ -153,7 +153,7 @@ Feature: Speech provider seam — SpeechProvider interface contract
     And I have a voice interview in hr_round with current index 1
     When I GET "/interviews/:id/questions/:index/speech" as that owner
     And I GET "/interviews/:id/questions/:index/speech" as that owner
-    Then the interview has exactly 1 elevenlabs llm_calls row for model "tts" with unit kind "character"
+    Then the interview has exactly 1 elevenlabs llm_calls row for "tts" with unit kind "character"
 
   # S08: voice-first default and the candidate's chosen duration. The ceiling itself is @AC-6
   # above; these say who gets to choose it and what the server does with a choice it will not

@@ -967,7 +967,7 @@
       },
       "promptVersion": "v{version}",
       "attempt": "Attempt {n}",
-      "fellBack": "After {provider}",
+      "fellBack": "After {model}",
       "latency": "{ms} ms",
       "unit": {
         "token": "tokens",

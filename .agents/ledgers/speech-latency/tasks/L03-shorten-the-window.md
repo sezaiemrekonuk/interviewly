@@ -43,16 +43,16 @@ and a shorter window makes that fragment short. 2 000 → 1 000 buys ~1 000 ms o
   are the data this task needs.
 
 ## Steps
-- [ ] **1. Check the precondition.** T04 shipped, and gate verdicts available from real use. If
+- [x] **1. Check the precondition.** T04 shipped, and gate verdicts available from real use. If
   either is missing: `blocked`, with what is needed. Do not proceed.
-- [ ] **2. Establish the error rate.** From logged verdicts: how often did the gate say `finished`
+- [x] **2. Establish the error rate.** From logged verdicts: how often did the gate say `finished`
   on a fragment that turned out to be mid-thought (the interruption), and how often did it hold a
   fragment that was clearly done (dead air, bounded by the 13 s clock)? The first number is the
   one that gates this task.
-- [ ] **3. Pick the window from the data, not from this file.** 1 000 ms is the proposal, not the
+- [x] **3. Pick the window from the data, not from this file.** 1 000 ms is the proposal, not the
   answer. A gate with a higher false-`finished` rate wants a longer window; a very accurate one
   could go shorter still.
-- [ ] **4. Change the constant and its assertion.** One commit, both files.
+- [x] **4. Change the constant and its assertion.** One commit, both files.
 - [ ] **5. Measure end to end** the same way REFERENCE.md's baseline was taken. Record
   before/after in `## Notes`.
 - [ ] **6. Listen to it.** Numbers cannot tell you whether the room now feels rushed. Answer three
@@ -75,5 +75,26 @@ Then, and this is the real verification: a live voice interview where you delibe
 mid-sentence. The unit test proves the constant changed; only the room proves it was safe to.
 
 ## Notes
-_(fill in when done — the error rate, the chosen window and why, the measured before/after, and
-what it felt like to speak to)_
+
+**Status: `in_progress`. Steps 1-4 are done, 5 and 6 are the owner's and are what finish it.**
+
+**The error rate (step 2), such as it is.** One live run, six uploads, the gate held four. Every
+error in it was a false **hold** — a finished answer held anyway — and there was not one false
+`finished`. That is the asymmetry this task needed: a false hold costs one extra probe, a false
+`finished` is the interruption ADR-L04 refuses to buy latency with. n=6 is a direction, not a rate,
+and this note does not claim otherwise.
+
+**And a caveat that outranks it.** The run those verdicts came from was recorded by a room that
+was also capturing the interviewer. An orphaned `MediaRecorder` was pushing TTS bytes into the next
+turn's upload (fixed in the same session, `use-voice-session.ts` — the recorder-identity guard), so
+the gate was judging fragments with the interviewer's own voice mixed in. **The verdicts above were
+measured through that.** Re-read them once the room has run clean; if a false `finished` appears,
+1 000 ms is the first thing to put back.
+
+**The window (step 3):** 1 000 ms, the file's own proposal, on the strength of the zero
+false-`finished` above and nothing more. Not shorter — there is no data that would justify it.
+
+**Steps 5 and 6 are not done.** Both need a microphone. Structurally the change is ADR-L04's
+arithmetic — ~1 000 ms off the window, ~250 ms off the last fragment's STT, no extra ElevenLabs
+money (per audio-minute billing, same total audio), one extra `gpt-4.1-nano` gate call per extra
+probe. Step 6 is the one that can veto it: if it interrupts you once, revert the constant.

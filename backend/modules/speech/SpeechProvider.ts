@@ -3,11 +3,16 @@ export interface SpeechCtx {
   traceId: string;
 }
 
+export interface SpeechCallReport {
+  provider: string;
+  model: string;
+}
+
 export interface SpeechProvider {
   speak(text: string, opts: { voiceId: string; language: string; ctx: SpeechCtx }):
-    Promise<{ audio: Buffer; mime: string; characters: number }>;
+    Promise<SpeechCallReport & { audio: Buffer; mime: string; characters: number }>;
   transcribe(audio: Buffer, opts: { mime: string; language: string }):
-    Promise<{ transcript: string; seconds: number }>;
+    Promise<SpeechCallReport & { transcript: string; seconds: number }>;
 }
 
 // ponytail: module-level binding swapped wholesale by `setSpeechProvider` — same pattern

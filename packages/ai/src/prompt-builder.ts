@@ -28,6 +28,8 @@ const NULL_MARKERS: Record<string, string> = {
   candidateCv: 'no cv provided',
 };
 
+const SERVER_OWNED_FIELDS = new Set(['allowedActions']);
+
 const DOB_KEYS = new Set(['dateOfBirth', 'date_of_birth']);
 const PLACEHOLDER = /\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g;
 
@@ -222,6 +224,7 @@ export class PromptBuilder {
     ctx: AiCtx,
   ): void {
     for (const { field, value } of boundValues) {
+      if (SERVER_OWNED_FIELDS.has(field)) continue;
       for (const pattern of this.patterns) {
         if (!pattern.regex.test(value)) continue;
         // Logged, never blocked (§7.1.5): the Zod output schema is the real barrier, and a

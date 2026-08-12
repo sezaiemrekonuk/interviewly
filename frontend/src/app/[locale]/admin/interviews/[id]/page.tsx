@@ -386,12 +386,18 @@ export default function AdminInterviewDetailPage() {
                       <td>{call.provider}</td>
                       <td className={table.occupation}>{call.model}</td>
                       <td className={table.flags}>
-                        <span className="tabular" title={call.promptUuid}>
-                          {call.promptUuid.slice(0, UUID_HEAD)}
-                        </span>
-                        <span className={table.pill}>
-                          {t('calls.promptVersion', { version: call.promptVersion })}
-                        </span>
+                        {call.promptUuid === '' ? (
+                          <span className="tabular">—</span>
+                        ) : (
+                          <>
+                            <span className="tabular" title={call.promptUuid}>
+                              {call.promptUuid.slice(0, UUID_HEAD)}
+                            </span>
+                            <span className={table.pill}>
+                              {t('calls.promptVersion', { version: call.promptVersion })}
+                            </span>
+                          </>
+                        )}
                         {call.attemptNo > 1 && (
                           <span className={table.pill}>
                             {t('calls.attempt', { n: call.attemptNo })}
@@ -399,7 +405,7 @@ export default function AdminInterviewDetailPage() {
                         )}
                         {call.fellBackFrom && (
                           <span className={table.pill}>
-                            {t('calls.fellBack', { provider: call.fellBackFrom })}
+                            {t('calls.fellBack', { model: call.fellBackFrom })}
                           </span>
                         )}
                       </td>

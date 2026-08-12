@@ -873,3 +873,98 @@ above rather than isolated from it.
 **Verified:** `npm test` 128 files / 1400 tests; `npm run typecheck` and `npm run lint` exit 0;
 `caddy validate` on the new Caddyfile; the edge reached 1, 2 and 4 distinct instances at the three
 scale steps, recorded per step in the results file.
+
+## 2026-08-12 — the room was recording the interviewer, and the credit downgrade was half-wired
+
+Two owner reports in one session, plus the latency work that came with them. Seven subagents in
+parallel; the split was by file, so nothing collided except one comment that ended up attached to
+the wrong function and was moved back by hand.
+
+**The capture bug (ADR-ADD19).** Reproduced before it was diagnosed: a probe stop re-opens the mic,
+the upload hangs, the conductor's reply arrives on the refetch, and the speak effect plays TTS into
+a recorder nobody closed. Then the effect opened a second recorder over the first without stopping
+it, and the orphan's chunks — read against `chunksRef.current` at delivery time — landed in the
+*next* turn's upload. Two failing tests first, both red for the right reason: the recorder was still
+`recording` when playback began, and the uploaded file contained the orphan's bytes. `recorderRef`
+identity now decides which recorder owns a turn; `discardRef` is deleted, because a single boolean
+cannot name which of two recorders is being thrown away.
+
+**The downgrade (ADR-ADD18).** `tts.ts` downgraded on a fatal provider error, `stt.ts` did not, and
+nothing in the acceptance suite drove the STT route. The candidate's own answer was therefore the
+one path where running out of credits stranded them in a voice room with no composer, while being
+told they were in a text one. Fixed in the shared `transcribeRecording`, awaited so the mode is
+durable before the 503 goes out — a floated call re-opens the exact race, and the test says so.
+Around it: ElevenLabs no longer retries a 401 three times, the "continuing in text" notice survives
+the mode flip that used to unmount it, the mic is released when the room stops being a voice room,
+and the downgrade publishes its SSE.
+
+**Latency, and one thing found while looking for it.** `L03`'s window went 2 000 → 1 000. The
+conductor's four independent per-turn reads now issue as one `Promise.all` — the audit of every
+write between them is in the task notes; `loadConversation` is the one genuinely ordered read and it
+still precedes both inserts. The model price table was being read off disk, YAML-parsed and
+zod-validated before **every** LLM call; it is now loaded once per process.
+
+The thing found by accident: `logAiCall` was writing ~94 kB per conductor call at `info`, carrying
+the rendered prompt — which is the candidate's CV, their profile and the whole transcript — into
+stdout and from there into Elasticsearch. `logger.ts`'s own header forbids it in as many words:
+"No secrets, PII, tokens, or PDF content in any log call." Unconditional, so relevelling it to
+`debug` would not have satisfied it. Content is now a length and a hash; every operational field
+survives.
+
+**Persona memoization was proposed and refused.** `generation.ts` documents it as already tried and
+reverted: `active` is how a persona is retired, and a process-lifetime cache keeps a retired persona
+conducting interviews until every api and worker restarts. `persona-for.test.ts` exists because that
+table served the wrong persona in production once.
+
+**Not done, and both need a microphone:** `L02`'s and `L03`'s before/after medians, and speaking to
+the shortened window to confirm it does not interrupt. **And a caveat that touches every number in
+`speech-latency` and `turn-taking`:** the gate-accuracy data those ledgers quote was gathered in the
+room that was recording the interviewer. It has not been re-taken.
+
+**Verified:** `npm test` 129 files / 1422 tests; `npm run -w frontend test` 61 files / 727 tests;
+root lint, frontend lint and typecheck all clean. The acceptance suite was NOT run — `compose.yaml`
+does not publish the store ports and `compose.dev.yaml` was not loaded — so the new
+`@speech-fallback` scenario is dry-run-verified only (steps all resolve, zero undefined under
+`strict: true`) and is owed a real run.
+
+## 2026-08-12 — the admin console was describing speech calls it had no record of
+
+Owner's report was the `v0` badge. That was the least of it, and the cheapest to fix.
+
+Started from the database rather than the code, which is what made the ranking obvious: twelve
+recent `llm_calls` rows showed `model: 'tts'`, `latency_ms: 0`, `prompt_uuid: ''` on every
+ElevenLabs row. So `v0` was a render bug over a correct encoding, while `model` and `latency_ms`
+were stored wrong — and `latency_ms: 0` was a hardcoded literal in `metering.ts`, which meant the
+provider-latency panel and the daily cost/latency series had been reporting the product's slowest
+call as instantaneous the whole time.
+
+The fix that mattered was a seam, not a patch: `speak`/`transcribe` now return the provider and
+model that actually served the call, so the row records what happened instead of what the call site
+assumed. Timing stayed at the call site on purpose — the retry loop is inside the driver, so a
+caller-side stopwatch spans all three attempts, and a provider-reported duration would have forced
+the fake to make one up.
+
+Two things fell out of that seam. The fake had been reporting `elevenlabs` and getting priced at
+live rates, so every stub-mode and acceptance row carried invented spend; it now bills nothing.
+But three acceptance scenarios exist precisely to prove that a provider call *does* bill
+`spent_usd`, and an honest fake would have turned them into tautologies that pass while asserting
+nothing — the same trap as the `tts.test.ts` mock that was set up and never asserted on. So the
+fake now takes the identity it stands in for as a constructor argument and the `@speech` hook
+declares it. The impersonation lives in the test that wants it.
+
+Also found while in there: STT was billing zero seconds when Scribe returned no word timings —
+free transcription the provider still charged for — and TTS was counting characters as UTF-16 code
+units, so emoji counted twice.
+
+**Verified:** `npm test` 130 files / 1432 tests; `npm run -w frontend test` 62 files / 729 tests
+(the admin call table had no test file at all before this; it has one now, covering a speech-shaped
+row and an LLM-shaped one); lint and typecheck clean.
+
+**Not run: the acceptance ring.** It needs `compose.dev.yaml`'s published store ports — Redis on
+6380 refused the connection — and it writes into the dev database rather than a scratch one. The
+three `@speech` S04 scenarios and the new `@speech-fallback` STT scenario are dry-run-verified only
+and are owed a real run: `docker compose -f compose.yaml -f compose.dev.yaml up -d db cache`, then
+`npm run test:acceptance -- --tags '@speech'`.
+
+**Not done:** no backfill of the existing rows. `model` straddles L01's TTS swap with no record of
+which row used which, and `latency_ms` was never captured — see ADR-ADD20.

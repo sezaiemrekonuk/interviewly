@@ -25,6 +25,16 @@ describe('FakeSpeechProvider', () => {
     expect(transcribe.seconds).toBeGreaterThan(0);
   });
 
+  it('names itself, so nothing it returns can be metered as ElevenLabs spend', async () => {
+    const fake = new FakeSpeechProvider();
+
+    const speak = await fake.speak('hello', { voiceId: 'v-1', language: 'en', ctx });
+    expect(speak).toMatchObject({ provider: 'fake', model: 'fake' });
+
+    const transcribe = await fake.transcribe(Buffer.alloc(64), { mime: 'audio/mpeg', language: 'en' });
+    expect(transcribe).toMatchObject({ provider: 'fake', model: 'fake' });
+  });
+
   it('failNext() throws exactly once then recovers', async () => {
     const fake = new FakeSpeechProvider();
     fake.failNext();
@@ -131,12 +141,70 @@ describe('ElevenLabsSpeech — the STT request shape', () => {
       language: 'en',
     });
 
-    expect(result).toEqual({ transcript: 'hello', seconds: 1.5 });
+    expect(result).toEqual({
+      provider: 'elevenlabs',
+      model: 'scribe_v1',
+      transcript: 'hello',
+      seconds: 1.5,
+    });
     expect(sent).toHaveLength(1);
     expect(sent[0].get('file')).toBeInstanceOf(Blob);
     expect(sent[0].get('audio')).toBeNull();
     expect(sent[0].get('model_id')).toBe('scribe_v1');
     expect(sent[0].get('language_code')).toBe('en');
+  });
+});
+
+describe('ElevenLabsSpeech — what the call reports about itself', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    m.loggerWarn.mockReset();
+  });
+
+  it('speak() reports the provider and the model id it actually sent', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(new Uint8Array([0xff, 0xfb]), { status: 200 })),
+    );
+
+    const driver = new ElevenLabsSpeech('key', 'eleven_turbo_v2_5', 'scribe_v1');
+    const result = await driver.speak('hello', { voiceId: 'v-1', language: 'en', ctx });
+
+    expect(result).toMatchObject({ provider: 'elevenlabs', model: 'eleven_turbo_v2_5' });
+  });
+
+  it('speak() counts an emoji as the one character the provider bills for', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(new Uint8Array([0xff, 0xfb]), { status: 200 })),
+    );
+
+    const driver = new ElevenLabsSpeech('key', 'eleven_turbo_v2_5', 'scribe_v1');
+    const result = await driver.speak('hi 👋', { voiceId: 'v-1', language: 'en', ctx });
+
+    expect(result.characters).toBe(4);
+  });
+
+  it('transcribe() bills the floor and logs when the response carries no word timings', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ text: '' }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+      ),
+    );
+
+    const driver = new ElevenLabsSpeech('key', 'eleven_turbo_v2_5', 'scribe_v1');
+    const result = await driver.transcribe(Buffer.from([1, 2, 3]), {
+      mime: 'audio/webm',
+      language: 'en',
+    });
+
+    expect(result.seconds).toBe(1);
+    expect(m.loggerWarn.mock.calls.map(([, event]) => event)).toContain('SPEECH_STT_NO_TIMINGS');
   });
 });
 
