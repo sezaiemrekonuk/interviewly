@@ -1,0 +1,47 @@
+# P05 — the `web` app. Deploy from the repo root: `fly deploy -c fly/web.toml`
+#
+# The three NEXT_PUBLIC_* values are BUILD ARGS and appear here, not in `fly secrets`. Next
+# inlines them into the client bundle during `npm run -w frontend build` (frontend/Dockerfile:33),
+# so a value supplied at run time is already too late and the image ships the source fallbacks —
+# a broken mascot and the wrong default locale, visible on the first page load and on no test.
+# Setting them as secrets creates the illusion of configuration while the bundle keeps the
+# fallbacks. compose.yaml's `web.build.args` block documents the same trap at length.
+#
+# Unlike compose there is no `${VAR:?}` posture available here, so the values are literal. They
+# must match .env.example; if the mascot digest changes, this file changes with it.
+app = "interviewly-web"
+primary_region = "fra"
+
+[build]
+  dockerfile = "../frontend/Dockerfile"
+  [build.args]
+    NEXT_PUBLIC_ASSETS_PREFIX = "/assets"
+    NEXT_PUBLIC_MASCOT_SHA256 = "86be52bdb7547413cafb3ed175a806a798c65de98b40849e0b974c47d187de65"
+    NEXT_PUBLIC_DEFAULT_LOCALE = "en"
+
+[env]
+  NODE_ENV = "production"
+  # `::`, not compose's `0.0.0.0`. Next's standalone server binds the loopback without this, but
+  # `0.0.0.0` binds IPv4 only and Fly's private network is IPv6 — Caddy dials the machine's
+  # `fdaa:` address and gets `connection refused` while the process is listening and Fly's own
+  # health check, which reaches it over IPv4, passes. A 502 on every page with a green machine.
+  # `::` binds dual-stack and serves both. compose is right to use 0.0.0.0: the Docker bridge is
+  # IPv4. The api needs no equivalent — Node's `listen(port)` with no host is already dual-stack.
+  HOSTNAME = "::"
+  PORT = "3000"
+  # Server-side rendering calls the api over the private network, never through the edge.
+  INTERNAL_API_URL = "http://interviewly-api.internal:4000"
+
+[checks]
+  [checks.root]
+    type = "http"
+    port = 3000
+    method = "GET"
+    path = "/"
+    interval = "10s"
+    timeout = "5s"
+    grace_period = "30s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

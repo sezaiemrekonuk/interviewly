@@ -1,0 +1,38 @@
+# P05 — the `worker` app. Deploy from the repo root: `fly deploy -c fly/worker.toml`
+#
+# A separate app rather than a process group of `api` (ADR-P04): the worker has no ports and
+# must not share a scale count with HTTP concurrency. `fly scale count` on api in P06 must move
+# api machines and nothing else.
+#
+# No services and no public IP — the worker never receives a request. `worker/src/health.ts:54`
+# serves `/healthz` on WORKER_HEALTH_PORT for a probe and for nothing else; under compose the
+# healthcheck is its only caller, and here this check is.
+app = "interviewly-worker"
+primary_region = "fra"
+
+[build]
+  dockerfile = "../worker/Dockerfile"
+
+# No `[deploy] release_command`. The api app owns `prisma migrate deploy`; two apps racing the
+# same migration is a lock contention bug waiting for a slow migration to expose it.
+
+[env]
+  NODE_ENV = "production"
+  WORKER_HEALTH_PORT = "4100"
+
+# No health check, and this is a finding rather than an omission.
+#
+# `worker/src/health.ts:66` binds `127.0.0.1` on purpose — the endpoint is container-internal, and
+# under compose its only caller is a healthcheck Docker execs *inside* the container. Fly probes
+# from the host, so the same check returns `connect: connection refused` forever and holds every
+# deploy at "1 critical" while the process is provably fine (WORKER_STARTED, then an abandon sweep
+# that scheduled and completed against both Redis and Postgres).
+#
+# Binding 0.0.0.0 would fix the probe and is an application code change, which this task does not
+# make. So the worker's liveness signal on Fly is its logs, not a check. A `kind` deployment does
+# not inherit this problem: a Kubernetes probe runs from the kubelet against the pod's own
+# network namespace, where loopback is reachable.
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

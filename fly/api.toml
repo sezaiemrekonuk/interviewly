@@ -1,0 +1,51 @@
+# P05 — the `api` app. Deploy from the repo root: `fly deploy -c fly/api.toml`
+#
+# No `[http_service]` and no public IP on purpose. The edge app is the only thing that may
+# terminate a client request: reachable directly, this app would see the client's IP only
+# through an X-Forwarded-For chain one hop shorter than TRUST_PROXY expects, so rate limiting
+# would key on the wrong address for exactly the requests that bypassed the edge. Caddy dials
+# `interviewly-api.internal:4000` over the private network, which needs no service block.
+#
+# Health therefore comes from a machine-level check rather than an `[[http_service.checks]]`
+# entry. `/readyz` (backend/src/app.ts:66) touches both dependencies; `/healthz` (`:63`) touches
+# none and is the liveness endpoint. Fly has one check concept, and readiness is the one that
+# must gate a rolling deploy, so `/readyz` is what is wired here.
+app = "interviewly-api"
+primary_region = "fra"
+
+# compose.yaml sets `stop_grace_period: 15s` deliberately above the API's own 10s drain ceiling
+# (#70). Fly's default is 5s — below the drain, so a release SIGKILLs machines mid-answer and the
+# only symptom is candidates losing turns during a deploy. This line is that setting, not a
+# rounded-up guess.
+kill_timeout = 15
+kill_signal = "SIGTERM"
+
+[build]
+  # Context is the repo root (compose.yaml uses `context: .`), so deploy from the root.
+  dockerfile = "../backend/Dockerfile"
+
+[deploy]
+  # The image WORKDIR is the workspace root, so the schema needs an explicit path (F02).
+  release_command = "npx prisma migrate deploy --schema backend/prisma/schema.prisma"
+  strategy = "rolling"
+
+[env]
+  NODE_ENV = "production"
+  API_PORT = "4000"
+  # Two proxy hops in front of this process: the Fly edge proxy, then Caddy. One hop here and
+  # the rate limiter keys on Caddy's private address for every client.
+  TRUST_PROXY = "2"
+
+[checks]
+  [checks.readyz]
+    type = "http"
+    port = 4000
+    method = "GET"
+    path = "/readyz"
+    interval = "10s"
+    timeout = "5s"
+    grace_period = "20s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

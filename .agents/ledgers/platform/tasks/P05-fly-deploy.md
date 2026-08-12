@@ -1,5 +1,5 @@
 # P05 — Fly: four apps, managed dependencies, and the three settings that fail silently
-REPO: (this repo) · Depends: P01 · Status: todo
+REPO: (this repo) · Depends: P01 (**skipped** — see Notes) · Status: in_progress
 Read first: STATE.md, REFERENCE.md, then this.
 **Model: claude-opus-5** — real credentials, a real hostname, and a release command running
 `prisma migrate deploy` against a real database. Three of its settings fail quietly rather than
@@ -103,3 +103,119 @@ Then the drain check: start an interview, and while a turn is in flight run
 Cleanup: `fly scale count 0` on all four apps if the deploy is not being kept warm for P06.
 
 ## Notes
+
+Session 2026-08-12 (Ahmet, opus-5). Deployed from a darwin 25.5.0 host, flyctl v0.4.80, org
+`personal` (ahmet-kilic-924), region `fra`. **Status: `in_progress`, not `done`** — the stack is
+up and serving, four of the Definition-of-done bullets are unverified. They are listed at the end.
+
+### Scope deviation: P01 was skipped
+
+The owner chose to go straight to Fly, so there are no GHCR images. All four apps build on Fly's
+remote builder from the same Dockerfiles. The Fly deployment is internally consistent, but
+**ADR-P06 does not hold**: a later `kind` run is not byte-comparable with these numbers until P01
+lands and both targets deploy one sha. Anything P06 measures here is a Fly number, not a
+cross-target number. `fly/README.md` repeats this where a deployer will hit it.
+
+### Seven things that were wrong on the first attempt
+
+1. **`[build] dockerfile` resolves relative to the config file, not the build context.**
+   `dockerfile = "backend/Dockerfile"` in `fly/api.toml` was looked up at `fly/backend/Dockerfile`.
+   All four use `../` (the edge uses `edge/Dockerfile`); the build context is still the repo root.
+2. **`HOSTNAME=0.0.0.0` on `web` binds IPv4 only, and Fly's private network is IPv6.** This is the
+   one that would have cost a session. Next logged `Network: http://0.0.0.0:3000`, Fly's own health
+   check passed — it reaches the machine over IPv4 — and every page returned 502, with the reason
+   visible only in the edge's log: `dial tcp [fdaa:…:3418:2]:3000: connect: connection refused`.
+   A green machine serving 502s. `HOSTNAME = "::"` binds dual-stack. compose is right to use
+   `0.0.0.0`: the Docker bridge is IPv4. The api needs no equivalent — Node's `listen(port)` with
+   no host argument is already dual-stack, which is why only `web` failed.
+3. **Caddy's `dynamic a` needs `versions ipv6` against `.internal`.** Same root cause: Fly's
+   internal DNS publishes AAAA only, and the module asks for A records by default. It would have
+   resolved an empty upstream set on every refresh and 502'd with no dial error at all.
+4. **`SHADOW_DATABASE_URL` must differ from `DATABASE_URL`, even though `migrate deploy` never
+   uses a shadow database.** The release command failed with `The shadow database you configured
+   appears to be the same as the main database.` — a config validation, not a connection. Pointed
+   at `/fly-db-shadow` on the same cluster; nothing ever connects to it.
+5. **The worker's health check is unimplementable on Fly and has been removed.**
+   `worker/src/health.ts:66` binds `127.0.0.1` deliberately. Under compose the healthcheck works
+   because Docker execs it *inside* the container; Fly probes from the host and gets
+   `connect: connection refused` forever, holding the deploy at `1 critical` while the process is
+   provably fine. Binding `0.0.0.0` is an application code change this task does not make, so the
+   worker has no check and its liveness signal on Fly is its logs. **This does not carry to P07** —
+   a Kubernetes probe runs against the pod's own network namespace, where loopback is reachable.
+6. **`.env.fly` had been pasted over with `.env`.** Caught before the first deploy. Repaired:
+   `SESSION_SECRET` was back to the `change-me` placeholder (`env.ts:135` would have refused the
+   boot — loud), `LOG_TRANSPORT=elastic` with `ELASTICSEARCH_URL=http://elasticsearch:9200` (no
+   Elasticsearch in this deployment — silent), `NEXT_PUBLIC_ASSETS_PREFIX` and
+   `NEXT_PUBLIC_MASCOT_SHA256` present as runtime keys (silent, and exactly the illusion the
+   non-negotiable names), `S3_REGION=us-east-1` against Tigris.
+7. **Fly creates a standby machine per app automatically** (api, web, worker each have one,
+   `stopped`). P06 must account for this before reading `fly scale count` as a replica count.
+
+### PgBouncer: not the problem it was expected to be
+
+`fly mpg attach` hands back a **PgBouncer** endpoint, and `prisma migrate deploy` ran through it
+without complaint — connected, found 21 migrations, applied them, exited 0. No `directUrl` in
+`backend/prisma/schema.prisma` and none needed, so no schema change was made. The cluster's direct
+endpoint is `fdaa:85:3524:0:1::6` if a future migration does trip on an advisory lock.
+
+### `db/init.sql` — checked, nothing to apply
+
+It issues three `CREATE DATABASE` statements and nothing else — no roles, extensions or grants.
+Managed Postgres creates the application database itself, `migrate deploy` never touches a shadow
+database, and `interviewly_test` belongs to the compose acceptance ring. Nothing was applied by
+hand, and nothing needs to be.
+
+### What exists, and what it costs
+
+| Resource | Identity | Cost |
+|---|---|---|
+| Managed Postgres | `interviewly-pg` / `d2gznoqg6310pkm8`, Basic, 10GB, fra | **$38/month** |
+| Upstash Redis | `interviewly-cache`, pay-as-you-go, eviction **disabled** | **$0.20 per 100K commands** |
+| Tigris bucket | `interviewly-assets`, public | usage |
+| Apps | `interviewly-{edge,web,api,worker}`, 1 machine + 1 standby each | machine time |
+
+`--disable-eviction` matches compose's `noeviction` (issue #72). Fly's own output warns:
+*"If you're using Sidekiq or BullMQ, which poll Redis frequently, consider switching to a
+fixed-price plan."* This stack is BullMQ **and** opens one Redis connection per SSE stream, so a
+P06 load run bills per command on top of the connection ceiling. **Move to a fixed-price plan
+before P06 runs, or the run's cost is unbounded.**
+
+**ADR-P09's number was not obtained.** `fly redis status` reports the plan but not a connection
+limit, and pay-as-you-go does not publish one in the CLI. P06 cannot report a ceiling until this
+is read from the Upstash console. This is the single most important missing figure in the ledger.
+
+### Verified
+
+Public hostname: **https://interviewly-edge.fly.dev**
+
+| Check | Result |
+|---|---|
+| `/api/healthz` through the edge | `{"ok":true}` — the `handle_path /api/*` strip works |
+| `/api/readyz` through the edge | `{"ready":true}` — Postgres **and** Redis reachable from api |
+| `/` through the edge | 200 — web upstream after the `::` fix |
+| `Vary` on `/` | `Cookie, Accept-Language` present (issue 91 behaviour survived the move) |
+| Security headers | `X-Content-Type-Options`, `X-Frame-Options` present |
+| Release command | `prisma migrate deploy` ran and exited 0 before the new version served |
+| Worker | `WORKER_STARTED`, then an abandon sweep that scheduled **and completed** — BullMQ's `JobScheduler` reaches both dependencies |
+
+### Not verified — the honest list
+
+- **The SSE stream through the edge.** `flush_interval -1` is in the config and was never exercised
+  against a live interview. This is the behaviour the whole ledger depends on; P06 must not assume it.
+- **`/assets/*`.** The Tigris bucket is empty — nothing has been uploaded — and the landing page
+  renders no `/assets/` path, so the rewrite is untested. `/assets/` returning 403 is an anonymous
+  bucket-list denial and is correct behaviour, not evidence either way.
+- **The drain check.** `fly deploy` mid-turn, the reason `kill_timeout = 15` is set. Not run.
+- **The browser walk-through**, and with it the `Secure` flag on a real session cookie and whether
+  SMTP delivers.
+
+### Two things the owner must decide
+
+- **Google sign-in is armed and will fail.** `GOOGLE_CLIENT_ID`/`SECRET` are deployed, so
+  `/api/auth/capabilities` reports `{"oauth":{"google":true}}` and the button draws — but
+  `https://interviewly-edge.fly.dev/api/auth/google/callback` is not registered in the Cloud
+  console, and Google matches it character for character. Either register it or unset both
+  secrets; both-empty is a supported state (issue #60). Password login is unaffected.
+- **SMTP is Gmail, not Resend** (`smtp.gmail.com:465`). Nodemailer's implicit-TLS path handles it,
+  but only if `SMTP_PASSWORD` is a Google **App Password** — a regular account password is
+  rejected, and the symptom is `email.send` retrying and dead-lettering, not a failed registration.

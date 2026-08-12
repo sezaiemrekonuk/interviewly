@@ -2,6 +2,8 @@
 internal_docs/
 .vscode
 .env
+# P05 — every managed-dependency connection string for the Fly deployment lands here.
+.env.fly
 compose.override.yaml
 node_modules/
 .next/
