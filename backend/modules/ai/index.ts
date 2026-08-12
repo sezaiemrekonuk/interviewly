@@ -8,6 +8,7 @@
  */
 import type { Prisma } from '@prisma/client';
 import {
+  loadModelPrices,
   resolveAiClient,
   validateProviderKeys,
   type AiClient,
@@ -109,6 +110,7 @@ export function aiClient(): AiClient {
   client ??= resolveAiClient(config, {
     recordLlmCall: writeLlmCall,
     keys: providerKeys,
+    prices: loadModelPrices(),
     logger,
     onSecurityEvent: recordSecurityEvent,
   });
