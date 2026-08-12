@@ -846,6 +846,11 @@ export interface InterviewStateResponse {
   /** The conversation, oldest first. A room rebuilds itself from this alone (§3.8). */
   messages: RoomMessage[];
   transcriptCursor: number;
+  /**
+   * T03 — the half-sentence the gate is holding for the CURRENT question, or null. Read with a
+   * plain `GET`: two refreshes see the same text and a polling client cannot eat its own answer.
+   */
+  pendingTurn: string | null;
 }
 
 export function useInterviewState(
@@ -990,11 +995,17 @@ export function useSubmitAudioAnswer(
   });
 }
 
-export interface SubmitTurnBody {
-  text: string;
-  /** How the candidate produced it. `widget` is C04's typed surface, not a third input device. */
-  inputMode: 'text' | 'voice' | 'widget';
-}
+/** How the candidate produced it. `widget` is C04's typed surface, not a third input device. */
+export type TurnInputMode = 'text' | 'voice' | 'widget';
+
+/**
+ * T03/T04 — `silence` is a turn with no text, and the union is what keeps it that way: the
+ * server's schema drops any text arriving on one, and a body that could carry both would let
+ * this client decide what a silent turn "said".
+ */
+export type SubmitTurnBody =
+  | { kind?: 'utterance'; text: string; inputMode: TurnInputMode }
+  | { kind: 'silence'; inputMode: TurnInputMode };
 
 /**
  * C02 — `POST /interviews/:id/turns`, the conversational path, and deliberately not a second
@@ -1031,6 +1042,21 @@ export function useSubmitTurn(
 
 export interface SubmitAudioTurnBody {
   audio: Blob;
+  /**
+   * T04 — the manual Stop, and nothing else. It skips the completeness gate, never a ceiling:
+   * the candidate ending their own turn is the escape hatch ADR-S06 kept visible.
+   */
+  force?: boolean;
+}
+
+/**
+ * T03's wire, on every path of `POST /turns/audio`. `pendingTurn` non-null means the gate called
+ * the utterance unfinished: nothing was conducted, no row was written, and the room keeps
+ * listening. Null means the turn happened — `state`/`currentIndex` are still read off the state
+ * refetch rather than from here (K11), so only this field is consumed.
+ */
+export interface SubmitAudioTurnResult {
+  pendingTurn: string | null;
 }
 
 /**
@@ -1044,16 +1070,23 @@ export interface SubmitAudioTurnBody {
  */
 export function useSubmitAudioTurn(
   interviewId: string,
-): UseMutationResult<unknown, ApiError, SubmitAudioTurnBody> {
+): UseMutationResult<SubmitAudioTurnResult, ApiError, SubmitAudioTurnBody> {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: async ({ audio }: SubmitAudioTurnBody) => {
+    mutationFn: async ({ audio, force }: SubmitAudioTurnBody) => {
       const type = (audio.type || 'audio/webm').split(';')[0];
       const form = new FormData();
       form.append('audio', new File([audio], 'answer', { type }), 'answer');
-      const result = await apiPostForm(`/interviews/${interviewId}/turns/audio`, form);
+      // The route's only field, and only when it is true: `stt.ts` refuses any other name and
+      // any other value, so an omitted `force` and `force=0` must not be the same request.
+      if (force) form.append('force', '1');
+      const result = await apiPostForm<SubmitAudioTurnResult>(
+        `/interviews/${interviewId}/turns/audio`,
+        form,
+      );
       if (!result.ok) throw new ApiError(result.code ?? 'UNKNOWN');
-      return result.data;
+      // A pre-T03 body has no `pendingTurn`; absent is "nothing held", never "held undefined".
+      return { pendingTurn: result.data?.pendingTurn ?? null };
     },
     onError: (err) => {
       if (SILENT_REFETCH_CODES.has(err.code)) {

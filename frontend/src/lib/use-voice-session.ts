@@ -19,7 +19,13 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { apiGetBlob } from '@/lib/api';
-import { queryKeys, useSubmitAudioTurn, ApiError, type RoomMessage } from '@/lib/query';
+import {
+  queryKeys,
+  useSubmitAudioTurn,
+  useSubmitTurn,
+  ApiError,
+  type RoomMessage,
+} from '@/lib/query';
 import {
   useMicPermission,
   type MicDevice,
@@ -32,9 +38,53 @@ export type VoiceConnectionStatus = 'connecting' | 'connected' | 'reconnecting' 
 /** Local-only beat — never the sync value. `resolveAvatarState` still wins on 'settled'. */
 export type VoiceBeat = 'listening' | 'speaking' | 'acknowledging' | null;
 
-/** Spec Open question 2: a guess until heard, which is why the manual stop is always visible. */
+/**
+ * Spec Open question 2: a guess until heard, which is why the manual stop is always visible.
+ *
+ * Since T04 this window ends a RECORDING, not a turn — the server's completeness gate decides
+ * whether the utterance was finished. So it is short on purpose: it costs a round trip when the
+ * candidate is mid-thought, and a long one is latency on every answer they did finish.
+ */
 export const VAD_SILENCE_MS = 2_000;
+
+/**
+ * The CEILING on what counts as speech, not the test for it (ADR-T07). 0.05 RMS is a loud voice
+ * on a close microphone; a laptop mic at arm's length runs an order of magnitude quieter, and
+ * against a fixed 0.05 such a candidate is never heard at all — no probe is ever sent, and the
+ * only thing that ends their turn is the clock. That cost four live interviews.
+ */
 export const VAD_THRESHOLD = 0.05;
+
+/**
+ * How far above the room's own noise floor a frame has to sit to be somebody talking. Three
+ * times is the usual margin: room tone is steady, speech is not, and the gap between them is
+ * far larger than this on any real microphone.
+ */
+const SPEECH_OVER_FLOOR = 3;
+
+/**
+ * ...and the quietest thing that may ever count as speech, whatever the floor says. Without it a
+ * dead-silent room (floor ~0) would arm on its own dither. -40 dBFS.
+ */
+const VAD_FLOOR = 0.01;
+
+/**
+ * T04 — how long a turn may say nothing at all before the room tells the server so. The room
+ * asserts nothing by sending it (K11): "thirteen seconds have passed" is the whole message, and
+ * whether that is a real silence or a flush of what is already held is the server's call.
+ */
+export const FORCE_SUBMIT_MS = 13_000;
+
+/**
+ * ADR-T06 — the same signal, sent sooner, when the server is already holding a fragment. That
+ * candidate has spoken, has paused, and has had the gate's verdict; thirteen more seconds of
+ * silence buys nothing and is what a wrongly-held finished answer costs. The gate's round trip
+ * is inside this window, so the real grace after a verdict is nearer three seconds.
+ *
+ * The long window stays for the other case, which is not the same case: a candidate who has said
+ * nothing at all is thinking about a hard question, and that time is theirs.
+ */
+export const FLUSH_HELD_MS = 4_000;
 
 /** How often the silence window is checked. Independent of the mic's frame rate on purpose. */
 const VAD_POLL_MS = 100;
@@ -50,8 +100,18 @@ export interface UseVoiceSessionResult {
   reconnect: () => void;
   /** The recorder is capturing this turn's answer. */
   recording: boolean;
-  /** End the turn now — the manual twin of the VAD, and always offered. */
-  stop: () => void;
+  /**
+   * The server is holding what has been said so far and is waiting for the rest of it — the
+   * candidate paused mid-thought and the turn did not end. Nothing is asserted by it: it is the
+   * last upload's answer, and the room only says so out loud.
+   */
+  holding: boolean;
+  /**
+   * End the recording now. `'final'` ends the TURN with it — the manual twin of the VAD, always
+   * offered, gate never consulted. `'probe'` is the VAD's own stop: the recording ends, the
+   * turn does not, and the server decides which of the two it was.
+   */
+  stop: (reason?: StopReason) => void;
   /** The failure code for this turn, or null. Copy is S10's; the branch is this hook's. */
   error: string | null;
   /** Re-run whichever half failed: the question audio, or the recording. */
@@ -99,6 +159,14 @@ const STATUS_BY_MIC: Record<MicPermissionState, VoiceConnectionStatus> = {
   unavailable: 'lost',
 };
 
+/**
+ * T04 — why a recording stopped, which is the only thing that separates the two paths through
+ * `onstop`. No new PHASE goes with it: a probe keeps `phase === 'listening'`, so the avatar goes
+ * on saying *listening* and the bars go on moving, which is the truth — the room is still the
+ * candidate's. Only a stop that ends the turn reaches `uploading`.
+ */
+type StopReason = 'probe' | 'final';
+
 type Phase = 'idle' | 'speaking' | 'listening' | 'uploading' | 'failed';
 
 const BEAT_BY_PHASE: Record<Phase, VoiceBeat> = {
@@ -129,9 +197,11 @@ export function useVoiceSession(
   const mic = useMicPermission();
   const client = useQueryClient();
   const submitAudio = useSubmitAudioTurn(interviewId ?? '');
+  const submitTurn = useSubmitTurn(interviewId ?? '');
 
   const [phase, setPhase] = useState<Phase>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [holding, setHolding] = useState(false);
 
   const { request: requestMic } = mic;
   const active = enabled && Boolean(interviewId);
@@ -155,6 +225,22 @@ export function useVoiceSession(
   // otherwise upload two seconds of nothing and come back SPEECH_AUDIO_INVALID.
   const heardRef = useRef(false);
   const lastLoudRef = useRef(0);
+  // The quietest level seen since this recorder opened — this room, this microphone, this turn.
+  const floorRef = useRef(VAD_THRESHOLD);
+  // When this recorder opened. The 13 s clock measures from here until something is heard, and
+  // from the last loud frame after that.
+  const turnStartedRef = useRef(0);
+  // Why the recorder stopped, read once in `onstop`.
+  const reasonRef = useRef<StopReason>('final');
+  // Set on the recorder the room is about to throw away: the one re-opened for a probe whose
+  // answer came back conducted, and the one the silence clock closes. Its bytes are dropped
+  // rather than uploaded — the interviewer is about to speak, and an open mic records the TTS.
+  const discardRef = useRef(false);
+  // An upload is in flight. The 13 s clock must not fire underneath one: a probe keeps the phase
+  // on 'listening', so nothing else would stop it.
+  const uploadingRef = useRef(false);
+  // The silence turn is sent once per open recorder, whatever the interval sees afterwards.
+  const silenceSentRef = useRef(false);
   const [attempt, setAttempt] = useState(0);
 
   // What the speak effect actually reacts to: WHICH assistant lines exist, by id, in order.
@@ -203,7 +289,34 @@ export function useVoiceSession(
     srcRef.current = null;
   }, []);
 
-  const startRecording = useCallback(() => {
+  // One branch for every way a submission can come back wrong, because both submissions — the
+  // recorded turn and the silence turn — owe exactly the same reconciliation.
+  const failTurn = useCallback(
+    (err: unknown) => {
+      if (!liveRef.current) return;
+      const code = err instanceof ApiError ? err.code : 'UNKNOWN';
+      if (SILENT.has(code)) {
+        setPhase('idle');
+        return;
+      }
+      if (SERVER_ENDED.has(code)) refetchState();
+      failedAtRef.current = 'answer';
+      setError(code);
+      setPhase('failed');
+    },
+    [refetchState],
+  );
+
+  /** Close the open recorder and throw its bytes away. Nothing is uploaded and nothing is lost. */
+  const discardRecorder = useCallback(() => {
+    const open = recorderRef.current;
+    if (!open) return;
+    discardRef.current = true;
+    recorderRef.current = null;
+    if (open.state !== 'inactive') open.stop();
+  }, []);
+
+  function startRecording() {
     const stream = mic.stream;
     if (!stream || typeof MediaRecorder === 'undefined') {
       failedAtRef.current = 'answer';
@@ -213,7 +326,11 @@ export function useVoiceSession(
     }
 
     heardRef.current = false;
+    floorRef.current = threshold;
     chunksRef.current = [];
+    discardRef.current = false;
+    silenceSentRef.current = false;
+    turnStartedRef.current = Date.now();
     const recorder = new MediaRecorder(stream);
     recorderRef.current = recorder;
 
@@ -222,39 +339,50 @@ export function useVoiceSession(
     };
     recorder.onstop = () => {
       recorderRef.current = null;
+      // A recorder the room already replaced or closed. Its bytes were never a turn.
+      if (discardRef.current) {
+        discardRef.current = false;
+        chunksRef.current = [];
+        return;
+      }
       // Unmounted mid-turn: the bytes are dropped rather than uploaded into a room nobody is in.
       if (!liveRef.current) return;
       const audio = new Blob(chunksRef.current, { type: recorder.mimeType });
       chunksRef.current = [];
-      setPhase('uploading');
+      const probe = reasonRef.current === 'probe';
+      // BEFORE the upload, never after (T04). The round trip is a second of speech, and a
+      // second of speech nobody is recording is the failure this ledger exists to fix, moved
+      // one step later — where it is harder to see, because the room still looks right.
+      if (probe) startRecording();
+      else setPhase('uploading');
+      uploadingRef.current = true;
       // No question named: the utterance may not be an answer at all, and what it advances is
       // the conductor's call (C02). The upload is the whole of what this hook asserts.
       submitAudio
-        .mutateAsync({ audio })
-        .then(() => {
+        .mutateAsync({ audio, force: !probe })
+        .then(({ pendingTurn }) => {
+          uploadingRef.current = false;
           if (!liveRef.current) return;
-          // The interviewer's reply arrives as a new assistant message off the refetch the
-          // mutation triggers, and the speak effect picks it up from there.
+          setHolding(pendingTurn !== null);
+          // Still the candidate's turn: the gate called it unfinished, nothing was conducted,
+          // and the recorder opened a moment ago is already carrying the rest of the sentence.
+          if (pendingTurn !== null) return;
+          // Conducted. Close the mic re-opened for the probe — the interviewer's reply arrives
+          // as a new assistant message off the refetch, and an open mic would record it.
+          discardRecorder();
           setPhase('idle');
         })
         .catch((err: unknown) => {
-          if (!liveRef.current) return;
-          const code = err instanceof ApiError ? err.code : 'UNKNOWN';
-          if (SILENT.has(code)) {
-            setPhase('idle');
-            return;
-          }
-          if (SERVER_ENDED.has(code)) refetchState();
-          failedAtRef.current = 'answer';
-          setError(code);
-          setPhase('failed');
+          uploadingRef.current = false;
+          discardRecorder();
+          failTurn(err);
         });
     };
 
     recorder.start();
     if (mic.muted) recorder.pause();
     setPhase('listening');
-  }, [mic.stream, mic.muted, refetchState, submitAudio]);
+  }
 
   // `startRecording` closes over `submitAudio`, and a react-query mutation result is a NEW
   // object on every render. The meter re-renders this hook once per animation frame, so using
@@ -262,18 +390,31 @@ export function useVoiceSession(
   // cancelling the in-flight audio and then finding nothing pending (the id was marked spoken
   // before the fetch), so nothing ever plays. Read through a ref instead: the effect reacts to
   // the conversation, not to identity churn.
-  const startRecordingRef = useRef(startRecording);
+  // A plain function, not a `useCallback`, since T04 — `onstop` re-opens the recorder by calling
+  // it, so memoising it would make it capture the ref that holds it, and a ref reached through
+  // the closure a hook memoises may not be assigned to. Its identity was never what the room
+  // read anyway: everything below goes through this ref, refreshed on every commit.
+  const startRecordingRef = useRef<(() => void) | null>(null);
   useEffect(() => {
     startRecordingRef.current = startRecording;
-  }, [startRecording]);
+  });
 
-  const stop = useCallback(() => {
+  const stop = useCallback((reason: StopReason = 'final') => {
     const recorder = recorderRef.current;
     if (!recorder || recorder.state === 'inactive') return;
+    reasonRef.current = reason;
     // A paused recorder ignores `stop` in some browsers; resume first so the last chunk lands.
     if (recorder.state === 'paused') recorder.resume();
     recorder.stop();
   }, []);
+
+  // The silence submission goes through `POST /turns`, not the audio route, and reaches it
+  // through a ref for the same reason `startRecording` does: a mutation result is a new object
+  // every render, and the meter renders this hook once per animation frame.
+  const submitTurnRef = useRef(submitTurn);
+  useEffect(() => {
+    submitTurnRef.current = submitTurn;
+  });
 
   // The interviewer's side of the conversation: every assistant line not yet spoken, in order,
   // each fetched from our origin and played once, and then the mic opens. A single turn can
@@ -362,7 +503,7 @@ export function useVoiceSession(
         if (!(await speak(message.id))) return;
         if (cancelled || !liveRef.current) return;
       }
-      startRecordingRef.current();
+      startRecordingRef.current?.();
     })();
 
     return () => {
@@ -384,7 +525,17 @@ export function useVoiceSession(
   // ever is. The recorder then never stops and the turn never uploads.
   useEffect(() => {
     if (phase !== 'listening' || mic.muted) return;
-    if (mic.level < threshold) return;
+    // What this microphone's silence actually measures, learned per recording rather than
+    // assumed. It only ever moves DOWN within a turn, and `startRecording` resets it, so a room
+    // that gets noisier mid-answer cannot desensitise the rest of that answer.
+    const armAt = Math.min(threshold, Math.max(floorRef.current * SPEECH_OVER_FLOOR, VAD_FLOOR));
+    if (mic.level < armAt) {
+      // A level of exactly zero is not a measurement of the room — it is a microphone that is
+      // delivering nothing (muted, suspended, or not yet running). Learning from it would teach
+      // the room that silence is 0 and drop the bar to `VAD_FLOOR` for the rest of the turn.
+      if (mic.level > 0) floorRef.current = Math.min(floorRef.current, mic.level);
+      return;
+    }
     heardRef.current = true;
     lastLoudRef.current = Date.now();
   }, [phase, mic.level, mic.muted, threshold]);
@@ -393,10 +544,45 @@ export function useVoiceSession(
     if (phase !== 'listening' || mic.muted) return;
     const timer = setInterval(() => {
       if (!heardRef.current) return;
-      if (Date.now() - lastLoudRef.current >= silenceMs) stop();
+      // A probe, not the end of the turn: the server's gate decides whether the candidate had
+      // finished, and this window is only how long a pause has to be to be worth asking about.
+      if (Date.now() - lastLoudRef.current >= silenceMs) stop('probe');
     }, VAD_POLL_MS);
     return () => clearInterval(timer);
   }, [phase, mic.muted, silenceMs, stop]);
+
+  // The clock (T04, split by ADR-T06). The turn always ends: the VAD only fires once the candidate has been
+  // heard, so a turn spoken into in the first place is ended by the gate — and one that is never
+  // spoken into at all would otherwise sit open forever, listening to a room nobody is talking
+  // in. The room asserts nothing by sending it (K11); the server reads it as a flush of whatever
+  // it is holding, or as a real silence, and it is the only one that can tell those apart.
+  useEffect(() => {
+    if (phase !== 'listening' || mic.muted) return;
+    const timer = setInterval(() => {
+      if (silenceSentRef.current || uploadingRef.current) return;
+      const since = heardRef.current ? lastLoudRef.current : turnStartedRef.current;
+      if (Date.now() - since < (holding ? FLUSH_HELD_MS : FORCE_SUBMIT_MS)) return;
+      silenceSentRef.current = true;
+      // Nothing was said into this recorder, so there is nothing to transcribe and no STT call
+      // to pay for: the bytes are dropped rather than uploaded.
+      discardRecorder();
+      setPhase('uploading');
+      uploadingRef.current = true;
+      submitTurnRef.current
+        .mutateAsync({ kind: 'silence', inputMode: 'voice' })
+        .then(() => {
+          uploadingRef.current = false;
+          if (!liveRef.current) return;
+          setHolding(false);
+          setPhase('idle');
+        })
+        .catch((err: unknown) => {
+          uploadingRef.current = false;
+          failTurn(err);
+        });
+    }, VAD_POLL_MS);
+    return () => clearInterval(timer);
+  }, [phase, mic.muted, holding, discardRecorder, failTurn]);
 
   // Mute means mute: the recorder stops capturing, it does not merely meter zero.
   useEffect(() => {
@@ -410,13 +596,13 @@ export function useVoiceSession(
   // reconnect are the next action (S07 owns the denial downgrade).
   useEffect(() => {
     if (mic.state === 'granted' || phase !== 'listening') return;
-    stop();
+    stop('final');
   }, [mic.state, phase, stop]);
 
   const retry = useCallback(() => {
     setError(null);
     if (failedAtRef.current === 'answer') {
-      startRecording();
+      startRecordingRef.current?.();
       return;
     }
     // Re-speak just the line that failed: the audio is served from the TTS cache, so this does
@@ -424,13 +610,14 @@ export function useVoiceSession(
     if (failedMessageRef.current) spokenRef.current.delete(failedMessageRef.current);
     failedMessageRef.current = null;
     setAttempt((n) => n + 1);
-  }, [startRecording]);
+  }, []);
 
   // No hot mic, no orphan playback, no recorder left running once the candidate leaves.
   useEffect(() => {
     liveRef.current = true;
     return () => {
       liveRef.current = false;
+      reasonRef.current = 'final';
       recorderRef.current?.stop();
       recorderRef.current = null;
       releasePlayer();
@@ -446,6 +633,7 @@ export function useVoiceSession(
     toggleMute: mic.toggleMute,
     reconnect,
     recording: phase === 'listening',
+    holding,
     stop,
     error,
     retry,

@@ -44,12 +44,45 @@ export function useMicPermission(): UseMicPermission {
 
   const streamRef = useRef<MediaStream | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
+  // Removes the wake-on-gesture listeners, or null when none are armed.
+  const wakeRef = useRef<(() => void) | null>(null);
   const rafRef = useRef<number | null>(null);
   const liveRef = useRef(true);
+
+  /**
+   * A browser creates an `AudioContext` **suspended** unless the page has already had a user
+   * gesture, and a suspended analyser reports pure silence. Nothing looks broken: permission is
+   * granted, the recorder runs, the Stop button shows — and `level` sits at 0 forever, so the
+   * VAD never arms and a spoken turn is never probed. The room listens to a candidate who is
+   * talking and hears nothing.
+   *
+   * A page RELOAD is exactly the no-gesture case, which is why this only ever bit on refresh
+   * (found in a live interview, 2026-08-11). `resume()` is asked for immediately and, when the
+   * browser refuses outright, again on the first thing the candidate touches.
+   */
+  const wake = useCallback((ctx: AudioContext) => {
+    const ask = () => {
+      void ctx.resume?.().catch(() => {});
+    };
+    ask();
+    if (ctx.state !== 'suspended' || typeof window === 'undefined') return;
+
+    const events = ['pointerdown', 'keydown', 'touchstart'] as const;
+    const onGesture = () => {
+      ask();
+      wakeRef.current?.();
+      wakeRef.current = null;
+    };
+    events.forEach((event) => window.addEventListener(event, onGesture));
+    wakeRef.current = () =>
+      events.forEach((event) => window.removeEventListener(event, onGesture));
+  }, []);
 
   const release = useCallback(() => {
     if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
     rafRef.current = null;
+    wakeRef.current?.();
+    wakeRef.current = null;
     audioCtxRef.current?.close().catch(() => {});
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
@@ -64,6 +97,7 @@ export function useMicPermission(): UseMicPermission {
     analyser.fftSize = 256;
     ctx.createMediaStreamSource(stream).connect(analyser);
     audioCtxRef.current = ctx;
+    wake(ctx);
 
     const buf = new Float32Array(analyser.fftSize);
     const tick = () => {
@@ -75,7 +109,7 @@ export function useMicPermission(): UseMicPermission {
       rafRef.current = requestAnimationFrame(tick);
     };
     tick();
-  }, []);
+  }, [wake]);
 
   const request = useCallback(
     async (wanted?: string) => {

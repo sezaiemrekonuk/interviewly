@@ -766,6 +766,55 @@
   font-size: 16px;
 }
 
+/* ------------------------------------------------- the recovery notice (T04) */
+
+/* An informational bed, not a card in the conversation: it is about the room, not part of what
+   was said. Sits under the list rather than in it — see the comment at its render site. */
+.resumed {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  background: var(--primary-soft);
+  border-radius: var(--radius-card);
+}
+
+.resumedLabel {
+  margin: 0;
+  font-family: var(--font-mono), monospace;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--primary-deep);
+}
+
+/* Quoted and italic: these are the candidate's own words as the machine heard them, and they
+   are shown as a quotation rather than as something the room is saying. */
+.resumedText {
+  margin: 0;
+  font-size: 14px;
+  font-style: italic;
+  color: var(--text);
+}
+
+.resumedText::before { content: '“'; }
+.resumedText::after { content: '”'; }
+
+.resumedHint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* The pause line in the control bar. Static text among controls, so it carries no border and no
+   weight — it is the room agreeing that the candidate is still mid-answer. */
+.pauseLine {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
 /* ------------------------------------------------------ written mode (text) */
 
 /* Not the room with the audio off: a written Q&A surface on the light ground, with the

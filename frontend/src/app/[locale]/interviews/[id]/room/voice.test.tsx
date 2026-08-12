@@ -97,6 +97,8 @@ function voiceState(over: Record<string, unknown> = {}) {
     transcript: [],
     messages: OPENING,
     transcriptCursor: 0,
+    // T03 — the half-sentence the server is holding for this question, or null.
+    pendingTurn: null,
     ...over,
   };
 }
@@ -106,6 +108,14 @@ interface Call {
   method: string;
   body: unknown;
 }
+
+/**
+ * Issue #219 — every wait in this file names its own ceiling. The default is 1 000 ms, and the
+ * turn loop this file drives is a chain of a state fetch, a TTS fetch and a mutation: on a
+ * loaded CI runner that chain misses the default window and red-lights a PR that touched
+ * nothing near the room. The number is a timeout, not a delay — a passing run never waits it.
+ */
+const SETTLE = { timeout: 5_000 };
 
 /** C06 — audio is bought per utterance now, so the speech route is keyed by message id. */
 const SPEECH = (id: string) => `/api/interviews/i1/messages/${id}/speech`;
@@ -158,7 +168,7 @@ async function renderRoom() {
   await act(async () => {
     renderWithProviders(<RoomPage />);
   });
-  await screen.findByTestId('interview-room');
+  await screen.findByTestId('interview-room', undefined, SETTLE);
 }
 
 const stateCalls = (calls: Call[]) => calls.filter((c) => c.url === '/api/interviews/i1/state').length;
@@ -259,7 +269,7 @@ describe('interview room, voice mode (W10)', () => {
     await user.type(input, 'Postgres and Redis.');
     await user.click(screen.getByRole('button', { name: messages.room.submit }));
 
-    await waitFor(() => expect(calls.filter((c) => c.url === TURNS)).toHaveLength(1));
+    await waitFor(() => expect(calls.filter((c) => c.url === TURNS)).toHaveLength(1), SETTLE);
     expect(calls.find((c) => c.url === TURNS)?.body).toEqual({
       text: 'Postgres and Redis.',
       inputMode: 'widget',
@@ -311,15 +321,16 @@ describe('interview room, voice mode (W10)', () => {
     await act(async () => {
       MockEventSource.instances[0]?.emit('INTERVIEW_STATE_CHANGED', '{}');
     });
-    await waitFor(() => expect(stateCalls(calls)).toBeGreaterThan(before));
+    await waitFor(() => expect(stateCalls(calls)).toBeGreaterThan(before), SETTLE);
 
-    await waitFor(() =>
-      expect(screen.getByTestId('question-typed')).toHaveTextContent('Explain an index.'),
+    await waitFor(
+      () => expect(screen.getByTestId('question-typed')).toHaveTextContent('Explain an index.'),
+      SETTLE,
     );
     expect(
       screen.getByText(messages.room.progress.replace('{index}', '2').replace('{total}', '8')),
     ).toBeInTheDocument();
-    expect(await screen.findByText('I ship.')).toBeInTheDocument();
+    expect(await screen.findByText('I ship.', undefined, SETTLE)).toBeInTheDocument();
   });
 
   // S05 deleted 'offers a reconnect on a dropped session' with the socket it dropped. The lost
@@ -346,7 +357,7 @@ describe('interview room, voice mode (W10)', () => {
     const calls = stubFetch();
     await renderRoom();
 
-    await waitFor(() => expect(audio.players).toHaveLength(1));
+    await waitFor(() => expect(audio.players).toHaveLength(1), SETTLE);
     // C06 — by message id, not by question index: the greeting, a follow-up and the handover
     // line are all things to say and none of them is a question with an index.
     expect(calls.some((c) => c.url === SPEECH('m3'))).toBe(true);
@@ -359,14 +370,14 @@ describe('interview room, voice mode (W10)', () => {
 
     await act(async () => audio.players[0].end());
 
-    const stop = await screen.findByTestId('voice-stop');
+    const stop = await screen.findByTestId('voice-stop', undefined, SETTLE);
     await act(async () => {
       fireEvent.click(stop);
     });
 
     // A turn, not an answer: the upload names no question, because whether the utterance
     // answered anything is the conductor's call and not this room's.
-    await waitFor(() => expect(calls.filter((c) => c.url === UPLOAD)).toHaveLength(1));
+    await waitFor(() => expect(calls.filter((c) => c.url === UPLOAD)).toHaveLength(1), SETTLE);
     expect(calls.some((c) => c.url === '/api/interviews/i1/answers/audio')).toBe(false);
   });
 
@@ -406,15 +417,15 @@ describe('interview room, voice mode (W10)', () => {
     });
     await renderRoom();
 
-    await waitFor(() => expect(audio.players).toHaveLength(1));
+    await waitFor(() => expect(audio.players).toHaveLength(1), SETTLE);
     await act(async () => audio.players[0].end());
     await act(async () => {
-      fireEvent.click(await screen.findByTestId('voice-stop'));
+      fireEvent.click(await screen.findByTestId('voice-stop', undefined, SETTLE));
     });
 
     // S10: the room's own copy per code, not the generic `errors` string.
     expect(
-      await screen.findByText(messages.room.voice.failure.SPEECH_AUDIO_INVALID),
+      await screen.findByText(messages.room.voice.failure.SPEECH_AUDIO_INVALID, undefined, SETTLE),
     ).toBeInTheDocument();
 
     await act(async () => {
@@ -423,8 +434,46 @@ describe('interview room, voice mode (W10)', () => {
 
     // Retry re-records the same turn rather than re-buying the line's audio: the upload is the
     // half that failed, and re-speaking `m3` would charge TTS twice for one question.
-    await waitFor(() => expect(screen.getByTestId('voice-stop')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('voice-stop')).toBeInTheDocument(), SETTLE);
     expect(audio.players).toHaveLength(1);
+  });
+
+  // T04 / ADR-T05 — the reload case. The notice means "this is what survived", not "this is
+  // what the server holds now": it is read once on mount and frozen, so the probes that extend
+  // the held text while the candidate keeps talking cannot rewrite it under them.
+  it('shows the held partial once after a reload, frozen, and drops it once conducted', async () => {
+    const calls = stubFetch({
+      states: [
+        voiceState({ pendingTurn: 'I was in the middle of saying' }),
+        voiceState({ pendingTurn: 'I was in the middle of saying that the migration' }),
+        voiceState({ pendingTurn: null }),
+      ],
+    });
+    await renderRoom();
+
+    const notice = await screen.findByTestId('turn-resumed', undefined, SETTLE);
+    expect(notice).toHaveTextContent('I was in the middle of saying');
+    // Outside the conversation list, which is the only place a screen-reader user meets the
+    // interviewer at all — a partial that regrew inside it would talk over them (AC-13) — and
+    // outside the conversation PANEL, which voice mode keeps closed and therefore clipped. The
+    // first version of this satisfied AC-13 and was invisible to the candidate it is for.
+    const panel = screen.getByTestId('conversation');
+    expect(panel.contains(notice)).toBe(false);
+    expect(panel.getAttribute('data-open')).toBe('false');
+    expect(screen.getByTestId('voice-controls').parentElement!.contains(notice)).toBe(true);
+
+    const before = stateCalls(calls);
+    await act(async () => {
+      MockEventSource.instances[0]?.emit('INTERVIEW_STATE_CHANGED', '{}');
+    });
+    await waitFor(() => expect(stateCalls(calls)).toBeGreaterThan(before), SETTLE);
+
+    expect(screen.getByTestId('turn-resumed')).not.toHaveTextContent('the migration');
+
+    await act(async () => {
+      MockEventSource.instances[0]?.emit('INTERVIEW_STATE_CHANGED', '{}');
+    });
+    await waitFor(() => expect(screen.queryByTestId('turn-resumed')).not.toBeInTheDocument(), SETTLE);
   });
 
   it('releases the microphone when the room unmounts', async () => {
@@ -433,8 +482,8 @@ describe('interview room, voice mode (W10)', () => {
     await act(async () => {
       ({ unmount } = renderWithProviders(<RoomPage />));
     });
-    await screen.findByTestId('interview-room');
-    await waitFor(() => expect(mics.tracks).toHaveLength(1));
+    await screen.findByTestId('interview-room', undefined, SETTLE);
+    await waitFor(() => expect(mics.tracks).toHaveLength(1), SETTLE);
 
     act(() => unmount());
 

@@ -198,6 +198,16 @@ export function VoiceControls({
       <div className={styles.bar} data-testid="voice-controls">
         <TimeRemaining expiresAt={expiresAt} />
 
+        {/* T04 — the recorder stopped on a pause, the turn did not. Said plainly, because the
+            bars alone cannot distinguish "still listening" from "listening again", and a
+            candidate who thinks the pause cost them their sentence starts it over. No live
+            region: it is a state of the room, and the interviewer's words own the announcing. */}
+        {session.recording && session.holding ? (
+          <p className={styles.pauseLine} data-testid="voice-holding">
+            {t('voice.stillListening')}
+          </p>
+        ) : null}
+
         {/* The VAD is a convenience; this is the enforcement the candidate has (ADR-S06). */}
         {session.recording ? (
           <Button type="button" onClick={() => session.stop()} data-testid="voice-stop">

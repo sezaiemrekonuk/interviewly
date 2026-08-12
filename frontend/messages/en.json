@@ -525,6 +525,11 @@
       "stop": "Stop and send",
       "micLost": "Your microphone stopped. Reconnect it to keep answering by voice.",
       "reconnect": "Reconnect",
+      "resumed": {
+        "label": "Picking up where you left off",
+        "hint": "Keep going — this part is already saved."
+      },
+      "stillListening": "Still listening — take your time.",
       "status": {
         "connecting": "Connecting",
         "connected": "Live",

@@ -113,6 +113,12 @@ to a `notIn` must keep that branch intact or the entire candidate side of the ro
 
 ### The room (T04)
 
+**Patched after T04 shipped — the line numbers below are pre-T04 and the hook grew ~200 lines.**
+Grep the symbol, not the line. What is new in it: `stop(reason: 'probe' \| 'final')`,
+`FORCE_SUBMIT_MS`, `holding`, the `discardRef`/`uploadingRef`/`silenceSentRef`/`turnStartedRef`
+quartet, and `startRecording` as a **plain function** (memoising it breaks
+`react-hooks/immutability` — see T04's Notes).
+
 | What | Where |
 |---|---|
 | `VAD_SILENCE_MS` / `VAD_THRESHOLD` / poll | `use-voice-session.ts:32-36` |

@@ -22,6 +22,7 @@ const session = (overrides: Partial<UseVoiceSessionResult> = {}): UseVoiceSessio
   toggleMute: vi.fn(),
   reconnect: vi.fn(),
   recording: false,
+  holding: false,
   stop: vi.fn(),
   error: null,
   retry: vi.fn(),
@@ -311,5 +312,49 @@ describe('VoiceControls input picker', () => {
 
     expect(screen.getByRole('option', { name: 'Microphone 1' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Microphone 2' })).toBeInTheDocument();
+  });
+});
+
+/**
+ * T04 — the pause line. The recorder is still open and the server is holding what was said so
+ * far; the strip says so rather than leaving a candidate mid-thought to guess whether anything
+ * is being kept. Static: it is a state of the room, not an announcement, and the interviewer's
+ * words are the only thing in this room worth a live region.
+ */
+describe('VoiceControls pause line (T04)', () => {
+  const renderWith = (over: Partial<UseVoiceSessionResult>) =>
+    render(
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <VoiceControls
+          session={session(over)}
+          expiresAt={null}
+          captionsOn
+          onToggleCaptions={vi.fn()}
+          cameraOn={false}
+          onToggleCamera={vi.fn()}
+          cameras={[]}
+          cameraId={null}
+          onSelectCamera={vi.fn()}
+          transcriptOpen={false}
+          onToggleTranscript={vi.fn()}
+        />
+      </NextIntlClientProvider>,
+    );
+
+  it('says the room is still listening while a fragment is held', () => {
+    renderWith({ recording: true, holding: true });
+
+    const line = screen.getByTestId('voice-holding');
+    expect(line).toHaveTextContent(messages.room.voice.stillListening);
+    expect(line).not.toHaveAttribute('aria-live');
+    expect(line).not.toHaveAttribute('role');
+  });
+
+  it('says nothing when the turn is not paused mid-thought', () => {
+    renderWith({ recording: true, holding: false });
+    expect(screen.queryByTestId('voice-holding')).not.toBeInTheDocument();
+
+    renderWith({ recording: false, holding: true });
+    expect(screen.queryByTestId('voice-holding')).not.toBeInTheDocument();
   });
 });

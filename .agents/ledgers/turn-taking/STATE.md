@@ -1,14 +1,20 @@
 # Turn-taking — State
 
 Last updated: 2026-08-11
-Last session ended: **`T03` done (Ahmet, 2026-08-11, opus-5).** The gate, the buffer and the
-silence turn are wired: `stt.ts` `submitTurnAudio`, `conductor.ts` (`kind`, the silence row, both
-ceilings), `turns.ts`, `state.ts` (`pendingTurn`, the widened filter), `peekPendingTurn` on T02's
-module. **The ledger was wrong that no migration was needed** — `chat_messages.action` is the
-`ConductorAction` enum, so `20260811120000_conductor_silence` adds the value the C07 way;
-REFERENCE.md is patched and the task's Notes say the rest.
-**`T04` is now unblocked** and is the last row. It consumes `pendingTurn` and `kind: 'silence'`;
-the wire contract is at the top of T03's `## Notes` and is the only thing T04 needs from here.
+Last session ended: **`T04`, `T05`, `T06`, `T08` done (Ahmet, 2026-08-11/12, opus-5).**
+**`T08` is the one that was actually wrong all along.** `VAD_THRESHOLD = 0.05` is a loud voice on
+a close microphone; the owner's mic never reached it, so `heardRef` never armed, **no audio was
+ever uploaded in four live runs**, nothing was ever held, and the recovery notice had nothing to
+show. ADR-T07 arms on `min(threshold, max(floor × 3, 0.01))` against the room's own measured
+floor instead. T06 (the `AudioContext` was never resumed) and T05 (the gate held three of four
+finished answers) were both real and neither was the complaint the owner kept reporting.
+**First working live run, 2026-08-12 05:21–05:23** — six uploads, fragments joined
+111 → 192 → 207, the 4 s flush conducted them at 05:22:25 (a conductor turn with no STT line
+before it), prompt v2 forwarded a 336-char answer as finished, and the interview advanced. The
+gate held 4 of 6; three of those were correct mid-answer pauses, the fourth ended the answer and
+was not. Still unexercised: the recovery notice (nobody has refreshed since it became reachable)
+and the 13 s silent-turn path.
+`T07` is the remaining known gap: speech spoken before the first probe dies with the page.
 
 **The gate costs 780 ms, measured (2026-08-11).** `gpt-4.1-nano`, warm median over n=5, min 556,
 max 887 — which confirms ADR-T03's 3 s timeout as a ceiling rather than a target. It is a real
@@ -31,8 +37,10 @@ EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**`T04`** — the last row, and the only one that edits the room. It is where issue #219's flaky
-`voice.test.tsx` timing gets rewritten, and it is what speech-latency `L02`/`L03` wait on.
+**`T07`** — the last thing the owner reported that is still true: refresh mid-sentence, with no
+pause anywhere in it, and the words are gone. `T06` fixed the case where a pause had happened.
+Everything else in the ledger is `done` and two things are **unverified against a live model** —
+`T05`'s prompt v2 and its 4 s flush, neither of which the second live run reached.
 
 ## Ledger
 
@@ -41,11 +49,15 @@ EXECUTE.md § 4 and continue with what it gives you.
 | T01 | The completeness gate: prompt, schema, seam method, chainless, fail-open | | done | C02, I02 |
 | T02 | The held partial: `pending-turn.ts`, atomic take, the two caps | | done | F03, S03 |
 | T03 | Turn paths: gate + join + hold, the silence turn, `pendingTurn` on `/state` | | done | T01, T02, C01, C02 |
-| T04 | The room: probe-vs-final stop, the 13 s clock, the recovery notice | | todo | T03, S06 |
+| T04 | The room: probe-vs-final stop, the 13 s clock, the recovery notice | | done | T03, S06 |
+| T05 | Gate accuracy: two clocks (4 s held / 13 s silent) and prompt v2 | | done | T04 |
+| T06 | The suspended `AudioContext`: a reloaded room measured nothing and never probed | | done | T04 |
+| T07 | Speech spoken before the first probe still dies with the page | | todo | T06 |
+| T08 | The VAD never heard the candidate: arm against the noise floor (ADR-T07) | | done | T06 |
 
 ## Dependency graph
 
-T01 ∥ T02 → T03 → T04. Nothing else in the project waits on any of them.
+T01 ∥ T02 → T03 → T04 → T05, and T04 → T06 → (T07 ∥ T08). Nothing else in the project waits on any of them.
 
 `T01` and `T02` are deliberately independent so two sessions can run them in parallel without
 touching the same files. `T03` is the only task that edits `conductor.ts` and `state.ts`; `T04`
@@ -61,8 +73,9 @@ docker compose up -d db cache
 cd backend && npx prisma generate && npx prisma migrate deploy
 ```
 
-No migration is added by this ledger. `chat_messages.action` already exists and already carries
-free-text values (`continue`, `drift`, `refused`); `silence` joins them without a schema change.
+One migration is added by this ledger, at T03: `20260811120000_conductor_silence`, one
+`ALTER TYPE … ADD VALUE 'silence'` on the `ConductorAction` enum. The "no migration" line this
+paragraph used to carry was wrong; see T03's Notes.
 
 `REDIS_URL` must be set and reachable for `T02` onward — the held partial has no in-memory
 fallback, and the acceptance suite must run against a throwaway Redis rather than a shared one
@@ -86,7 +99,12 @@ All of the above are `done`.
 
 ## Cross-ledger dependencies (this ledger blocks)
 
-**None.** No other ledger cites a `T0x` task.
+| Ledger task | Waits on | For |
+|---|---|---|
+| L02 | T03 | the turn path it moves the seconds inside of |
+| L03 | T04 | `VAD_SILENCE_MS`, revisited once the gate's accuracy is known |
+
+Both are `todo` and both are now unblocked.
 
 ## Supersession
 
@@ -106,11 +124,27 @@ assumed: the held partial is not durable and is not the conversation. ADR-C01 is
   `providers.ts`, passed by `LiveAiClient.turnComplete` as `call`'s optional `chainFor`. If a
   second prompt ever needs it, this should become a field on the prompt YAML rather than a
   second special case in `live-client.ts`.
-- **[T04] Issue #219 (flaky voice turn-loop test) is folded into T04.** `voice.test.tsx` races a
-  real 1 000 ms `waitFor` and red-lights PRs that touch nothing near the room; T04 rewrites every
-  timing assertion in that file anyway. If T04 slips, the standalone fix is one line —
-  `testTimeout` in `frontend/vitest.config.mts` — and is worth doing alone: a red `unit` job that
-  does not mean "you broke something" is how red builds start getting ignored.
+- **[T04] ~~Issue #219~~ closed.** Every `waitFor`/`findBy` in `voice.test.tsx` now carries an
+  explicit 5 s `SETTLE` ceiling instead of inheriting the 1 000 ms default. Nothing was moved to
+  fake timers there — the file drives real `userEvent`, and the hook's own T04 tests are where
+  the clock is faked.
+- **[T04] `holding` has one source and the notice has another.** The pause line reads the last
+  upload's `pendingTurn` (hook state); the recovery notice reads `GET /state` once at mount. So a
+  candidate who reloads mid-pause sees the notice but no pause line until they speak again. It is
+  the cheap correct version — seeding the hook from `/state` means two sources for one fact —
+  but if the pause line is ever wanted on that first breath, that is the seam.
+- **[T06] The meter is the VAD's only sense, and it fails silently.** A suspended `AudioContext`
+  reported 0 rather than an error, and every layer above it — permission, recorder, Stop button —
+  looked healthy. There is still no signal for "the room has been listening for N seconds and has
+  measured nothing but zero", which is the shape of this whole class of bug. A `VOICE_METER_DEAD`
+  warning after, say, 5 s of `phase === 'listening'` with a peak level of exactly 0 would have
+  turned two live interviews into one log line.
+- **[T08] No test in this repo can hear anything.** Four causes of one complaint shipped past a
+  green suite because every audio path is stubbed: jsdom has no `AudioContext`, no
+  `MediaRecorder` and no microphone, so a threshold that is too high, a context that is asleep
+  and a notice rendered inside a clipped panel all look identical to a passing test. What would
+  have caught every one of them is a single manual pass with a real microphone, which is now the
+  last section of every task file in this ledger.
 - **[T02] The held partial has no in-memory fallback.** Redis down means every fragment is gated
   alone — correct, but silently more expensive and more interrupt-prone. There is no metric for
   it yet.
@@ -126,9 +160,12 @@ assumed: the held partial is not durable and is not the conversation. ADR-C01 is
   seconds, including the one number this ledger has a claim on: `VAD_SILENCE_MS`, which `L03`
   shortens once `T04` has shipped and the gate's accuracy is known. ADR-T01 made that argument;
   `L03` is where it gets followed through.
-- **Gate accuracy telemetry on Turkish** (spec Open question 1). Log verdicts against fragment
-  length now; promote a tuning task only once there is data showing the error rate.
-- **`FORCE_SUBMIT_MS` to config.** 13 s is a guess like the 2 s before it. Promote when a real
-  candidate says it is wrong, not on principle.
+- **Gate accuracy telemetry on Turkish** (spec Open question 1). Logging shipped in `T05`; the
+  **first data point** is 4 holds in 6 gated uploads (2026-08-12), of which one hold was wrong —
+  it ended an answer by timing out rather than by a verdict. Promote a tuning task when there are
+  enough runs to say whether that is the prompt, the model, or Turkish. One interview is not.
+- ~~**`FORCE_SUBMIT_MS` to config.**~~ **Promoted to `T05` 2026-08-11.** The stated trigger fired:
+  the owner ran the room and said 13 s was wrong. It is still not config — ADR-T06 splits it into
+  two constants instead, because the two situations wanted different numbers, not a knob.
 - **Rate limits on `/turns/audio`.** Each fragment is a paid STT call, and a turn can now make
   several. Fold into issue #120's existing gap-class task rather than opening a parallel one.
