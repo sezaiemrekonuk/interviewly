@@ -8,8 +8,6 @@
  * NOT part of `npm test` — needs Postgres. Same as `consumer.integration.test.ts`:
  *
  *   docker compose -f compose.yaml -f compose.dev.yaml up -d db cache
- *   export DATABASE_URL=postgresql://interviewly:interviewly@localhost:5432/interviewly
- *   export REDIS_URL=redis://localhost:6380
  *   npm run test:integration
  */
 import { randomUUID } from 'node:crypto';

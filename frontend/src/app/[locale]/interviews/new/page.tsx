@@ -2,7 +2,7 @@
 
 import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { Suspense, useState, type ReactNode } from 'react';
+import { Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { CvNotice } from '../../../../components/setup/cv-notice';
 import { ListingUpload } from '../../../../components/setup/listing-upload';
@@ -18,7 +18,7 @@ import { Button, Field, Input } from '../../../../components/ui';
 import { Link, useRouter } from '../../../../i18n/navigation';
 import { DEFAULT_LANDING_PATH } from '../../../../lib/auth-redirect';
 import { routeForError } from '../../../../lib/error-routing';
-import { useCreateInterview, useSubmitProfile } from '../../../../lib/query';
+import { useCaptureJobListing, useCreateInterview, useSubmitProfile } from '../../../../lib/query';
 import { useErrorMessage } from '../../../../lib/use-error-message';
 import { useRequireAuth } from '../../../../lib/use-require-auth';
 
@@ -132,15 +132,29 @@ function InterviewSetup() {
   const errorMessage = useErrorMessage();
   const create = useCreateInterview();
   const submitProfile = useSubmitProfile();
+  const captureJobListing = useCaptureJobListing();
+
+  const prefill = unescapeText(params.get('prefill') ?? '');
+  const jobTitle = params.get('jobTitle') ?? '';
+  const jobCompany = params.get('jobCompany') ?? '';
+  const externalJobId = params.get('jobId') ?? '';
 
   const [mode, setMode] = useState<'text' | 'voice'>('voice');
   const [durationKey, setDurationKey] = useState<DurationKey>('full');
   const [lengthKey, setLengthKey] = useState<LengthKey>('medium');
   const [customHr, setCustomHr] = useState('4');
   const [customTech, setCustomTech] = useState('6');
-  const [jobText, setJobText] = useState(() => unescapeText(params.get('prefill') ?? ''));
+  const [jobText, setJobText] = useState(() => prefill);
   const [uploadId, setUploadId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+
+  const captured = useRef(false);
+  useEffect(() => {
+    if (!user || captured.current) return;
+    if (!prefill || !jobTitle || !jobCompany || !externalJobId) return;
+    captured.current = true;
+    captureJobListing.mutate({ externalJobId, jobTitle, jobCompany, jobText: prefill });
+  }, [user, prefill, jobTitle, jobCompany, externalJobId, captureJobListing]);
 
   if (loading || !user) return null;
 

@@ -75,6 +75,7 @@ export {
   candidateVars,
   conductVars,
   listingVars,
+  mayProbe,
   questionVars,
   reportVars,
   scoreVars,

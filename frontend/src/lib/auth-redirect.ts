@@ -24,6 +24,6 @@ export function safeReturnPath(candidate: string | null | undefined): string {
 }
 
 /** The path an unauthenticated visitor is sent to, preserving where they were headed. */
-export function signInPathFor(pathname: string): string {
-  return `/sign-in?returnPath=${encodeURIComponent(pathname)}`;
+export function signInPathFor(pathname: string, search = ''): string {
+  return `/sign-in?returnPath=${encodeURIComponent(`${pathname}${search}`)}`;
 }

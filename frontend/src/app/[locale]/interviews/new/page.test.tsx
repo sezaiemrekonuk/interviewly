@@ -37,6 +37,7 @@ function stubFetch(
     createStatus?: number;
     createBody?: unknown;
     profileStatus?: number;
+    jobListingStatus?: number;
     uploadBody?: unknown;
     /** The account's CV, which the block above the listing reads. Null is "not attached". */
     cv?: { id: string; filename: string; mime: string; sizeBytes: number; uploadedAt: string } | null;
@@ -65,6 +66,12 @@ function stubFetch(
     // I11 answers a listing with the text it parsed out of the PDF.
     if (url === '/api/uploads') {
       return json(201, options.uploadBody ?? { uploadId: 'up1', text: 'Backend engineer, Go' });
+    }
+    if (url === '/api/interviews/job-listings') {
+      const status = options.jobListingStatus ?? 204;
+      return status === 204
+        ? new Response(null, { status })
+        : json(status, { error: { code: 'VALIDATION_ERROR' } });
     }
     if (url === '/api/interviews') {
       return json(
@@ -409,5 +416,72 @@ describe('interview setup page (W05)', () => {
     expect(screen.getByLabelText(messages.setup.listingPaste)).toHaveValue(
       'Backend engineer\n\nGo, Postgres',
     );
+  });
+
+  describe('the extension landing is captured on arrival', () => {
+    const landing = (overrides: Record<string, string | null> = {}) => {
+      const params: Record<string, string> = {
+        prefill: 'Backend engineer\\n\\nGo, Postgres',
+        jobTitle: 'Backend Engineer',
+        jobCompany: 'Acme',
+        jobId: '4242',
+      };
+      for (const [key, value] of Object.entries(overrides)) {
+        if (value === null) delete params[key];
+        else params[key] = value;
+      }
+      return new URLSearchParams(params).toString();
+    };
+
+    const captures = (calls: Call[]) => calls.filter((c) => c.url === '/api/interviews/job-listings');
+
+    it('writes exactly one row for the four params, without waiting for a create', async () => {
+      nav.search = landing();
+      const calls = stubFetch();
+      await renderSetup();
+
+      await waitFor(() => expect(captures(calls)).toHaveLength(1));
+      expect(captures(calls)[0].method).toBe('POST');
+      expect(captures(calls)[0].body).toEqual({
+        externalJobId: '4242',
+        jobTitle: 'Backend Engineer',
+        jobCompany: 'Acme',
+        jobText: 'Backend engineer\n\nGo, Postgres',
+      });
+      expect(calls.filter((c) => c.url === '/api/interviews')).toHaveLength(0);
+    });
+
+    it.each(['prefill', 'jobTitle', 'jobCompany', 'jobId'])(
+      'captures nothing when %s is missing',
+      async (missing) => {
+        nav.search = landing({ [missing]: null });
+        const calls = stubFetch();
+        await renderSetup();
+
+        expect(captures(calls)).toHaveLength(0);
+      },
+    );
+
+    it('captures nothing when a param is present but blank', async () => {
+      nav.search = landing({ jobCompany: '' });
+      const calls = stubFetch();
+      await renderSetup();
+
+      expect(captures(calls)).toHaveLength(0);
+    });
+
+    it('leaves the setup flow untouched when the capture is refused', async () => {
+      nav.search = landing();
+      const calls = stubFetch({ jobListingStatus: 422 });
+      const user = userEvent.setup();
+      await renderSetup();
+
+      await waitFor(() => expect(captures(calls)).toHaveLength(1));
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: messages.setup.start }));
+
+      await waitFor(() => expect(nav.push).toHaveBeenCalledWith('/interviews/i1/pre-join'));
+    });
   });
 });

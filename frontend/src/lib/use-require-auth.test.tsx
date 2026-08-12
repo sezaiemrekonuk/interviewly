@@ -45,6 +45,7 @@ describe('useRequireAuth', () => {
   beforeEach(() => {
     nav.replace.mockReset();
     nav.pathname = '/interviews/abc';
+    window.history.replaceState({}, '', '/interviews/abc');
   });
 
   afterEach(() => {
@@ -58,6 +59,20 @@ describe('useRequireAuth', () => {
 
     await waitFor(() =>
       expect(nav.replace).toHaveBeenCalledWith('/sign-in?returnPath=%2Finterviews%2Fabc'),
+    );
+  });
+
+  it('keeps the query string, so an extension landing is not stripped to its pathname', async () => {
+    nav.pathname = '/interviews/new';
+    window.history.replaceState({}, '', '/interviews/new?prefill=Backend&jobId=4242');
+    stubFetch(401, { error: { code: 'UNAUTHENTICATED' } });
+
+    render();
+
+    await waitFor(() =>
+      expect(nav.replace).toHaveBeenCalledWith(
+        '/sign-in?returnPath=%2Finterviews%2Fnew%3Fprefill%3DBackend%26jobId%3D4242',
+      ),
     );
   });
 

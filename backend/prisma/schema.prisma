@@ -207,6 +207,7 @@ model User {
   interviews   Interview[]
   uploads      Upload[]     @relation("UploadOwner")
   audit_logs   AuditLog[]
+  job_listings JobListing[]
 
   @@map("users")
 }
@@ -554,4 +555,19 @@ model LlmCall {
   @@index([interview_id, created_at])
   @@index([created_at])
   @@map("llm_calls")
+}
+
+model JobListing {
+  id              String   @id @default(cuid())
+  user_id         String
+  external_job_id String
+  job_title       String
+  job_company     String
+  job_text        String
+  created_at      DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Restrict)
+
+  @@unique([user_id, external_job_id])
+  @@map("job_listings")
 }

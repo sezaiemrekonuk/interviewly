@@ -8,7 +8,9 @@
  * question early, or ends on a first-turn injection, still returns 200 and still produces a
  * report; nothing goes red.
  */
+import type { ConductTurnArgs } from '@interviewly/ai';
 import type { Interview } from '@prisma/client';
+import { conductVars } from '@interviewly/ai';
 import { describe, expect, it } from 'vitest';
 
 import { __testing, turnInputSchema } from './conductor';
@@ -131,16 +133,39 @@ describe('clampAction', () => {
     expect(clampAction(interview({ current_index: 3 }), { action: 'next_question' }, CLAMP_CTX).refusal).toBeNull();
   });
 
-  it('drifts when the per-question ceiling is spent and the interviewer wants to stay', () => {
-    const spent = { turnsLeftOnQuestion: 0, turnsOnQuestion: 4, traceId: 't1' };
-    expect(clampAction(interview({ current_index: 3 }), { action: 'continue' }, spent).action).toBe('drift');
+  it.each([1, 0])(
+    'drifts with %i turns left when the interviewer wants to stay on the question',
+    (turnsLeftOnQuestion) => {
+      const spent = { turnsLeftOnQuestion, turnsOnQuestion: 2, traceId: 't1' };
+      expect(clampAction(interview({ current_index: 3 }), { action: 'continue' }, spent).action).toBe('drift');
+    },
+  );
+
+  it('offers continue on exactly the turns the drift guard will honour it on', () => {
+    for (const turnsLeftOnQuestion of [3, 2, 1, 0]) {
+      const offered = String(
+        conductVars({
+          remainingTopics: [],
+          conversation: [],
+          mayHandOver: false,
+          mayEnd: false,
+          turnsLeftOnQuestion,
+        } as unknown as ConductTurnArgs).allowedActions,
+      ).split(', ');
+      const honoured = clampAction(
+        interview({ current_index: 3 }),
+        { action: 'continue' },
+        { turnsLeftOnQuestion, turnsOnQuestion: 1, traceId: 't1' },
+      ).action;
+      expect(offered.includes('continue')).toBe(honoured === 'continue');
+    }
   });
 
   it('does not drift over an action that is already leaving the question', () => {
     // Drift exists to stop an interviewer circling one question. Rewriting an end or a
     // handover into a forced advance would override a decision that already moves on — and
     // would resurrect an interview the interviewer had just ended.
-    const spent = { turnsLeftOnQuestion: 0, turnsOnQuestion: 4, traceId: 't1' };
+    const spent = { turnsLeftOnQuestion: 1, turnsOnQuestion: 2, traceId: 't1' };
     const at = interview({ current_index: 3 });
     expect(clampAction(at, { action: 'next_question' }, spent).action).toBe('next_question');
     expect(clampAction(at, { action: 'handover' }, spent).action).toBe('handover');

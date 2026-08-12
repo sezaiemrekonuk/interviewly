@@ -59,3 +59,10 @@ export const uploadLimiter = keyedLimiter({
   windowMs: 60 * 60 * 1000,
   keyOf: byUser,
 });
+
+export const jobListingLimiter = keyedLimiter({
+  prefix: 'joblisting',
+  limit: 60,
+  windowMs: 60 * 60 * 1000,
+  keyOf: byUser,
+});

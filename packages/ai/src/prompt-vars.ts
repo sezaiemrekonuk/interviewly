@@ -48,6 +48,7 @@ export function reportVars(args: GenerateReportArgs): Record<string, unknown> {
     language: args.language,
     perAnswerScores: args.perAnswerScores ? JSON.stringify(args.perAnswerScores) : 'none',
     transcript: args.transcript,
+    jobListing: args.jobListing,
     candidateProfile: args.candidateProfile,
     candidateCv: args.candidateCv,
     endedReason: args.endedReason,
@@ -133,6 +134,10 @@ function formatConversation(turns: ConductTurnArgs['conversation']): string {
   return turns.map((t) => `${speaker[t.role]}: ${t.content}`).join('\n\n');
 }
 
+export function mayProbe(turnsLeftOnQuestion: number): boolean {
+  return turnsLeftOnQuestion > 1;
+}
+
 /**
  * The guards, stated to the model as well as enforced by the server. Enforcement alone would
  * be enough for correctness and produces a worse interview: an interviewer that keeps trying
@@ -147,8 +152,9 @@ function allowedActions(args: ConductTurnArgs): string[] {
   // cut off mid-clarification — the interviewer asks one more probe, the server overrules it,
   // and the round reads as a skip. Taking it off the list makes the interviewer close the
   // question in its own words instead, which is the same advance without the seam.
-  const actions =
-    args.turnsLeftOnQuestion <= 1 ? ['next_question'] : ['continue', 'next_question', 'show_widget'];
+  const actions = mayProbe(args.turnsLeftOnQuestion)
+    ? ['continue', 'next_question', 'show_widget']
+    : ['next_question'];
   if (args.mayHandOver) actions.push('handover');
   if (args.mayEnd) actions.push('end_interview');
   return actions;

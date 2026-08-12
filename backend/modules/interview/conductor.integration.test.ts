@@ -21,8 +21,6 @@
  * job, so Redis too:
  *
  *   docker compose -f compose.yaml -f compose.dev.yaml up -d db cache
- *   export DATABASE_URL=postgresql://interviewly:interviewly@localhost:5432/interviewly
- *   export REDIS_URL=redis://localhost:6380
  *   npm run test:integration
  */
 import { randomUUID } from 'node:crypto';
@@ -529,16 +527,19 @@ it('speaks the row it lands on when the provider is unreachable (C05 fallback)',
 }, 30_000);
 
 // The defect this prevents: taking the last message as the answer. A candidate who builds an
-// answer over three turns ends on "…yeah, that's basically it", and that is what the report
+// answer across the follow-up ends on "…so now I rehearse them", and that is what the report
 // would have scored.
+//
+// Two utterances, not three: ADR-ADD12 spends the per-question budget on one follow-up, so a
+// third would be drifted onto the next question and this file's stale `{ ...interview }`
+// snapshot would fail the advance CAS instead of the assertion below.
 it('stores the whole answer window, not the last utterance (C01)', async () => {
   const { interview, hr } = await seed({ index: 1 });
   await greet(interview, hr[0]);
 
-  const said = ['We shipped it two weeks late.', 'The migration had not been rehearsed.', 'So now I rehearse them.'];
+  const said = ['We shipped it two weeks late.', 'The migration had not been rehearsed. So now I rehearse them.'];
   await turn(interview, said[0], { say: 'What went wrong exactly?', action: 'continue' });
-  await turn(interview, said[1], { say: 'And since?', action: 'continue' });
-  await turn(interview, said[2], { say: 'Understood. Next question.', action: 'next_question' });
+  await turn(interview, said[1], { say: 'Understood. Next question.', action: 'next_question' });
 
   const answers = await answersFor(hr[0].id);
   expect(answers).toHaveLength(1);
@@ -599,7 +600,10 @@ describe('the silence turn (T03)', () => {
     await greet(interview, hr[0]);
     const nudge: ConductorTurn = { say: 'Anything at all?', action: 'continue' };
 
-    for (let i = 0; i < config.CONDUCTOR_MAX_TURNS_PER_QUESTION; i += 1) {
+    // `MAX - 1`, because that is where the drift now fires (ADR-ADD12: `mayProbe` is false at one
+    // turn left, not zero). Spending the whole `MAX` would advance on the second-to-last silence
+    // and the last one would then fail the CAS on this file's stale interview snapshot.
+    for (let i = 0; i < config.CONDUCTOR_MAX_TURNS_PER_QUESTION - 1; i += 1) {
       await silence(interview, nudge);
     }
 

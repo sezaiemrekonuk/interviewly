@@ -15,6 +15,11 @@ describe('safeReturnPath', () => {
     expect(safeReturnPath('/interviews?tab=reports')).toBe('/interviews?tab=reports');
   });
 
+  it('keeps the extension landing whole, query and all', () => {
+    const landing = '/interviews/new?prefill=Backend%20engineer&jobTitle=Backend&jobCompany=Acme&jobId=4242';
+    expect(safeReturnPath(landing)).toBe(landing);
+  });
+
   it('falls back when nothing was requested', () => {
     expect(safeReturnPath(null)).toBe(DEFAULT_LANDING_PATH);
     expect(safeReturnPath(undefined)).toBe(DEFAULT_LANDING_PATH);
@@ -30,6 +35,8 @@ describe('safeReturnPath', () => {
     '/\\evil.example/phish',
     'javascript:alert(1)',
     'evil.example',
+    '//evil.example/phish?prefill=x',
+    '/\\evil.example/phish?prefill=x',
   ])('refuses %s', (hostile) => {
     expect(safeReturnPath(hostile)).toBe(DEFAULT_LANDING_PATH);
   });
@@ -39,5 +46,14 @@ describe('signInPathFor', () => {
   it('encodes the path so query and hash cannot break out of the parameter', () => {
     expect(signInPathFor('/interviews/abc')).toBe('/sign-in?returnPath=%2Finterviews%2Fabc');
     expect(signInPathFor('/a?b=c#d')).toBe('/sign-in?returnPath=%2Fa%3Fb%3Dc%23d');
+  });
+
+  it('carries the search string, so an extension landing survives sign-in', () => {
+    const path = signInPathFor('/interviews/new', '?prefill=Backend&jobId=4242');
+
+    expect(path).toBe('/sign-in?returnPath=%2Finterviews%2Fnew%3Fprefill%3DBackend%26jobId%3D4242');
+    expect(new URLSearchParams(path.slice(path.indexOf('?'))).get('returnPath')).toBe(
+      '/interviews/new?prefill=Backend&jobId=4242',
+    );
   });
 });

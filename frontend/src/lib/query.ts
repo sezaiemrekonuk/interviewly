@@ -949,6 +949,22 @@ export function useCreateInterview(): UseMutationResult<
   });
 }
 
+export interface CaptureJobListingBody {
+  externalJobId: string;
+  jobTitle: string;
+  jobCompany: string;
+  jobText: string;
+}
+
+export function useCaptureJobListing(): UseMutationResult<void, ApiError, CaptureJobListingBody> {
+  return useMutation({
+    mutationFn: async (body: CaptureJobListingBody) => {
+      const result = await apiPost<void>('/interviews/job-listings', body);
+      if (!result.ok) throw new ApiError(result.code ?? 'UNKNOWN');
+    },
+  });
+}
+
 /**
  * I05 body — layer 2, the per-interview pre-questions, or a skip. `{ skip: true }` is the
  * whole body for the no-form path setup uses today.

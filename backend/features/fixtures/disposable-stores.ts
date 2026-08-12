@@ -52,11 +52,11 @@ export function assertDisposableDatabase(url: string): void {
   const name = databaseName(url);
   if (/(^|[_-])(test|ci)$/.test(name)) return;
   throw new Error(
-    `Refusing to run acceptance against database "${name}": this suite TRUNCATEs users, ` +
-      `sessions and email_tokens between scenarios and creates interviews that outlive it. ` +
-      `Point DATABASE_URL (or TEST_DATABASE_URL) at a database whose name ends in _test or ` +
-      `ci — db/init.sql creates interviewly_test — or set ACCEPTANCE_ALLOW_DESTRUCTIVE_DB=1 ` +
-      `if you meant it.`,
+    `Refusing to run a destructive suite against database "${name}": acceptance TRUNCATEs ` +
+      `users, sessions and email_tokens between scenarios, and the vitest integration ring ` +
+      `creates users, interviews and personas it does not remove. Point DATABASE_URL (or ` +
+      `TEST_DATABASE_URL) at a database whose name ends in _test or ci — db/init.sql creates ` +
+      `interviewly_test — or set ACCEPTANCE_ALLOW_DESTRUCTIVE_DB=1 if you meant it.`,
   );
 }
 

@@ -25,7 +25,7 @@ afterEach(() => {
 
 describe('assertDisposableDatabase', () => {
   it('refuses the application database named by the repo-root .env', () => {
-    expect(() => assertDisposableDatabase(ENV_URL)).toThrow(/Refusing to run acceptance/);
+    expect(() => assertDisposableDatabase(ENV_URL)).toThrow(/Refusing to run a destructive suite/);
   });
 
   it('accepts the local acceptance database and CI’s', () => {
@@ -74,8 +74,9 @@ describe('assertDisposableRedis', () => {
  * is why this is a subprocess rather than an import — the ordering IS the behaviour, and a test
  * that required the file into this process would have already lost it.
  *
- * The CI case is the one that has to keep working: `.github/workflows/ci.yml` exports a pathless
- * `redis://localhost:6379`, and the acceptance job goes red if that is not moved off db 0 here.
+ * The CI case is the one that has to keep working: `.github/workflows/ci.yml` now exports
+ * `redis://localhost:6379/1` — `test:integration` refuses db 0 outright rather than rewriting
+ * it — but a pathless URL from anywhere else still has to be moved off db 0 here.
  */
 describe('cucumber.js store resolution', () => {
   const ROOT = join(__dirname, '../../..');

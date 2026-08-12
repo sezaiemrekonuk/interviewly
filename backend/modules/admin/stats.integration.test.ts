@@ -14,7 +14,6 @@
  * NOT part of `npm test` — needs Postgres:
  *
  *   docker compose -f compose.yaml -f compose.dev.yaml up -d db cache
- *   export DATABASE_URL=postgresql://interviewly:interviewly@localhost:5432/interviewly_test
  *   npm run test:integration
  */
 import { randomUUID } from 'node:crypto';

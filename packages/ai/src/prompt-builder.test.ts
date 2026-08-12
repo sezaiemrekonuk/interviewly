@@ -5,6 +5,7 @@ import { AiError, noopLogger, type AiLogger } from './errors';
 import { MAX_BLOCK_CHARS, PromptBuilder, createPromptBuilder } from './prompt-builder';
 import { PROMPTS_DIR, PromptRegistry, loadPromptRegistry } from './registry';
 import { loadInjectionPatterns } from './config';
+import { PROMPT_NAMES, reportVars } from './prompt-vars';
 import { StubAiClient } from './stub';
 
 const ctx = { interviewId: 'itv_1', traceId: 'trace_1' };
@@ -288,6 +289,48 @@ describe('PromptRegistry', () => {
   });
 });
 
+describe('interview.question.generate', () => {
+  it('anchors questions in the listing and keeps the CV out of the subject', () => {
+    const system = loadPromptRegistry()
+      .resolve('interview.question.generate')
+      .messages.filter((m) => m.role === 'system')
+      .map((m) => m.content)
+      .join(' ')
+      .replace(/\s+/g, ' ');
+    expect(system).toContain(
+      'every question must test a requirement, responsibility or skill the listing actually names',
+    );
+    expect(system).toContain('It is never the subject of a question');
+    expect(system).not.toContain('Name a specific thing from the CV');
+  });
+});
+
+describe('interview.report.generate', () => {
+  it('grades the candidate against the listing, with the CV as background only', () => {
+    const listing = 'Senior data engineer owning the Snowflake warehouse and its dbt models.';
+    const built = createPromptBuilder().build({
+      promptName: PROMPT_NAMES.generateReport,
+      vars: reportVars({
+        transcript: 'Q: How do you tune a slow query? A: I read the plan, then index.',
+        jobListing: listing,
+        candidateProfile: null,
+        candidateCv: null,
+        language: 'en',
+        endedReason: 'completed',
+        answeredCount: 1,
+        plannedCount: 1,
+        integrity: { flaggedUtterances: [], refusals: 0, forcedAdvances: 0 },
+        ctx,
+      }),
+      ctx,
+    });
+    const system = built.system.replace(/\s+/g, ' ');
+    expect(system).toContain('it is the standard this report grades against');
+    expect(system).toContain('Never grade the candidate against their own resume');
+    expect(userText(built)).toContain(`<job_listing>${listing}</job_listing>`);
+  });
+});
+
 describe('StubAiClient', () => {
   it('returns exactly the requested count, schema-valid, through the real builder', async () => {
     const { logger, events } = capturing();
@@ -314,6 +357,7 @@ describe('StubAiClient', () => {
     await expect(
       stub.generateReport({
         transcript: 'Q: hi A: hello',
+        jobListing: 'Backend engineer, Postgres and Node.',
         candidateProfile: null,
         candidateCv: null,
         language: 'en',
