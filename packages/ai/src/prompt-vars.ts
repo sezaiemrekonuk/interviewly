@@ -123,6 +123,7 @@ export function conductVars(args: ConductTurnArgs): Record<string, unknown> {
     remainingTopics: args.remainingTopics.join(', ') || 'none',
     conversation: formatConversation(args.conversation),
     turnsLeftOnQuestion: args.turnsLeftOnQuestion,
+    questionsLeft: args.questionsLeft,
     allowedActions: allowedActions(args).join(', '),
   };
 }
@@ -130,7 +131,7 @@ export function conductVars(args: ConductTurnArgs): Record<string, unknown> {
 /** `SPEAKER: text` blocks, oldest first — the shape the score prompt already uses for turns. */
 function formatConversation(turns: ConductTurnArgs['conversation']): string {
   if (turns.length === 0) return 'none — the interview has not started';
-  const speaker = { user: 'CANDIDATE', assistant: 'INTERVIEWER', system: 'SYSTEM' } as const;
+  const speaker = { user: 'CANDIDATE', assistant: 'INTERVIEWER', system: 'NOTE' } as const;
   return turns.map((t) => `${speaker[t.role]}: ${t.content}`).join('\n\n');
 }
 

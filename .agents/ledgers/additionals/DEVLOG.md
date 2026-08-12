@@ -968,3 +968,59 @@ and are owed a real run: `docker compose -f compose.yaml -f compose.dev.yaml up 
 
 **Not done:** no backfill of the existing rows. `model` straddles L01's TTS swap with no record of
 which row used which, and `latency_ms` was never captured — see ADR-ADD20.
+
+## 2026-08-12 — an interview that ended itself at question 2 of 6, and the audit log that mostly
+watched itself
+
+Two unrelated bugs, found from one real interview's logs and one audit-log tally. See
+`DECISIONS.md` ADR-ADD21 and ADR-ADD22 for the reasoning; this is what changed and where.
+
+**The completion guard (ADR-ADD21)**
+
+- `backend/modules/interview/conductor.ts` — new `mayComplete(interview)`
+  (`target_question_count - current_index === 0`), added to `__testing`. `clampAction` refuses
+  `end_interview` with `endReason: 'completed'` when it is false (new `RefusalReason`
+  `questions_left`, with its own `REFUSAL_NOTE` entry), and separately validates `turn.endReason`
+  against the `END_REASONS` map via `isEndReason` rather than falling back to `cut_short` on any
+  truthy string. `mayEnd` is untouched — both guards run, in order, for every `end_interview`.
+- `backend/modules/interview/conductor.ts` — `askConductor` now binds `questionsLeft:
+  questionsLeft(interview)` into `ConductTurnArgs`, the same helper `mayComplete` reads.
+- `packages/ai/prompts/interview.conduct.turn.v6.prompt.yaml` — new (K9: v1–v5 untouched). Binds
+  `questionsLeft` and restates `completed` as the end of the interview, with a round out of its own
+  topics named as the handover it always was.
+- `backend/modules/interview/conductor.test.ts` — `mayComplete` on its own, plus `clampAction`
+  cases: refused mid-interview with `questions_left`, allowed on the last question, `cut_short`
+  still allowed anywhere with questions left, an unrecognised `endReason` refused as `no_reason`.
+- `backend/modules/interview/conductor.integration.test.ts` — a `completed` request at question 2
+  of 4 refused end-to-end (no `ended_reason`, no report, the transcript shows `continue`); the
+  identical reply honoured once the interview has actually run out of questions; abuse still cuts
+  an interview short with questions left. The pre-existing "closing answer survives every exit"
+  (AC-11) case moved from ending on `completed` to ending on `cut_short` — it seeds an interview at
+  question 2, and a `completed` ending there is exactly the bug this closes.
+
+**The injection scanner's false positives (ADR-ADD22)**
+
+- `packages/ai/src/prompt-builder.ts` — `SERVER_OWNED_FIELDS = new Set(['allowedActions'])`,
+  skipped before `scanForInjection` runs any pattern against a bound value. Landed alongside an
+  unrelated commit on this branch (`3eac4e2`); recorded here because nothing else names it.
+- `packages/ai/src/prompt-vars.ts` — `formatConversation`'s system-row label changed from
+  `SYSTEM:` to `NOTE:`. `role-marker-injection` compiles with the `im` flags and matches a role
+  marker at the start of any line, not only the compiled message's start, so the label was
+  self-matching on every silence or refusal note in a transcript.
+- `packages/ai/src/prompt-builder.test.ts` — a bound `allowedActions` naming `end_interview` and
+  `handover` produces zero `SECURITY_PROMPT_INJECTION_SUSPECTED` events; the same word arriving
+  through `jobListing` still produces one, attributed to that field and to `action-name-injection`.
+- `packages/ai/src/prompt-vars.test.ts` — new `formatConversation` block: a conversation carrying
+  two system notes renders `NOTE:` on both and matches neither `role-marker-injection` nor
+  `forged-turn-sequence`; a candidate utterance that opens a line with `SYSTEM:` itself still
+  matches `role-marker-injection`, pinning that the fix narrows the false positive without
+  narrowing the real one.
+
+**Verified:** `npm run typecheck` and `npm run lint` — clean. Unit suite 1443 passing across 130
+files. The integration ring was run against a throwaway Postgres and Redis rather than the
+developer stack, whose stores compose publishes on no host port: `conductor.integration.test.ts`
+19 passing, the whole `--project worker --project node` ring 45 passing.
+
+**Not done:** neither `injection-patterns.yaml` pattern was touched — both false positives were in
+what was fed to the scanner, not in what it looked for. See the ADR for why loosening either would
+have been the wrong fix.

@@ -15,7 +15,7 @@ import { describe, expect, it } from 'vitest';
 
 import { __testing, turnInputSchema } from './conductor';
 
-const { trimHistory, mayHandOver, mayEnd, clampAction, countsAsTurn } = __testing;
+const { trimHistory, mayHandOver, mayEnd, mayComplete, clampAction, countsAsTurn } = __testing;
 
 /** Only the columns the guards read. Cast once here rather than in every case. */
 function interview(over: Partial<Interview>): Interview {
@@ -68,6 +68,24 @@ describe('mayEnd', () => {
   });
 });
 
+describe('mayComplete', () => {
+  it('is false while any question in the interview is still to be asked', () => {
+    expect(mayComplete(interview({ current_index: 2 }))).toBe(false);
+    expect(mayComplete(interview({ current_index: 7 }))).toBe(false);
+  });
+
+  it('is true on the last question of the interview, and past it', () => {
+    expect(mayComplete(interview({ current_index: 8 }))).toBe(true);
+    expect(mayComplete(interview({ current_index: 9 }))).toBe(true);
+  });
+
+  it('reads the interview total, never the round it is currently in', () => {
+    const lastHrQuestion = interview({ current_index: 4, hr_question_count: 4 });
+    expect(mayHandOver(lastHrQuestion)).toBe(true);
+    expect(mayComplete(lastHrQuestion)).toBe(false);
+  });
+});
+
 describe('clampAction', () => {
   it('passes an action the interview allows', () => {
     const at = interview({ current_index: 3 });
@@ -114,6 +132,46 @@ describe('clampAction', () => {
         CLAMP_CTX,
       ).action,
     ).toBe('end_interview');
+  });
+
+  it('refuses a completion while the interview still has questions to ask', () => {
+    const out = clampAction(
+      interview({ current_index: 2, hr_question_count: 2 }),
+      { action: 'end_interview', endReason: 'completed' },
+      CLAMP_CTX,
+    );
+    expect(out.action).toBe('continue');
+    expect(out.refusal).toEqual({ requested: 'end_interview', why: 'questions_left' });
+  });
+
+  it('allows a completion once the last question has been reached', () => {
+    expect(
+      clampAction(
+        interview({ current_index: 8 }),
+        { action: 'end_interview', endReason: 'completed' },
+        CLAMP_CTX,
+      ).action,
+    ).toBe('end_interview');
+  });
+
+  it('lets abuse end the interview anywhere, which is the only early ending there is', () => {
+    expect(
+      clampAction(
+        interview({ current_index: 2 }),
+        { action: 'end_interview', endReason: 'cut_short' },
+        CLAMP_CTX,
+      ).action,
+    ).toBe('end_interview');
+  });
+
+  it('refuses an end reason it does not recognise rather than reading it as cut_short', () => {
+    const out = clampAction(
+      interview({ current_index: 2 }),
+      { action: 'end_interview', endReason: 'round_over' },
+      CLAMP_CTX,
+    );
+    expect(out.action).toBe('continue');
+    expect(out.refusal).toEqual({ requested: 'end_interview', why: 'no_reason' });
   });
 
   // C07 — the refusal has to come back out. It was swallowed: `clampAction` downgraded the

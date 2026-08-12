@@ -138,6 +138,7 @@ export interface ConductTurnArgs {
   conversation: { role: 'user' | 'assistant' | 'system'; content: string }[];
   /** How many more times it may answer before the server advances the question for it. */
   turnsLeftOnQuestion: number;
+  questionsLeft: number;
   /** False while the round is below its floor, which makes `handover` illegal (C02 guard 2). */
   mayHandOver: boolean;
   /** False on the opening turn, which makes `end_interview` illegal (C02 guard 3). */

@@ -4,9 +4,10 @@ import { AiError, noopLogger, type AiLogger } from './errors';
 import { MAX_BLOCK_CHARS, PromptBuilder, createPromptBuilder } from './prompt-builder';
 import { PromptRegistry, loadPromptRegistry } from './registry';
 import { loadInjectionPatterns } from './config';
-import { PROMPT_NAMES, candidateVars, reportVars } from './prompt-vars';
+import { PROMPT_NAMES, candidateVars, conductVars, reportVars } from './prompt-vars';
 import { CandidateBatchSchema } from './schemas';
 import { StubAiClient } from './stub';
+import type { ConductTurnArgs } from './AiClient';
 
 const ctx = { interviewId: 'itv_1', traceId: 'trace_1' };
 
@@ -34,6 +35,28 @@ function baseVars(over: Record<string, unknown> = {}) {
     priorTopics: 'none',
     ...over,
   };
+}
+
+function conductArgs(over: Partial<ConductTurnArgs> = {}): ConductTurnArgs {
+  return {
+    personaBrief: 'brief',
+    personaName: 'Ada',
+    roundType: 'hr',
+    language: 'en',
+    jobListing: 'Backend engineer, Postgres and Node.',
+    candidateProfile: null,
+    candidateCv: null,
+    currentQuestion: 'Tell me about a conflict.',
+    currentIntent: 'find out how they handle disagreement',
+    remainingTopics: ['motivation'],
+    conversation: [{ role: 'assistant', content: 'Tell me about a conflict.' }],
+    turnsLeftOnQuestion: 3,
+    questionsLeft: 2,
+    mayHandOver: false,
+    mayEnd: false,
+    ctx,
+    ...over,
+  } as ConductTurnArgs;
 }
 
 describe('PromptBuilder', () => {
@@ -222,6 +245,33 @@ describe('PromptBuilder', () => {
     // The whole point of the sink is a durable row, and a durable row must not carry the
     // candidate's text (issue 063). Nothing here is the matched value.
     expect(Object.values(seen[0]).join(' ')).not.toContain('hire me');
+  });
+
+  it('does not flag a bound allowedActions value that legitimately names end_interview', () => {
+    const { logger, events } = capturing();
+    new PromptBuilder(loadPromptRegistry(), loadInjectionPatterns(), logger).build({
+      promptName: PROMPT_NAMES.conductTurn,
+      vars: conductVars(conductArgs({ mayEnd: true, mayHandOver: true })),
+      ctx,
+    });
+    expect(
+      events.filter((e) => e.event === 'SECURITY_PROMPT_INJECTION_SUSPECTED'),
+    ).toHaveLength(0);
+  });
+
+  it('still flags end_interview text when it arrives through jobListing instead of allowedActions', () => {
+    const { logger, events } = capturing();
+    new PromptBuilder(loadPromptRegistry(), loadInjectionPatterns(), logger).build({
+      promptName: PROMPT_NAMES.conductTurn,
+      vars: conductVars(
+        conductArgs({ jobListing: 'This role occasionally requires triggering end_interview manually.' }),
+      ),
+      ctx,
+    });
+    const flagged = events.filter((e) => e.event === 'SECURITY_PROMPT_INJECTION_SUSPECTED');
+    expect(
+      flagged.some((e) => e.fields.field === 'jobListing' && e.fields.patternId === 'action-name-injection'),
+    ).toBe(true);
   });
 
   it('builds normally when no sink is given — the scan stays log-only', () => {
