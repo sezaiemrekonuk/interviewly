@@ -374,3 +374,165 @@ A regression of ADR-ADD06, not a pre-existing defect.
 **Also fixed:** the `/me` fixtures in `dashboard/page.test.tsx` omitted `onboardingCompletedAt`
 and `interviewCount` entirely, so they did not match the payload the endpoint actually returns.
 That is why the wider gate looked like it broke twenty unrelated tests.
+
+## ADR-ADD08 — the console's cost charts, and how many colours the palette actually has
+
+**Ask (owner, 2026-08-12):** a line chart, a stacked area chart, a bar chart, a table with
+sparklines, a heatmap and a pie chart on the admin console, "for proper cost tracking, trend
+tracking, tracking model shares to the total cost"; the shapes and their parameters ours to pick.
+
+**Shape chosen:**
+
+- **A new endpoint, not a wider `/admin/stats`.** Three of the six forms are time series and
+  `/admin/stats` has no notion of a date — it answers one all-time question per figure. A window
+  parameter on it would also change the meaning of every existing field for every existing
+  caller. `GET /admin/costs?days=7|30|90` is separate, whitelisted, and fetched only when the
+  Costs section is open. It carries `adminStatsLimiter` because it is the same class of read as
+  the endpoint that limiter was written for (issue 85).
+- **One graphic, one claim — which is why the line chart is not daily spend twice.** The stacked
+  area is daily spend split by model, so its top edge *is* daily total spend; a line of the same
+  figure beside it is the same fact drawn twice. The owner asked for both panels, so the second
+  line is **cost per interview**: spend ÷ interviews started that day. That is the only figure in
+  the set that separates price from volume — a total that rises because forty more people
+  interviewed is not a cost problem, and no other graphic here can tell the two apart.
+- **The bar chart is the range against the range before it.** Every other "spend by model" view
+  is one value per model, which DESIGN §W11 already answers with a `Meter`. Two values per
+  category is the one comparison a `Meter` cannot make, and "which model is growing" is the
+  question the flat figures could never answer.
+- **Three series, then Other — because the palette measurably holds three.** The registry ships
+  `--series-1…6` and they were chosen to clear AA *as text on `--surface`*, which is a different
+  test from telling two adjacent fills apart. Run through a CVD/ΔE check they fail as a
+  categorical set: `--series-5`↔`--series-6` sit at ΔE 4.2 for deuteranopia and 14.2 for normal
+  vision, below the 15 floor at which full-colour readers stop separating a pair; every subset of
+  four or more fails on some pair. `--series-1/2/3` is the only subset that clears both the
+  colourblind and the normal-vision floors (12.9 and 18.7). So the charts colour the top three
+  models by spend and fold the rest into one bucket. The **table lists every model** with exact
+  figures, so nothing is hidden by the fold — only uncoloured.
+- **Other is `--surface-sunken` with a `--border` hairline, not a fourth hue and not
+  `--text-muted`.** The obvious neutral collides with `--series-3` at ΔE 0.3 deutan — the two
+  would be the same swatch to a deuteranope. The sunken fill separates by lightness and by
+  outline instead of by hue, which is the same treatment `.day[data-tier='0']` already uses on
+  the dashboard for "the empty ground". The previous-range bars take it for the same reason: a
+  reference is not a series, and a hue spent on one is a hue the models no longer have.
+- **Colour follows the model, not its rank.** `charts/series.ts` is the single place a model
+  becomes a slot, so a model keeps its colour across the area, the bars, the donut, the table
+  swatch and its sparkline — and changing the range does not repaint a model that survived the
+  change. That shared identity is also why the legend is not repeated under every graphic.
+- **The heatmap is the dashboard's practice grid, reused.** A 7 × 24 CSS grid of `data-tier`
+  cells over the existing `activityTier` and its `color-mix` ramp off `--accent`. Not an SVG:
+  the existing component already solved this exact problem, and a second tiering function is a
+  second answer to "which step is this" that can drift from the first.
+- **One sparkline scale, shared by every row.** A per-row maximum draws a model that spent
+  $0.001 and one that spent $10 with the same silhouette, which is a lie about the comparison
+  the column exists to support. The regression test makes two models 100× apart and asserts their
+  `points` differ — under the per-row bug they are byte-identical.
+- **The model table is the accessible rendering, and it is the only one.** Every SVG here is
+  `aria-hidden` under a `<figure>` whose `<figcaption>` states the claim in words and numbers;
+  the table carries every figure the area, the bars and the donut draw. Announcing them a fourth
+  time is the noise ADR-ADD04 already refused. The heatmap is the exception that proves it: a
+  colour ramp has no textual twin, so its caption names the peak bucket and its value.
+- **Fixed-size SVG inside its own `overflow-x: auto`, never a scaled `viewBox`.** Scaling a
+  viewBox scales the 13px type with it — the chart is either unreadable at 390px or oversized at
+  1120px. This is the `.trendScroll` pattern the report chart already established, and it is what
+  keeps the page body from ever scrolling sideways.
+- **Still no chart library.** `recharts` remains installed and unimported (ADR-ADD04, ADR-W09).
+  Every value here is a geometry or presentation attribute — `points`, `d`, `stroke-dasharray`,
+  `stroke-dashoffset`, `transform`, `fill-opacity` — because the production CSP is
+  `style-src 'self' 'nonce-…'` and drops the style attribute every chart library positions with.
+- **The per-model `Meter` list is deleted, not kept beside the table.** The table is a strict
+  superset of it: the same cost and latency, plus share, tokens and a trend. Two lists of the
+  same numbers is how a surface starts disagreeing with itself.
+- **An index on `llm_calls(created_at)`.** Every query here filters on a bare date range, and the
+  existing `[interview_id, created_at]` cannot serve one. It is a genuine second btree insert on
+  the table written by every provider call — the cost is real and taken deliberately, where the
+  redundant prefix index that ADR rejected bought nothing.
+
+**Skipped, deliberately:**
+
+- **No per-cluster spend from the server.** The occupation breakdown is still summed from the
+  loaded rows and still says so. Joining `llm_calls` → `interviews` → cluster is a fifth
+  aggregation for a panel nobody asked about in this round.
+- **No hover, tooltip or crosshair layer.** Every figure these charts draw is already printed as
+  text in the table below them, so a tooltip would be a fourth copy of a number the reader can
+  already read — and it would need a positioned element, which is the CSP problem again.
+- **No all-time range.** An unbounded scan is precisely what `stats.ts` refused when it declined
+  the `take:` cap, and 90 days is the ceiling that keeps this endpoint's cost bounded.
+- **No CSV or export.** The console is a reading surface; an export is a different feature with
+  its own audit question.
+- **`--series-4/5/6` stay in the registry, unused by these charts.** They are still valid ink for
+  a surface that needs one or two of them in isolation — the report chart uses 1 and 3. What the
+  measurement rules out is treating all six as a categorical set, not the tokens themselves.
+- **No `ADMIN AUDIT` grep markers in `costs.ts`.** Every query in it deliberately counts
+  soft-deleted interviews, which the convention in `modules/admin` marks with a comment (ADR-N01).
+  This work was done under a standing no-comments instruction, so the marker is recorded here
+  instead. `grep -rn "ADMIN AUDIT" modules/admin` no longer returns every such read; restoring
+  the four one-line markers is the fix if that convention is to hold.
+
+## ADR-ADD09 — one panel instead of seven cards, and the filter's real scope
+
+**Ask (owner, 2026-08-12):** carry the filter into the container of the table it belongs to, "in
+the same container top-down"; and on Costs, compress the title, the chart and the range into one
+container behind a dropdown that picks between charts — or between chart types for the same data,
+"available, applicable ones".
+
+**Shape chosen:**
+
+- **The filter moved because it was claiming scope it never had.** It floated on `--bg` above
+  whatever the section rendered, which on Costs put it above six graphics fed by `/admin/costs` —
+  an endpoint that does not read the filter bag at all. A control positioned over a region reads
+  as scoping that region. Inside the `.head` of the table it filters, it can only claim the rows
+  underneath it, which is exactly what it does. The layout ask and the correctness fix are the
+  same edit.
+- **One optional prop, not five layouts.** The five tables were already the identical
+  `.card > .head > .scroller > table` shell, so `filter?: ReactNode` rendered at the end of `.head`
+  covers all of them. The drill-down had been doing this by hand since it was written; it now
+  takes the same wrapper, so the two surfaces space it the same way instead of by coincidence.
+- **On Costs the filter is now at the bottom, and that is correct.** It sits with the interview
+  list, which is the only thing on that surface it narrows. A filter high on the page that
+  silently governs one card near the bottom is the failure the whole filter-builder exists to
+  avoid (§W11 "Chips").
+- **Six questions, one panel.** Seven stacked cards was 4400px of scrolling to reach a heatmap,
+  and any given operator wants one of them. A `Chart` select picks the question and a `Drawn as`
+  select picks the form, sharing the strip with the range control.
+- **The type list is per-question, so the control cannot lie.** A form is offered only where it
+  answers the same question: a part-to-whole gets a donut or bars, never a line; a time series
+  gets a line, an area or columns, never a donut. Where one form is honest — this range against
+  the last, when the money lands — the second select is **absent**, not a select with a single
+  option. A control with one choice is furniture that looks live.
+- **The type is remembered per question.** Switching away and back returns the drawing the
+  operator left it on. Resetting to the default is a second decision they did not make.
+- **The model table never goes behind the dropdown.** Every drawing here is an `aria-hidden` SVG
+  whose text counterpart is that table (ADR-ADD08). If the table were a seventh view, choosing
+  any chart would leave the surface with a graphic and no accessible form of it. It stays below
+  the panel, always rendered.
+- **One plot shell.** `trend-lines`, `model-mix` and `model-delta` each carried their own copy of
+  the gutter, gridlines, ticks, axes and date labels. That is now `charts/plot.tsx`, and a chart
+  *type* is only the marks drawn inside it — which is why three new forms (area, columns, stacked
+  columns, one line per model) cost roughly one file rather than four. `area` needed no new
+  geometry at all: `stackBands` with a single series already returns that polygon.
+- **The residual series is dashed when it is a line.** As a fill it is `--surface-sunken` with a
+  hairline (ADR-ADD08). A line has no fill to be pale, so it takes `--text-muted` — which is
+  ΔE 0.3 from `--series-3` under deuteranopia — plus a dash pattern. The dash is the separation;
+  the colour is not doing that work.
+- **The multi-line form scales to the tallest series, the stacked forms to the stacked total.**
+  Same data, two different axes, because "how big is this model" and "how big is everything" are
+  different questions. A test asserts the line form reaches higher in the plot than the stacked
+  one for identical input, so the axes cannot silently be unified.
+- **One empty-state line, owned by the panel.** The note used to live in each chart card, so
+  deleting six cards deleted it for three of the six views — they drew a flat zero line under a
+  caption that confidently read "0.000000 a day on average" and never said nothing was spent.
+  The panel now decides emptiness per view and the `figcaption` carries the sentence, and the
+  test asserts exactly one occurrence, so it can neither vanish again nor be printed twice.
+
+**Skipped, deliberately:**
+
+- **No URL or storage persistence for the chosen view.** Add it when someone needs to link a
+  colleague to a specific chart; until then it is state nobody asked to survive a reload.
+- **No hover or tooltip layer.** Unchanged from ADR-ADD08: the table below prints every figure,
+  and a tooltip needs a positioned element the CSP would drop.
+- **The plot is still a fixed-width SVG in its own scroller.** It grew to 880 × 220 now that it
+  owns the card alone, but it does not measure its container. Scaling a `viewBox` scales the 13px
+  type with it, and measuring means a resize observer for a chart that already fits every desktop
+  width the console supports.
+- **No second panel for side-by-side comparison.** It was offered and declined; two half-width
+  panels would each scroll a fixed-width chart, which is worse than switching between them.

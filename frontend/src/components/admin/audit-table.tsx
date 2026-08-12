@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 
 import { Link } from '../../i18n/navigation';
@@ -19,6 +20,7 @@ export function AuditTable({
   onLoadMore,
   sort,
   onSort,
+  filter,
 }: {
   items: AdminAuditRow[];
   hasNextPage: boolean;
@@ -26,6 +28,7 @@ export function AuditTable({
   onLoadMore: () => void;
   sort: { field: string; dir: 'asc' | 'desc' };
   onSort: (field: string) => void;
+  filter?: ReactNode;
 }) {
   const t = useTranslations('admin');
   const format = useFormatter();
@@ -45,6 +48,7 @@ export function AuditTable({
           {t('audit.heading')}
         </h2>
         <p className={styles.note}>{t('audit.note')}</p>
+        {filter ? <div className={styles.filter}>{filter}</div> : null}
       </div>
 
       {items.length === 0 ? (

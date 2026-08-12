@@ -1,0 +1,420 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 16px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-heading), Georgia, serif;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.note {
+  margin: 0;
+  max-width: 72ch;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.caption {
+  order: 1;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.scroller {
+  overflow-x: auto;
+}
+
+.plot {
+  display: block;
+}
+
+.axis {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.grid {
+  stroke: var(--border);
+  stroke-width: 1;
+  opacity: 0.55;
+}
+
+.tick,
+.axisLabel {
+  font-family: var(--font-body), sans-serif;
+  font-size: 13px;
+  fill: var(--text-muted);
+}
+
+.value {
+  font-family: var(--font-body), sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  fill: var(--text);
+}
+
+.line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.point {
+  fill: var(--accent);
+  stroke: var(--surface);
+  stroke-width: 2;
+}
+
+.mean {
+  stroke: var(--text-muted);
+  stroke-width: 1;
+}
+
+.areaFill {
+  fill: var(--accent);
+  fill-opacity: 0.16;
+}
+
+.column {
+  fill: var(--accent);
+}
+
+.seriesLine {
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.stroke1 {
+  stroke: var(--series-1);
+}
+
+.stroke2 {
+  stroke: var(--series-2);
+}
+
+.stroke3 {
+  stroke: var(--series-3);
+}
+
+.strokeOther {
+  stroke: var(--text-muted);
+  stroke-dasharray: 4 3;
+}
+
+.band {
+  stroke: var(--surface);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.s1 {
+  fill: var(--series-1);
+}
+
+.s2 {
+  fill: var(--series-2);
+}
+
+.s3 {
+  fill: var(--series-3);
+}
+
+.sOther {
+  fill: var(--surface-sunken);
+  stroke: var(--border);
+}
+
+.band.sOther {
+  stroke: var(--border);
+}
+
+.priorBar {
+  fill: var(--surface-sunken);
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.arc {
+  fill: none;
+  stroke-width: 28;
+}
+
+.arcS1 {
+  stroke: var(--series-1);
+}
+
+.arcS2 {
+  stroke: var(--series-2);
+}
+
+.arcS3 {
+  stroke: var(--series-3);
+}
+
+.arcSOther {
+  stroke: var(--surface-sunken);
+}
+
+.share {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 24px;
+}
+
+.legend {
+  display: flex;
+  flex-direction: column;
+  align-self: start;
+  gap: 8px;
+  max-width: 420px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.share .legend {
+  flex: 1 1 220px;
+}
+
+.legendRow {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.swatchCell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.swatch {
+  display: inline-block;
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-input);
+}
+
+.swatch[data-series='s1'] {
+  background: var(--series-1);
+}
+
+.swatch[data-series='s2'] {
+  background: var(--series-2);
+}
+
+.swatch[data-series='s3'] {
+  background: var(--series-3);
+}
+
+.swatch[data-series='sOther'] {
+  background: var(--surface-sunken);
+  border-color: var(--border);
+}
+
+.legendLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.legendValue {
+  color: var(--text-muted);
+}
+
+.heat {
+  display: grid;
+  grid-template-columns: auto repeat(24, minmax(12px, 1fr));
+  gap: 4px;
+  align-items: center;
+  min-width: 560px;
+}
+
+.heatDay,
+.heatHour {
+  font-size: 13px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.heatDay {
+  padding-inline-end: 8px;
+}
+
+.heatHour {
+  text-align: center;
+}
+
+.heatCell {
+  aspect-ratio: 1;
+  border: 1px solid transparent;
+  border-radius: var(--radius-input);
+}
+
+.heatCell[data-tier='0'] {
+  background: var(--surface-sunken);
+  border-color: var(--border);
+}
+
+.heatCell[data-tier='1'] {
+  background: color-mix(in srgb, var(--accent) 34%, var(--surface-sunken));
+}
+
+.heatCell[data-tier='2'] {
+  background: color-mix(in srgb, var(--accent) 64%, var(--surface-sunken));
+}
+
+.heatCell[data-tier='3'] {
+  background: var(--accent);
+}
+
+.scale {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.scaleStep {
+  width: 10px;
+  height: 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-input);
+}
+
+.scaleStep[data-tier='0'] {
+  background: var(--surface-sunken);
+  border-color: var(--border);
+}
+
+.scaleStep[data-tier='1'] {
+  background: color-mix(in srgb, var(--accent) 34%, var(--surface-sunken));
+}
+
+.scaleStep[data-tier='2'] {
+  background: color-mix(in srgb, var(--accent) 64%, var(--surface-sunken));
+}
+
+.scaleStep[data-tier='3'] {
+  background: var(--accent);
+}
+
+.spark {
+  display: block;
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+}
+
+.control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.controlLabel {
+  font-size: 13px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.range {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-inline-start: auto;
+}
+
+.rangeLabel {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.rangeButton {
+  min-height: 32px;
+  padding: 0 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-button);
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.rangeButton:hover {
+  background: var(--surface-sunken);
+}
+
+.rangeButton[aria-pressed='true'] {
+  background: var(--surface-sunken);
+  border-color: var(--text-muted);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.delta {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.delta[data-direction='up'] {
+  color: var(--warning);
+}
+
+.delta[data-direction='down'] {
+  color: var(--success);
+}
+
+.empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.skeleton {
+  height: 320px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+}
+
+@media (max-width: 480px) {
+  .card {
+    padding: 16px;
+  }
+}

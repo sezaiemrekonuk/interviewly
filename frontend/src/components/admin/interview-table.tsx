@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 
 import { Link } from '../../i18n/navigation';
@@ -45,6 +46,7 @@ export function InterviewTable({
   onLoadMore,
   sort,
   onSort,
+  filter,
 }: {
   items: AdminInterviewRow[];
   hasNextPage: boolean;
@@ -52,6 +54,7 @@ export function InterviewTable({
   onLoadMore: () => void;
   sort: { field: string; dir: 'asc' | 'desc' };
   onSort: (field: string) => void;
+  filter?: ReactNode;
 }) {
   const t = useTranslations('admin');
   const format = useFormatter();
@@ -69,6 +72,7 @@ export function InterviewTable({
         <h2 className={styles.heading} id="admin-interviews-heading">
           {t('interviews.heading')}
         </h2>
+        {filter ? <div className={styles.filter}>{filter}</div> : null}
       </div>
 
       {items.length === 0 ? (

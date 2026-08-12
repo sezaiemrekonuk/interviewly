@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 
 import type { AdminCallRow } from '../../lib/query';
@@ -18,6 +19,7 @@ export function CallTable({
   showInterview = false,
   sort,
   onSort,
+  filter,
 }: {
   items: AdminCallRow[];
   hasNextPage: boolean;
@@ -26,6 +28,7 @@ export function CallTable({
   showInterview?: boolean;
   sort: { field: string; dir: 'asc' | 'desc' };
   onSort: (field: string) => void;
+  filter?: ReactNode;
 }) {
   const t = useTranslations('admin');
   const format = useFormatter();
@@ -44,6 +47,7 @@ export function CallTable({
           {t('calls.heading')}
         </h2>
         <p className={styles.note}>{t('calls.note')}</p>
+        {filter ? <div className={styles.filter}>{filter}</div> : null}
       </div>
 
       {items.length === 0 ? (
