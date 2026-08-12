@@ -73,8 +73,8 @@ quota, security and failure aggregation · rate limits and per-account budget en
 - No Tailwind and no UI library, by specification. CSS Modules reading design tokens.
 - Both locales ship every key in the same commit. No English fallback is ever shown to a Turkish
   reader.
-- `answers.scores` (the four-axis breakdown) is usually `null`. `report_questions` is the
-  reliable per-question grade.
+- `answers.scores` (the four-axis breakdown) is `null` on every interview taken before ADR-ADD16.
+  `report_questions` is the per-question grade that exists for all of them.
 - `ended_reason='cut_short'` is never written, so the admin's cut-short figure is always zero.
 
 **Undecided / not claimed:** pricing. The product is free while in preview and no paid tier,

@@ -760,3 +760,26 @@ candidate's CV, because `reportVars` had never been given the vacancy.
 Left open, deliberately and now the only one: `interview.question.candidates` is anchored to
 neither the listing nor the CV and overwrites question rows, but the path is dead today
 (`promoteNextQuestion` returns early for every interview). ADR-ADD15 says who owns it.
+
+
+## 2026-08-12 — adaptive questioning fires for the first time
+
+`DECISIONS.md` ADR-ADD16. Found by running an interview end to end and reading the logs.
+
+- `packages/ai/src/providers.ts` — gemini gets `thinkingConfig: { thinkingBudget: 0 }`. Thinking
+  was charged against `maxOutputTokens`, truncating the whole fallback tier, not only this prompt.
+- `packages/ai/prompts/interview.question.candidates.v3.prompt.yaml` — new. Object reply contract
+  (`json_object` cannot emit an array, so v1/v2 failed every call) and the listing bound as the
+  anchor. v1/v2 untouched, same uuid.
+- `packages/ai/src/schemas.ts`, `index.ts`, `live-client.ts` — `CandidateBatchSchema`;
+  `generateCandidates` unwraps `.candidates` and still returns `Candidate[]`.
+- `packages/ai/src/AiClient.ts`, `prompt-vars.ts`, `backend/…/candidate-prep.ts` (+ selftest) —
+  `jobListing` through to `interview.job_text`.
+- `packages/ai/src/providers.test.ts`, `prompt-builder.test.ts` — the transports' first
+  request-body tests, plus the prompt's contract and anchor.
+
+**Verified:** 5/5 promotions on a six-question run, difficulty matching the selector's table
+including the clamp, no fallbacks. `npm test` 127 files / 1400. `@adaptive-questions` 7 / 53.
+Selftests, typecheck, lint clean.
+
+**Not done:** the conductor overwrites the promoted `text` but keeps the promoted `topic`.

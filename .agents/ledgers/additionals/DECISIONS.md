@@ -922,3 +922,33 @@ were written under a no-new-comments constraint for the branch; that header is t
 making, because it is the only comment in this tree whose absence loses a *rule* — a future editor
 who does not read it edits a shipped version in place and rewrites what `llm_calls.prompt_version`
 claims about the past.
+
+
+## ADR-ADD16 — the adaptive path was never alive, and two provider bugs are why
+
+**Ask (owner):** prove adaptive questioning works end to end. It did not. This is the fix.
+
+`promoteNextQuestion` scored every answer and promoted nothing, always. Not a dead gate — the
+pool behind it failed on both providers, for two unrelated reasons:
+
+- **OpenAI cannot emit a top-level array.** `response_format: json_object` is sent on every
+  prompt; `interview.question.candidates` v1/v2 asked for `[{…}]` and validated against a bare
+  `z.array`. Unreachable shape. The only array-rooted schema in the tree.
+- **The gemini fallback spends its budget thinking.** `gemini-2.5-flash` charges thinking against
+  `maxOutputTokens`: 765 of 800 measured, `finishReason: MAX_TOKENS`. Tier-2 has been decorative
+  for every prompt in the tree, not just this one — `turn.complete` has 30 tokens, `score` 600.
+
+**Shape chosen:** `thinkingConfig: { thinkingBudget: 0 }` fixes the tier in one line rather than
+raising eight `max_tokens`, and matches tier-1, which is non-thinking throughout. Candidates v3
+(same uuid, K9) returns `{"candidates":[…]}` like `QuestionBatchSchema` already does, so the
+outlier is gone rather than special-cased; the seam still returns `Candidate[]`. v3 also binds
+`<job_listing>`, which ADR-ADD15 assigned to whoever woke this path up. The transports get their
+first request-body tests: every existing chain test injects a mock, so both bugs lived in the two
+functions the suite never called.
+
+**Verified:** six-question text interview on an image from this branch — 5/5 promotions, every
+difficulty matching `selectNextQuestion` including the floor clamp, no provider fell back.
+`npm test` 1400, `@adaptive-questions` 7 scenarios, typecheck and lint clean.
+
+**Known, not fixed:** the conductor overwrites the promoted row's `text` and leaves its `topic`,
+so a label can stop describing its question. Audit surface, predates this branch, conductor's call.

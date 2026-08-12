@@ -158,9 +158,10 @@ interviewer takes ([ADR-T01, T03, T07, T08](.agents/ledgers/turn-taking/DECISION
 
 ## What we knowingly left
 
-- `answers.scores`, the four-axis breakdown, is usually `null`. `report_questions` is the reliable
-  per-question grade — the pre-generation path that fills the breakdown became rare once the
-  conductor owned question wording ([ADR-D02](.agents/ledgers/adaptive/DECISIONS.md)).
+- `answers.scores`, the four-axis breakdown, was `null` on every interview ever taken until
+  [ADR-ADD16](.agents/ledgers/additionals/DECISIONS.md): the pre-generation behind it had been
+  failing on both providers since it shipped. Written on every scored turn now, but rows from
+  before the fix stay empty, so `report_questions` is still the grade to read across all of them.
 - Streaming responses. Every call is request/response; streaming STT is a different product, and
   we recorded that as a decision rather than a backlog item
   ([ADR-L05](.agents/ledgers/speech-latency/DECISIONS.md)).

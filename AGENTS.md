@@ -91,10 +91,10 @@ with two different configs — `frontend/eslint.config.mjs` for `frontend/**`, t
 
 ## Things that are true and look like bugs
 
-- **`answers.scores` is usually `null`.** `promoteNextQuestion` (`backend/modules/interview/
-  adaptive.ts`) returns early when a question has no pre-generated candidates, which is every
-  interview today. The reliable per-question grade is `report_questions`. Do not build a feature
-  on the four-axis breakdown without checking it exists.
+- **`answers.scores` is `null` on every interview taken before ADR-ADD16.** That was a live
+  failure, not a design: the candidate pre-generation `promoteNextQuestion` needs was rejected by
+  both providers on every call. It is filled on every scored turn now, but old rows stay empty, so
+  `report_questions` is still the per-question grade that exists for all of them.
 - **`ended_reason='cut_short'` is never written**, so `/admin/stats.cutShort` is always 0. The
   admin copy says so out loud.
 - **Deletion is soft everywhere** and every FK is `ON DELETE RESTRICT`. A hard delete will fail.
