@@ -404,7 +404,7 @@ mascot, no `--live`. Density tightens: 13/14px type, 8–12px cell padding, hair
 | `deleted` flag | 13px pill, `--surface-sunken` bed, `--text-muted` label, `--radius-button`. Not `--danger` — a soft-deleted row is a fact, not an error |
 | Load more | secondary button (bordered `--surface`) centred under the table, shown only while `nextCursor` exists. Not the page's `--primary` |
 | Primary action | at most one on the whole surface; if none exists, the surface has no orange. Do not promote "Load more" to fill the slot |
-| Bars, not charts | every quantity on this surface is one value against one ceiling, so it is a `Meter` (`components/shell/meter.tsx`), never a chart library. A native `<progress>` carries its value as a **DOM property**, which is the only kind of bar that survives the production CSP (`style-src 'self' 'nonce-…'` drops the style attribute a width-in-a-prop bar needs). See ADR-W09 — the dependency is installed and deliberately unimported |
+| Bars, not charts | a quantity that is one value against one ceiling is a `Meter` (`components/shell/meter.tsx`), never a chart library. A native `<progress>` carries its value as a **DOM property**, which is the only kind of bar that survives the production CSP (`style-src 'self' 'nonce-…'` drops the style attribute a width-in-a-prop bar needs). See ADR-W09 — the dependency is installed and deliberately unimported. The Costs section is the one place a `Meter` cannot say what is being asked; see **Cost charts** below |
 | Bar colour | the informational family only: `--accent` (primary series), `--warning` (cut short), `--text-muted` (baseline). **Never `--primary`** — that slot belongs to the surface's one primary action. No hex literals in TSX; the lint scans `.tsx` |
 | Legibility | every bar states its number as text beside it; nothing on this surface is readable by colour or length alone. A `Meter` beside its own printed figure passes `decorative`, because announcing "progress bar 41%" next to the 41% it duplicates is noise |
 | `weakestQuestions` | a list, not a chart: `--surface` card, question text 14px, score 14/600 right-aligned, hairline rules between rows |
@@ -420,6 +420,29 @@ mascot, no `--live`. Density tightens: 13/14px type, 8–12px cell padding, hair
 | Empty after a search | a different fact from an empty table, and never the same line. "Nothing was recorded" told to someone whose query simply matched nothing is a lie about the data |
 | Drill-down | same shell, same rail, same not-authorized card. Summary as a `<dl>`, then the report's prompt uuid + version, then the call table, then the event timeline. Money prints the backend's six-decimal string verbatim; a voice call keeps its own per-second row rather than folding into a token count |
 | 390px | figures stack; every table scrolls inside its own wrapper; the filter controls drop to one per line |
+
+#### Cost charts (`/admin` → Costs)
+
+A `Meter` answers "how much, against what ceiling". It cannot answer "is this rising", "is the
+mix shifting", or "when does the money land", which is what a cost surface is for. These seven
+graphics are the exception the rule above points at, and they carry their own rules.
+
+| Element | Spec |
+|---|---|
+| Still no chart library | hand-rolled SVG, per ADR-ADD04. Every value is a geometry or presentation **attribute** — `points`, `x/y/width/height`, `d`, `r`, `stroke-dasharray`, `stroke-dashoffset`, `transform`, `fill-opacity`. **No `style` attribute anywhere**: the production CSP drops it, which is the whole reason `recharts` stays installed and unimported |
+| One graphic, one claim | daily spend (line) · daily cost per interview (line) · spend by model over time (stacked area) · this range against the last (grouped bars) · share of range spend (donut) · the exact figures (table + sparkline) · when the money lands (7×24 heatmap). A graphic that restates what another already said is deleted, not kept for symmetry — which is why the per-model `Meter` list is gone and why the line chart is *cost per interview*, not the stacked area's own silhouette redrawn |
+| **Three series, then Other** | the categorical palette is `--series-1`, `--series-2`, `--series-3` and stops there. `--series-4/5/6` clear AA as text but **fail categorical separation** against the first three (`--series-5`↔`--series-6` sit at ΔE 4.2 for deuteranopia and 14.2 for normal vision, below the 15 floor). Every model past the third folds into one **Other** bucket: `--surface-sunken` fill with a `--border` hairline, which separates by lightness and outline rather than by hue. `--text-muted` is **not** available for it — it collides with `--series-3` at ΔE 0.3 deutan |
+| Colour follows the model, not the rank | a model keeps its series slot across the area, the bars, the donut, the table swatch and its sparkline. Changing the range must not repaint a model that survived the change |
+| The previous range is never a series | in the grouped bars it is `--surface-sunken` + hairline. It is a reference, not a fourth model, and a hue spent on it is a hue the models no longer have |
+| Sparkline scale | **one max shared by every row**, never per-row. A per-row max draws a model that spent $0.001 and one that spent $10 with the same silhouette, which is a lie about the comparison the column exists for |
+| Money | the backend's six-decimal string, printed verbatim in every figure card, table cell and caption. Axis ticks may carry fewer decimals — a tick is a scale, not a ledger figure. All client-side arithmetic goes through `microUsd`; a float sum of money drifts |
+| Accessibility | every graphic is a `<figure>` whose `<svg>` is `aria-hidden`, with a `<figcaption>` stating the claim in words and numbers. The **model table is the accessible rendering** of the area, bars and donut — same figures as text — so announcing them a fourth time is the noise ADR-ADD04 already refused. The heatmap's caption names its peak bucket and value, because a colour ramp is the one encoding a caption cannot skip |
+| Legend | always present for the model series, with the share printed beside each label. Identity is never colour-alone: the swatch sits next to the name it belongs to |
+| Heatmap | the dashboard's practice grid, reused — a CSS grid of `data-tier` cells with the `color-mix` ramp off `--accent`, `activityTier` for the steps, `--surface-sunken` + hairline for the empty ground. Hours are UTC and labelled every third column; a row of 24 numbers is not a label |
+| Fixed size, own scroller | the `<svg>` carries `width`/`height` in px inside an `overflow-x: auto` wrapper — **not** a scaled `viewBox`. Scaling a `viewBox` scales the 13px type with it, and the page body must never scroll sideways |
+| Range | 7 / 30 / 90 days, whitelisted on the server, default 30. One control drives every graphic at once. No all-time option: an unbounded scan is the thing `stats.ts` deliberately refused |
+| Empty range | axes and gridlines drawn, series flat on the baseline, and one `--text-muted` line saying nothing was spent. Never a spinner, never a blank region |
+| Loading | the chart cards hold their final height, so seven figures landing at once does not reflow the section under the operator's cursor |
 
 ---
 
