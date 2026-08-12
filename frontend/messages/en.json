@@ -932,7 +932,22 @@
       "typeDonut": "Donut",
       "typeBars": "Bars",
       "typeGrouped": "Grouped columns",
-      "typeHeatmap": "Heatmap"
+      "typeHeatmap": "Heatmap",
+      "viewCompare": "Compare series",
+      "by": "By",
+      "byProvider": "Provider",
+      "byModel": "Model",
+      "measure": "Measure",
+      "measureCost": "Cost (USD)",
+      "measureCalls": "Calls",
+      "measureTokens": "Tokens",
+      "measureLatency": "Latency (ms)",
+      "series": "Series",
+      "seriesCap": "This chart draws at most six series, so drop one before adding another.",
+      "seriesEmpty": "Waiting for at least one series to draw.",
+      "tokenlessNote": "{models} bill per second and store no token count, so those lines read zero without being free.",
+      "compareCaption": "{from} to {to}, {count} series compared on {measure}.",
+      "truncatedNote": "{count} more models spent in this range and are not listed."
     },
     "calls": {
       "heading": "Model calls",

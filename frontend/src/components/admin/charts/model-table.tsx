@@ -20,7 +20,7 @@ export function ModelTable({ data }: { data: AdminCostsResponse }) {
   const SPARK = {
     width: 96,
     height: 24,
-    max: Math.max(1, ...data.models.flatMap((row) => row.daily.map(microUsd))),
+    max: Math.max(1, ...data.models.flatMap((row) => row.daily.costUsd.map(microUsd))),
   };
 
   return (
@@ -87,7 +87,7 @@ export function ModelTable({ data }: { data: AdminCostsResponse }) {
                         aria-hidden="true"
                         focusable="false"
                       >
-                        <polyline points={sparkPoints(row.daily.map(microUsd), SPARK)} />
+                        <polyline points={sparkPoints(row.daily.costUsd.map(microUsd), SPARK)} />
                       </svg>
                       <span className={tableStyles.caption}>
                         {t('costs.sparkNote', { model })}
