@@ -1177,3 +1177,117 @@ the old rows age out.
 **Left alone, deliberately:** `attempt_no` is still 1 for speech even when the driver retried
 internally, while the LLM path writes one row per attempt. Making the two agree is a data decision
 about what a "call" is, not a bug fix. `SpeechCallReport` is now the cheap place to add it.
+
+## ADR-ADD21 — `completed` needs the interview empty, not merely started
+
+**Ask, from a real interview.** `cmsqhzltj000tnh011ifcs5ir`, voice, Turkish, 2026-08-12:
+`target_question_count` 6, `hr_question_count` 2, `state` `completed`, `ended_reason` `completed`,
+`current_index` 2, `spent_usd` 0.146 of a 1.50 budget — no budget or time ceiling involved. The
+four technical questions had already been generated and every one still had `asked_at` NULL; both
+`interview_rounds` rows were still `pending`. The final assistant row carried `action =
+end_interview` and a *new question* as its content — the model was moving to the next question, not
+ending anything, and the server let it end the interview anyway. No error anywhere in the logs.
+
+**What was actually wrong, in two halves.** `clampAction` (ADR-C02) gated `end_interview` on
+`mayEnd` alone — `current_index > 1 || turnsOnQuestion >= 3` — which answers "has this interview
+started", never "does it have anything left". `handover` had `mayHandOver`, a coverage floor;
+`end_interview` had no floor at all, so ending at question 2 of 6 and ending at question 6 of 6 were
+the same call and both wrote `completed`. And the prompt made the same mistake independently:
+`remainingTopics` is round-scoped by design (ADR-C05's degradation path reasons per round), so on
+the last question of the HR round it renders "Topics this round still has to cover: none" — and
+v5's `end_interview` bullet defined `completed` as "there is nothing left to cover." Round-empty read
+as interview-empty, with nothing in the prompt distinguishing that moment from an actual completion.
+
+**Shape chosen:**
+
+- **A new guard, `mayComplete(interview)`** — `target_question_count - current_index === 0`.
+  `clampAction` now refuses `end_interview` with `endReason: 'completed'` while that is false, with
+  a new refusal reason `questions_left` whose note tells the interviewer in as many words that a
+  round which has run out of its own topics is a handover, not a completion.
+- **`mayEnd` is unchanged and still gates every `end_interview`, `completed` included.** The two
+  guards ask different questions and both have to pass: `mayEnd` is the abuse floor (has this
+  interview run long enough that ending it is not just a candidate's first sentence), `mayComplete`
+  is the coverage floor (is there anything left to ask). A `completed` request at question 2 of 6
+  now fails `mayComplete` even though it would have passed `mayEnd` on its own.
+- **`cut_short` is deliberately untouched, and is now the only early ending.** Abuse, fraud and a
+  refusal to take part have to be able to end an interview mid-round — that is the entire reason the
+  action exists — so it is still gated by `mayEnd` alone, exactly as ADR-C02 shipped it.
+- **`endReason` is validated against the `END_REASONS` map (`isEndReason`) instead of a bare
+  truthiness check.** `applyAction` used to fall back to `cut_short` for any string that was not
+  `undefined`, so a malformed or hallucinated reason was an unguarded early end wearing the label of
+  the one action that is supposed to be unguardable. A reason the server does not recognise is now
+  refused with `no_reason`, the same refusal an empty one already got.
+- **New prompt revision `interview.conduct.turn.v6.prompt.yaml`** (K9: new file, same uuid, version
+  6, v1–v5 on disk untouched). It binds a new `questionsLeft` variable —
+  `target_question_count - current_index`, unasked questions across the *whole* interview, every
+  round, which the interviewer previously had no way to see — and restates `completed` as the end of
+  the INTERVIEW, with running out of a round's own topics named explicitly as the handover it always
+  was.
+
+**Verified:** `conductor.test.ts` — `mayComplete` on its own (false mid-interview, true on the last
+question and past it, and reading the interview total rather than the round it hands over on: a
+last-HR-question row is `mayHandOver` true and `mayComplete` false in the same case) and through
+`clampAction` (refused with `questions_left` mid-interview, allowed once the last question is
+reached, `cut_short` still allowed anywhere, an unrecognised `endReason` refused as `no_reason`
+rather than read as `cut_short`). `conductor.integration.test.ts` — a `completed` request at
+question 2 of 4 is refused, writes nothing to `ended_reason`, produces no report, and the transcript
+shows the server's `continue`; the identical reply is honoured once the interview has actually run
+out of questions; abuse still cuts an interview short with questions left. The AC-11 "closing answer
+survives every exit" case was rewritten to end on `cut_short` rather than `completed`, because it
+seeds an interview at question 2 and a `completed` ending there is now precisely the bug this ADR
+closes.
+
+## ADR-ADD22 — the injection scanner was flagging its own output
+
+**Ask.** On the same deployment, 41 of the 54 `security.prompt_injection_suspected` audit rows —
+the single most common row in `audit_logs` — were the prompt builder flagging values the server
+itself had written into the prompt, not anything a candidate typed.
+
+**What was actually wrong, two independent false positives:**
+
+- `allowedActions` (`prompt-vars.ts`) renders the conductor's own action vocabulary into the prompt
+  as a hint (ADR-C02: "a courtesy, so an interviewer does not spend its turns on refusals, never the
+  check"). `action-name-injection` (`\b(end_interview|show_widget|next_question|endReason)\b`,
+  `packages/ai/config/injection-patterns.yaml`) matched it verbatim on every single call, because
+  the field that carries the server's own vocabulary is written in the server's own vocabulary.
+- `formatConversation` (`prompt-vars.ts`) labelled a `system`-role transcript row `SYSTEM:`.
+  `loadInjectionPatterns` compiles every pattern with the `im` flags, and `role-marker-injection`
+  matches `^\s*(system|assistant)\s*:` case-insensitively at the start of *any* line, not only the
+  start of the compiled message. Every conversation carrying a silence note (ADR-T04) or a refused-
+  action note (this ADR's own `REFUSAL_NOTE`) therefore matched on its own label, regardless of what
+  either note said.
+
+**Why this is a correctness bug and not noise.** Since C07 a match is not only a log line: it sets
+`chat_messages.flagged_injection` on the row and the report is told the candidate tried to steer the
+interviewer. A pattern that fires on every turn the server itself annotates tells an assessor
+nothing about that candidate. The tally is the sharper way to say it: of the 54 rows, 41 were
+`allowedActions`/`action-name-injection` and the remaining 13 were `conversation`/
+`role-marker-injection` — which is the second self-match, not the real hits the first was hiding.
+Every suspicion this deployment has ever recorded was the builder reading its own handwriting, so
+the panel C07 built to show a real attempt has never yet shown one, and had no way to.
+
+**Shape chosen:**
+
+- **`SERVER_OWNED_FIELDS` in `prompt-builder.ts`**, a set of bound-value field names the scanner
+  skips before it runs any pattern against them. `allowedActions` is in it; nothing else is, because
+  nothing else is server-authored text bound into the prompt the way that field is — `jobListing`,
+  `candidateCv` and every candidate-sourced block still scan exactly as before, and a test pins that
+  `end_interview` arriving through `jobListing` still flags `action-name-injection` while the same
+  word arriving through `allowedActions` does not.
+- **`formatConversation`'s system-row label changed from `SYSTEM:` to `NOTE:`.** The label was never
+  meaningful content, only a role marker for the model to read, and it was doing double duty as an
+  accidental self-match for a pattern written to catch a candidate forging that exact marker. A
+  candidate who types `SYSTEM:` themselves is unaffected — their words are the *value* inside a
+  `CANDIDATE:` block, not the label the server writes, so `role-marker-injection` still catches them
+  where it is supposed to.
+- **Neither pattern in `injection-patterns.yaml` was touched.** Both false positives were in what
+  the server fed the scanner, not in what the scanner looked for; loosening either pattern would
+  have weakened the real protection C07 added for the family of attacks the file's own comments
+  document (a forged multi-turn exchange, a directive naming itself the candidate's "only valid
+  action").
+
+**Verified:** `prompt-builder.test.ts` — `conductVars` built with `mayEnd`/`mayHandOver` true
+(so `allowedActions` renders `end_interview` and `handover` both) produces zero
+`SECURITY_PROMPT_INJECTION_SUSPECTED` events; the same action name arriving through `jobListing`
+still produces one, attributed to that field and to `action-name-injection` by id — proving the skip
+is scoped to the one field that earns it rather than to the pattern itself.
