@@ -197,3 +197,63 @@ ADR-ADD03. What changed and where.
   already renders whatever the setup call refuses with.
 
 `npm test` 112 files / 1122 tests pass; typecheck and eslint clean.
+
+## 2026-08-12 — the report's score chart, and seven owner-reported defects
+
+ADR-ADD04. Eight items in one pass; what changed and where.
+
+**Report — the chart (feature)**
+
+- `components/report/score-trend.tsx` — new. One column per scored answer, grouped by round,
+  each column printing its own score above it and its round's name under the group, with a
+  dashed baseline through `overall_score`. Pure SVG, every value an attribute; `--series-1` and
+  `--series-3` come in through `report.module.css` classes. Wide charts scroll inside
+  `.trendScroll`, so a ten-question interview never scrolls the page sideways.
+- `components/report/report-view.tsx` — renders it between the verdict sentence and Rounds, and
+  only from two answers up. The points come off `rows`, which already joins each scored question
+  to its transcript turn — that turn is where `roundType` lives.
+- `messages/{en,tr}.json` — `report.trendTitle`, `report.trendCaption`.
+
+**Report — the download (fix)**
+
+- `worker/src/render-pdf.ts` — `ReportPdfMeta.interviewId` is gone, replaced by `occupation`.
+  The header line and the PDF `Title` name the role instead of the cuid; a null occupation falls
+  back to "Practice interview".
+- `worker/src/finalize.ts` — one `include` for the interview's occupation.
+- `backend/src/lib/storage.ts` — `signedUrl` takes an optional `filename` and presigns
+  `ResponseContentDisposition` with it. `backend/modules/interview/download.ts` passes
+  `interviewly-report-<yyyy-mm-dd>.pdf`, off the report's own `created_at`. The object key is
+  unchanged.
+
+**Room**
+
+- `components/room/persona-tiles.tsx` — the text-mode roster's green `LIVE` badge and the
+  four-bar glyph beside it are deleted (owner: remove it). The tile still carries `data-live`,
+  which is what the CSS and the room's own test read. `room.module.css` lost `.liveBadge`,
+  `.mini` and their four overrides with it; `room.live` stays in both message files because the
+  voice test asserts the string is *absent*.
+- `components/room/room.module.css` — the mute/camera split control: the switch half painted a
+  transparent border while the welded caret painted a real one, so the pair read as a bordered
+  box hanging off nothing. The split rules are now scoped to `.group:has(.caret)` (a caret-less
+  switch keeps its own radii), the switch takes `--border` when it is not in the danger state,
+  and both halves carry the app's focus ring at `z-index: 1` so the neighbour cannot clip it.
+
+**Landing chrome**
+
+- `chrome.module.css` — the scrolled header is iced glass now: `blur(32px) saturate(180%)` over
+  62% `--surface`, up from a 12px blur at 78%. Sign in became a real control (padding and a
+  `--surface-sunken` hover bed rather than a colour change alone), and Try now carries the rail's
+  ink with a hairline lift. Neither is orange: the hero still owns the page's one `--primary`.
+
+**Archive**
+
+- `app/[locale]/interviews/page.tsx` — the sessions sort is the house `<Select>` now, not a bare
+  native one. That is what fixes the arrow with nothing between it and the border: `appearance:
+  none` plus a drawn chevron at 16px inside a 44px right padding, which `components/ui` already
+  owned. The local `.select` is four lines of override.
+- `components/interviews/question-table.tsx` — the question view offered `recent` and `worst`
+  only; `oldest` and `best` are in, over the same comparator shape the sessions list uses
+  (unscored rows last under *both* score sorts). `messages/{en,tr}.json` gained the two labels.
+
+`npm test` 121 files / 1253 tests pass (new: three on the chart's geometry, two on the added
+sorts); typecheck and eslint clean.
