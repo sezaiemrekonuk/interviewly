@@ -122,6 +122,29 @@ const QUEUE = {
   ],
 };
 
+const COSTS = {
+  days: 30,
+  from: '2026-07-14',
+  to: '2026-08-12',
+  buckets: ['2026-08-10', '2026-08-11', '2026-08-12'],
+  daily: { costUsd: ['0.400000', '0.500000', '0.334560'], interviews: [2, 3, 1] },
+  totals: { costUsd: '1.234560', calls: 42, tokens: 84210, interviews: 6 },
+  previous: { costUsd: '1.000000' },
+  models: [
+    {
+      provider: 'openai',
+      model: 'gpt-4.1-mini',
+      costUsd: '1.234560',
+      previousCostUsd: '1.000000',
+      calls: 42,
+      tokens: 84210,
+      averageLatencyMs: 950,
+      daily: ['0.400000', '0.500000', '0.334560'],
+    },
+  ],
+  hourly: [{ dow: 1, hour: 14, costUsd: '1.234560' }],
+};
+
 const STATS = {
   averageDurationMs: 512000,
   completed: 12,
@@ -227,6 +250,7 @@ function stubFetch({
         });
       }
       if (url === '/api/admin/stats') return json(200, stats);
+      if (url.startsWith('/api/admin/costs')) return json(200, COSTS);
       if (url.startsWith('/api/admin/llm-calls'))
         return json(200, {
           ...META,
@@ -414,8 +438,9 @@ describe('admin list + stats (W11)', () => {
     const total = within(screen.getByTestId('admin-platform-spend'));
     expect(total.getByText(STATS.totalCostUsd)).toBeInTheDocument();
     expect(screen.queryByText('0.141200')).not.toBeInTheDocument();
-    // Spend by model comes from the same endpoint rather than a hatched placeholder.
-    expect(within(screen.getByTestId('admin-by-model')).getByText(/gpt-4\.1-mini/)).toBeInTheDocument();
+    expect((await screen.findAllByText(/gpt-4\.1-mini/)).length).toBeGreaterThan(1);
+    expect(within(screen.getByTestId('admin-window-spend')).getByText(COSTS.totals.costUsd))
+      .toBeInTheDocument();
   });
 
   it('opens the accounts section against its own endpoint, not an empty placeholder', async () => {
