@@ -16,6 +16,7 @@ import {
   runChain,
   type ChainDeps,
   type LlmCallRecord,
+  type ProviderTransport,
 } from './providers';
 import { QuestionBatchSchema } from './schemas';
 import type { BuiltPrompt } from './prompt-builder';
@@ -67,13 +68,18 @@ describe('buildChain', () => {
 
 describe('transport request bodies', () => {
   async function sentBody(
-    transport: typeof geminiTransport,
+    transport: ProviderTransport,
+    provider: string,
     response: unknown,
-  ): Promise<Record<string, never> & Record<string, unknown>> {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify(response), { status: 200 }));
-    vi.stubGlobal('fetch', fetchMock);
+  ): Promise<Record<string, unknown>> {
+    let sent = '';
+    vi.stubGlobal('fetch', async (_url: string, init: { body: string }) => {
+      sent = init.body;
+      return new Response(JSON.stringify(response), { status: 200 });
+    });
     try {
       await transport({
+        provider,
         model: 'm',
         apiKey: 'k',
         system: 'system template',
@@ -84,11 +90,11 @@ describe('transport request bodies', () => {
     } finally {
       vi.unstubAllGlobals();
     }
-    return JSON.parse(String(fetchMock.mock.calls[0][1].body));
+    return JSON.parse(sent) as Record<string, unknown>;
   }
 
   it('spends the gemini output budget on output, never on thinking', async () => {
-    const body = await sentBody(geminiTransport, {
+    const body = await sentBody(geminiTransport, 'google', {
       candidates: [{ content: { parts: [{ text: '[]' }] } }],
     });
     expect(body.generationConfig).toMatchObject({
@@ -98,7 +104,7 @@ describe('transport request bodies', () => {
   });
 
   it('makes openai enforce JSON, which is why no prompt may ask for a top-level array', async () => {
-    const body = await sentBody(openaiTransport, {
+    const body = await sentBody(openaiTransport, 'openai', {
       choices: [{ message: { content: '{}' } }],
     });
     expect(body.response_format).toEqual({ type: 'json_object' });
