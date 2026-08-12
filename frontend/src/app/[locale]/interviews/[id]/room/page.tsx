@@ -1,5 +1,6 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
@@ -17,6 +18,7 @@ import { Button } from '../../../../../components/ui';
 import { routeForError } from '../../../../../lib/error-routing';
 import {
   ApiError,
+  queryKeys,
   useAbandonInterview,
   useInterviewState,
   useResumeInterview,
@@ -29,6 +31,7 @@ import { useRequireAuth } from '../../../../../lib/use-require-auth';
 import { useRoomHeartbeat } from '../../../../../lib/use-room-clock';
 import { useVoiceSession } from '../../../../../lib/use-voice-session';
 import { resolveActiveSpeaker } from '../../../../../lib/voice/active-speaker';
+import { FLUSH_GRACE_MS, FLUSH_POLL_MS, takeFlushed } from '../../../../../lib/voice/unload-flush';
 
 import styles from '../../../../../components/room/room.module.css';
 
@@ -135,10 +138,47 @@ export default function InterviewRoomPage() {
   const [resumed, setResumed] = useState<string | null>(null);
   const resumedReadRef = useRef(false);
   const resumedGoneRef = useRef(false);
+
+  // T07 — but not before the flush that left with the last page has landed. A beacon sent at
+  // `pagehide` is still being transcribed and gated when this room asks `GET /state`: measured at
+  // ~2 s early, which is long enough for the latch above to freeze on a null and for the
+  // candidate to be told nothing survived while it was arriving.
+  //
+  // A ref and not state, and every write below is inside an effect or a timer: the wait must not
+  // be a render input. Deriving it from `resumed` — or from anything the latch writes — makes
+  // that effect its own dependency and re-enter on what it just wrote, which is the cascade
+  // `react-hooks/set-state-in-effect` exists to catch.
+  const awaitingFlushRef = useRef(false);
+  const client = useQueryClient();
+
+  // Nothing else in the room polls `/state`. This does, briefly, and only for the candidate whose
+  // last page actually sent a beacon — the marker is consumed on read, so it buys one reload.
+  useEffect(() => {
+    if (!takeFlushed(id)) return;
+    awaitingFlushRef.current = true;
+    const poll = setInterval(() => {
+      void client.invalidateQueries({ queryKey: queryKeys.interviewState(id) });
+    }, FLUSH_POLL_MS);
+    // Nothing came. Stop asking and let the latch below freeze on the null it has been holding
+    // off from — the room says nothing rather than waiting on a flush that will never land.
+    const giveUp = setTimeout(() => {
+      awaitingFlushRef.current = false;
+      resumedReadRef.current = true;
+      clearInterval(poll);
+    }, FLUSH_GRACE_MS);
+    return () => {
+      clearInterval(poll);
+      clearTimeout(giveUp);
+    };
+  }, [client, id]);
+
   useEffect(() => {
     if (!room) return;
     if (!resumedReadRef.current) {
+      // A null while a flush is still in flight is not an answer, it is an early question.
+      if (awaitingFlushRef.current && room.pendingTurn === null) return;
       resumedReadRef.current = true;
+      awaitingFlushRef.current = false;
       setResumed(room.pendingTurn ?? null);
       return;
     }

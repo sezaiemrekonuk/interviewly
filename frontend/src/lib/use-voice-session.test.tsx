@@ -11,6 +11,7 @@ import {
   VAD_SILENCE_MS,
   VAD_THRESHOLD,
 } from './use-voice-session';
+import { takeFlushed } from './voice/unload-flush';
 import { installAudioMock, type AudioHarness } from '../test/audio-mock';
 import { installMediaDevicesMock } from '../test/media-devices-mock';
 
@@ -724,5 +725,200 @@ describe('useVoiceSession — a pause is not the end of the turn (T04)', () => {
 
     const probe = calls.find((call) => call.url === UPLOAD)!.body as FormData;
     expect(probe.get('force')).toBe(null);
+  });
+});
+
+/**
+ * T07 — the speech that never reached a probe. T06 fixed the case where a pause had happened:
+ * the fragment is on the server and the reloaded room recovers it. What is still lost is an
+ * utterance the candidate is in the MIDDLE of — nothing has been uploaded, and the browser's
+ * audio dies with the document.
+ *
+ * Real timers here: nothing below waits on either clock, and the flush is synchronous.
+ */
+describe('useVoiceSession — speech the page takes with it (T07)', () => {
+  let audio: AudioHarness;
+  let client: QueryClient;
+  let beacon: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    installMediaDevicesMock();
+    audio = installAudioMock();
+    client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    sessionStorage.clear();
+    // jsdom has no `sendBeacon` at all, so this is a definition rather than a spy.
+    beacon = vi.fn(() => true);
+    Object.defineProperty(navigator, 'sendBeacon', { value: beacon, configurable: true });
+  });
+
+  afterEach(() => {
+    Reflect.deleteProperty(navigator, 'sendBeacon');
+    vi.unstubAllGlobals();
+  });
+
+  function mount() {
+    return renderHook(
+      () => useVoiceSession('i1', { enabled: true, messages: MESSAGES, speakable: true, vad: VAD }),
+      { wrapper: wrapper(client) },
+    );
+  }
+
+  /** Greeting spoken, recorder open — the state every flush below is interrupted from. */
+  async function listening() {
+    const calls = stubApi();
+    const hook = mount();
+    await waitFor(() => expect(audio.players).toHaveLength(1));
+    await act(async () => audio.players[0].end());
+    await waitFor(() => expect(audio.recorders).toHaveLength(1));
+    return { hook, calls };
+  }
+
+  const hide = async () => {
+    await act(async () => {
+      window.dispatchEvent(new Event('pagehide'));
+    });
+  };
+
+  const beaconed = () => beacon.mock.calls[0][1] as FormData;
+
+  it('records in chunks, so there is something to flush before the stop', async () => {
+    await listening();
+
+    expect(audio.recorders[0].timeslice).toBe(1_000);
+  });
+
+  it('posts what has been recorded so far when the page goes away, unforced', async () => {
+    await listening();
+    audio.recorders[0].chunk(2_000, 'H');
+    audio.recorders[0].chunk(2_000, 'Z');
+
+    await hide();
+
+    expect(beacon).toHaveBeenCalledTimes(1);
+    expect(beacon.mock.calls[0][0]).toBe(UPLOAD);
+    const form = beaconed();
+    // A flush is an ordinary probe: the gate decides whether it finished a turn (ADR-T02).
+    expect(form.get('force')).toBe(null);
+    const file = form.get('audio') as File;
+    // Bare media type, the same allow-list the normal upload is written against.
+    expect(file.type).toBe('audio/webm');
+    expect(await file.text()).toBe('H'.repeat(2_000) + 'Z'.repeat(2_000));
+  });
+
+  // The flush and the reloaded room are two documents; this is the only thing that crosses
+  // between them. Without it the new page reads `/state` before the gate has written and freezes
+  // on a null — the fragment lands a second later and is never shown.
+  it('leaves a marker for the reloaded room, and only once it has actually sent', async () => {
+    await listening();
+    audio.recorders[0].chunk(2_000, 'H');
+    audio.recorders[0].chunk(2_000, 'Z');
+    expect(takeFlushed('i1')).toBe(false);
+
+    await hide();
+
+    expect(takeFlushed('i1')).toBe(true);
+  });
+
+  it('leaves no marker when the browser refuses the beacon', async () => {
+    beacon.mockReturnValue(false);
+    await listening();
+    audio.recorders[0].chunk(2_000, 'H');
+    audio.recorders[0].chunk(2_000, 'Z');
+
+    await hide();
+
+    expect(takeFlushed('i1')).toBe(false);
+  });
+
+  it('sends nothing when no recording is open', async () => {
+    stubApi();
+    mount();
+    await waitFor(() => expect(audio.players).toHaveLength(1));
+
+    await hide();
+
+    expect(beacon).not.toHaveBeenCalled();
+  });
+
+  // The container header with no audio after it: a refresh in the second before the candidate
+  // said anything is not worth an STT charge, and there is nothing in it to recover.
+  it('sends nothing when only the header has been recorded', async () => {
+    await listening();
+    audio.recorders[0].chunk(2_000, 'H');
+
+    await hide();
+
+    expect(beacon).not.toHaveBeenCalled();
+  });
+
+  it('flushes once, however many times the page says it is leaving', async () => {
+    await listening();
+    audio.recorders[0].chunk(2_000, 'H');
+    audio.recorders[0].chunk(2_000, 'Z');
+
+    await hide();
+    await hide();
+
+    expect(beacon).toHaveBeenCalledTimes(1);
+  });
+
+  // A beacon is capped near 64 KiB and the browser refuses the whole payload rather than
+  // truncating it. What survives is the TAIL — the words the candidate was in the middle of —
+  // carried by the first chunk, which is the only one with the WebM header in it. A tail without
+  // that header is not a file any decoder will take.
+  it('keeps the header and the last of a recording too long to fit in one beacon', async () => {
+    await listening();
+    const recorder = audio.recorders[0];
+    recorder.chunk(8_000, 'H');
+    for (let i = 0; i < 6; i += 1) recorder.chunk(8_000, 'M');
+    for (let i = 0; i < 6; i += 1) recorder.chunk(8_000, 'Z');
+
+    await hide();
+
+    const file = beaconed().get('audio') as File;
+    const text = await file.text();
+    expect(file.size).toBeLessThanOrEqual(64 * 1_024);
+    expect(text.startsWith('H'.repeat(8_000))).toBe(true);
+    expect(text.endsWith('Z'.repeat(8_000))).toBe(true);
+    // The middle is what a cap costs, and it is the oldest speech — not the newest.
+    expect(text).not.toContain('M');
+  });
+
+  // The page may survive the event (a backgrounded tab, restored). The beaconed audio must not
+  // then be uploaded a second time and joined onto the same turn twice — but the header has to
+  // stay, or what the recorder assembles at `stop()` has no container at all.
+  it('never uploads the flushed audio a second time, and still uploads a decodable file', async () => {
+    const { hook, calls } = await listening();
+    audio.recorders[0].chunk(2_000, 'H');
+    audio.recorders[0].chunk(2_000, 'Z');
+
+    await hide();
+    await act(async () => hook.result.current.stop());
+
+    await waitFor(() => expect(hits(calls, UPLOAD)).toBe(1));
+    const uploaded = await ((calls.find((call) => call.url === UPLOAD)!.body as FormData).get(
+      'audio',
+    ) as File).text();
+    expect(uploaded.startsWith('H'.repeat(2_000))).toBe(true);
+    expect(uploaded).not.toContain('Z');
+  });
+
+  // Best-effort, never load-bearing: a refused beacon costs nothing, says nothing, and leaves
+  // every byte where a normal upload will still find it.
+  it('loses nothing and shows nothing when the browser refuses the beacon', async () => {
+    beacon.mockReturnValue(false);
+    const { hook, calls } = await listening();
+    audio.recorders[0].chunk(2_000, 'H');
+    audio.recorders[0].chunk(2_000, 'Z');
+
+    await hide();
+    await act(async () => hook.result.current.stop());
+
+    expect(hook.result.current.error).toBe(null);
+    await waitFor(() => expect(hits(calls, UPLOAD)).toBe(1));
+    const uploaded = await ((calls.find((call) => call.url === UPLOAD)!.body as FormData).get(
+      'audio',
+    ) as File).text();
+    expect(uploaded).toContain('Z');
   });
 });

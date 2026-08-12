@@ -2,6 +2,8 @@ import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { FLUSH_GRACE_MS, FLUSH_POLL_MS, markFlushed } from '@/lib/voice/unload-flush';
+
 import { MockEventSource, installEventSourceMock } from '../../../../../test/event-source-mock';
 import { messages, renderWithProviders } from '../../../../../test/render';
 import { installMediaDevicesMock } from '../../../../../test/media-devices-mock';
@@ -180,6 +182,8 @@ describe('interview room, voice mode (W10)', () => {
   beforeEach(() => {
     nav.push.mockReset();
     nav.replace.mockReset();
+    // The flush marker is per tab and jsdom keeps one tab for the whole file.
+    sessionStorage.clear();
     installEventSourceMock();
     mics = installMediaDevicesMock();
     audio = installAudioMock();
@@ -475,6 +479,63 @@ describe('interview room, voice mode (W10)', () => {
     });
     await waitFor(() => expect(screen.queryByTestId('turn-resumed')).not.toBeInTheDocument(), SETTLE);
   });
+
+  // T07 — the half of the flush the candidate can see, and the reason the first live run of it
+  // read as "it didn't save". A beacon sent at `pagehide` is still being transcribed and gated
+  // when the reloaded room asks `GET /state`: measured at ~2 s early on 2026-08-12, against a
+  // fragment that reached Redis one second after the room had already latched null and frozen.
+  // The marker the dying page leaves is what buys those seconds back.
+  it('waits for a flush that is still in flight before deciding nothing survived', async () => {
+    markFlushed('i1');
+    stubFetch({
+      states: [
+        // The reloaded room asks before the gate has written: an honest null, and the wrong
+        // answer to freeze.
+        voiceState({ pendingTurn: null }),
+        voiceState({ pendingTurn: 'Oh my God. You slipped?' }),
+      ],
+    });
+    await renderRoom();
+
+    const notice = await screen.findByTestId('turn-resumed', undefined, SETTLE);
+    expect(notice).toHaveTextContent('Oh my God. You slipped?');
+  });
+
+  // ...and the wait is bought by the marker alone. A room nobody flushed from latches the first
+  // answer and stays frozen on it (ADR-T05) — no polling, and no notice that appears a beat
+  // after the candidate has started their next sentence.
+  it('does not wait, or re-read, when no flush left this tab', async () => {
+    const calls = stubFetch({
+      states: [voiceState({ pendingTurn: null }), voiceState({ pendingTurn: 'too late' })],
+    });
+    await renderRoom();
+    const reads = stateCalls(calls);
+
+    await new Promise((resolve) => setTimeout(resolve, 1_200));
+
+    expect(screen.queryByTestId('turn-resumed')).not.toBeInTheDocument();
+    expect(stateCalls(calls)).toBe(reads);
+  });
+
+  // The candidate who flushed and whose fragment the server did not keep — the gate conducted it,
+  // or the beacon never arrived. The wait is bounded: the room stops asking and says nothing,
+  // rather than polling `/state` for the rest of the interview.
+  it(
+    'gives up on a flush that never lands, and stops asking',
+    async () => {
+      markFlushed('i1');
+      const calls = stubFetch({ states: [voiceState({ pendingTurn: null })] });
+      await renderRoom();
+
+      await new Promise((resolve) => setTimeout(resolve, FLUSH_GRACE_MS + 400));
+      const afterGrace = stateCalls(calls);
+      await new Promise((resolve) => setTimeout(resolve, FLUSH_POLL_MS * 2));
+
+      expect(screen.queryByTestId('turn-resumed')).not.toBeInTheDocument();
+      expect(stateCalls(calls)).toBe(afterGrace);
+    },
+    FLUSH_GRACE_MS + FLUSH_POLL_MS * 2 + 5_000,
+  );
 
   it('releases the microphone when the room unmounts', async () => {
     stubFetch();
