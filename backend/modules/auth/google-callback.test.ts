@@ -3,10 +3,13 @@
  * account never met onboarding — and because onboarding is not reachable once bypassed, the
  * profile that personalises every interview stayed empty forever.
  *
- * The destination is now `/`, which applies the K8.7 first-run rule client-side — the same
- * rule the password path uses. What this pins is the handler's half: where it sends the
- * browser, and that the failure paths still answer as they did. `page.test.tsx` owns the
- * other half (what `/` then does with an account that has not finished onboarding).
+ * The destination was `/` for exactly that reason: the marketing page carried the K8.7 bounce.
+ * `/` is public now and redirects nobody (additionals ADR-ADD06), so a Google user landed on
+ * marketing copy after signing in. The destination is `/dashboard`, and the onboarding half of
+ * the rule moved to that page — the one arrival a sign-in call site cannot cover, because this
+ * handler is a server 302 straight into the app. What this pins is the handler's half: where it
+ * sends the browser, and that the failure paths still answer as they did.
+ * `dashboard/page.test.tsx` owns the other half.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -79,16 +82,16 @@ describe('the redirect URI', () => {
   });
 });
 
-describe('the success destination is the first-run router', () => {
-  it('is `/`, so the rule lives in one place instead of two', async () => {
+describe('the success destination is inside the app', () => {
+  it('is `/dashboard`, which is where the first-run rule is enforced', async () => {
     // Read from source rather than driven through a full OAuth exchange: completing one needs
     // a live token endpoint, and the assertion that matters is which URL the success path
     // names — a constant, and the entire defect.
     const { readFileSync } = await import('node:fs');
     const source = readFileSync(new URL('./google.ts', import.meta.url), 'utf8');
 
-    expect(source).toContain('res.redirect(302, `${config.PUBLIC_ORIGIN}/`)');
-    // The refusals keep their own destination; only the success path moved.
-    expect(source).not.toContain('PUBLIC_ORIGIN}/dashboard');
+    expect(source).toContain('res.redirect(302, `${config.PUBLIC_ORIGIN}/dashboard`)');
+    // Never the public landing again: it redirects nobody, so this path would end there.
+    expect(source).not.toContain('res.redirect(302, `${config.PUBLIC_ORIGIN}/`)');
   });
 });

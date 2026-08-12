@@ -4,6 +4,7 @@ import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Suspense } from 'react';
 
+import { AnonymousOnly } from '../../../../components/auth/anonymous-only';
 import { AuthShell } from '../../../../components/auth/auth-shell';
 import styles from '../../../../components/auth/auth.module.css';
 import { CredentialsForm, loginSchema } from '../../../../components/auth/credentials-form';
@@ -68,7 +69,9 @@ export default function SignInPage() {
   // boundary `next build` refuses to prerender the route at all.
   return (
     <Suspense fallback={null}>
-      <SignIn />
+      <AnonymousOnly>
+        <SignIn />
+      </AnonymousOnly>
     </Suspense>
   );
 }

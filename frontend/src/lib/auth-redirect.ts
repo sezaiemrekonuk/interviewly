@@ -3,8 +3,9 @@
  * at least one interview exists. Also the fallback when a `?returnPath=` is unusable.
  *
  * `/dashboard` is the signed-in home. It used to be `/`, which served both audiences and
- * flashed the marketing page at signed-in visitors; the two are now separate surfaces and
- * `/` redirects here for anyone with a session (`components/home/home-switch.tsx`).
+ * flashed the marketing page at signed-in visitors. The two are separate surfaces now, and
+ * since 2026-08-12 `/` no longer redirects: it is public for everyone, and the header's two
+ * actions point here instead (`components/chrome/header-nav.tsx`).
  */
 export const DEFAULT_LANDING_PATH = '/dashboard';
 

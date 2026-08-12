@@ -20,7 +20,7 @@ export type DemoRound = (typeof DEMO_ROUNDS)[number];
 
 /**
  * Three answers per question. `a` is the strong one throughout, which is a property of the
- * *data* and never of the screen: `demo-interview.tsx` draws them in an order shuffled per
+ * *data* and never of the screen: `handover.tsx` draws them in an order shuffled per
  * question per mount, so nothing about the position or the length of an answer tells the
  * visitor which it is before they read it. Finding out is the demonstration.
  */

@@ -3,6 +3,7 @@
 import { useLocale, useTranslations } from 'next-intl';
 import { useState } from 'react';
 
+import { AnonymousOnly } from '../../../../components/auth/anonymous-only';
 import { AuthShell } from '../../../../components/auth/auth-shell';
 import styles from '../../../../components/auth/auth.module.css';
 import { CredentialsForm, registerSchema } from '../../../../components/auth/credentials-form';
@@ -17,7 +18,7 @@ const FIELD_FOR_CODE = {
   PASSWORD_TOO_SHORT: 'password',
 } as const;
 
-export default function RegisterPage() {
+function Register() {
   const t = useTranslations('auth');
   const router = useRouter();
   // The language the form is being read in, carried onto the new row so the verification mail
@@ -79,5 +80,13 @@ export default function RegisterPage() {
         </Link>
       </p>
     </AuthShell>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <AnonymousOnly>
+      <Register />
+    </AnonymousOnly>
   );
 }

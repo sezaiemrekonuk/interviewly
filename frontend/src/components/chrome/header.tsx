@@ -22,7 +22,7 @@ const cx = (...names: Array<string | false | undefined>) => names.filter(Boolean
  * No locale switcher here for now — English only while the landing copy is in flux; it still
  * lives on `/settings` for a signed-in user who wants Turkish.
  */
-export function SiteHeader() {
+export function SiteHeader({ onDark = false }: { onDark?: boolean } = {}) {
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
@@ -35,7 +35,7 @@ export function SiteHeader() {
   }, []);
 
   return (
-    <header className={cx(styles.header, scrolled && styles.headerScrolled)}>
+    <header className={cx(styles.header, onDark && styles.headerOnDark, scrolled && styles.headerScrolled)}>
       <div className={styles.headerInner}>
         <Link href="/" className={styles.wordmark}>
           Interviewly
