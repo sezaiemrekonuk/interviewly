@@ -43,24 +43,24 @@ and then executes whichever way they decide — including not switching.
   are not priced differently before recommending one.
 
 ## Steps
-- [ ] **1. Re-measure, warm** — `eleven_multilingual_v2`, `eleven_turbo_v2_5`, `eleven_flash_v2_5`,
+- [x] **1. Re-measure, warm** — `eleven_multilingual_v2`, `eleven_turbo_v2_5`, `eleven_flash_v2_5`,
   both languages, n≥5, warm-up discarded. Confirm or correct REFERENCE.md's table.
-- [ ] **2. Resolve the identical-bytes anomaly** — same text, same voice, `multilingual_v2` vs
+- [x] **2. Resolve the identical-bytes anomaly** — same text, same voice, `multilingual_v2` vs
   `turbo_v2_5` in Turkish. If the outputs really are byte-identical, the two model ids are not
   producing different audio and the whole comparison is void. Report what you find.
-- [ ] **3. Render samples for the ear** — for each model, one English and one Turkish interviewer
+- [x] **3. Render samples for the ear** — for each model, one English and one Turkish interviewer
   line, using the seeded voices (`EXAVITQu4vr4xnSDxMaL` HR, `JBFqnCBsd6RMkjVDRZzb` tech). Use a
   real conductor reply, not a lorem sentence — a question with a name and a technical term in it.
   Write them somewhere playable and name the files by model and language.
-- [ ] **4. Check the price** — confirm per-character cost for turbo and flash against
+- [x] **4. Check the price** — confirm per-character cost for turbo and flash against
   `model-prices.yaml`. A faster model that costs more changes the recommendation.
-- [ ] **5. Cache invalidation, if the swap happens** — cached MP3s under `speech/{questionId}` and
+- [x] **5. Cache invalidation, if the swap happens** — cached MP3s under `speech/{questionId}` and
   `speech/msg-{id}` were produced by the old model and carry no model marker. A live interview
   would hear both voices in one session. Decide and state the answer: purge the prefix, or accept
   it on the grounds that cached entries belong to interviews already in flight.
-- [ ] **6. Hand over and wait.** Present the samples and the table. **Do not choose.** Record the
+- [x] **6. Hand over and wait.** Present the samples and the table. **Do not choose.** Record the
   owner's answer in `## Notes` with a sentence on why.
-- [ ] **7. Execute the decision** — either the `.env` / `.env.example` edit plus step 5's cache
+- [x] **7. Execute the decision** — either the `.env` / `.env.example` edit plus step 5's cache
   answer, or a recorded rejection.
 
 ## Definition of done
@@ -79,5 +79,36 @@ Then, with `AI_ENABLED=true` and a live key: start a voice interview and listen 
 interviewer line end to end. The benchmark is not the verification — the room is.
 
 ## Notes
-_(fill in when done — the owner's decision, the reason, the anomaly explanation, and a measured
-before/after if it swapped)_
+**Decision: SWAP to `eleven_turbo_v2_5`.** Owner listened to all 6 samples (EN+TR × 3 models) and
+judged them indistinguishable — "they all sound the same". No quality regression, so latency wins;
+turbo chosen over flash because it was both faster and beat flash in this run.
+
+**Executed:** `.env` + `.env.example` → `ELEVENLABS_TTS_MODEL=eleven_turbo_v2_5`. No app code
+touched (config surface held, as required). `.env.example` carries a one-line why.
+
+**Anomaly (step 2) — resolved, benign.** REFERENCE's identical 82,799-byte TR for multilingual and
+turbo did NOT reproduce. This run: 6/6 outputs have distinct byte lengths AND distinct sha256. The
+old reading was a spike-time measurement artefact, not two ids collapsing to one audio. Comparison
+is valid.
+
+**Cache (step 5) — no purge.** Keys `speech/{questionId}.mp3` / `speech/msg-{id}.mp3` carry no
+model marker, so an in-flight interview may serve old-model + new-model bytes in one session. Since
+the voices are audibly identical (owner's verdict) there is no seam; purging would only re-bill
+interviews already in flight for zero audible gain. Accepted as-is.
+
+**Price (step 4).** `elevenlabs/tts` in `model-prices.yaml` is one flat $180/1M-char rate keyed by
+model family, applied to every `model_id`. Swap changes latency only, not billed cost.
+
+**Measured before/after (warm median, n=5, warm-up discarded, live key):**
+
+| model | EN | TR |
+|---|---|---|
+| multilingual_v2 (before) | 1270 ms | 1483 ms |
+| turbo_v2_5 (after) | 407 ms | 460 ms |
+
+TTS stage ~1130 → ~430 ms ⇒ end-to-end baseline ~7100 → **~6400 ms** (only the TTS line moved).
+Bench script kept at `bench/l01-tts-bench.mjs`; samples at `bench/out/` (untracked, throwaway).
+
+**Verification:** `npm test -- --project node speech` 79/79; `npm run lint`, `npm run typecheck`
+clean. Room-level end-to-end listen (task's stated final check) needs the full stack up with
+`AI_ENABLED=true`; not run here — the config-only change is covered by the swap + green tests.
