@@ -53,18 +53,6 @@ function Wave({
   );
 }
 
-/** Four static bars — a glyph on a control, never a second reading of the mic level. */
-export function MiniBars() {
-  return (
-    <span className={styles.mini} aria-hidden="true">
-      <i />
-      <i />
-      <i />
-      <i />
-    </span>
-  );
-}
-
 /**
  * A meeting tile: the picture is the tile, everything else floats on top of it. The name plate
  * sits bottom-right and the LIVE badge top-right, the way every call surface a candidate has
@@ -167,12 +155,6 @@ function PersonaTile({
           <p className={styles.tileName}>{persona.name}</p>
           <p className={styles.tileRole}>{role}</p>
         </div>
-        {live ? (
-          <span className={styles.liveBadge}>
-            <MiniBars />
-            {t('live')}
-          </span>
-        ) : null}
       </div>
       <Wave speaking={speaking} small state={live ? state : 'idle'} />
     </div>

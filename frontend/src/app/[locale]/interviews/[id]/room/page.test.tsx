@@ -193,8 +193,7 @@ describe('interview room, text mode (W06)', () => {
     const tech = screen.getByTestId('persona-tile-tech');
     expect(hr).toHaveAttribute('data-live', 'true');
     expect(tech).toHaveAttribute('data-live', 'false');
-    expect(within(hr).getByText(messages.room.live)).toBeInTheDocument();
-    expect(screen.getAllByText(messages.room.live)).toHaveLength(1);
+    expect(screen.queryByText(messages.room.live)).not.toBeInTheDocument();
     // The inactive tile is a roster row, not a second speaker: it never animates. The room has
     // no cameras, so the resolved avatar state now drives that persona's waveform, not an image.
     expect(within(tech).getByTestId('wave')).toHaveAttribute('data-avatar-state', 'idle');
