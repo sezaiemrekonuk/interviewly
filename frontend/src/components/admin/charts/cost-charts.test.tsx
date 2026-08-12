@@ -286,6 +286,29 @@ describe('admin cost charts (W11)', () => {
     expect(within(container).queryByText(OTHER)).not.toBeInTheDocument();
   });
 
+  it('swatches only the models the charts actually colour, and marks no other row as residual', () => {
+    const { container } = renderWithIntl(<ModelTable data={FIXTURE} />);
+
+    const swatches = [...container.querySelectorAll(`.${styles.swatch}`)];
+    expect(swatches).toHaveLength(FIXTURE.models.length);
+    expect(swatches.slice(0, 3).map((node) => node.getAttribute('data-series'))).toEqual([
+      's1',
+      's2',
+      's3',
+    ]);
+    for (const node of swatches.slice(3)) {
+      expect(node.getAttribute('data-series')).toBeNull();
+    }
+  });
+
+  it('says what the cap dropped on the table that claims to be the whole list', () => {
+    const whole = renderWithIntl(<ModelTable data={FIXTURE} />);
+    expect(within(whole.container).queryByTestId('admin-cost-truncated')).not.toBeInTheDocument();
+
+    const capped = renderWithIntl(<ModelTable data={{ ...FIXTURE, truncated: 4 }} />);
+    expect(within(capped.container).getByTestId('admin-cost-truncated')).toBeInTheDocument();
+  });
+
   it('scales every sparkline against one shared maximum, so a small model draws small', () => {
     const { container } = renderWithIntl(<ModelTable data={FIXTURE} />);
 

@@ -562,5 +562,14 @@ platform actually calls — were unreachable by any chart or table. See `DECISIO
   should never have been a shrink target. Also gave the selected chip the sunken bed the range
   buttons already use; border colour alone was too quiet a "this one is drawn".
 
+  Two more the test pass caught before merge: the unfolded table was still asking `seriesToken`
+  for a colour past the third row and getting `sOther` back — the same grey the legend uses to
+  *mean* "the remaining models", so two named models were being labelled as the residual. Rows
+  past the third now carry no swatch at all; absence is unambiguous where a grey box was not.
+  And `truncatedNote` only rendered under the compare view, while the **table** is the surface
+  that claims to be the whole ranked list and prints the platform total in its footer — with a
+  real capped response its rows and its total would not have reconciled, and nothing nearby
+  would have said why.
+
 **Not done here (see ADR-ADD10 "Skipped"):** no small multiples past six series, no persistence of
 the picked series, and overlapping filled areas still muddy past three.

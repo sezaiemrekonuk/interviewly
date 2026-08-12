@@ -8,6 +8,7 @@ import { microUsd } from '../interview-table';
 import tableStyles from '../table.module.css';
 
 import styles from './charts.module.css';
+import { CHART_SERIES_LIMIT } from './fold';
 import { seriesKey, seriesLabel, seriesShare, seriesToken } from './series';
 
 export function ModelTable({ data }: { data: AdminCostsResponse }) {
@@ -30,6 +31,11 @@ export function ModelTable({ data }: { data: AdminCostsResponse }) {
           {t('costs.modelsTitle')}
         </h3>
         <p className={tableStyles.note}>{t('costs.modelsNote')}</p>
+        {data.truncated > 0 ? (
+          <p className={tableStyles.note} data-testid="admin-cost-truncated">
+            {t('costs.truncatedNote', { count: data.truncated })}
+          </p>
+        ) : null}
       </div>
 
       {data.models.length === 0 ? (
@@ -66,7 +72,12 @@ export function ModelTable({ data }: { data: AdminCostsResponse }) {
                   <tr key={seriesKey(row)}>
                     <td>
                       <span className={styles.swatchCell}>
-                        <span className={styles.swatch} data-series={seriesToken(row, index)} />
+                        <span
+                          className={styles.swatch}
+                          data-series={
+                            index < CHART_SERIES_LIMIT ? seriesToken(row, index) : undefined
+                          }
+                        />
                         {model}
                       </span>
                     </td>
