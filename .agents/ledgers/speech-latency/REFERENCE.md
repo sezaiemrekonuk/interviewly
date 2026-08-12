@@ -30,7 +30,7 @@ Live providers, the repo's own `.env`. Model calls are warm medians over n=5.
 | completeness gate | 780 | `gpt-4.1-nano` (turn-taking T01). min 556, max 887 |
 | conductor | 1 180 | `gpt-4.1-mini`, **34 output tokens** — understated, see below |
 | client refetch + `GET speech` | ~300 | two round trips |
-| TTS, whole MP3 | ~1 130 | `eleven_multilingual_v2`, 132 chars |
+| TTS, whole MP3 | ~430 | `eleven_turbo_v2_5` since L01 (was ~1130 on `eleven_multilingual_v2`) |
 | **total** | **~7 100** | |
 
 ### ⚠ Two things that will mislead you if you skip them
@@ -67,8 +67,10 @@ server boot, paid once. No keep-alive agent, no warm-up ping, no pooling work.
 | `eleven_turbo_v2_5` | **313 ms** | **310 ms** | 82 799 |
 | `eleven_flash_v2_5` | 397 ms | 344 ms | 81 128 |
 
-Turbo beat flash. The identical Turkish byte count between multilingual and turbo is odd enough
-that the comparison should not be trusted until someone listens to both files.
+Turbo beat flash. **L01 (2026-08-12) shipped turbo_v2_5:** re-measured warm medians were
+multilingual 1270/1483 ms vs turbo 407/460 ms (EN/TR), owner judged the samples indistinguishable.
+The identical-Turkish-byte anomaly did NOT reproduce — 6/6 outputs distinct-hashed, it was a
+spike-time measurement artefact.
 
 ### STT scales sub-linearly — ~500 ms fixed + ~35 ms per audio-second
 

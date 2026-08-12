@@ -18,7 +18,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { apiGetBlob } from '@/lib/api';
+import { API_BASE, apiGetBlob } from '@/lib/api';
 import {
   queryKeys,
   useSubmitAudioTurn,
@@ -32,6 +32,7 @@ import {
   type MicPermissionState,
 } from '@/lib/use-mic-permission';
 import { voiceDowngrade } from '@/lib/voice/downgrade';
+import { markFlushed } from '@/lib/voice/unload-flush';
 
 export type VoiceConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'lost';
 
@@ -70,15 +71,20 @@ const VAD_FLOOR = 0.01;
 
 /**
  * T04 — how long a turn may say nothing at all before the room tells the server so. The room
- * asserts nothing by sending it (K11): "thirteen seconds have passed" is the whole message, and
- * whether that is a real silence or a flush of what is already held is the server's call.
+ * asserts nothing by sending it (K11): "the window has passed" is the whole message, and whether
+ * that is a real silence or a flush of what is already held is the server's call.
+ *
+ * Six seconds since ADR-T08, down from thirteen. ADR-T06 defended the longer number as a
+ * thinking budget and the owner overruled it from the room: thirteen seconds of an interviewer
+ * saying nothing reads as a room that has stopped working, and a candidate who is genuinely
+ * thinking is better served by an interviewer that speaks than by one that waits.
  */
-export const FORCE_SUBMIT_MS = 13_000;
+export const FORCE_SUBMIT_MS = 6_000;
 
 /**
  * ADR-T06 — the same signal, sent sooner, when the server is already holding a fragment. That
- * candidate has spoken, has paused, and has had the gate's verdict; thirteen more seconds of
- * silence buys nothing and is what a wrongly-held finished answer costs. The gate's round trip
+ * candidate has spoken, has paused, and has had the gate's verdict; four more seconds of
+ * silence buy nothing and is what a wrongly-held finished answer costs. The gate's round trip
  * is inside this window, so the real grace after a verdict is nearer three seconds.
  *
  * The long window stays for the other case, which is not the same case: a candidate who has said
@@ -88,6 +94,22 @@ export const FLUSH_HELD_MS = 4_000;
 
 /** How often the silence window is checked. Independent of the mic's frame rate on purpose. */
 const VAD_POLL_MS = 100;
+
+/**
+ * T07 — how often the recorder hands over what it has captured. Without a timeslice a
+ * `MediaRecorder` holds everything until `stop()`, so a page torn down mid-sentence has nothing
+ * to send: the bytes exist only inside a recorder that dies with the document. It does not
+ * change what a normal turn uploads — the same bytes simply arrive in pieces, and `onstop`
+ * assembles the identical blob.
+ */
+const CHUNK_MS = 1_000;
+
+/**
+ * ...and how much of them a beacon may carry. The browser's own limit is 64 KiB across all
+ * beacons in flight, and it REFUSES an oversized payload rather than truncating it, so this sits
+ * under the ceiling with the multipart envelope's few hundred bytes to spare.
+ */
+const BEACON_MAX_BYTES = 60_000;
 
 export interface UseVoiceSessionResult {
   status: VoiceConnectionStatus;
@@ -227,7 +249,7 @@ export function useVoiceSession(
   const lastLoudRef = useRef(0);
   // The quietest level seen since this recorder opened — this room, this microphone, this turn.
   const floorRef = useRef(VAD_THRESHOLD);
-  // When this recorder opened. The 13 s clock measures from here until something is heard, and
+  // When this recorder opened. The silent-turn clock measures from here until something is heard, and
   // from the last loud frame after that.
   const turnStartedRef = useRef(0);
   // Why the recorder stopped, read once in `onstop`.
@@ -236,11 +258,14 @@ export function useVoiceSession(
   // answer came back conducted, and the one the silence clock closes. Its bytes are dropped
   // rather than uploaded — the interviewer is about to speak, and an open mic records the TTS.
   const discardRef = useRef(false);
-  // An upload is in flight. The 13 s clock must not fire underneath one: a probe keeps the phase
+  // An upload is in flight. The silent-turn clock must not fire underneath one: a probe keeps the phase
   // on 'listening', so nothing else would stop it.
   const uploadingRef = useRef(false);
   // The silence turn is sent once per open recorder, whatever the interval sees afterwards.
   const silenceSentRef = useRef(false);
+  // T07 — the unload flush is sent once per open recorder too. A `pagehide` the page comes back
+  // from (a backgrounded tab) can fire again, and the second one has nothing new to say.
+  const flushedRef = useRef(false);
   const [attempt, setAttempt] = useState(0);
 
   // What the speak effect actually reacts to: WHICH assistant lines exist, by id, in order.
@@ -330,6 +355,7 @@ export function useVoiceSession(
     chunksRef.current = [];
     discardRef.current = false;
     silenceSentRef.current = false;
+    flushedRef.current = false;
     turnStartedRef.current = Date.now();
     const recorder = new MediaRecorder(stream);
     recorderRef.current = recorder;
@@ -379,7 +405,7 @@ export function useVoiceSession(
         });
     };
 
-    recorder.start();
+    recorder.start(CHUNK_MS);
     if (mic.muted) recorder.pause();
     setPhase('listening');
   }
@@ -583,6 +609,63 @@ export function useVoiceSession(
     }, VAD_POLL_MS);
     return () => clearInterval(timer);
   }, [phase, mic.muted, holding, discardRecorder, failTurn]);
+
+  // T07 — the last thing this room can do for speech that never reached a probe. The candidate
+  // is mid-sentence, nothing has been uploaded, and the document is being torn down: a normal
+  // `fetch` does not outlive it, so the tail goes out as a beacon and the page is free to die.
+  //
+  // `pagehide`, not `beforeunload` — the latter never fires on mobile Safari, and a backgrounded
+  // tab that is later killed loses exactly as much as a refresh does.
+  //
+  // Best-effort by construction (ADR-T02): a flush is an ordinary probe, unforced and gated like
+  // any other, and nothing above it is told whether it landed. There is no state to update —
+  // what the reloaded room shows is what the server actually holds, and the recovery notice
+  // already reads that from `GET /state` rather than from anything claimed here.
+  useEffect(() => {
+    if (phase !== 'listening' || !interviewId) return;
+    if (typeof navigator === 'undefined' || typeof navigator.sendBeacon !== 'function') return;
+
+    const flush = () => {
+      const recorder = recorderRef.current;
+      const chunks = chunksRef.current;
+      // Fewer than two chunks is the container header and no audio after it: a refresh in the
+      // second before the candidate said anything, with nothing in it to recover and no reason
+      // to pay for an STT call.
+      if (flushedRef.current || !recorder || chunks.length < 2) return;
+
+      // Chunk 0 is the only one with the WebM header and the codec's init data in it, so it
+      // always rides along: a tail of clusters on its own is not a file any decoder will take.
+      // Everything else is taken from the END — the words the candidate was in the middle of are
+      // the ones worth the room's one remaining request, and the cap is what the oldest speech
+      // in a long answer costs.
+      const head = chunks[0];
+      let budget = BEACON_MAX_BYTES - head.size;
+      const tail: Blob[] = [];
+      for (let i = chunks.length - 1; i > 0 && chunks[i].size <= budget; i -= 1) {
+        budget -= chunks[i].size;
+        tail.unshift(chunks[i]);
+      }
+      if (tail.length === 0) return;
+
+      const type = (recorder.mimeType || 'audio/webm').split(';')[0];
+      const form = new FormData();
+      form.append('audio', new File([head, ...tail], 'answer', { type }), 'answer');
+      // No `force`: the gate decides whether this finished the turn, exactly as for a probe.
+      if (!navigator.sendBeacon(`${API_BASE}/interviews/${interviewId}/turns/audio`, form)) return;
+
+      flushedRef.current = true;
+      // The note for the page that replaces this one: its `GET /state` will beat the STT and the
+      // gate, and without this it would freeze on the honest null they answer with.
+      markFlushed(interviewId);
+      // The page may yet survive this event, and the recorder with it. What has been sent must
+      // not be uploaded a second time and joined onto the same turn twice — but the header stays
+      // behind, or the blob `onstop` assembles has no container at all.
+      chunksRef.current = [head];
+    };
+
+    window.addEventListener('pagehide', flush);
+    return () => window.removeEventListener('pagehide', flush);
+  }, [phase, interviewId]);
 
   // Mute means mute: the recorder stops capturing, it does not merely meter zero.
   useEffect(() => {

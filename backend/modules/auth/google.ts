@@ -258,12 +258,15 @@ export const googleCallback: RequestHandler = async (req, res) => {
     throw err;
   }
 
-  // `/`, not a landing path chosen here (issue #80). `/` applies the K8.7 first-run rule
-  // client-side (`lib/first-run.ts`, via `home-switch.tsx`) — the same rule the password
-  // sign-in uses. Sending Google users straight to the signed-in home skipped onboarding
-  // entirely, and their profile stayed empty forever; re-deriving the rule in this handler
-  // would have given it a second home to drift from.
-  res.redirect(302, `${config.PUBLIC_ORIGIN}/`);
+  // The signed-in home, not `/` (2026-08-12). This used to land on the marketing page because
+  // that page carried the K8.7 bounce; `/` is now public for everyone and redirects nobody, so
+  // the same 302 left a Google user reading the landing copy after signing in.
+  //
+  // Issue #80 stays closed without re-deriving the rule here: `useRequireAuth` applies K8.7 at
+  // the destination (`lib/first-run.ts` `mustFinishOnboarding`), so an account that has not
+  // finished onboarding is sent to `/onboarding/1` by the surface it arrives at, whichever one
+  // that is. The rule still has exactly one home, and it is no longer on a public page.
+  res.redirect(302, `${config.PUBLIC_ORIGIN}/dashboard`);
 };
 
 async function fetchIdentity(

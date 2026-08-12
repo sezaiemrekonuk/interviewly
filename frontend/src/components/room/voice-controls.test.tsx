@@ -358,3 +358,59 @@ describe('VoiceControls pause line (T04)', () => {
     expect(screen.queryByTestId('voice-holding')).not.toBeInTheDocument();
   });
 });
+
+/**
+ * Stop's slot. The control a candidate reaches for under time pressure has to be in the same
+ * place every time, and it was not: rendering it only while recording inserted and removed a
+ * button in the MIDDLE of a wrapping row, so every turn boundary shifted Mute, Camera, Captions
+ * and Transcript sideways — twice per turn — and moved the wrap point with them on a narrow
+ * window.
+ */
+describe('VoiceControls — the bar does not move under the candidate (T04)', () => {
+  const renderWith = (over: Partial<UseVoiceSessionResult>) =>
+    render(
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <VoiceControls
+          session={session(over)}
+          expiresAt={null}
+          captionsOn
+          onToggleCaptions={vi.fn()}
+          cameraOn={false}
+          onToggleCamera={vi.fn()}
+          cameras={[]}
+          cameraId={null}
+          onSelectCamera={vi.fn()}
+          transcriptOpen={false}
+          onToggleTranscript={vi.fn()}
+        />
+      </NextIntlClientProvider>,
+    );
+
+  /** What the row is made of, in order — the thing that must not change between turns. */
+  const bar = () =>
+    Array.from(screen.getByTestId('voice-controls').children).map(
+      (child) => `${child.tagName}.${child.className}`,
+    );
+
+  it('keeps the same controls in the same order whether or not a turn is being recorded', () => {
+    const idle = renderWith({ recording: false });
+    const before = bar();
+    idle.unmount();
+
+    renderWith({ recording: true });
+
+    expect(bar()).toEqual(before);
+  });
+
+  it("holds the slot at Stop's own width, in every language", () => {
+    renderWith({ recording: false });
+
+    // A ghost of the label rather than a fixed width: `voice.stop` is translated, and a number
+    // that fits "Stop" is the wrong number for "Durdur".
+    const ghost = screen.getByTestId('voice-stop-slot');
+    expect(ghost).toHaveTextContent(messages.room.voice.stop);
+    // ...and it is furniture, not a control: nothing to read out, nothing to tab to.
+    expect(ghost.getAttribute('aria-hidden')).toBe('true');
+    expect(screen.queryByTestId('voice-stop')).not.toBeInTheDocument();
+  });
+});

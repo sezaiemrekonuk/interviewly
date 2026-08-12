@@ -1,24 +1,46 @@
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { messages, renderWithIntl } from '../../../../test/render';
+
+const nav = vi.hoisted(() => ({ replace: vi.fn() }));
+
+vi.mock('next/navigation', async () => ({
+  ...(await import('@/test/navigation')).serverNavigation,
+  useRouter: () => ({ push: vi.fn(), replace: nav.replace, prefetch: vi.fn(), refresh: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => '/forgot-password',
+}));
 
 import ForgotPasswordPage from './page';
 
 // The endpoint answers 202 with no body at all, which is what the screen has to cope with:
 // `apiPost` parses the body and gets nothing.
+//
+// `/api/me` is answered separately and anonymously: the screen is wrapped in
+// `components/auth/anonymous-only.tsx`, so it probes the session on mount, and the canned
+// answer here would otherwise make every case a signed-in one.
 function stubFetch(status: number, body?: unknown) {
-  const spy = vi.fn(async () =>
-    body === undefined
+  const spy = vi.fn(async (url: string | URL) => {
+    if (String(url) === '/api/me')
+      return new Response(JSON.stringify({ error: { code: 'UNAUTHENTICATED' } }), {
+        status: 401,
+        headers: { 'content-type': 'application/json' },
+      });
+    return body === undefined
       ? new Response(null, { status })
       : new Response(JSON.stringify(body), {
           status,
           headers: { 'content-type': 'application/json' },
-        }),
-  );
+        });
+  });
   vi.stubGlobal('fetch', spy);
   return spy;
+}
+
+function formCalls(spy: ReturnType<typeof stubFetch>) {
+  return spy.mock.calls.filter(([url]) => String(url) !== '/api/me');
 }
 
 async function submit(email: string) {
@@ -28,6 +50,10 @@ async function submit(email: string) {
 }
 
 describe('forgot-password page', () => {
+  beforeEach(() => {
+    nav.replace.mockReset();
+  });
+
   afterEach(() => {
     vi.unstubAllGlobals();
   });
@@ -46,6 +72,7 @@ describe('forgot-password page', () => {
         body: JSON.stringify({ email: 'known@example.com' }),
       }),
     );
+    expect(nav.replace).not.toHaveBeenCalled();
   });
 
   // The API cannot tell the two apart, and this is the assertion that keeps the client from
@@ -80,6 +107,6 @@ describe('forgot-password page', () => {
     await waitFor(() =>
       expect(screen.getByText(messages.errors.VALIDATION_ERROR)).toBeInTheDocument(),
     );
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(formCalls(fetchSpy)).toEqual([]);
   });
 });

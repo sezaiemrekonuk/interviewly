@@ -208,12 +208,30 @@ export function VoiceControls({
           </p>
         ) : null}
 
-        {/* The VAD is a convenience; this is the enforcement the candidate has (ADR-S06). */}
-        {session.recording ? (
-          <Button type="button" onClick={() => session.stop()} data-testid="voice-stop">
+        {/* The VAD is a convenience; this is the enforcement the candidate has (ADR-S06).
+            The SLOT is always in the row, and always exactly this wide. Rendering the button
+            only while recording used to insert and remove an item in the middle of a wrapping
+            bar, so Mute, Camera, Captions and Transcript all moved twice per turn — and the one
+            control a candidate reaches for under time pressure was never in the same place.
+            The ghost is a real `Button` rather than a `min-width`: `voice.stop` is translated,
+            and a number that fits "Stop" is the wrong number for "Durdur". Same component, same
+            padding and weight, so the two can never drift apart. */}
+        <div className={styles.stopSlot}>
+          <Button
+            type="button"
+            className={styles.stopGhost}
+            aria-hidden="true"
+            tabIndex={-1}
+            data-testid="voice-stop-slot"
+          >
             {t('voice.stop')}
           </Button>
-        ) : null}
+          {session.recording ? (
+            <Button type="button" onClick={() => session.stop()} data-testid="voice-stop">
+              {t('voice.stop')}
+            </Button>
+          ) : null}
+        </div>
 
         {/* Mute and Camera are one control each: the switch, and the caret that says which
             device it switches. Together, and before the captions — the two things a candidate

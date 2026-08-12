@@ -1,0 +1,121 @@
+.peep {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+  color: var(--text);
+  transition: transform var(--duration-default) var(--easing-default);
+}
+
+.ada {
+  --peep-hair: var(--rail);
+}
+
+.turing {
+  --peep-hair: var(--rail-raised);
+}
+
+.line {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 4.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.fillSkin {
+  fill: var(--surface);
+}
+
+.fillHair {
+  fill: var(--peep-hair);
+}
+
+.fillBody {
+  fill: var(--surface-sunken);
+}
+
+.pupil {
+  fill: currentColor;
+}
+
+.mouthOpen {
+  fill: var(--peep-hair);
+  stroke: currentColor;
+  stroke-width: 4.5;
+}
+
+.hoop {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 4;
+}
+
+.glass {
+  fill: var(--surface);
+  fill-opacity: 0.35;
+  stroke: currentColor;
+  stroke-width: 4.5;
+}
+
+.band {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 6;
+  stroke-linecap: round;
+}
+
+.cup {
+  fill: var(--peep-hair);
+  stroke: currentColor;
+  stroke-width: 4.5;
+}
+
+.gear {
+  transition: opacity var(--duration-default) var(--easing-default);
+}
+
+.eyes {
+  transform-origin: 82px 70px;
+}
+
+.peep[data-mood='listening'] {
+  transform: rotate(-3deg);
+}
+
+.peep[data-mood='asking'] {
+  transform: rotate(1.5deg);
+}
+
+.peep[data-mood='marking'] {
+  transform: rotate(2.5deg);
+}
+
+.peep[data-mood='pleased'] {
+  transform: rotate(-1.5deg);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .eyes {
+    animation: peepBlink 6400ms linear infinite;
+  }
+
+  .turing .eyes {
+    animation-delay: 2900ms;
+  }
+}
+
+@keyframes peepBlink {
+  0%,
+  95.5% {
+    transform: none;
+  }
+  96.5%,
+  98% {
+    transform: scaleY(0.06);
+  }
+  99%,
+  100% {
+    transform: none;
+  }
+}

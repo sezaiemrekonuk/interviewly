@@ -17,6 +17,7 @@
  */
 
 import { useNow, useTranslations } from 'next-intl';
+import { useEffect } from 'react';
 
 import { MonthHeatmap } from '../../../components/dashboard/month-heatmap';
 import {
@@ -30,7 +31,7 @@ import {
 import { inFlight, weakest } from '../../../components/dashboard/summary';
 import { AppRail } from '../../../components/shell/app-rail';
 import { SplitShell, WorkBody, WorkTop } from '../../../components/shell/split-shell';
-import { Link } from '../../../i18n/navigation';
+import { Link, useRouter } from '../../../i18n/navigation';
 import { useMyInterviews, useMyQuestions, useProfile } from '../../../lib/query';
 import { useErrorMessage } from '../../../lib/use-error-message';
 import { useRequireAuth } from '../../../lib/use-require-auth';
@@ -54,16 +55,28 @@ function firstName(fullName: string | undefined): string | null {
 
 export default function DashboardPage() {
   const t = useTranslations('dashboard');
+  const router = useRouter();
   const { user, loading: authLoading } = useRequireAuth();
-  const ready = !authLoading && user !== null;
+  const unonboarded = user !== null && !user.onboardingCompletedAt;
+  const ready = !authLoading && user !== null && !unonboarded;
   const errorMessage = useErrorMessage();
   const now = useNow();
+
+  // K8.7 at the signed-in home, which is the one arrival `firstRunPath` cannot cover: the
+  // Google callback is a server 302 straight into the app, so it passes no sign-in call site.
+  // `/` used to carry this bounce and is public now, redirecting nobody (ADR-ADD06), which left
+  // a Google user reading marketing copy. Only the onboarding half of the rule belongs here —
+  // `firstRunPath` would send a fully-onboarded account with no interviews to `/interviews/new`
+  // and make this page unreachable for them (issue 80).
+  useEffect(() => {
+    if (unonboarded) router.replace('/onboarding/1');
+  }, [unonboarded, router]);
 
   const profile = useProfile(ready);
   const list = useMyInterviews(ready);
   const questions = useMyQuestions(ready);
 
-  if (authLoading || !user) return null;
+  if (authLoading || !user || unonboarded) return null;
 
   const items = list.data?.pages.flatMap((page) => page.items) ?? [];
   const allQuestions = questions.data?.pages.flatMap((page) => page.items) ?? [];

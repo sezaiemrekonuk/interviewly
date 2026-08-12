@@ -243,3 +243,37 @@ refreshing `lastLoud`, so the VAD simply never fires and the clock ends the turn
 exactly today's behaviour and no worse. ADR-S06's threshold and `VAD_THRESHOLD`'s value are
 unchanged as written; what changed is that the value is now a bound rather than the test.
 `speech-latency` `L03` still owns `VAD_SILENCE_MS`.
+
+---
+
+## ADR-T08 — 2026-08-12 — The silent-turn window is 6 s, not 13 (supersedes ADR-T06's silence number)
+
+**Context:** ADR-T06 set two clocks and defended the longer one at length: *"13 s is a thinking
+budget for a candidate staring at a hard question, and it is not what was wrong. Shortening it
+globally would cut off the people the whole ledger exists to protect."* That argument was made
+about a room nobody had yet sat in silence in. Since then the room has run end to end, the owner
+has sat in it, and thirteen seconds of an interviewer saying nothing does not read as thinking
+time — it reads as a room that has stopped working. PLAN.md said these numbers move when someone
+hears them being wrong. This is the second time the owner has heard one.
+
+**Decision:** `FORCE_SUBMIT_MS = 6_000`. `FLUSH_HELD_MS` stays at 4 000, so the two branches stay
+distinct and the held one is still the shorter. Nothing else changes: same anchor, same guards,
+the same `POST /turns { kind: 'silence' }`, and the room still asserts nothing by sending it.
+
+**Why not keep thirteen and improve the copy:** the room already says everything it honestly can.
+The candidate's problem is not that they misunderstand the wait, it is the wait.
+
+**Why not one clock again:** the two situations still differ. A candidate the server is holding a
+fragment for has already spoken and had a verdict; one who has said nothing may still be
+thinking. Six and four are closer than thirteen and four, but collapsing them would re-open what
+ADR-T06 settled for a saving of one constant.
+
+**What this costs, stated plainly:** a candidate who genuinely needs more than six seconds to
+begin a hard answer now gets a nudge from the interviewer instead of silence. That is the trade
+the owner chose, with ADR-T06's argument in front of them. It is recoverable — the nudge is a
+conductor turn, not an ended interview, and the candidate can answer straight through it.
+
+**Consequences:** ADR-T06's structure stands; only its number for the silence branch is
+superseded. `use-voice-session.test.tsx` now asserts both windows by value, so neither moves
+again without someone deciding to. The number remains a constant rather than config, for the
+reason ADR-T06 gave: the two situations wanted different numbers, not a knob.
