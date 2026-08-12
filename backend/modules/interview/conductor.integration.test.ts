@@ -29,11 +29,21 @@ import { randomUUID } from 'node:crypto';
 
 import type { AiClient, ConductorTurn } from '@interviewly/ai';
 import type { Interview, Question } from '@prisma/client';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { ApiError } from '../../src/lib/api-error';
 import { config } from '../../src/lib/env';
 import { prisma } from '../../src/lib/db';
+
+// L02's prewarm is a paid provider call fired off the conductor's own path. Spied, not run:
+// what this file asserts about it is *when* it is fired, and a real synthesis here would reach
+// ElevenLabs from a test that stands up nothing but Postgres. Everything else in `tts` stays
+// real — nothing in this file imports it.
+const speech = vi.hoisted(() => ({ prewarm: vi.fn(() => Promise.resolve()) }));
+vi.mock('../speech/tts', async (orig) => ({
+  ...(await orig<typeof import('../speech/tts')>()),
+  prewarmMessageSpeech: speech.prewarm,
+}));
 
 import { conductTurn } from './conductor';
 import { currentQuestionRow } from './state';
@@ -78,14 +88,20 @@ interface Seeded {
  * already written — so `ensureTechBatch` finds a full technical round and returns without
  * reaching a provider, exactly as it does mid-interview for a candidate.
  */
-async function seed(at: { index: number; hrCount?: number; target?: number }): Promise<Seeded> {
+async function seed(at: {
+  index: number;
+  hrCount?: number;
+  target?: number;
+  /** `voice` only where the test is about the speech path — L02's prewarm is mode-guarded. */
+  mode?: 'text' | 'voice';
+}): Promise<Seeded> {
   const hrCount = at.hrCount ?? HR_COUNT;
   const target = at.target ?? TARGET;
 
   const interview = await prisma.interview.create({
     data: {
       user_id: userId,
-      mode: 'text',
+      mode: at.mode ?? 'text',
       job_text: 'Backend engineer, Postgres experience.',
       job_source: 'paste',
       occupation: 'Backend Engineer',
@@ -322,6 +338,107 @@ describe('the closing answer survives every exit (@AC-11)', () => {
     const row = await reread(interview.id);
     expect(row.state).toBe('evaluating');
     expect(row.ended_reason).toBe('cut_short');
+  }, 30_000);
+});
+
+// L02 — the turn response names the assistant rows it wrote, so the room can begin fetching
+// their audio without waiting for a `/state` refetch to reveal them. `say()` stamps each row
+// with the request's trace, and `conductTurn` reads them back by it: this is the wire that
+// carries the ids, and the ordering a handover depends on.
+describe('the turn response names the lines it wrote (L02)', () => {
+  it('carries the id of the single row a continued turn wrote', async () => {
+    const { interview, hr } = await seed({ index: 1 });
+    await greet(interview, hr[0]);
+
+    const result = await turn(interview, 'It was a migration I under-rehearsed.', {
+      say: 'What would you do differently now?',
+      action: 'continue',
+    });
+
+    const assistant = await prisma.chatMessage.findMany({
+      where: { interview_id: interview.id, role: 'assistant' },
+      orderBy: [{ created_at: 'asc' }, { id: 'asc' }],
+      select: { id: true },
+    });
+    // The greeting plus the one line this turn said; spokenIds names only the latter.
+    expect(result.spokenIds).toEqual([assistant[assistant.length - 1].id]);
+  }, 30_000);
+
+  it('names both lines a handover wrote, in the order they were said', async () => {
+    const { interview, hr } = await seed({ index: 2 });
+    await greet(interview, hr[1]);
+
+    const result = await turn(
+      interview,
+      'I disagreed once and was wrong, which is the useful half of the story.',
+      { say: 'Thanks — over to my colleague.', action: 'handover' },
+      { say: 'Hello, I handle the technical half.', action: 'continue' },
+    );
+
+    expect(result.spokenIds).toHaveLength(2);
+    const rows = await prisma.chatMessage.findMany({
+      where: { interview_id: interview.id, id: { in: result.spokenIds } },
+      select: { id: true, content: true },
+    });
+    const contentById = new Map(rows.map((r) => [r.id, r.content]));
+    expect(result.spokenIds.map((id) => contentById.get(id))).toEqual([
+      'Thanks — over to my colleague.',
+      'Hello, I handle the technical half.',
+    ]);
+  }, 30_000);
+
+  // The one path where "when the row is written" and "when the response is sent" are not the
+  // same moment. Everywhere else `say()` is the last thing a turn does; a handover says its
+  // closing line and then runs a whole second conductor call before returning, and the route's
+  // prewarm — which fires after `res.json` — would leave that line's audio unbought for the
+  // duration of it. Ordering is the assertion, because the saving IS the ordering.
+  it('buys the closing line while the next interviewer is still being written', async () => {
+    const { interview, hr } = await seed({ index: 2, mode: 'voice' });
+    await greet(interview, hr[1]);
+
+    const events: string[] = [];
+    speech.prewarm.mockImplementation(() => {
+      events.push('prewarm');
+      return Promise.resolve();
+    });
+
+    const scripted = fakeConductor(
+      { say: 'Thanks — over to my colleague.', action: 'handover' },
+      { say: 'Hello, I handle the technical half.', action: 'continue' },
+    );
+    const client: AiClient = {
+      ...scripted,
+      conductTurn: (...args: Parameters<AiClient['conductTurn']>) => {
+        events.push('conduct');
+        return scripted.conductTurn(...args);
+      },
+    };
+
+    const result = await conductTurn(
+      { ...interview },
+      { kind: 'utterance', text: 'That is the whole of the story.', inputMode: 'voice' },
+      { traceId: `l02-${randomUUID()}`, client },
+    );
+
+    // The turn's own call, then the closing line's synthesis, then `openRound`'s call — not
+    // prewarm last, which is what firing it off the response would look like from here.
+    expect(events).toEqual(['conduct', 'prewarm', 'conduct']);
+    expect(speech.prewarm).toHaveBeenCalledWith(interview.id, result.spokenIds[0], expect.any(String));
+  }, 30_000);
+
+  it('buys nothing for a text interview — there is no audio to prewarm', async () => {
+    const { interview, hr } = await seed({ index: 2 });
+    await greet(interview, hr[1]);
+    speech.prewarm.mockClear();
+
+    await turn(
+      interview,
+      'That is the whole of the story.',
+      { say: 'Thanks — over to my colleague.', action: 'handover' },
+      { say: 'Hello, I handle the technical half.', action: 'continue' },
+    );
+
+    expect(speech.prewarm).not.toHaveBeenCalled();
   }, 30_000);
 });
 
