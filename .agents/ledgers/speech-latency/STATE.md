@@ -1,11 +1,12 @@
 # Speech-latency — State
 
-Last updated: 2026-08-11
-Last session ended: **Ledger opened (Ahmet, 2026-08-11, opus-5). No code written yet.** The room
-takes ~7.1 s from a candidate's last word to the interviewer's first sound, measured against live
-providers rather than estimated (REFERENCE.md carries the table and the method). The spec
-(`.agents/specs/2026-08-11-speech-latency.md`), PLAN, five ADRs and four task files are in place;
-the ownership row is in `.agents/EXECUTE.md`.
+Last updated: 2026-08-12
+Last session ended: **L01 done (Ahmet, 2026-08-12, opus — owner OK'd opus for a sonnet-tier task).
+TTS swapped `eleven_multilingual_v2` → `eleven_turbo_v2_5`** in `.env`/`.env.example` after the
+owner heard all 6 samples and judged them indistinguishable. TTS stage ~1130 → ~430 ms (warm
+median, live key), end-to-end baseline ~7100 → ~6400 ms. The identical-bytes anomaly did not
+reproduce (6/6 distinct hashes) — it was a spike-time artefact. No cache purge (voices
+indistinguishable, so no seam). No app code touched. Tests/lint/typecheck green.
 
 Three things were settled by measurement rather than argument: connection pooling is **not** the
 problem and the hypothesis is recorded dead (ADR-L02); the TTS model is 3.3× faster in config but
@@ -29,14 +30,14 @@ commit** → re-apply EXECUTE.md § 4 and continue with what it gives you.
 
 ## Current task
 
-**`L01`** — the biggest cheap win, blocked on nothing, and it needs a human's ears rather than a
-green test. `L04` is equally unblocked if you would rather measure than listen.
+**`L04`** — the conductor's real-prompt TTFT, blocked on nothing (`C02` done). `L02`/`L03` still
+wait on turn-taking `T03`/`T04`. L01 is done: turbo_v2_5 shipped, ~700 ms off the clock.
 
 ## Ledger
 
 | ID | Title | Repo | Status | Depends on |
 |----|-------|------|--------|------------|
-| L01 | The TTS model: measure, listen, then swap or reject | | todo | S02 |
+| L01 | The TTS model: measure, listen, then swap or reject | | done | S02 |
 | L04 | The conductor's real prompt: production-sized TTFT, then prefix caching or not | | todo | C02 |
 | L02 | Assistant ids on the turn response, synthesis begun when the row is written | | todo | T03, S02 |
 | L03 | Shorten `VAD_SILENCE_MS` behind the gate | | todo | T04, L01 |
