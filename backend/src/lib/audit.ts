@@ -25,6 +25,7 @@ export type AuditAction =
   | 'admin.interviews_read'
   | 'admin.interview_read'
   | 'admin.stats_read'
+  | 'admin.costs_read'
   | 'admin.llm_calls_read'
   | 'admin.users_read'
   | 'admin.sessions_read'
