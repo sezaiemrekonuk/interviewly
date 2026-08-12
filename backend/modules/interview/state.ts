@@ -224,7 +224,7 @@ async function resolveTranscript(interviewId: string) {
  * C07 — the refusal notes stay out of the room. They are written for the interviewer, and
  * showing them to the candidate would narrate the guard that just stopped them: "the server
  * refused because this round has not covered enough questions yet" is a recipe. T03 adds the
- * silence rows for a different reason: they are the room's own thirteen-second clock, read back
+ * silence rows for a different reason: they are the room's own six-second clock, read back
  * to it as prose. The drift note stays visible — it is about the candidate's own turn, not about
  * a rule they could aim at.
  *

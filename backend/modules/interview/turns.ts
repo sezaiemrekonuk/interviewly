@@ -34,7 +34,7 @@ export const submitTurn: RequestHandler = async (req, res) => {
  * T03 — every turn submission takes the held partial first, and what it does with it is the
  * whole of what the room does not have to know.
  *
- * The room cannot tell "silent for thirteen seconds" from "stopped mid-thought, then silent":
+ * The room cannot tell "silent for six seconds" from "stopped mid-thought, then silent":
  * both are the same signal on the same clock. The server can, because it holds the fragment —
  * so a silence request carrying one is an ordinary utterance turn and writes no silence row
  * (@AC-10), and one carrying nothing is a real silence.

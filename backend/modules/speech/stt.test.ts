@@ -422,7 +422,7 @@ describe('submitTurnAudio — the completeness gate (T03)', () => {
   });
 
   // @AC-11 — manual Stop. All `force` buys is skipping a gate the candidate could skip by
-  // waiting thirteen seconds anyway.
+  // waiting six seconds anyway.
   it('force submits whatever the transcript looks like, without calling the gate', async () => {
     m.take.mockResolvedValue(held());
     m.transcribe.mockResolvedValue({ transcript: 'and', seconds: 1 });

@@ -81,7 +81,7 @@ const parseAudio = audioParser({ fields: 1, parts: 3 });
  * the wire would let a candidate post words they never spoke into the utterance the conductor
  * answers, the transcript records and the report scores, while paying for a fraction of a second
  * of audio. `force` cannot buy that — all it skips is a gate the candidate skips anyway by
- * staying quiet for thirteen seconds. The multer limit caps the COUNT; `turnFields` below is
+ * staying quiet for six seconds. The multer limit caps the COUNT; `turnFields` below is
  * what refuses a field by name.
  */
 const parseTurnAudio = audioParser({ fields: 1, parts: 3 });

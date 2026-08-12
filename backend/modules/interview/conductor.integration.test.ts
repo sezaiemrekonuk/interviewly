@@ -211,7 +211,7 @@ const turn = (interview: Interview, text: string, ...script: (ConductorTurn | Er
     { traceId: `c02-${randomUUID()}`, client: fakeConductor(...script) },
   );
 
-/** T03 — thirteen seconds with nothing said and nothing held. No text, by construction. */
+/** T03 — six seconds with nothing said and nothing held. No text, by construction. */
 const silence = (interview: Interview, ...script: (ConductorTurn | Error)[]) =>
   conductTurn(
     { ...interview },
@@ -621,7 +621,7 @@ describe('the silence turn (T03)', () => {
       data: Array.from({ length: config.CONDUCTOR_MAX_TURNS }, () => ({
         interview_id: interview.id,
         role: 'system' as const,
-        content: '[The candidate has said nothing for 13 seconds.]',
+        content: '[The candidate has said nothing for 6 seconds.]',
         action: 'silence' as const,
         trace_id: `t03-${randomUUID()}`,
       })),

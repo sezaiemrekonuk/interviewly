@@ -115,8 +115,19 @@ const HISTORY_ELIDED = '[earlier turns omitted]';
  * What the interviewer reads where the candidate's utterance would have been. Written as an
  * observation rather than an instruction: the interviewer decides whether to nudge, re-ask or
  * move on, exactly as it decides everything else about a turn.
+ *
+ * Six, not thirteen: ADR-T08 shortened the room's silent-turn window (`FORCE_SUBMIT_MS`) and
+ * this string was missed, so for two days the interviewer was told the candidate had sat in
+ * silence twice as long as they had — and it decides how hard to nudge from exactly that. The
+ * room's constant is the source of truth; this sentence has to be edited with it. It is not
+ * derived from config because the window is a room constant the server never receives, and a
+ * number invented here would be a second, quieter way to be wrong.
+ *
+ * Only the genuine-silence path writes it. A silence that arrives while the server holds a
+ * fragment is turned back into an ordinary utterance before it reaches here (T03), so the
+ * shorter `FLUSH_HELD_MS` window never produces this sentence.
  */
-const SILENCE_NOTE = '[The candidate has said nothing for 13 seconds.]';
+const SILENCE_NOTE = '[The candidate has said nothing for 6 seconds.]';
 
 /**
  * A turn the candidate spent, for both ceilings. Silence is one of them (ADR-T04): a silent
