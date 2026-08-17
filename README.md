@@ -132,5 +132,4 @@ symptom, and the queries worth keeping.
 
 ## Team
 
-Built by **Sezai Emre Konuk**, **Mehmet Fatih Top** and **Ahmet Şükrü Kılıç** for the OBSS
-AI-Native Internship programme. One owner per area; task IDs carry the prefix.
+Built by **Sezai Emre Konuk**, **Mehmet Fatih Top** and **Ahmet Şükrü Kılıç**. Privilage of this application is secured by the three.
