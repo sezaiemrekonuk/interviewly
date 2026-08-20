@@ -194,7 +194,10 @@ export function orderTranscript(questions: TranscriptQuestion[]) {
 }
 
 // ponytail: the whole transcript ships on every room refetch. At <= 10 turns that is a few KB;
-// page it off a cursor if the turn count ever grows.
+// page it off a cursor if the turn count ever grows. Questions themselves are already bounded —
+// `order_index` is unique per round and a round's size is set once at generation — so no cap
+// belongs here; `resolveMessages` below is the one side of this that a bug (retries, silence
+// rows) could actually run away with, and gets one.
 async function resolveTranscript(interviewId: string) {
   const questions = await prisma.question.findMany({
     where: { round: { interview_id: interviewId } },
@@ -240,12 +243,18 @@ const messagesWhere = (interviewId: string) => ({
   OR: [{ action: null }, { action: { notIn: HIDDEN_ACTIONS } }],
 });
 
+// Defensive ceiling, not a page size (§ponytail above resolveTranscript): a real interview's
+// conversation stays a few dozen rows. Hitting this means a bug is spamming turns (retries,
+// silence rows) — logged rather than silently dropping the tail of the room's own history.
+const MESSAGE_ROOM_CAP = 500;
+
 async function resolveMessages(interviewId: string) {
   const rows = await prisma.chatMessage.findMany({
     where: messagesWhere(interviewId),
     // Same order the conductor replays in. A user utterance and the reply to it are written
     // inside one request and can share a millisecond; `id` breaks that tie the same way twice.
     orderBy: [{ created_at: 'asc' }, { id: 'asc' }],
+    take: MESSAGE_ROOM_CAP,
     select: {
       id: true,
       role: true,
@@ -263,6 +272,9 @@ async function resolveMessages(interviewId: string) {
       question: { select: { round: { select: { type: true } } } },
     },
   });
+  if (rows.length === MESSAGE_ROOM_CAP) {
+    logger.warn({ interviewId, cap: MESSAGE_ROOM_CAP }, 'room message count hit the room cap');
+  }
   return rows.map((m) => ({
     id: m.id,
     role: m.role,
