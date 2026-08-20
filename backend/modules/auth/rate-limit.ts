@@ -7,7 +7,22 @@ import { logger } from '../../src/lib/logger';
 
 // One shared Redis connection for the whole auth module. A02 reuses this client for
 // PKCE state storage — do not open a second connection.
-export const redis = new Redis(config.REDIS_URL, { maxRetriesPerRequest: null });
+//
+// Lazy, not a module-load-time `new Redis(...)`: that constructor opens a real socket the
+// moment this file is `require`d, so any unit test importing anything under modules/auth/ —
+// even transitively, even one that never touches rate limiting — retried a connection to a
+// `cache` host that doesn't resolve outside Docker, forever. A dozen call sites bind `redis`
+// as a plain value (`import { redis } from './rate-limit'`), so a Proxy that defers the real
+// `new Redis` to first property access keeps every one of them unchanged; only the moment the
+// side effect happens moves, from import-time to first actual use.
+let realClient: Redis | undefined;
+const client = (): Redis => (realClient ??= new Redis(config.REDIS_URL, { maxRetriesPerRequest: null }));
+export const redis: Redis = new Proxy({} as Redis, {
+  get(_target, prop, receiver) {
+    const value = Reflect.get(client(), prop, receiver);
+    return typeof value === 'function' ? value.bind(client()) : value;
+  },
+});
 
 // Sliding-window counter over a sorted set. Returns the count inside the window after
 // recording this hit; the caller rejects when it exceeds the limit.

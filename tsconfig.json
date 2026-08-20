@@ -1,10 +1,21 @@
 {
+  // This config no longer typechecks any workspace's shippable source — `npm run typecheck`
+  // runs each of frontend/, backend/, worker/, packages/*/'s OWN tsconfig for that (their real
+  // `module`/`moduleResolution`, the ones `tsc -p` actually builds with). Checking backend/src
+  // here too, under `module: esnext`, is what let I08 ship top-level `await` clean through this
+  // config and red through backend's own commonjs build — one program cannot serve both.
+  // What's left has no workspace tsconfig of its own: prisma/seed.ts and the cucumber step
+  // definitions run through `tsx` (module setting irrelevant to execution), and the
+  // integration tests below are the ones no other command reads with `tsc` at all.
   "compilerOptions": {
     "target": "ES2022",
+    // dom/dom.iterable stay: the cucumber world's `httpPost`/`httpGet` etc. use the global
+    // `fetch`/`Response`, and dropping this lib swaps `Response.json()` from dom's `Promise<any>`
+    // to Node's own ambient `Promise<unknown>` — an unrelated type error, not the module-target
+    // fix this config exists for.
     "lib": ["ES2022", "dom", "dom.iterable"],
     "module": "esnext",
     "moduleResolution": "bundler",
-    "jsx": "react-jsx",
     "strict": true,
     "noEmit": true,
     "esModuleInterop": true,
@@ -13,14 +24,10 @@
     "isolatedModules": true,
     "baseUrl": ".",
     "paths": {
-      "@interviewly/types": ["packages/types/src/index.ts"],
-      "@interviewly/ai": ["packages/ai/src/index.ts"],
-      "@interviewly/backend": ["backend/src/worker-exports.ts"],
-      "@/*": ["frontend/src/*"]
+      "@interviewly/ai": ["packages/ai/src/index.ts"]
     }
   },
   "include": [
-    "backend/src",
     "backend/prisma",
     "backend/features",
     // Not all of backend/modules: its unit tests carry loose mock typings that pass at runtime,
@@ -28,10 +35,7 @@
     // INTEGRATION files are here because nothing else can catch them — they are excluded from
     // `npm test`, so a wrong Prisma fixture in one stays invisible until the CI acceptance job
     // runs it. That is exactly how issue 196's test first shipped, missing a required column.
-    "backend/modules/**/*.integration.test.ts",
-    "frontend/src",
-    "packages/*/src",
-    "worker/src"
+    "backend/modules/**/*.integration.test.ts"
   ],
   "exclude": ["node_modules", "**/dist", "**/.next"]
 }
