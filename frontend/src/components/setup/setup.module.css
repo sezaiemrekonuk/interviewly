@@ -12,6 +12,20 @@
   min-height: 168px; /* ~7 rows at 16px — the listing is the screen's subject, not a slot */
 }
 
+.counter {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: -8px; /* Visual tightness with textarea */
+}
+
+.counter.approaching {
+  color: var(--warning);
+}
+
+.counter.exceeded {
+  color: var(--danger);
+}
+
 /* The PDF is an alternative to the paste, so it is separated by a rule and a word, never
    docked against the textarea. */
 .alt {

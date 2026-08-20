@@ -12,7 +12,7 @@ const schema = z.object({
   externalJobId: z.string().trim().min(1).max(MAX_LABEL_CHARS),
   jobTitle: z.string().trim().min(1).max(MAX_LABEL_CHARS),
   jobCompany: z.string().trim().min(1).max(MAX_LABEL_CHARS),
-  jobText: z.string().trim().min(1),
+  jobText: z.string().trim().min(1).max(MAX_BLOCK_CHARS),
 });
 
 export const captureJobListing: RequestHandler = async (req, res) => {

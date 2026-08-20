@@ -131,20 +131,24 @@ describe('captureJobListing', () => {
   });
 
   it('caps the stored text at the block ceiling and says so', async () => {
-    const long = 'x'.repeat(MAX_BLOCK_CHARS + 500);
+    const long = 'x'.repeat(MAX_BLOCK_CHARS);
 
     await land({ ...BODY, jobText: long }).run();
 
     expect(rows[0].job_text).toHaveLength(MAX_BLOCK_CHARS);
-    expect(info).toHaveBeenCalledWith(
-      expect.objectContaining({ chars: long.length, kept: MAX_BLOCK_CHARS }),
-      'LISTING_TRUNCATED',
-    );
+    expect(info).not.toHaveBeenCalledWith(expect.anything(), 'LISTING_TRUNCATED');
   });
 
   it('does not report a truncation that did not happen', async () => {
     await land(BODY).run();
 
     expect(info).not.toHaveBeenCalledWith(expect.anything(), 'LISTING_TRUNCATED');
+  });
+
+  it('refuses jobText that exceeds the block ceiling', async () => {
+    const long = 'x'.repeat(MAX_BLOCK_CHARS + 1);
+
+    await expect(land({ ...BODY, jobText: long }).run()).rejects.toThrow('VALIDATION_ERROR');
+    expect(upsert).not.toHaveBeenCalled();
   });
 });

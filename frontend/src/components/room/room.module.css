@@ -845,6 +845,20 @@
   min-height: 96px;
 }
 
+.composerCounter {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.composerCounter.approaching {
+  color: var(--warning);
+}
+
+.composerCounter.exceeded {
+  color: var(--danger);
+}
+
 .composerActions {
   display: flex;
   gap: 16px;
