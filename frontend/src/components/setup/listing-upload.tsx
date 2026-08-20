@@ -9,6 +9,9 @@ import { useErrorMessage } from '../../lib/use-error-message';
 
 import styles from './setup.module.css';
 
+// Max characters for job listing text sent to LLM for question generation (12k chars).
+const MAX_LISTING_CHARS = 12_000;
+
 /**
  * The listing is the setup screen's subject: a labelled textarea that leads the form, with the
  * PDF offered underneath as a clearly separate alternative — never docked against the input as
@@ -61,6 +64,10 @@ export function ListingUpload({
   }
 
   const locked = uploading || disabled;
+  const charCount = value.length;
+  const charPercent = charCount / MAX_LISTING_CHARS;
+  const isApproaching = charPercent > 0.8;
+  const isExceeded = charPercent > 1;
 
   return (
     <div className={styles.listing}>
@@ -68,14 +75,22 @@ export function ListingUpload({
           names the miss (`LISTING_REQUIRED`) where the failure happens. */}
       <Field label={t('listingPaste')} hint={t('listingHint')}>
         {(control) => (
-          <Textarea
-            {...control}
-            className={styles.textarea}
-            rows={7}
-            value={value}
-            disabled={locked}
-            onChange={(event) => onJobText(event.target.value)}
-          />
+          <>
+            <Textarea
+              {...control}
+              className={styles.textarea}
+              rows={7}
+              value={value}
+              disabled={locked}
+              onChange={(event) => onJobText(event.target.value)}
+              maxLength={MAX_LISTING_CHARS}
+            />
+            <p
+              className={`${styles.counter} ${isApproaching && !isExceeded ? styles.approaching : ''} ${isExceeded ? styles.exceeded : ''}`}
+            >
+              {charCount.toLocaleString()} / {MAX_LISTING_CHARS.toLocaleString()}
+            </p>
+          </>
         )}
       </Field>
 

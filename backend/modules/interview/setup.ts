@@ -1,6 +1,8 @@
 import type { RequestHandler } from 'express';
 import { z } from 'zod';
 
+import { MAX_BLOCK_CHARS } from '@interviewly/ai';
+
 import { ApiError } from '../../src/lib/api-error';
 import { prisma } from '../../src/lib/db';
 import { config } from '../../src/lib/env';
@@ -36,7 +38,7 @@ const schema = z.object({
   // The upper bound is checked in the handler, not here: it is config, and a `.max()` read at
   // module load would bake in whatever `VOICE_MAX_INTERVIEW_SECONDS` held at import time.
   durationSeconds: z.coerce.number().int().positive().optional(),
-  jobText: z.string().trim().min(1).optional(),
+  jobText: z.string().trim().min(1).max(MAX_BLOCK_CHARS).optional(),
   uploadId: z.string().min(1).optional(),
   targetQuestionCount: z.coerce
     .number()
