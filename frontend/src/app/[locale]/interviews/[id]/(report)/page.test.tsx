@@ -379,6 +379,39 @@ describe('report + transcript (W07)', () => {
     );
   });
 
+  it('copies the current page URL and shows a confirmation', async () => {
+    stubFetch();
+    await renderReport();
+
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('report-copy-link'));
+    });
+
+    expect(writeText).toHaveBeenCalledWith(window.location.href);
+    expect(await screen.findByTestId('report-copy-link-status')).toHaveTextContent(
+      messages.report.copyLinkCopied,
+    );
+  });
+
+  it('shows an inline error when the clipboard write rejects', async () => {
+    stubFetch();
+    await renderReport();
+
+    const writeText = vi.fn().mockRejectedValue(new Error('denied'));
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('report-copy-link'));
+    });
+
+    expect(await screen.findByTestId('report-copy-link-status')).toHaveTextContent(
+      messages.report.copyLinkError,
+    );
+  });
+
   // Issue 83. `failed` and `abandoned` used to fall into the generating beat and sit there
   // past its ceiling, advising a refresh that can never help. No timers are advanced here:
   // the panel has to be the first paint, not a recovery from the wait.

@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+
 import { useTranslations } from 'next-intl';
 
 import { Link } from '../../i18n/navigation';
@@ -44,6 +46,19 @@ export function ReportRail({
   const notReady = download.isError && download.error.code === 'INTERVIEW_NOT_FOUND';
   const downloadFailed = download.isError && !notReady;
 
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopyState('copied');
+    } catch {
+      setCopyState('error');
+    }
+    // ponytail: a fixed 2s reset, not a debounce/queue — one click at a time is the only
+    // case this button sees.
+    setTimeout(() => setCopyState('idle'), 2000);
+  }
+
   return (
     <>
       <RailMark href="/" />
@@ -86,6 +101,19 @@ export function ReportRail({
                 {t('downloadError')}
               </p>
             ) : null}
+            <Button
+              className={styles.downloadButton}
+              variant="secondary"
+              onClick={copyLink}
+              data-testid="report-copy-link"
+            >
+              {t('copyLink')}
+            </Button>
+            {copyState === 'idle' ? null : (
+              <p role="status" className={styles.downloadNote} aria-live="polite" data-testid="report-copy-link-status">
+                {copyState === 'copied' ? t('copyLinkCopied') : t('copyLinkError')}
+              </p>
+            )}
           </div>
         </>
       )}
