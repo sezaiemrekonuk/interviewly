@@ -32,6 +32,7 @@ function model(name: string) {
     calls.push({ model: name, method, args });
     if (method === 'findUnique') return { id: (args.where as { id: string }).id };
     if (method === 'groupBy') return rows[`${name}.groupBy`] ?? [];
+    if (method === 'upsert') return {};
     return rows[name] ?? [];
   };
   return {
@@ -39,15 +40,18 @@ function model(name: string) {
     findUnique: record('findUnique'),
     groupBy: record('groupBy'),
     create: record('create'),
+    upsert: record('upsert'),
   };
 }
 
 vi.mock('../../src/lib/db', () => ({
   prisma: {
     llmCall: model('llmCall'),
+    llmModelStat: model('llmModelStat'),
     user: model('user'),
     session: model('session'),
     auditLog: model('auditLog'),
+    auditActionStat: model('auditActionStat'),
     interview: model('interview'),
   },
 }));
@@ -246,11 +250,11 @@ describe('admin console reads', () => {
 
   it('offers the audit filter the vocabulary the table actually holds', async () => {
     rows.auditLog = [auditRow('a1')];
-    rows['auditLog.groupBy'] = [{ action: 'interview.soft_deleted', _count: { _all: 4 } }];
+    rows.auditActionStat = [{ action: 'interview.soft_deleted', count: 4 }];
     const { sent } = await invoke(listAuditLog);
 
-    // Counted from the data, not copied from the `AuditAction` union — a hardcoded list drifts
-    // the moment an action is added, and drifts silently.
+    // Counted from the running total, not copied from the `AuditAction` union — a hardcoded
+    // list drifts the moment an action is added, and drifts silently.
     expect(sent.body?.actions).toEqual([{ action: 'interview.soft_deleted', count: 4 }]);
   });
 

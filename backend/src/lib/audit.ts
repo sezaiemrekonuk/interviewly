@@ -66,4 +66,12 @@ export async function recordAudit(
       ...(entry.metadata === undefined ? {} : { metadata: entry.metadata }),
     },
   });
+  // Keeps `/admin/audit`'s action-vocabulary running count in step with the row just written,
+  // instead of that endpoint re-counting every `audit_logs` row on every read (see
+  // AuditActionStat in schema.prisma).
+  await client.auditActionStat.upsert({
+    where: { action: entry.action },
+    create: { action: entry.action, count: 1 },
+    update: { count: { increment: 1 } },
+  });
 }

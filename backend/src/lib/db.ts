@@ -82,6 +82,28 @@ export async function recordLlmCall(
       data: { spent_usd: { increment: data.cost_usd } },
       select: { spent_usd: true, budget_usd: true },
     });
+    // Keeps `/admin/stats`'s perModel running totals in step with the call it just wrote,
+    // instead of that endpoint re-summing every `llm_calls` row on every read (see
+    // LlmModelStat in schema.prisma).
+    await client.llmModelStat.upsert({
+      where: { provider_model: { provider: data.provider, model: data.model } },
+      create: {
+        provider: data.provider,
+        model: data.model,
+        calls: 1,
+        cost_usd: data.cost_usd,
+        input_tokens: data.input_tokens ?? 0,
+        output_tokens: data.output_tokens ?? 0,
+        latency_sum_ms: data.latency_ms,
+      },
+      update: {
+        calls: { increment: 1 },
+        cost_usd: { increment: data.cost_usd },
+        input_tokens: { increment: data.input_tokens ?? 0 },
+        output_tokens: { increment: data.output_tokens ?? 0 },
+        latency_sum_ms: { increment: data.latency_ms },
+      },
+    });
     return {
       call,
       spent_usd: interview.spent_usd,

@@ -116,7 +116,7 @@ const usd = (value: Prisma.Decimal | null): string => (value ?? new Prisma.Decim
 
 export const getAdminStats: RequestHandler = async (req, res, next) => {
   try {
-    const [completedAgg, stateCounts, tokenSum, occupationGroups, clusters, weakest, modelGroups] =
+    const [completedAgg, stateCounts, tokenSum, occupationGroups, clusters, weakest, modelStats] =
       await Promise.all([
         // averageDurationMs + cutShort source: completed state only.
         // ADMIN AUDIT — intentionally bypasses userInterviews (K11: deleted interviews counted)
@@ -146,6 +146,12 @@ export const getAdminStats: RequestHandler = async (req, res, next) => {
         prisma.interview.groupBy({ by: ['state'], _count: { _all: true } }),
         // totalTokens across ALL llm_calls — deleted interviews included (K11)
         // ADMIN AUDIT — intentionally bypasses userInterviews (K11: deleted interviews counted)
+        //
+        // Deliberately NOT read from `llm_model_stats` (unlike perModel below): that table is
+        // only as complete as `recordLlmCall`'s callers, and this figure's whole job is to
+        // agree with whatever is actually in `llm_calls`, however it got there. Still an
+        // unbounded scan — flagged, not fixed, because a total that can silently drift from
+        // its own source table is worse than one that is slow.
         prisma.llmCall.aggregate({
           _sum: { input_tokens: true, output_tokens: true, cost_usd: true },
         }),
@@ -161,20 +167,16 @@ export const getAdminStats: RequestHandler = async (req, res, next) => {
         // seeded reference table (`prisma/seed.ts` owns the canonical list).
         prisma.occupationCluster.findMany({ select: { id: true, key: true } }),
         weakestQuestions(),
-        // US-26's "spend by model", grouped in Postgres. The result set is providers × models
-        // — a handful of rows, not one per call — which is why this one can afford to be
-        // unbounded where the two scans issue 85 removed could not.
+        // US-26's "spend by model". Was a `groupBy(['provider','model'])` over every
+        // `llm_calls` row ever written — a handful of *output* rows does not mean a handful
+        // scanned, and that scan grew on every provider call with no upper bound. Reads the
+        // running total `recordLlmCall` (db.ts) now keeps instead (`LlmModelStat`), which is
+        // sized to providers × models, not calls.
         //
         // Voice rolls into the same total by design: a per-second row and a per-token row are
         // both money spent, and separating them into two currencies would leave no figure that
         // answers "what did this cost". `unitKind` on the drill-down is where the two split.
-        prisma.llmCall.groupBy({
-          by: ['provider', 'model'],
-          _sum: { cost_usd: true, input_tokens: true, output_tokens: true },
-          _avg: { latency_ms: true },
-          _count: { _all: true },
-          orderBy: { _sum: { cost_usd: 'desc' } },
-        }),
+        prisma.llmModelStat.findMany({ orderBy: { cost_usd: 'desc' } }),
       ]);
 
     // averageDurationMs: mean of ended_at - started_at over completed; 0 if none qualify
@@ -217,15 +219,15 @@ export const getAdminStats: RequestHandler = async (req, res, next) => {
       // `llm_calls` rather than `interviews.spent_usd` so it agrees with `perModel` below —
       // the two must add up to the same figure or the panel contradicts itself.
       totalCostUsd: usd(tokenSum._sum.cost_usd),
-      perModel: modelGroups.map((group) => ({
-        provider: group.provider,
-        model: group.model,
-        calls: group._count._all,
-        tokens: (group._sum.input_tokens ?? 0) + (group._sum.output_tokens ?? 0),
-        costUsd: usd(group._sum.cost_usd),
+      perModel: modelStats.map((stat) => ({
+        provider: stat.provider,
+        model: stat.model,
+        calls: stat.calls,
+        tokens: Number(stat.input_tokens) + Number(stat.output_tokens),
+        costUsd: usd(stat.cost_usd),
         // Rounded to a millisecond: an average latency carrying six decimals of precision it
         // does not have reads as a measurement rather than a mean.
-        averageLatencyMs: Math.round(group._avg.latency_ms ?? 0),
+        averageLatencyMs: stat.calls > 0 ? Math.round(Number(stat.latency_sum_ms) / stat.calls) : 0,
       })),
       perOccupation,
       // `sampleSize` ships rather than being filtered on. A `HAVING COUNT(*) >= n` floor was

@@ -52,11 +52,11 @@ export const listLlmCalls: RequestHandler = async (req, res, next) => {
     // The distinct providers and models present, so the console can offer a filter it knows
     // will match something instead of a free-text box. Unfiltered on purpose — a facet list
     // that narrowed with the selection could not be used to change the selection.
-    const facets = await prisma.llmCall.groupBy({
-      by: ['provider', 'model'],
-      _count: { _all: true },
-      orderBy: { _count: { id: 'desc' } },
-    });
+    //
+    // Was `llmCall.groupBy(['provider','model'])` — the same unbounded full-table scan
+    // `/admin/stats`'s perModel had (see LlmModelStat in schema.prisma). Reads the running
+    // totals `recordLlmCall` (db.ts) keeps instead.
+    const facets = await prisma.llmModelStat.findMany({ orderBy: { calls: 'desc' } });
 
     const envelope = listEnvelope(
       rows,
@@ -101,7 +101,7 @@ export const listLlmCalls: RequestHandler = async (req, res, next) => {
       facets: facets.map((facet) => ({
         provider: facet.provider,
         model: facet.model,
-        count: facet._count._all,
+        count: facet.calls,
       })),
     });
   } catch (err) {

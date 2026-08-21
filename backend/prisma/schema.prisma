@@ -254,6 +254,19 @@ model AuditLog {
   @@map("audit_logs")
 }
 
+/// Per-`action` running counts, updated by `recordAudit` (audit.ts) in the same write as the
+/// `audit_logs` row. `/admin/audit`'s action-filter vocabulary was `groupBy(['action'])` over
+/// this fastest-growing table on every page view — including the view's own read, which is
+/// itself audited, so the scan got a row bigger by the time the next visitor ran it. `action`
+/// is a closed compile-time union (`AuditAction`, audit.ts), so this table never grows past
+/// that handful of rows regardless of how large `audit_logs` gets.
+model AuditActionStat {
+  action String @id
+  count  Int    @default(0)
+
+  @@map("audit_action_stats")
+}
+
 model Session {
   id         String    @id @default(cuid())
   user_id    String
@@ -555,6 +568,26 @@ model LlmCall {
   @@index([interview_id, created_at])
   @@index([created_at])
   @@map("llm_calls")
+}
+
+/// Running per-`(provider, model)` totals, updated in the same transaction as the `llm_calls`
+/// insert (`recordLlmCall`, db.ts) instead of being summed from it on every read.
+///
+/// `/admin/stats` used to `groupBy(['provider', 'model'])` over every `llm_calls` row ever
+/// written, on every dashboard load — a table with no upper bound that grows on every provider
+/// call. This is the same shape as `interviews.spent_usd`: a lifetime total is cheaper to keep
+/// running than to re-derive, and the row count here is providers × models, not calls.
+model LlmModelStat {
+  provider       String
+  model          String
+  calls          Int      @default(0)
+  cost_usd       Decimal  @default(0) @db.Decimal(14, 6)
+  input_tokens   BigInt   @default(0)
+  output_tokens  BigInt   @default(0)
+  latency_sum_ms BigInt   @default(0)
+
+  @@id([provider, model])
+  @@map("llm_model_stats")
 }
 
 model JobListing {

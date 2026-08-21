@@ -11,12 +11,13 @@ import { recordAudit } from './audit';
 
 const fakeTx = () => {
   const create = vi.fn().mockResolvedValue({});
-  return { client: { auditLog: { create } } as never, create };
+  const upsert = vi.fn().mockResolvedValue({});
+  return { client: { auditLog: { create }, auditActionStat: { upsert } } as never, create, upsert };
 };
 
 describe('recordAudit', () => {
   it('writes through the client it was given, onto the audit_logs columns', async () => {
-    const { client, create } = fakeTx();
+    const { client, create, upsert } = fakeTx();
 
     await recordAudit(client, {
       actorUserId: 'user_1',
@@ -34,6 +35,12 @@ describe('recordAudit', () => {
         subject_id: 'interview_1',
         trace_id: 'trace_1',
       },
+    });
+    // Same client, same call: the running count and the row it counts must never disagree.
+    expect(upsert).toHaveBeenCalledWith({
+      where: { action: 'interview.soft_deleted' },
+      create: { action: 'interview.soft_deleted', count: 1 },
+      update: { count: { increment: 1 } },
     });
   });
 

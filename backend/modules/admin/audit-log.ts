@@ -55,11 +55,11 @@ export const listAuditLog: RequestHandler = async (req, res, next) => {
 
     // Which actions actually occur, counted, so the filter offers the real vocabulary rather
     // than a hardcoded copy of the union in `src/lib/audit.ts` that would drift from it.
-    const actions = await prisma.auditLog.groupBy({
-      by: ['action'],
-      _count: { _all: true },
-      orderBy: { _count: { id: 'desc' } },
-    });
+    //
+    // Was `auditLog.groupBy(['action'])` — unbounded over the fastest-growing table on the
+    // admin surface, on every visit, including the visit's own write. Reads the running count
+    // `recordAudit` keeps instead (`AuditActionStat`).
+    const actions = await prisma.auditActionStat.findMany({ orderBy: { count: 'desc' } });
 
     const envelope = listEnvelope(
       rows,
@@ -95,7 +95,7 @@ export const listAuditLog: RequestHandler = async (req, res, next) => {
 
     res.status(200).json({
       ...envelope,
-      actions: actions.map((row) => ({ action: row.action, count: row._count._all })),
+      actions: actions.map((row) => ({ action: row.action, count: row.count })),
     });
   } catch (err) {
     next(err);

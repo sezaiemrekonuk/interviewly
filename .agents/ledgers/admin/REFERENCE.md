@@ -257,7 +257,7 @@ out the timeline.
   "unfinished": 4,                  // abandoned + failed
   "totalTokens": 84210,             // Σ input+output tokens, DELETED INTERVIEWS INCLUDED
   "totalCostUsd": "12.404100",      // N05 — Σ llm_calls.cost_usd, NOT interviews.spent_usd
-  "perModel": [                     // N05 — groupBy(provider, model) in Postgres
+  "perModel": [                     // N05 — read from llm_model_stats, a running total (perf fix, see below)
     { "provider": "openai", "model": "gpt-4.1-mini",
       "calls": 812, "tokens": 41220, "costUsd": "3.104000", "averageLatencyMs": 940 }
   ],
@@ -275,6 +275,12 @@ unchanged, byte for byte (issue 85). The total is summed from `llm_calls` rather
 `interviews.spent_usd` so it cannot disagree with its own breakdown, and voice rolls into it —
 a per-second row and a per-token row are both money spent; `unitKind` on the drill-down is
 where the two split.
+
+`perModel[]` was originally `groupBy(['provider','model'])` over every `llm_calls` row ever
+written — unbounded, on every dashboard load. It now reads `llm_model_stats`, a per-`(provider,
+model)` running total kept in step by `recordLlmCall` (db.ts) in the same transaction as the
+`llm_calls` insert — the same pattern `interviews.spent_usd` already used. Sized to providers ×
+models, not calls.
 
 ### `GET /admin/llm-calls`
 
