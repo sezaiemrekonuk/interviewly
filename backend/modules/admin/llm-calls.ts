@@ -16,6 +16,7 @@ import type { Request, RequestHandler } from 'express';
 import { recordAudit } from '../../src/lib/audit';
 import { prisma } from '../../src/lib/db';
 import { logger } from '../../src/lib/logger';
+import { adminRead, applyReadHeaders } from '../../src/lib/read-replica';
 
 import { findManyArgs, listEnvelope, listParams } from './list';
 import { CALL_SPEC } from './specs';
@@ -41,22 +42,29 @@ export const listLlmCalls: RequestHandler = async (req, res, next) => {
     // The discrete facets and the query language AND together: a dropdown and a typed term are
     // two ways of asking, and picking one over the other would silently drop the operator's.
     const where = { ...llmCallFilters(req.query), ...params.search.where };
-    const cursorExists = params.cursorId
-      ? Boolean(
-          await prisma.llmCall.findUnique({ where: { id: params.cursorId }, select: { id: true } }),
-        )
-      : false;
 
-    const rows = await prisma.llmCall.findMany({ where, ...findManyArgs(params, cursorExists) });
+    const { data, source, lagSeconds } = await adminRead(async (client) => {
+      const cursorExists = params.cursorId
+        ? Boolean(
+            await client.llmCall.findUnique({ where: { id: params.cursorId }, select: { id: true } }),
+          )
+        : false;
 
-    // The distinct providers and models present, so the console can offer a filter it knows
-    // will match something instead of a free-text box. Unfiltered on purpose — a facet list
-    // that narrowed with the selection could not be used to change the selection.
-    //
-    // Was `llmCall.groupBy(['provider','model'])` — the same unbounded full-table scan
-    // `/admin/stats`'s perModel had (see LlmModelStat in schema.prisma). Reads the running
-    // totals `recordLlmCall` (db.ts) keeps instead.
-    const facets = await prisma.llmModelStat.findMany({ orderBy: { calls: 'desc' } });
+      const rows = await client.llmCall.findMany({ where, ...findManyArgs(params, cursorExists) });
+
+      // The distinct providers and models present, so the console can offer a filter it knows
+      // will match something instead of a free-text box. Unfiltered on purpose — a facet list
+      // that narrowed with the selection could not be used to change the selection.
+      //
+      // Was `llmCall.groupBy(['provider','model'])` — the same unbounded full-table scan
+      // `/admin/stats`'s perModel had (see LlmModelStat in schema.prisma). Reads the running
+      // totals `recordLlmCall` (db.ts) keeps instead.
+      const facets = await client.llmModelStat.findMany({ orderBy: { calls: 'desc' } });
+
+      return { rows, facets };
+    });
+
+    const { rows, facets } = data;
 
     const envelope = listEnvelope(
       rows,
@@ -95,6 +103,8 @@ export const listLlmCalls: RequestHandler = async (req, res, next) => {
     });
 
     logger.info({ traceId: req.traceId, count: envelope.items.length }, 'ADMIN_LLM_CALLS_LISTED');
+
+    applyReadHeaders(res, { data, source, lagSeconds });
 
     res.status(200).json({
       ...envelope,

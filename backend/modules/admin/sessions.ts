@@ -16,6 +16,7 @@ import { recordAudit } from '../../src/lib/audit';
 import { clock } from '../../src/lib/clock';
 import { prisma } from '../../src/lib/db';
 import { logger } from '../../src/lib/logger';
+import { adminRead, applyReadHeaders } from '../../src/lib/read-replica';
 
 import { findManyArgs, listEnvelope, listParams } from './list';
 import { SESSION_SPEC } from './specs';
@@ -42,17 +43,22 @@ export const listSessions: RequestHandler = async (req, res, next) => {
     const now = clock.now();
     const params = listParams(req.query, SESSION_SPEC, now);
     const where = { ...sessionFilters(req.query, now), ...params.search.where };
-    const cursorExists = params.cursorId
-      ? Boolean(
-          await prisma.session.findUnique({ where: { id: params.cursorId }, select: { id: true } }),
-        )
-      : false;
 
-    const rows = await prisma.session.findMany({
-      where,
-      ...findManyArgs(params, cursorExists),
-      include: { user: { select: { email_lower: true, role: true } } },
+    const { data, source, lagSeconds } = await adminRead(async (client) => {
+      const cursorExists = params.cursorId
+        ? Boolean(
+            await client.session.findUnique({ where: { id: params.cursorId }, select: { id: true } }),
+          )
+        : false;
+
+      return client.session.findMany({
+        where,
+        ...findManyArgs(params, cursorExists),
+        include: { user: { select: { email_lower: true, role: true } } },
+      });
     });
+
+    const rows = data;
 
     const envelope = listEnvelope(
       rows,
@@ -81,6 +87,8 @@ export const listSessions: RequestHandler = async (req, res, next) => {
     });
 
     logger.info({ traceId: req.traceId, count: envelope.items.length }, 'ADMIN_SESSIONS_LISTED');
+
+    applyReadHeaders(res, { data, source, lagSeconds });
 
     res.status(200).json(envelope);
   } catch (err) {

@@ -111,6 +111,21 @@ search by event name or trace:
 title: "AUTH_LOGIN_FAILED"        level >= 50        msg: "<traceId>"
 ```
 
+## Read replica (admin console)
+
+Opt-in, same overlay pattern as observability above:
+
+```bash
+docker compose -f compose.yaml -f compose.replica.yaml up -d
+```
+
+Brings up `db-replica`, a real streaming standby of `db`, and points `api`'s
+`DATABASE_REPLICA_URL` at it. Every `/admin/*` read routes there and falls back to the primary
+automatically if it's down; everything else in the app is untouched. See
+[backend/AGENTS.md](backend/AGENTS.md) for the header contract and
+`ci/verify-read-replica.sh` to prove replication is actually happening.
+
+
 Every log line is `title` (a fixed `UPPER_SNAKE` event name) plus `msg` (the request context —
 traceId, userId, method, path — folded into one JSON string). Elasticsearch is not published;
 Kibana is the only door. Without it, `docker compose logs -f api worker` has the same lines.

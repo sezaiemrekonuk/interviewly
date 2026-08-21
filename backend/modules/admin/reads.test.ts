@@ -82,6 +82,9 @@ function invoke(
     json(body: Record<string, unknown>) {
       sent.body = body;
     },
+    set() {
+      return this;
+    },
   };
   const next = vi.fn();
   return handler(req as never, res as never, next as never).then(() => ({ sent, next }));

@@ -1,0 +1,49 @@
+name: interviewly
+# Opt-in read replica overlay (Q ledger: read-replica). Not part of the default
+# `docker compose up -d` — same "you asked for it, you pay for it" pattern as
+# compose.observability.yaml. Bring it up with:
+#
+#   docker compose -f compose.yaml -f compose.replica.yaml up -d
+#
+# and admin-console reads (backend/modules/admin/*) start routing to db-replica; every
+# other read and every write stays on the primary. Tear down with `docker compose -f
+# compose.yaml -f compose.replica.yaml down -v` — `-v` also drops pgdata_replica, which you
+# want, because a stale clone left behind is not a resumable standby, it's a diverged one.
+services:
+  db:
+    # wal_level=replica + at least one sender/slot is what makes physical streaming
+    # replication possible at all; the base image ships wal_level=replica already in
+    # postgres 16 defaults but sender/slot counts default low, so both are set explicitly
+    # rather than relied on.
+    command: ["postgres", "-c", "wal_level=replica", "-c", "max_wal_senders=4", "-c", "max_replication_slots=4"]
+    volumes:
+      - ./db/replica-role.sh:/docker-entrypoint-initdb.d/20-replica-role.sh:ro
+
+  db-replica:
+    image: postgres:16-alpine
+    user: postgres
+    environment:
+      PGDATA: /var/lib/postgresql/data
+    volumes:
+      - pgdata_replica:/var/lib/postgresql/data
+      - ./db/replica-entrypoint.sh:/replica-entrypoint.sh:ro
+    entrypoint: ["/replica-entrypoint.sh"]
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U interviewly"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  api:
+    environment:
+      DATABASE_REPLICA_URL: postgresql://interviewly:interviewly@db-replica:5432/interviewly
+    depends_on:
+      db-replica:
+        condition: service_healthy
+
+volumes:
+  pgdata_replica:

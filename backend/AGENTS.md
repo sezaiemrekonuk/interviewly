@@ -59,3 +59,28 @@ before any test runs. Use the root `npm test`, which passes `--env-file-if-exist
 
 `.env` hostnames (`db`, `cache`) are compose-internal and do not resolve on a laptop — see the
 root file for how to run the integration and acceptance suites.
+
+## Read replica (admin console only)
+
+`docker compose -f compose.yaml -f compose.replica.yaml up -d` adds `db-replica`, a real
+streaming-replication standby of `db` — opt-in, same pattern as `compose.observability.yaml`.
+It sets `DATABASE_REPLICA_URL` on `api`, which is all `src/lib/read-replica.ts` needs to start
+routing: **every `backend/modules/admin/*` read** (stats, costs, llm-calls, users, sessions,
+audit, interview-detail, interviews list) goes through `adminRead()`, which runs against the
+replica and falls back to the primary — silently, with a warning log — on any replica error.
+Every write, and every read outside `modules/admin`, stays on the primary; nothing else in the
+app knows the replica exists.
+
+Two response headers carry the staleness contract every admin handler owes its caller:
+`X-Read-Source: primary|replica` always, `X-Replica-Lag-Seconds` only when the read actually
+came from the replica and a lag figure was obtainable (`pg_last_xact_replay_timestamp()`,
+cached ~2s so it isn't a query-per-request tax).
+
+Without `DATABASE_REPLICA_URL` set — the default everywhere, including production until
+someone opts in — `adminRead()` is a no-op wrapper around the primary `prisma` singleton.
+
+Proof this actually replicates, not just that the code compiles: `ci/verify-read-replica.sh`
+boots `db` + `db-replica`, writes a marker row on the primary, polls the replica for it, checks
+`pg_is_in_recovery()`, then kills `db-replica` and confirms the primary is unaffected. The
+routing/failover logic itself (no live database needed) is `backend/src/lib/read-replica.test.ts`,
+part of the normal `npm test` run.

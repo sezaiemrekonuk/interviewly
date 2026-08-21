@@ -4,6 +4,7 @@ import type { Request, RequestHandler } from 'express';
 import { recordAudit } from '../../src/lib/audit';
 import { prisma } from '../../src/lib/db';
 import { logger } from '../../src/lib/logger';
+import { adminRead, applyReadHeaders } from '../../src/lib/read-replica';
 
 import { findManyArgs, listEnvelope, listParams } from './list';
 import { INTERVIEW_SPEC } from './specs';
@@ -54,35 +55,43 @@ export const listAllInterviews: RequestHandler = async (req, res, next) => {
     // The dropdown facets and the typed query AND together — two ways of asking the same
     // list, and honouring only one of them would silently drop the operator's other half.
     const where = { ...interviewFilters(req.query), ...params.search.where };
-    const cursorExists = params.cursorId
-      ? Boolean(
-          await prisma.interview.findUnique({
-            where: { id: params.cursorId },
-            select: { id: true },
-          }),
-        )
-      : false;
 
-    // ADMIN AUDIT — intentionally bypasses userInterviews (K11: deleted interviews counted).
-    // The soft-delete filter is the whole point of the helper, so this is a direct read; it
-    // is the only sanctioned prisma.interview.findMany call site outside modules/admin.
-    const rows = await prisma.interview.findMany({
-      where,
-      ...findManyArgs(params, cursorExists),
-      include: {
-        occupation_cluster: { select: { key: true } },
-        user: { select: { email_lower: true } },
-      },
+    const { data, source, lagSeconds } = await adminRead(async (client) => {
+      const cursorExists = params.cursorId
+        ? Boolean(
+            await client.interview.findUnique({
+              where: { id: params.cursorId },
+              select: { id: true },
+            }),
+          )
+        : false;
+
+      // ADMIN AUDIT — intentionally bypasses userInterviews (K11: deleted interviews counted).
+      // The soft-delete filter is the whole point of the helper, so this is a direct read; it
+      // is the only sanctioned prisma.interview.findMany call site outside modules/admin.
+      const rows = await client.interview.findMany({
+        where,
+        ...findManyArgs(params, cursorExists),
+        include: {
+          occupation_cluster: { select: { key: true } },
+          user: { select: { email_lower: true } },
+        },
+      });
+
+      const page = rows.slice(0, params.limit);
+
+      // One grouped query for the whole page rather than a sum per row.
+      const totals = await client.llmCall.groupBy({
+        by: ['interview_id'],
+        where: { interview_id: { in: page.map((r) => r.id) } },
+        _sum: { input_tokens: true, output_tokens: true },
+      });
+
+      return { rows, totals };
     });
 
-    const page = rows.slice(0, params.limit);
+    const { rows, totals } = data;
 
-    // One grouped query for the whole page rather than a sum per row.
-    const totals = await prisma.llmCall.groupBy({
-      by: ['interview_id'],
-      where: { interview_id: { in: page.map((r) => r.id) } },
-      _sum: { input_tokens: true, output_tokens: true },
-    });
     const tokensFor = new Map(
       totals.map((t) => [
         t.interview_id,
@@ -137,6 +146,8 @@ export const listAllInterviews: RequestHandler = async (req, res, next) => {
       { traceId: req.traceId, count: envelope.items.length },
       'ADMIN_INTERVIEWS_LISTED',
     );
+
+    applyReadHeaders(res, { data, source, lagSeconds });
 
     res.status(200).json(envelope);
   } catch (err) {

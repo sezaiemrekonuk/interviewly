@@ -4,6 +4,7 @@ import type { RequestHandler } from 'express';
 import { recordAudit } from '../../src/lib/audit';
 import { prisma } from '../../src/lib/db';
 import { logger } from '../../src/lib/logger';
+import { adminRead, applyReadHeaders } from '../../src/lib/read-replica';
 
 /**
  * Issue 85: this handler used to pull every `completed` interview and every clustered
@@ -89,8 +90,11 @@ export function summariseOccupations(
  * ordering of its own fixtures without depending on what else is in the database. Production
  * takes the default.
  */
-export function weakestQuestions(limit = 5): Promise<WeakestQuestion[]> {
-  return prisma.$queryRaw<WeakestQuestion[]>`
+export function weakestQuestions(
+  limit = 5,
+  client: Pick<typeof prisma, '$queryRaw'> = prisma,
+): Promise<WeakestQuestion[]> {
+  return client.$queryRaw<WeakestQuestion[]>`
     SELECT
       q."text"                     AS text,
       ROUND(AVG(rq."score"))::int  AS score,
@@ -116,68 +120,75 @@ const usd = (value: Prisma.Decimal | null): string => (value ?? new Prisma.Decim
 
 export const getAdminStats: RequestHandler = async (req, res, next) => {
   try {
-    const [completedAgg, stateCounts, tokenSum, occupationGroups, clusters, weakest, modelStats] =
-      await Promise.all([
-        // averageDurationMs + cutShort source: completed state only.
-        // ADMIN AUDIT — intentionally bypasses userInterviews (K11: deleted interviews counted)
-        //
-        // Raw, because Prisma's `aggregate` cannot express `ended_at - started_at`. SUM and
-        // COUNT rather than AVG so the mean is still computed the way it was: an exact
-        // integer sum divided in JS, byte-identical to the old `reduce`. `::bigint` is exact
-        // here — Prisma stores `TIMESTAMP(3)`, so a duration has no sub-millisecond part to
-        // lose.
-        prisma.$queryRaw<CompletedAggregate[]>`
-          SELECT
-            COUNT(*) FILTER (
-              WHERE "started_at" IS NOT NULL AND "ended_at" IS NOT NULL
-            ) AS duration_count,
-            COALESCE(SUM(
-              ROUND(EXTRACT(EPOCH FROM ("ended_at" - "started_at")) * 1000)
-            ) FILTER (
-              WHERE "started_at" IS NOT NULL AND "ended_at" IS NOT NULL
-            ), 0)::bigint AS duration_sum_ms,
-            COUNT(*) FILTER (
-              WHERE "ended_reason" = 'cut_short'::"EndedReason"
-            ) AS cut_short
-          FROM "interviews"
-          WHERE "state" = 'completed'::"InterviewState"
-        `,
-        // ADMIN AUDIT — intentionally bypasses userInterviews (K11: deleted interviews counted)
-        prisma.interview.groupBy({ by: ['state'], _count: { _all: true } }),
-        // totalTokens across ALL llm_calls — deleted interviews included (K11)
-        // ADMIN AUDIT — intentionally bypasses userInterviews (K11: deleted interviews counted)
-        //
-        // Deliberately NOT read from `llm_model_stats` (unlike perModel below): that table is
-        // only as complete as `recordLlmCall`'s callers, and this figure's whole job is to
-        // agree with whatever is actually in `llm_calls`, however it got there. Still an
-        // unbounded scan — flagged, not fixed, because a total that can silently drift from
-        // its own source table is worse than one that is slow.
-        prisma.llmCall.aggregate({
-          _sum: { input_tokens: true, output_tokens: true, cost_usd: true },
-        }),
-        // perOccupation: grouped in Postgres (deleted included). The result set is
-        // clusters × distinct occupations, not one row per interview.
-        // ADMIN AUDIT — intentionally bypasses userInterviews (K11: deleted interviews counted)
-        prisma.interview.groupBy({
-          by: ['occupation_cluster_id', 'occupation'],
-          where: { occupation_cluster_id: { not: null } },
-          _count: { _all: true },
-        }),
-        // The cluster keys, once, instead of a join on every interview row. This is a small
-        // seeded reference table (`prisma/seed.ts` owns the canonical list).
-        prisma.occupationCluster.findMany({ select: { id: true, key: true } }),
-        weakestQuestions(),
-        // US-26's "spend by model". Was a `groupBy(['provider','model'])` over every
-        // `llm_calls` row ever written — a handful of *output* rows does not mean a handful
-        // scanned, and that scan grew on every provider call with no upper bound. Reads the
-        // running total `recordLlmCall` (db.ts) now keeps instead (`LlmModelStat`), which is
-        // sized to providers × models, not calls.
-        //
-        // Voice rolls into the same total by design: a per-second row and a per-token row are
-        // both money spent, and separating them into two currencies would leave no figure that
-        // answers "what did this cost". `unitKind` on the drill-down is where the two split.
-        prisma.llmModelStat.findMany({ orderBy: { cost_usd: 'desc' } }),
-      ]);
+    const { data, source, lagSeconds } = await adminRead(async (client) => {
+      const [completedAgg, stateCounts, tokenSum, occupationGroups, clusters, weakest, modelStats] =
+        await Promise.all([
+          // averageDurationMs + cutShort source: completed state only.
+          // ADMIN AUDIT — intentionally bypasses userInterviews (K11: deleted interviews counted)
+          //
+          // Raw, because Prisma's `aggregate` cannot express `ended_at - started_at`. SUM and
+          // COUNT rather than AVG so the mean is still computed the way it was: an exact
+          // integer sum divided in JS, byte-identical to the old `reduce`. `::bigint` is exact
+          // here — Prisma stores `TIMESTAMP(3)`, so a duration has no sub-millisecond part to
+          // lose.
+          client.$queryRaw<CompletedAggregate[]>`
+            SELECT
+              COUNT(*) FILTER (
+                WHERE "started_at" IS NOT NULL AND "ended_at" IS NOT NULL
+              ) AS duration_count,
+              COALESCE(SUM(
+                ROUND(EXTRACT(EPOCH FROM ("ended_at" - "started_at")) * 1000)
+              ) FILTER (
+                WHERE "started_at" IS NOT NULL AND "ended_at" IS NOT NULL
+              ), 0)::bigint AS duration_sum_ms,
+              COUNT(*) FILTER (
+                WHERE "ended_reason" = 'cut_short'::"EndedReason"
+              ) AS cut_short
+            FROM "interviews"
+            WHERE "state" = 'completed'::"InterviewState"
+          `,
+          // ADMIN AUDIT — intentionally bypasses userInterviews (K11: deleted interviews counted)
+          client.interview.groupBy({ by: ['state'], _count: { _all: true } }),
+          // totalTokens across ALL llm_calls — deleted interviews included (K11)
+          // ADMIN AUDIT — intentionally bypasses userInterviews (K11: deleted interviews counted)
+          //
+          // Deliberately NOT read from `llm_model_stats` (unlike perModel below): that table is
+          // only as complete as `recordLlmCall`'s callers, and this figure's whole job is to
+          // agree with whatever is actually in `llm_calls`, however it got there. Still an
+          // unbounded scan — flagged, not fixed, because a total that can silently drift from
+          // its own source table is worse than one that is slow.
+          client.llmCall.aggregate({
+            _sum: { input_tokens: true, output_tokens: true, cost_usd: true },
+          }),
+          // perOccupation: grouped in Postgres (deleted included). The result set is
+          // clusters × distinct occupations, not one row per interview.
+          // ADMIN AUDIT — intentionally bypasses userInterviews (K11: deleted interviews counted)
+          client.interview.groupBy({
+            by: ['occupation_cluster_id', 'occupation'],
+            where: { occupation_cluster_id: { not: null } },
+            _count: { _all: true },
+          }),
+          // The cluster keys, once, instead of a join on every interview row. This is a small
+          // seeded reference table (`prisma/seed.ts` owns the canonical list).
+          client.occupationCluster.findMany({ select: { id: true, key: true } }),
+          weakestQuestions(5, client),
+          // US-26's "spend by model". Was a `groupBy(['provider','model'])` over every
+          // `llm_calls` row ever written — a handful of *output* rows does not mean a handful
+          // scanned, and that scan grew on every provider call with no upper bound. Reads the
+          // running total `recordLlmCall` (db.ts) now keeps instead (`LlmModelStat`), which is
+          // sized to providers × models, not calls.
+          //
+          // Voice rolls into the same total by design: a per-second row and a per-token row are
+          // both money spent, and separating them into two currencies would leave no figure that
+          // answers "what did this cost". `unitKind` on the drill-down is where the two split.
+          client.llmModelStat.findMany({ orderBy: { cost_usd: 'desc' } }),
+        ]);
+
+      return { completedAgg, stateCounts, tokenSum, occupationGroups, clusters, weakest, modelStats };
+    });
+
+    const { completedAgg, stateCounts, tokenSum, occupationGroups, clusters, weakest, modelStats } =
+      data;
 
     // averageDurationMs: mean of ended_at - started_at over completed; 0 if none qualify
     const { duration_count, duration_sum_ms } = completedAgg[0];
@@ -207,6 +218,8 @@ export const getAdminStats: RequestHandler = async (req, res, next) => {
     });
 
     logger.info({ traceId: req.traceId }, 'ADMIN_STATS_READ');
+
+    applyReadHeaders(res, { data, source, lagSeconds });
 
     res.json({
       averageDurationMs,

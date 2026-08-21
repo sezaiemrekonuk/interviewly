@@ -38,6 +38,10 @@ export const schema = z.object({
   INTERNAL_API_URL:            z.string().url(),
   DATABASE_URL:                z.string(),
   SHADOW_DATABASE_URL:         z.string(),
+  // Optional: a streaming read replica for admin-console reads only (compose.replica.yaml).
+  // Absent in every environment that doesn't opt in, and `read-replica.ts` treats absence as
+  // "route everything to the primary" rather than an error.
+  DATABASE_REPLICA_URL:        emptyAsUnset(z.string().optional()),
   REDIS_URL:                   z.string().url(),
   SESSION_SECRET:              z.string().min(32),
   SESSION_TTL_DAYS:            emptyAsUnset(z.coerce.number().default(7)),

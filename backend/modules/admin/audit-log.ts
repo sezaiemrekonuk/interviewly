@@ -15,6 +15,7 @@ import type { Request, RequestHandler } from 'express';
 import { recordAudit } from '../../src/lib/audit';
 import { prisma } from '../../src/lib/db';
 import { logger } from '../../src/lib/logger';
+import { adminRead, applyReadHeaders } from '../../src/lib/read-replica';
 
 import { findManyArgs, listEnvelope, listParams } from './list';
 import { AUDIT_SPEC } from './specs';
@@ -38,28 +39,35 @@ export const listAuditLog: RequestHandler = async (req, res, next) => {
   try {
     const params = listParams(req.query, AUDIT_SPEC);
     const where = { ...auditFilters(req.query), ...params.search.where };
-    const cursorExists = params.cursorId
-      ? Boolean(
-          await prisma.auditLog.findUnique({
-            where: { id: params.cursorId },
-            select: { id: true },
-          }),
-        )
-      : false;
 
-    const rows = await prisma.auditLog.findMany({
-      where,
-      ...findManyArgs(params, cursorExists),
-      include: { actor: { select: { email_lower: true, role: true } } },
+    const { data, source, lagSeconds } = await adminRead(async (client) => {
+      const cursorExists = params.cursorId
+        ? Boolean(
+            await client.auditLog.findUnique({
+              where: { id: params.cursorId },
+              select: { id: true },
+            }),
+          )
+        : false;
+
+      const rows = await client.auditLog.findMany({
+        where,
+        ...findManyArgs(params, cursorExists),
+        include: { actor: { select: { email_lower: true, role: true } } },
+      });
+
+      // Which actions actually occur, counted, so the filter offers the real vocabulary rather
+      // than a hardcoded copy of the union in `src/lib/audit.ts` that would drift from it.
+      //
+      // Was `auditLog.groupBy(['action'])` — unbounded over the fastest-growing table on the
+      // admin surface, on every visit, including the visit's own write. Reads the running count
+      // `recordAudit` keeps instead (`AuditActionStat`).
+      const actions = await client.auditActionStat.findMany({ orderBy: { count: 'desc' } });
+
+      return { rows, actions };
     });
 
-    // Which actions actually occur, counted, so the filter offers the real vocabulary rather
-    // than a hardcoded copy of the union in `src/lib/audit.ts` that would drift from it.
-    //
-    // Was `auditLog.groupBy(['action'])` — unbounded over the fastest-growing table on the
-    // admin surface, on every visit, including the visit's own write. Reads the running count
-    // `recordAudit` keeps instead (`AuditActionStat`).
-    const actions = await prisma.auditActionStat.findMany({ orderBy: { count: 'desc' } });
+    const { rows, actions } = data;
 
     const envelope = listEnvelope(
       rows,
@@ -92,6 +100,8 @@ export const listAuditLog: RequestHandler = async (req, res, next) => {
     });
 
     logger.info({ traceId: req.traceId, count: envelope.items.length }, 'ADMIN_AUDIT_LISTED');
+
+    applyReadHeaders(res, { data, source, lagSeconds });
 
     res.status(200).json({
       ...envelope,

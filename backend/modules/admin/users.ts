@@ -13,6 +13,7 @@ import type { Request, RequestHandler } from 'express';
 import { recordAudit } from '../../src/lib/audit';
 import { prisma } from '../../src/lib/db';
 import { logger } from '../../src/lib/logger';
+import { adminRead, applyReadHeaders } from '../../src/lib/read-replica';
 
 import { findManyArgs, listEnvelope, listParams } from './list';
 import { USER_SPEC } from './specs';
@@ -36,32 +37,37 @@ export const listUsers: RequestHandler = async (req, res, next) => {
   try {
     const params = listParams(req.query, USER_SPEC);
     const where = { ...userFilters(req.query), ...params.search.where };
-    const cursorExists = params.cursorId
-      ? Boolean(
-          await prisma.user.findUnique({ where: { id: params.cursorId }, select: { id: true } }),
-        )
-      : false;
 
-    const rows = await prisma.user.findMany({
-      where,
-      ...findManyArgs(params, cursorExists),
-      select: {
-        id: true,
-        email_lower: true,
-        role: true,
-        locale: true,
-        email_verified_at: true,
-        onboarding_completed_at: true,
-        consent_version: true,
-        consented_at: true,
-        deleted_at: true,
-        created_at: true,
-        // Deleted interviews included, like everywhere else on this router (K11): an admin
-        // counting a user's interviews wants the ones that happened, not the ones still shown
-        // to the user.
-        _count: { select: { interviews: true } },
-      },
+    const { data, source, lagSeconds } = await adminRead(async (client) => {
+      const cursorExists = params.cursorId
+        ? Boolean(
+            await client.user.findUnique({ where: { id: params.cursorId }, select: { id: true } }),
+          )
+        : false;
+
+      return client.user.findMany({
+        where,
+        ...findManyArgs(params, cursorExists),
+        select: {
+          id: true,
+          email_lower: true,
+          role: true,
+          locale: true,
+          email_verified_at: true,
+          onboarding_completed_at: true,
+          consent_version: true,
+          consented_at: true,
+          deleted_at: true,
+          created_at: true,
+          // Deleted interviews included, like everywhere else on this router (K11): an admin
+          // counting a user's interviews wants the ones that happened, not the ones still shown
+          // to the user.
+          _count: { select: { interviews: true } },
+        },
+      });
     });
+
+    const rows = data;
 
     const envelope = listEnvelope(
       rows,
@@ -95,6 +101,8 @@ export const listUsers: RequestHandler = async (req, res, next) => {
     });
 
     logger.info({ traceId: req.traceId, count: envelope.items.length }, 'ADMIN_USERS_LISTED');
+
+    applyReadHeaders(res, { data, source, lagSeconds });
 
     res.status(200).json(envelope);
   } catch (err) {

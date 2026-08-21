@@ -13,6 +13,7 @@ import { ApiError } from '../../src/lib/api-error';
 import { recordAudit } from '../../src/lib/audit';
 import { prisma } from '../../src/lib/db';
 import { logger } from '../../src/lib/logger';
+import { adminRead, applyReadHeaders } from '../../src/lib/read-replica';
 
 /**
  * A ceiling, not a page. An interview asks at most 20 questions and each one costs a handful
@@ -111,37 +112,47 @@ export const getAdminInterview: RequestHandler = async (req, res, next) => {
   try {
     const id = String(req.params.id);
 
-    // ADMIN AUDIT — no `deleted_at: null`. A deleted interview is exactly the one an admin
-    // opens this page for (K11), so the soft-delete helper is bypassed here as it is on the
-    // list. `findUnique` and not `findFirst`: the id is the whole predicate.
-    const interview = await prisma.interview.findUnique({
-      where: { id },
-      include: {
-        occupation_cluster: { select: { key: true, label: true } },
-        user: { select: { id: true, email_lower: true, role: true } },
-        reports: { select: { status: true, prompt_uuid: true, prompt_version: true } },
-      },
+    // ponytail: adminRead's fallback treats ANY thrown error (including this ApiError) as "the
+    // replica failed", so an interview that's genuinely missing is looked up twice — once on
+    // the replica, once on the primary — before the 404 surfaces. Correct, just one redundant
+    // query in the not-found path; split "replica down" from "app error" if that ever matters.
+    const { data, source, lagSeconds } = await adminRead(async (client) => {
+      // ADMIN AUDIT — no `deleted_at: null`. A deleted interview is exactly the one an admin
+      // opens this page for (K11), so the soft-delete helper is bypassed here as it is on the
+      // list. `findUnique` and not `findFirst`: the id is the whole predicate.
+      const interview = await client.interview.findUnique({
+        where: { id },
+        include: {
+          occupation_cluster: { select: { key: true, label: true } },
+          user: { select: { id: true, email_lower: true, role: true } },
+          reports: { select: { status: true, prompt_uuid: true, prompt_version: true } },
+        },
+      });
+      if (!interview) throw new ApiError('INTERVIEW_NOT_FOUND');
+
+      const [calls, events] = await Promise.all([
+        client.llmCall.findMany({
+          where: { interview_id: id },
+          orderBy: { created_at: 'asc' },
+          take: MAX_CALLS + 1,
+        }),
+        // US-29. Every row the system wrote about this interview: the injection suspicions, the
+        // budget and time trips, and the soft delete. Admin *reads* are recorded against the
+        // list rather than an interview, so they do not crowd this timeline out.
+        client.auditLog.findMany({
+          where: { subject_type: 'interview', subject_id: id },
+          orderBy: { created_at: 'desc' },
+          take: MAX_EVENTS,
+        }),
+      ]);
+
+      const callsTruncated = calls.length > MAX_CALLS;
+      const page = callsTruncated ? calls.slice(0, MAX_CALLS) : calls;
+
+      return { interview, page, events, callsTruncated };
     });
-    if (!interview) throw new ApiError('INTERVIEW_NOT_FOUND');
 
-    const [calls, events] = await Promise.all([
-      prisma.llmCall.findMany({
-        where: { interview_id: id },
-        orderBy: { created_at: 'asc' },
-        take: MAX_CALLS + 1,
-      }),
-      // US-29. Every row the system wrote about this interview: the injection suspicions, the
-      // budget and time trips, and the soft delete. Admin *reads* are recorded against the
-      // list rather than an interview, so they do not crowd this timeline out.
-      prisma.auditLog.findMany({
-        where: { subject_type: 'interview', subject_id: id },
-        orderBy: { created_at: 'desc' },
-        take: MAX_EVENTS,
-      }),
-    ]);
-
-    const callsTruncated = calls.length > MAX_CALLS;
-    const page = callsTruncated ? calls.slice(0, MAX_CALLS) : calls;
+    const { interview, page, events, callsTruncated } = data;
 
     await recordAudit(prisma, {
       actorUserId: req.user!.id,
@@ -152,6 +163,8 @@ export const getAdminInterview: RequestHandler = async (req, res, next) => {
     });
 
     logger.info({ traceId: req.traceId, interviewId: id }, 'ADMIN_INTERVIEW_READ');
+
+    applyReadHeaders(res, { data, source, lagSeconds });
 
     res.status(200).json(shapeInterviewDetail(interview, page, events, callsTruncated));
   } catch (err) {
